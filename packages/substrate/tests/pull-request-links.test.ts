@@ -54,7 +54,7 @@ describe("migration 013", () => {
       .all() as Array<{ name: string }>;
     assert.deepEqual(tables.map((t) => t.name), ["issue_pr_commits", "issue_pull_requests"]);
     const v = s.db.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number };
-    assert.equal(v.v, 16);
+    assert.equal(v.v, 17);
   });
 
   it("rejects a duplicate relation row and a duplicate commit", () => {

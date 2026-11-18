@@ -63,6 +63,7 @@ changing the model.
 
 ```bash
 sb provenance dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
+                              [--dispatcher-participant <holder>] [--dispatcher-session <id>]
 sb provenance allocate <binding-id|ref> [--checkpoint <entry-id>]
 sb provenance bind <receipt-id> <40-char-sha>
 sb provenance trace <ref>

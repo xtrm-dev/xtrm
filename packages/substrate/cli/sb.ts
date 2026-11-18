@@ -53,7 +53,7 @@ import { canonicalPullReference, pullUrl, type IssuePullRequestView } from "../s
 import { parseAllTrailers } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { RESULT_FIELDS, assessJournalEntry, assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
-import { renderProvenanceTrace } from "../src/presentation/terminal.ts";
+import { renderDispatchers, renderProvenanceTrace } from "../src/presentation/terminal.ts";
 import { assertContractShape, contractShapeHints, isValidScrutiny, normaliseContract, SCRUTINY_LEVELS, type ContractRepair } from "../src/domain/contract.ts";
 import { enrichExecutionContext } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
@@ -853,6 +853,7 @@ renders the latest (or selected) checkpoint as text.`,
   provenance: `usage: sb provenance <verb>
 
   dispatch <ref> [--workspace/--participant/--activation/--attempt/--session/--base-commit/--claim-id <v>]
+           [--dispatcher-participant <holder>] [--dispatcher-session <id>]
   allocate <binding-id|ref> [--checkpoint <entry-id>]
   bind <receipt-id> <40-char-sha>
   trace <ref> | commit <sha> | receipt <id> | pr <ref>
@@ -870,7 +871,17 @@ closure); commit/receipt/pr walk it backwards from an external id; session
 and activation answer what one session touched or one activation produced.
 Record what happened in the Journal and close with cited refs; never edit
 the contract to narrate history.`,
-  "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--project <id>]`,
+  "provenance.dispatch": `usage: sb provenance dispatch <ref> [--workspace <dir>] [--participant/--activation/--attempt/--session/--base-commit <v>] [--claim-id <n>] [--dispatcher-participant <holder>] [--dispatcher-session <id>] [--project <id>]
+
+--participant/--activation/--attempt/--session name the execution being
+bound. --dispatcher-participant and --dispatcher-session name who dispatched
+it and from which xtrm session; they are stored on the binding as observed
+labels and printed by trace, session and activation. Both are optional and
+independent: an omitted flag stores nothing, and a binding written without
+them (or before migration 017) reads as absent, never as a placeholder. They are
+never defaulted from the environment. --dispatcher-participant is a
+shell-safe label; --dispatcher-session is a lowercase UUID or a tmux
+session id ($N). A malformed value fails closed and writes no binding.`,
   "links": `usage: sb links <check|sync> [args...]\n\ncheck lists T2 candidates (PR commits whose XTRM-Issue trailer names an Issue); sync runs the one-shot reconciler.`,
   "links.check": `usage: sb links check [--issue <ref>] [--project <id>] [--repo owner/name] [--limit <n>] [--link-gate warn|enforce|off] [--dry-run]
 
@@ -884,8 +895,10 @@ writes nothing.`,
 
 reads the full lineage spine: execution bindings with their pinned
 revisions, receipts with artifacts, attestation currency, claims and the
-closure view. Human output names each binding's participant, activation and
-session and truncates a long spine; --json carries the untruncated spine.
+closure view. Human output names each binding's participant, activation,
+session and dispatcher (participant and session, "dispatched by …") and
+truncates a long spine; --json carries the untruncated spine, with
+dispatcherParticipantId and dispatcherSessionId null where none was recorded.
 Read-model only: nothing is created, and the revision never moves.
 Methodology: trace to verify before dispatch and to audit after close; the
 spine shows evidence, the Journal tells the story.`,
@@ -908,10 +921,12 @@ the caller because only the caller has it; absence is never invented.`,
   "provenance.pr": `usage: sb provenance pr <provider-ref>`,
   "provenance.session": `usage: sb provenance session <session-id>
 
-what did this session touch: issues, bindings, receipts, artifacts, result count.`,
+what did this session touch: issues, bindings, receipts, artifacts, result
+count, and who dispatched each binding (dispatchers).`,
   "provenance.activation": `usage: sb provenance activation <activation-id>
 
-what did this activation produce: issues, bindings, receipts, artifacts.`,
+what did this activation produce: issues, bindings, receipts, artifacts, and
+who dispatched each binding (dispatchers).`,
   "provenance.bundle": `usage: sb provenance bundle <ref> [--repo-root <dir>] [--project <id>]`,
   import: `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]`,
   "import.beads": `usage: sb import beads --file <export.jsonl> --project <id> [--edges-file <f>] [--create-project <PREFIX:Name>] [--dry-run]
@@ -1530,7 +1545,7 @@ export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "provenance.attach": ["project", "receipt", "holder"],
   "external.bind": ["project", "provider", "scope", "id", "key", "url", "state", "holder"],
   "external.list": ["project", "provider", "scope", "limit"],
-  "provenance.dispatch": ["project", "claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit"],
+  "provenance.dispatch": ["project", "claim-id", "workspace", "participant", "activation", "attempt", "session", "base-commit", "dispatcher-participant", "dispatcher-session"],
   "provenance.allocate": ["project", "checkpoint"],
   "provenance.bind": [],
   "provenance.trace": [],
@@ -2869,8 +2884,22 @@ function runJournal(
 // contract hash from the binding row, bind takes the SHA the caller has —
 // and the hooks/service stay the automatic path. The revision never moves.
 
-function bindingSummary(b: { id: string; issueId: string; issueRevision: number; contractHash: string }): Record<string, unknown> {
-  return { bindingId: b.id, issueId: b.issueId, revision: b.issueRevision, contractHash: b.contractHash };
+function bindingSummary(b: {
+  id: string;
+  issueId: string;
+  issueRevision: number;
+  contractHash: string;
+  dispatcherParticipantId: string | null;
+  dispatcherSessionId: string | null;
+}): Record<string, unknown> {
+  return {
+    bindingId: b.id,
+    issueId: b.issueId,
+    revision: b.issueRevision,
+    contractHash: b.contractHash,
+    dispatcherParticipantId: b.dispatcherParticipantId,
+    dispatcherSessionId: b.dispatcherSessionId,
+  };
 }
 
 function runProvenance(
@@ -2920,6 +2949,8 @@ function runProvenance(
         activationId: flag(flags, "activation"),
         attemptId: flag(flags, "attempt"),
         sessionId: flag(flags, "session"),
+        dispatcherParticipantId: flag(flags, "dispatcher-participant"),
+        dispatcherSessionId: flag(flags, "dispatcher-session"),
         baseCommit: flag(flags, "base-commit"),
         claimId: claimRaw !== undefined ? Number(claimRaw) : undefined,
         executionContext: enrichExecutionContext({
@@ -3019,6 +3050,7 @@ function runProvenance(
         `session ${detail.sessionId}: issues ${detail.issueIds.length} bindings ${detail.bindingIds.length} receipts ${detail.receiptIds.length} results ${detail.resultCount}`,
         `issues: ${detail.issueIds.length > 0 ? detail.issueIds.join(",") : "(none)"}`,
         `artifacts: ${detail.artifacts.length > 0 ? detail.artifacts.map((a) => `${a.kind}:${a.value}`).join(",") : "(none)"}`,
+        ...renderDispatchers(detail.dispatchers),
       ];
       return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
     }
@@ -3030,6 +3062,7 @@ function runProvenance(
         `activation ${detail.activationId}: issues ${detail.issueIds.length} bindings ${detail.bindingIds.length} receipts ${detail.receiptIds.length}`,
         `issues: ${detail.issueIds.length > 0 ? detail.issueIds.join(",") : "(none)"}`,
         `artifacts: ${detail.artifacts.length > 0 ? detail.artifacts.map((a) => `${a.kind}:${a.value}`).join(",") : "(none)"}`,
+        ...renderDispatchers(detail.dispatchers),
       ];
       return { code: 0, stdout: lines.join("\n") + "\n", stderr: "" };
     }

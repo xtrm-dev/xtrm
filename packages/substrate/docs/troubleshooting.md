@@ -87,7 +87,12 @@ layer owns workspace exclusion.
 
 If an older client reports `unknown migration version 12`, update that client
 to a compatible Substrate version. Do not delete migrations or downgrade the
-database to bypass fail-closed version checks.
+database to bypass fail-closed version checks. The same applies to every later
+migration: once any client opens the shared store with a newer Substrate, every
+older `sb` on that store fails closed with `unknown migration version <n>`
+(migration 17, `dispatcher-identity`, needs the `sb` release that ships it;
+0.3.3 and earlier do not know it). Upgrade every `sb` binary that opens the
+store before the first newer one touches it.
 
 ## Previously imported Beads data
 

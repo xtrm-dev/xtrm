@@ -564,6 +564,19 @@ export interface ExecutionIdentityView {
   sessionId?: string | null;
   runId?: string | null;
   attemptId?: string | null;
+  dispatcherParticipantId?: string | null;
+  dispatcherSessionId?: string | null;
+}
+
+// "dispatched by <participant> (sess <id>)", or null when the binding recorded
+// no dispatcher. Each half is shown only when recorded (XTRM-839).
+export function formatDispatcher(d: { dispatcherParticipantId?: string | null; dispatcherSessionId?: string | null }): string | null {
+  const who = d.dispatcherParticipantId || null;
+  const sess = d.dispatcherSessionId ? `sess ${d.dispatcherSessionId}` : null;
+  if (who && sess) return `dispatched by ${who} (${sess})`;
+  if (who) return `dispatched by ${who}`;
+  if (sess) return `dispatched from ${sess}`;
+  return null;
 }
 
 export function renderExecutionIdentity(identity: ExecutionIdentityView, opts: TerminalStyleOptions): string {
@@ -573,7 +586,24 @@ export function renderExecutionIdentity(identity: ExecutionIdentityView, opts: T
   if (identity.attemptId) parts.push(identity.attemptId);
   if (identity.sessionId) parts.push(`sess ${identity.sessionId}`);
   if (identity.runId) parts.push(`run ${identity.runId}`);
+  const dispatcher = formatDispatcher(identity);
+  if (dispatcher) parts.push(dispatcher);
   return parts.length > 0 ? dim(parts.join(" · "), opts.color) : dim(IDENTITY_ABSENT, opts.color);
+}
+
+// One "dispatcher" line per binding for `sb provenance session|activation`;
+// an explicit absence marker when no binding recorded a dispatcher.
+export function renderDispatchers(
+  dispatchers: Array<{ bindingId: string; dispatcherParticipantId: string | null; dispatcherSessionId: string | null }>,
+): string[] {
+  const recorded = dispatchers.flatMap((d) => {
+    const text = formatDispatcher(d);
+    return text ? [`  ${d.bindingId} ${text}`] : [];
+  });
+  if (recorded.length === 0) return ["dispatchers: (none recorded)"];
+  const shown = recorded.slice(0, TRACE_MAX_ITEMS);
+  const more = recorded.length > shown.length ? [`  …(${recorded.length - shown.length} more)`] : [];
+  return [`dispatchers: ${recorded.length}`, ...shown, ...more];
 }
 
 // Bounded human provenance trace (XTRM-411): each binding/receipt/checkpoint

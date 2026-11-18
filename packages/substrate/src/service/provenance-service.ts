@@ -18,6 +18,7 @@ import {
   type ExecutionBinding,
 } from "../domain/execution-binding.ts";
 import {
+  canonicalizeDispatcherIdentity,
   canonicalizeWriteIdentity,
   executionContextFromLegacy,
   normalizeExecutionContext,
@@ -100,6 +101,21 @@ export interface ProvenanceTrace {
   // reopened and re-closed Issue carries one row per settlement.
   closures: Closure[];
   closureRevision: number | null;
+}
+
+/** Who dispatched one execution binding; both fields are null when never recorded (XTRM-839). */
+export interface DispatcherView {
+  bindingId: string;
+  dispatcherParticipantId: string | null;
+  dispatcherSessionId: string | null;
+}
+
+function dispatcherView(b: ExecutionBinding): DispatcherView {
+  return {
+    bindingId: b.id,
+    dispatcherParticipantId: b.dispatcherParticipantId,
+    dispatcherSessionId: b.dispatcherSessionId,
+  };
 }
 
 /**
@@ -233,19 +249,28 @@ export class ProvenanceService {
           throw new Error(`dispatch rejected: ${issueId} is live-held by ${active.holder}; holder/activation mismatch (anti-steal)`);
         }
       }
+      // Dispatcher identity (XTRM-839) is validated at the same write seam:
+      // a malformed value throws before the INSERT, and an absent one is
+      // stored as NULL, never as an empty string or a placeholder.
+      const dispatcher = canonicalizeDispatcherIdentity({
+        participantId: input.dispatcherParticipantId ?? null,
+        sessionId: input.dispatcherSessionId ?? null,
+      });
       const id = newExecutionBindingId();
       this.db
         .prepare(
           `INSERT INTO execution_bindings
              (id, issue_id, issue_revision, contract_hash, resolved_context_hash,
               claim_id, participant_id, activation_id, attempt_id, session_id,
+              dispatcher_participant_id, dispatcher_session_id,
               workspace, base_commit, execution_context_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           id, issueId, report.revision, report.contractHash, resolved.hash,
           active?.id ?? null, dispatchFlat.participantId, dispatchFlat.activationId,
-          dispatchFlat.attemptId, dispatchFlat.sessionId, dispatchFlat.workspace, dispatchFlat.baseCommit,
+          dispatchFlat.attemptId, dispatchFlat.sessionId, dispatcher.participantId, dispatcher.sessionId,
+          dispatchFlat.workspace, dispatchFlat.baseCommit,
           identity.executionContext ? JSON.stringify(identity.executionContext) : null, now,
         );
       this.issues.appendEvent(issueId, "provenance.dispatched", {
@@ -526,6 +551,7 @@ export class ProvenanceService {
     receiptIds: string[];
     artifacts: Array<{ receiptId: string; kind: string; value: string; provider: string | null }>;
     resultCount: number;
+    dispatchers: DispatcherView[];
   } {
     const issueIds = this.issuesForSession(sessionId);
     const bindings = rows<Row>(this.db, "SELECT * FROM execution_bindings WHERE session_id = ? ORDER BY created_at, id", sessionId)
@@ -558,6 +584,7 @@ export class ProvenanceService {
       receiptIds,
       artifacts,
       resultCount,
+      dispatchers: bindings.map(dispatcherView),
     };
   }
 
@@ -571,9 +598,10 @@ export class ProvenanceService {
     bindingIds: string[];
     receiptIds: string[];
     artifacts: Array<{ receiptId: string; kind: string; value: string; provider: string | null }>;
+    dispatchers: DispatcherView[];
   } {
     if (typeof activationId !== "string" || activationId.trim() === "") {
-      return { activationId, issueIds: [], bindingIds: [], receiptIds: [], artifacts: [] };
+      return { activationId, issueIds: [], bindingIds: [], receiptIds: [], artifacts: [], dispatchers: [] };
     }
     const boundIssues = rows<{ issue_id: string }>(
       this.db,
@@ -600,7 +628,7 @@ export class ProvenanceService {
         }
       }
     }
-    return { activationId, issueIds, bindingIds: bindings.map((b) => b.id), receiptIds, artifacts };
+    return { activationId, issueIds, bindingIds: bindings.map((b) => b.id), receiptIds, artifacts, dispatchers: bindings.map(dispatcherView) };
   }
 
   /** Closure rows for an Issue in outcome order (ADR §80 `closure outcomes`). */
@@ -905,6 +933,8 @@ export class ProvenanceService {
       activationId: flat.activationId,
       attemptId: flat.attemptId,
       sessionId: flat.sessionId,
+      dispatcherParticipantId: (r["dispatcher_participant_id"] as string | null | undefined) ?? null,
+      dispatcherSessionId: (r["dispatcher_session_id"] as string | null | undefined) ?? null,
       workspace: r["workspace"] as string,
       baseCommit: flat.baseCommit,
       createdAt: r["created_at"] as number,

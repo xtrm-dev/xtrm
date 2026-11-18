@@ -1,0 +1,645 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Console UI system: rail, toolbar, rows, PR identity, Project, Factory (XTRM-853)</title><style>
+:root{
+  --bg:#f6f8fa; --surface:#ffffff; --card:#f7fafc; --canvas:#ffffff;
+  --fg:#111c26; --mut:#5a6b7b; --line:#e3eaf0; --line2:#d3dde6;
+  --dot:rgba(120,140,160,.38); --shadow:rgba(17,28,38,.12); --teal:#0f766e;
+  --ok:#15803d; --okbg:#e8f6ee; --accent:#4338ca; --accentbg:#eceafd;
+  --att:#b45309; --warn:#92400e; --warnbg:#fef3e2; --bad:#b91c1c; --badbg:#fdecec;
+  --sched:#7b8a99; --neutral:#4a5b6b; --neutralbg:#eef2f6;
+  --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI","Noto Sans",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 var(--font);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:44px max(16px,env(safe-area-inset-left,0px)) 96px}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);font-weight:650;margin:0 0 12px}
+h1{font-size:36px;line-height:1.15;letter-spacing:-.02em;font-weight:700;margin:0 0 12px;text-wrap:balance}
+.dek{font-size:17.5px;color:var(--mut);margin:0;max-width:68ch}
+.meta{margin-top:16px;font-size:13px;color:var(--mut);display:flex;flex-wrap:wrap;gap:6px 18px}
+.kicker{font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);font-weight:650;margin:48px 0 6px}
+h2{font-size:25px;line-height:1.25;letter-spacing:-.01em;font-weight:680;margin:0 0 10px;text-wrap:balance}
+h2 small{display:block;font-size:14.5px;color:var(--mut);font-weight:400;margin-top:6px;max-width:78ch}
+h3{font-size:16.5px;font-weight:680;margin:0 0 4px}
+p{margin:0 0 10px;max-width:82ch}
+code{font:12.5px var(--mono);background:var(--card);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:12px;margin:26px 0 4px}
+.fact{border:1px solid var(--line);border-left:3px solid var(--c,var(--teal));border-radius:10px;padding:12px 16px;background:var(--surface)}
+.fact .v{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.fact .k{font-size:13px;color:var(--mut);margin-top:3px}
+.st-done{--c:var(--ok);--cb:var(--okbg);--cf:var(--ok)}
+.st-running{--c:var(--accent);--cb:var(--accentbg);--cf:var(--accent)}
+.st-waiting{--c:var(--att);--cb:var(--warnbg);--cf:var(--warn)}
+.st-blocked{--c:var(--bad);--cb:var(--badbg);--cf:var(--bad)}
+.st-scheduled{--c:var(--sched);--cb:var(--neutralbg);--cf:var(--mut)}
+.pill{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:1px 10px;white-space:nowrap;background:var(--cb);color:var(--cf)}
+.pill .gl{font-family:var(--mono);margin-right:5px}
+.kc{display:inline-flex;gap:7px;align-items:center;border:1px solid var(--line);border-radius:20px;padding:3px 12px 3px 9px;font-size:12.5px;background:var(--surface);color:var(--mut)}
+.kc b{color:var(--fg);font-size:14px;font-variant-numeric:tabular-nums}.kc i{width:9px;height:9px;border-radius:50%;background:var(--c,var(--sched))}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 10px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line);margin:30px 0 0;position:sticky;top:0;background:var(--bg);z-index:5}
+.tabs a{font-size:14px;font-weight:600;color:var(--mut);text-decoration:none;padding:9px 14px;border-bottom:2px solid transparent;border-radius:8px 8px 0 0}
+.tabs a[aria-current="page"]{color:var(--accent);border-bottom-color:var(--accent);background:var(--accentbg)}
+.tabs a:focus-visible,.cx :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.view[hidden]{display:none}
+.tbox{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:10px 0;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--card);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td .why{display:block;color:var(--mut);font-size:12.5px;margin-top:2px}
+.note{border:1px solid var(--line);border-left:3px solid var(--att);background:var(--warnbg);border-radius:0 10px 10px 0;padding:10px 16px;margin:12px 0;font-size:14px}
+.note.good{border-left-color:var(--ok);background:var(--okbg)}
+details{margin:10px 0}summary{cursor:pointer;font-weight:600;font-size:13.5px;color:var(--mut)}
+.spec{border:1px solid var(--line);border-radius:12px;background:var(--surface);margin:0 0 16px;overflow:hidden}
+.spec-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+.spec-h h3{margin:0}.spec-h .src{font:11.5px var(--mono);color:var(--mut)}
+.spec-b{padding:14px 16px}
+.q{font-size:13.5px;color:var(--mut);margin:0 0 10px;max-width:84ch}.q b{color:var(--fg)}
+figcaption,.cap{font-size:13px;color:var(--mut);margin-top:10px;max-width:84ch}
+.pair.wide{grid-template-columns:1fr}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,540px),1fr));gap:12px;align-items:start}
+.cxw{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);min-width:0}
+.cxh{display:flex;justify-content:space-between;gap:8px;padding:6px 12px;font-size:11.5px;color:var(--mut);background:var(--card);border-bottom:1px solid var(--line)}
+.cxh b{color:var(--fg);letter-spacing:.06em;text-transform:uppercase;font-size:11px}
+.cxi{overflow-x:auto}
+.lg-box{overflow-x:auto}.canvas{background:var(--canvas);background-image:radial-gradient(var(--dot) 1px,transparent 1.5px);background-size:18px 18px;border:1px solid var(--line);border-radius:14px}
+figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;display:block;color:var(--fg)}figure svg text{fill:currentColor}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}
+.sw{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:8px}
+.sw div{border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:12px}
+.sw .l,.sw .d{height:30px}.sw .lbl{padding:5px 9px;line-height:1.4}.sw .lbl b{display:block;font:11.5px var(--mono)}
+@media (max-width:720px){h1{font-size:28px}}
+@media (prefers-reduced-motion:reduce){.cx *{transition:none!important}}
+
+/* ===== Console miniature: token sets copied from src/styles.css (light value of --x-success is the R1 proposal) ===== */
+.cx{--x-deep:#f4f4f5;--x-sidebar:#f4f4f5;--x-surface:#ffffff;--x-raised:#ffffff;--x-control:#efeff1;--x-hover:rgb(15 15 20/.045);--x-pressed:rgb(15 15 20/.08);--x-ink:#18181b;--x-ink-muted:#5f5f68;--x-ink-faint:#94949c;--x-bm:rgb(15 15 20/.07);--x-bs:rgb(15 15 20/.04);--x-b:rgb(15 15 20/.11);--x-bx:rgb(15 15 20/.2);--x-accent:#4f46e5;--x-accent-ink:#4338ca;--x-accent-soft:rgb(79 70 229/.1);--x-danger:#c42b2b;--x-success:#1b7f46;--x-float:0 10px 30px -12px rgb(15 15 20/.22),0 0 0 1px rgb(15 15 20/.06);--x-gh:#24292f;--x-ghink:#fff;
+  --cf:"Figtree Variable",ui-sans-serif,system-ui,sans-serif;--cm:"Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;
+  background:var(--x-deep);color:var(--x-ink);font:13px/20px var(--cf);min-width:520px}
+.cx[data-theme=dark]{--x-deep:#0d0d0d;--x-sidebar:#232323;--x-surface:#151515;--x-raised:#1e1e1e;--x-control:#262626;--x-hover:rgb(255 255 255/.03);--x-pressed:rgb(255 255 255/.06);--x-ink:#ececef;--x-ink-muted:#a0a0a8;--x-ink-faint:#6a6a72;--x-bm:rgb(255 255 255/.08);--x-bs:rgb(255 255 255/.06);--x-b:rgb(255 255 255/.12);--x-bx:rgb(255 255 255/.18);--x-accent:#818cf8;--x-accent-ink:#a5b4fc;--x-accent-soft:rgb(129 140 248/.12);--x-danger:#f07171;--x-success:#5ccb8a;--x-float:0 18px 44px -12px rgb(0 0 0/.72),0 0 0 1px rgb(255 255 255/.08);--x-gh:#f0f6fc;--x-ghink:#24292f}
+.cx *{box-sizing:border-box}
+.cx .ic{width:13px;height:13px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cx .ic.n{width:16px;height:16px;stroke-width:2.25}.cx .ic.m{width:12px;height:12px}.cx .ic.big{width:14px;height:14px;stroke-width:2.25}
+.cx .mono{font-family:var(--cm)}.cx .tab{font-variant-numeric:tabular-nums}.cx .f{color:var(--x-ink-faint)}.cx .mu{color:var(--x-ink-muted)}
+.cx .row{display:flex;align-items:center;min-width:0}
+/* chips (Badge) */
+.cx .bd{display:inline-flex;align-items:center;justify-content:center;gap:3px;border-radius:4px;font-weight:500;white-space:nowrap;line-height:1;height:18px;padding:0 6px;font-size:10.9px;flex:none}
+.cx .bd.xs{height:16px;padding:0 4px;font-size:9.9px}
+.cx .bd.accent{background:var(--x-accent-soft);color:var(--x-accent-ink)}.cx .bd.active{background:var(--x-accent-soft);color:var(--x-ink)}
+.cx .bd.danger{background:color-mix(in srgb,var(--x-danger) 12%,transparent);color:var(--x-danger)}
+.cx .bd.success{background:color-mix(in srgb,var(--x-success) 12%,transparent);color:var(--x-success)}
+.cx .bd.neutral{background:var(--x-pressed);color:var(--x-ink-muted)}.cx .bd.muted{background:var(--x-hover);color:var(--x-ink-faint)}
+.cx .bd.dash{background:transparent;border:1px dashed var(--x-bx);color:var(--x-ink-muted)}
+/* PrKey */
+.cx .pk{display:inline-flex;align-items:center;gap:4px;font:12px/16px var(--cm);white-space:nowrap}
+.cx .pk.s-open{color:var(--x-success)}.cx .pk.s-draft{color:var(--x-ink-muted)}.cx .pk.s-merged{color:var(--x-accent-ink)}.cx .pk.s-closed{color:var(--x-danger)}
+.cx .rf{font:12px/16px var(--cm);color:var(--x-accent-ink);white-space:nowrap}
+.cx .ik{font:12px/16px var(--cm);color:var(--x-ink-muted);white-space:nowrap}
+/* sidebar + NavRail */
+.cx .sb{width:264px;max-width:100%;background:var(--x-sidebar);padding:8px;display:flex;flex-direction:column;gap:1px}
+.cx .sh{display:flex;align-items:center;justify-content:space-between;height:28px;padding:0 8px;font-size:11px;font-weight:600;color:var(--x-ink-faint)}
+.cx .nr{position:relative;display:flex;align-items:center;gap:10px;height:30px;padding:0 8px;border-radius:6px;color:var(--x-ink-muted);font-weight:600;cursor:default}
+.cx .nr>.ic.n{color:var(--x-ink-faint)}.cx .nr:hover{background:var(--x-hover)}
+.cx .nr.sel{background:var(--x-pressed);color:var(--x-ink)}.cx .nr.sel>.ic.n{color:var(--x-ink)}
+.cx .nr.def{color:var(--x-ink-faint)}
+.cx .nr .ct{margin-left:auto;font-size:11.5px;font-weight:400;color:var(--x-ink-faint)}
+.cx .nr .tg{margin-left:auto;margin-right:-4px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--x-ink-faint);border:0;background:none;padding:0;cursor:pointer}
+.cx .nr .tg .ic{transition:transform .15s}.cx .nr.shut .tg .ic{transform:rotate(-90deg)}
+.cx .rail{margin:0 0 2px 15px;border-left:1px solid var(--x-bm);display:flex;flex-direction:column;gap:1px}
+.cx .nr.shut+.rail{display:none}
+.cx .nc{position:relative;display:flex;align-items:center;height:28px;padding:0 8px 0 18px;border-radius:6px;color:var(--x-ink-muted);font-weight:500;cursor:default}
+.cx .nc:hover{background:var(--x-hover)}.cx .nc.def{color:var(--x-ink-faint)}
+.cx .nc.act{color:var(--x-ink);font-weight:600;background:var(--x-hover)}
+.cx .nc.act::before{content:"";position:absolute;left:-1px;top:6px;bottom:6px;width:2px;border-radius:2px;background:var(--x-accent)}
+.cx .nc .ct{margin-left:auto;font-size:11.5px;font-weight:400;color:var(--x-ink-faint)}
+/* toolbar */
+.cx .gs{display:flex;align-items:center;gap:8px;height:44px;padding:0 10px;font-size:12px;color:var(--x-ink-faint)}
+.cx .gs .pal{margin-left:auto;display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;border-radius:6px;border:1px solid var(--x-b);color:var(--x-ink-muted)}
+.cx kbd{font:10.5px var(--cf);border:1px solid var(--x-b);border-radius:3px;padding:0 4px;color:var(--x-ink-faint)}
+.cx .tb{display:flex;flex-wrap:wrap;align-items:center;gap:6px 6px;min-height:40px;padding:6px}
+.cx .tbn{display:flex;align-items:center;gap:4px;height:28px;padding:0 6px;border-radius:6px;font-size:12px;color:var(--x-ink-muted);border:0;background:none;font-family:inherit;cursor:default;position:relative;white-space:nowrap}
+.cx .tbn:hover{background:var(--x-hover);color:var(--x-ink)}
+.cx .tbn.pri{color:var(--x-ink);font-weight:500}.cx .tbn.val{color:var(--x-ink);font-weight:500}
+.cx .tbn.chipy{background:var(--x-pressed)}
+.cx .tbn.tabsel{color:var(--x-ink);font-weight:500}.cx .tbn.tabsel::after{content:"";position:absolute;left:6px;right:6px;bottom:0;height:2px;border-radius:1px;background:var(--x-ink)}
+.cx .tbn .n{color:var(--x-ink-faint);font-variant-numeric:tabular-nums}
+.cx .lf{position:relative;display:flex;align-items:center;gap:6px;height:28px;width:28px;border-radius:6px;overflow:hidden;color:var(--x-ink-muted);transition:width .15s;cursor:text;padding:0 7px;flex:none}
+.cx .lf:hover{background:var(--x-hover)}
+.cx .lf input{width:0;border:0;outline:0;background:none;color:var(--x-ink);font:12px var(--cf);padding:0;min-width:0}
+.cx .lf.on,.cx .lf:focus-within{width:216px;background:var(--x-hover);box-shadow:0 0 0 2px color-mix(in oklab,var(--x-accent) 60%,transparent)}
+.cx .lf.on input,.cx .lf:focus-within input{width:100%;flex:1}
+.cx .lf .m{margin-left:auto;font-size:11px;color:var(--x-ink-faint);white-space:nowrap;display:none}.cx .lf.on .m{display:block}
+.cx .lf.hasv{box-shadow:none}
+.cx .seg{display:flex;margin-left:auto;gap:2px}.cx .ib{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--x-ink-muted)}.cx .ib.on{background:var(--x-hover);color:var(--x-ink)}
+/* lists */
+.cx .tbl{background:var(--x-surface)}
+.cx .th{display:grid;height:32px;align-items:center;border-bottom:1px solid var(--x-bs);font-size:11px;color:var(--x-ink-faint)}
+.cx .th>*{padding:0 8px}
+.cx .tr{position:relative;display:grid;height:32px;align-items:center;border-bottom:1px solid var(--x-bs);cursor:default}
+.cx .tr:hover,.cx .tr.hov{background:var(--x-hover)}.cx .tr.sel{background:var(--x-hover)}
+.cx .tr>*{padding:0 8px;min-width:0;display:flex;align-items:center;white-space:nowrap}
+.cx .tr .ti{overflow:hidden;text-overflow:ellipsis;display:block;line-height:32px;min-width:0}
+.cx .tr .r{justify-content:flex-end;color:var(--x-ink-muted);font-size:11.5px}
+.cx .tr .done .ti{color:var(--x-ink-muted)}
+.cx .ra{position:absolute;right:6px;top:0;bottom:0;display:none;align-items:center;background:var(--x-hover);padding-left:4px;padding:0 0 0 4px}
+.cx .tr:hover .ra,.cx .tr.hov .ra{display:flex}
+.cx .tr .ra{background:var(--x-surface)}.cx .tr:hover .ra,.cx .tr.hov .ra{background:color-mix(in srgb,var(--x-ink) 4.5%,var(--x-surface))}
+.cx .btn{width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--x-ink-muted);border:0;background:none;padding:0;cursor:pointer}
+.cx .btn:hover{background:var(--x-pressed);color:var(--x-ink)}.cx .btn.big{width:20px}
+.cx .pri3{display:inline-flex;align-items:flex-end;gap:2px;height:12px;width:16px;flex:none}.cx .pri3 i{width:3px;border-radius:1px;background:var(--x-bx)}.cx .pri3 i.f{background:var(--x-ink-muted)}
+.cx .chv{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--x-ink-faint);flex:none}
+.cx .today .tr .btn,.cx .today .tr .ic.big{color:var(--x-ink-faint)}
+/* popover + tooltip */
+.cx .pw{position:relative;display:inline-flex;min-width:0}
+.cx .pop{position:absolute;left:0;top:calc(100% + 4px);z-index:4;display:none;flex-direction:column;gap:2px;width:300px;max-height:240px;overflow:auto;background:var(--x-raised);border-radius:8px;box-shadow:var(--x-float);padding:6px}
+.cx .pop.open{display:flex}.cx .pop .pr{display:flex;gap:8px;align-items:baseline;padding:3px 6px;border-radius:4px;min-width:0}.cx .pop .pr:hover{background:var(--x-hover)}
+.cx .pop .pr span.t{color:var(--x-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.cx .pop .hd{font-size:11px;color:var(--x-ink-faint);padding:2px 6px}
+.cx .tip{position:absolute;z-index:5;background:var(--x-raised);box-shadow:var(--x-float);border-radius:6px;padding:3px 8px;font-size:11.5px;color:var(--x-ink);white-space:nowrap}
+/* drawer */
+.cx .dr{background:var(--x-surface);max-width:460px}
+.cx .dh{display:flex;align-items:center;gap:6px;height:44px;padding:0 10px;border-bottom:1px solid var(--x-bm)}
+.cx .dh .t{font-weight:500;margin-left:4px}.cx .dh .e{margin-left:auto;display:flex;gap:2px;align-items:center}
+.cx .ph{padding:14px 20px 12px;display:flex;flex-direction:column;gap:8px}
+.cx .ph h2{margin:0;font:500 15px/22px var(--cf);color:var(--x-ink);text-wrap:pretty;display:flex;gap:8px;align-items:baseline}
+.cx .ph .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--x-ink-faint);margin:0}
+.cx .ph .meta .br{font:12px/16px var(--cm);color:var(--x-ink-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px}
+.cx .gh{margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:99px;background:var(--x-gh);color:var(--x-ghink);font-size:11.2px;font-weight:500;flex:none}
+.cx .sec{border-top:1px solid var(--x-bm);padding:14px 20px;display:flex;flex-direction:column;gap:8px}
+.cx .sec h3{margin:0;font:500 12px/16px var(--cf);color:var(--x-ink-faint);display:flex;align-items:center;gap:8px}
+.cx .sec h3 .a{margin-left:auto;font-weight:400}
+.cx dl{display:grid;grid-template-columns:7.5rem 1fr;gap:6px 12px;margin:0;font-size:13px}.cx dt{color:var(--x-ink-faint)}.cx dd{margin:0;min-width:0}
+.cx .add{color:var(--x-success)}.cx .del{color:var(--x-danger)}
+.cx .fl{display:flex;gap:8px;align-items:center;font-size:13px;min-width:0}.cx .fl .fn{font:12px var(--cm);color:var(--x-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+/* Project */
+.cx .ps{padding:10px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;border-bottom:1px solid var(--x-bm);background:var(--x-surface)}
+.cx .ps b{font-weight:600;font-size:13.5px}
+.cx .nn{margin:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cx .nn>div{padding:8px 10px;border-radius:8px;background:var(--x-surface);min-width:0}
+.cx .nn small{display:block;font-size:11px;color:var(--x-ink-faint)}
+.cx .at{display:grid;grid-template-columns:7.2rem minmax(0,1fr) auto 3.2rem;align-items:center;gap:0 10px;min-height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface)}
+.cx .at:hover{background:var(--x-hover)}.cx .at .w{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cx .at .w small{color:var(--x-ink-faint);margin-left:8px}
+.cx .dg{padding:6px 12px;background:var(--x-control);font:10.5px var(--cm);letter-spacing:.08em;text-transform:uppercase;color:var(--x-ink-muted);display:flex;justify-content:space-between}
+.cx .ev{display:grid;grid-template-columns:3.2rem 6.4rem minmax(0,1fr) auto;gap:0 10px;align-items:center;min-height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface)}
+.cx .ev.past{color:var(--x-ink-muted)}.cx .ev .k{display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--x-ink-muted)}
+.cx .now{display:flex;align-items:center;gap:8px;height:20px;padding:0 12px;color:var(--x-danger);font:10.5px var(--cm);letter-spacing:.06em;background:var(--x-surface)}
+.cx .now i{flex:1;height:1px;background:var(--x-danger);opacity:.55}
+.cx .wt{background:var(--x-surface)}
+.cx .wh,.cx .wr{display:grid;grid-template-columns:minmax(210px,1.5fr) 4.6rem minmax(0,1.5fr) 5.6rem 2.6rem 4.4rem;align-items:center;column-gap:8px;padding:0 12px}
+.cx .wh{height:30px;border-bottom:1px solid var(--x-bs);font-size:11px;color:var(--x-ink-faint)}
+.cx .wr{height:32px;border-bottom:1px solid var(--x-bs)}.cx .wr:hover{background-color:var(--x-hover)}
+.cx .wr>*{min-width:0;white-space:nowrap}
+.cx .wn{display:flex;align-items:center;gap:6px;min-width:0}
+.cx .wn .nm{overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.cx .wr.d1,.cx .wr.d2{background-image:linear-gradient(var(--x-bm),var(--x-bm));background-size:1px 100%;background-repeat:no-repeat;background-position:22px 0}
+.cx .wr.d2{background-image:linear-gradient(var(--x-bm),var(--x-bm)),linear-gradient(var(--x-bm),var(--x-bm));background-size:1px 100%,1px 100%;background-position:22px 0,44px 0;background-repeat:no-repeat}
+.cx .wr.d1 .wn{padding-left:22px}.cx .wr.d2 .wn{padding-left:44px}
+.cx .wr .tx{display:flex;gap:6px;align-items:center;min-width:0;overflow:hidden}
+.cx .wr .rr{font-size:11.5px;color:var(--x-ink-muted);text-align:right}
+.cx .st{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--x-ink-muted)}
+.cx .dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--x-accent);flex:none}.cx .dot.idle{border:1px solid var(--x-ink-muted)}.cx .dot.done{background:var(--x-ink-faint);border:0}.cx .dot.bad{background:var(--x-danger);border:0}
+.cx .fu{display:grid;grid-template-columns:16px minmax(0,1fr) 5.2rem 4.6rem 4rem auto;gap:0 10px;align-items:center;min-height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface)}
+.cx .jr{display:grid;grid-template-columns:6rem minmax(0,1fr) 5.4rem 5rem 4.2rem;gap:0 10px;align-items:center;min-height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface)}
+.cx .jk{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:4px;border:1px solid var(--x-bx);font:11px/1 var(--cm);color:var(--x-ink);white-space:nowrap}
+.cx .jk .w{font:10.5px var(--cf);color:var(--x-ink-muted)}
+.cx .ban{display:flex;gap:10px;align-items:flex-start;border-left:2px solid var(--x-ink-faint);padding:6px 10px;margin:8px 12px;background:var(--x-surface);border-radius:0 6px 6px 0;font-size:12px}
+.cx .ban.warn{border-left-color:var(--x-accent)}.cx .ban b{font-weight:600}
+/* Factory */
+.cx .fr{display:grid;grid-template-columns:minmax(9.5rem,1fr) 5.4rem 4rem 6rem 4.4rem;gap:0 8px;align-items:center;height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface);position:relative}
+.cx .fr:hover,.cx .fr.sel{background:color-mix(in srgb,var(--x-ink) 4.5%,var(--x-surface))}
+.cx .ff{display:grid;grid-template-columns:8.5rem minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--x-bs)}
+.cx .ff:last-child{border:0}.cx .ff .k{color:var(--x-ink-muted);font-size:12.5px}.cx .ff .v{color:var(--x-ink);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx .ff .v.inh{color:var(--x-ink-muted)}.cx .ff .sub{grid-column:2/4;font-size:11.5px;color:var(--x-ink-faint)}
+.cx .fe{position:absolute;right:20px;z-index:4;width:290px;background:var(--x-raised);border-radius:8px;box-shadow:var(--x-float);padding:10px;display:flex;flex-direction:column;gap:8px}
+.cx .fe .cli{font:11px/16px var(--cm);color:var(--x-ink-muted);background:var(--x-deep);border-radius:6px;padding:6px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx .fe .acts{display:flex;gap:6px;justify-content:flex-end}.cx .fe .acts .tbn{border:1px solid var(--x-b)}
+.cx .cp{background:var(--x-deep);border-radius:6px;padding:8px 10px;font:11.5px/17px var(--cm);color:var(--x-ink-muted);max-height:84px;overflow:hidden}
+</style></head><body>
+<noscript><div class="wrap"><div class="note"><b>JavaScript is off.</b> The Console specimens are drawn from data by a short inline script; the tables below each figure carry the same facts as text.</div></div></noscript>
+<div class="wrap">
+<p class="eyebrow">XTRM-853 · Console v2 · design pass</p>
+<h1>The Console UI system: one rail, quiet toolbars, small rows, PR identity, Project visuals, one Factory drawer</h1>
+<p class="dek">The operator's review of 2026-11-18 asked for a coherent UI system before more surfaces land. This page shows the six answers in the Console's own tokens, in light and dark. The committed spec <code>packages/xtrm-app/docs/design/console-ui-system.md</code> names every token and component, with file, props and consuming surfaces.</p>
+<div class="meta"><span>Status: proposal for lead review, then operator look</span><span>Binding: ADR-002 §D9 and §12, XTRM-632/636/637</span><span>Nothing in <code>src/</code> changes under XTRM-853</span></div>
+<div class="note good"><b>Reading the page.</b> The page chrome follows the Mercury style (light grey page, white cards). Each “Console” frame inside a card is a faithful miniature of the app, rendered with the token values of <code>src/styles.css</code> in the light theme and in the dark theme. Rows, keys and titles are sample data (merged PR numbers and issue keys come from repository history; open, draft and closed states are illustrative). The one deliberate token deviation is the light <code>--x-success</code> shown at the proposed <code>#1b7f46</code> (ruling R1).</div>
+
+<div class="facts">
+ <div class="fact" style="--c:var(--accent)"><div class="v">1 rail</div><div class="k">nested sections, no child icons</div></div>
+ <div class="fact" style="--c:var(--sched)"><div class="v">0 chips</div><div class="k">in the resting toolbar</div></div>
+ <div class="fact" style="--c:var(--teal)"><div class="v">13 px</div><div class="k">icons in rows (text size)</div></div>
+ <div class="fact" style="--c:var(--ok)"><div class="v">4 states</div><div class="k">PR key: open, draft, merged, closed</div></div>
+ <div class="fact" style="--c:var(--att)"><div class="v">3 sources</div><div class="k">behind the Workers tree</div></div>
+ <div class="fact" style="--c:var(--bad)"><div class="v">5 rulings</div><div class="k">R1–R5 for the lead</div></div>
+</div>
+
+<nav class="tabs" aria-label="Views">
+ <a href="#shell" data-v="shell">Shell · items 1–3</a><a href="#pulls" data-v="pulls">Pull requests · item 4</a><a href="#project" data-v="project">Project · item 5</a><a href="#factory" data-v="factory">Factory · item 6</a><a href="#tokens" data-v="tokens">Tokens and registry</a>
+</nav>
+
+<!-- ================= SHELL ================= -->
+<div class="view" id="view-shell" hidden>
+<div class="kicker">01 · NavRail</div>
+<h2>Nested sections hang on a hairline rail, and the label column lines up<small>Children carry no icon. The rail sits under the centre of the parent icon, the child label starts at the parent label's x, and the active child is marked on the rail with the accent.</small></h2>
+<div class="spec"><div class="spec-h"><h3>NavRail</h3><span class="src">src/ui/sidebar.tsx · ContextSidebar.tsx (Project, Research)</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> where am I, and what is inside this section? Click the chevrons to collapse a section.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--accent)"></i><b>16 px</b> rail x</span><span class="kc"><i style="--c:var(--teal)"></i><b>34 px</b> label x, parent and child</span><span class="kc"><i style="--c:var(--accent)"></i><b>2 px</b> active marker</span><span class="kc"><i></i><b>28 px</b> child row</span></div>
+ <div class="pair" data-s="nav"></div>
+ <figure class="canvas"><svg viewBox="0 0 1000 232" role="img" aria-label="NavRail geometry at 2x: the rail is 16 pixels from the row edge, under the centre of the parent icon; parent and child labels both start 34 pixels from the row edge">
+  <g transform="translate(120,40)">
+   <rect x="0" y="0" width="360" height="60" rx="10" style="fill:var(--card);stroke:var(--line2)"/>
+   <rect x="16" y="14" width="32" height="32" rx="7" style="fill:var(--line2)"/><text x="68" y="36" font-size="15" font-weight="650">Project</text>
+   <line x1="32" x2="32" y1="64" y2="172" style="stroke:var(--sched);stroke-width:2"/>
+   <rect x="30" y="100" width="4" height="40" rx="2" style="fill:var(--accent)"/>
+   <text x="68" y="90" font-size="14" style="fill:var(--mut)">Timeline</text><text x="68" y="126" font-size="14" font-weight="650">Workers</text><text x="68" y="162" font-size="14" style="fill:var(--mut)">Follow-ups</text>
+   <line x1="32" x2="32" y1="-8" y2="60" style="stroke:var(--accent);stroke-dasharray:4 3"/>
+   <line x1="68" x2="68" y1="-8" y2="172" style="stroke:var(--teal);stroke-dasharray:4 3"/>
+   <text x="26" y="-14" text-anchor="end" font-size="11.5" font-family="ui-monospace,monospace" style="fill:var(--accent)">rail x = 16 px</text>
+   <text x="74" y="-14" font-size="11.5" font-family="ui-monospace,monospace" style="fill:var(--teal)">label x = 34 px</text>
+  </g>
+  <text x="560" y="56" font-size="14" font-weight="650">Parent row</text><text x="560" y="76" font-size="13" style="fill:var(--mut)">8 px padding + 16 px icon + 10 px gap = label at 34 px.</text><text x="560" y="94" font-size="13" style="fill:var(--mut)">Icon centre at 8 + 8 = 16 px: the rail runs under it.</text>
+  <text x="560" y="136" font-size="14" font-weight="650">Child row</text><text x="560" y="156" font-size="13" style="fill:var(--mut)">15 px margin + 1 px hairline + 18 px padding = label at 34 px.</text><text x="560" y="174" font-size="13" style="fill:var(--mut)">The active child shows a 2 px accent marker on the rail.</text>
+ </svg><figcaption>Geometry at 2×, in pixels from the row's left edge. The values come from <code>SidebarRow</code> today (<code>px-2</code>, 16 px <code>nav</code> icon, <code>gap-2.5</code>).</figcaption></figure>
+ <details><summary>Text equivalent</summary><div class="tbox"><table><tr><th>part</th><th>value</th><th>token or utility</th></tr>
+ <tr><td>Rail</td><td>1 px, x = 16 px</td><td><code>ml-[15px] border-l border-border-muted</code></td></tr>
+ <tr><td>Child row</td><td>28 px, no icon, label at 34 px</td><td><code>h-7 pl-[18px] font-medium text-ink-muted</code></td></tr>
+ <tr><td>Active child</td><td>ink, semibold, hover fill, 2 px accent marker on the rail</td><td><code>text-ink font-semibold bg-hover before:bg-accent</code></td></tr>
+ <tr><td>Deferred child</td><td>faint label, still navigable</td><td><code>text-ink-faint</code></td></tr></table></div></details>
+</div></div>
+
+<div class="kicker">02 · Toolbar</div>
+<h2>Plain text and icon buttons; a local filter that is an icon until you focus it<small>No resting fill, so “New issue” and the filters stop looking like chips. The local filter uses the filter glyph and narrows the list; Ctrl+K stays the global palette with the magnifier.</small></h2>
+<div class="spec"><div class="spec-h"><h3>Toolbar controls and ListFilter</h3><span class="src">src/ui/primitives.tsx · src/ui/toolbar.tsx (new)</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> which controls act on this list, and how is filtering this list different from searching everything? Click the filter icon below; it widens. Type to see a value state.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--sched)"></i><b>0</b> resting fills</span><span class="kc"><i style="--c:var(--accent)"></i><b>28 → 192 px</b> filter width</span><span class="kc"><i></i><b>/</b> focuses the filter</span><span class="kc"><i></i><b>Ctrl K</b> stays global</span></div>
+ <p class="q" style="margin-top:12px"><b>Today</b> (light, from the current source): resting <code>bg-pressed</code> on every filter and on “New issue”.</p>
+ <div class="pair" data-s="tbToday" data-one="light"></div>
+ <p class="q" style="margin-top:14px"><b>Proposed</b>: three states of one toolbar — resting, an active filter, and the focused local filter holding a value.</p>
+ <div class="pair" data-s="tb"></div>
+ <figcaption class="cap">The global palette (top bar, <kbd>Ctrl K</kbd>) searches across surfaces and opens results. The list filter narrows only the rows already loaded in this surface, by title, key and author. Selected tab = ink text plus a 2 px ink bar, no fill (ruling R5). Filter shortcut <kbd>/</kbd> and the filter glyph are ruling R4.</figcaption>
+</div></div>
+
+<div class="kicker">03 · List rows</div>
+<h2>Icons at text size, the status chip right after the key, one copy action at the end<small>The status chip moves behind the key. The 14 px icons shrink to 13 px. The two hover actions (open, copy) become one copy action; the Inspector opens on click and the page on double-click.</small></h2>
+<div class="spec"><div class="spec-h"><h3>Issue row and RowAction</h3><span class="src">src/issues/IssuesSurface.tsx · src/ui/row-action.tsx (new) · src/ui/icon.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> can I read key, state and title in one glance, and what can I do with a row? Hover the rows.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--teal)"></i><b>14 → 13 px</b> row icons</span><span class="kc"><i style="--c:var(--accent)"></i><b>key → chip → title</b></span><span class="kc"><i></i><b>2 → 1</b> hover actions</span><span class="kc"><i></i><b>20 px</b> action target</span></div>
+ <p class="q" style="margin-top:12px"><b>Today</b> (light): status chip before the key; open and copy actions at 14 px.</p>
+ <div class="pair" data-s="rowsToday" data-one="light"></div>
+ <p class="q" style="margin-top:14px"><b>Proposed</b> (row 3 shows the hover state; row 2 is the selected row).</p>
+ <div class="pair" data-s="rows"></div>
+ <details><summary>Text equivalent</summary><div class="tbox"><table><tr><th>slot</th><th>today</th><th>proposed</th></tr>
+ <tr><td>1</td><td>disclosure, 14 px chevron</td><td>disclosure, 13 px chevron (20 px target)</td></tr>
+ <tr><td>2</td><td>kind icon 14 px</td><td>kind icon 13 px</td></tr>
+ <tr><td>3</td><td>priority glyph</td><td>priority glyph (unchanged)</td></tr>
+ <tr><td>4</td><td>status chip, 64 px</td><td>key (mono, data-sized column)</td></tr>
+ <tr><td>5</td><td>key and flat ref</td><td>status chip xs, 68 px; the word is the carrier</td></tr>
+ <tr><td>end</td><td>open + copy, 14 px icons</td><td>copy only, 13 px icon, 20 px target</td></tr></table></div></details>
+</div></div>
+</div>
+
+<!-- ================= PULL REQUESTS ================= -->
+<div class="view" id="view-pulls" hidden>
+<div class="kicker">04 · PR identity</div>
+<h2>One PrKey, coloured by state, wherever a PR number appears<small>Open is green, draft is muted, merged is violet, closed is red. The state is also a glyph shape, the tooltip and the aria-label, so colour is never the only signal.</small></h2>
+<div class="spec"><div class="spec-h"><h3>PrKey and PrStateChip</h3><span class="src">src/ui/pr-key.tsx (new) · absorbs src/issues/pr-state.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what state is this PR in, without opening it? Hover a key for its tooltip.</p>
+ <div class="pair" data-s="prKeys"></div>
+ <div class="tbox"><table><tr><th>state</th><th>key colour</th><th>glyph</th><th>chip tone</th><th>tooltip</th><th>aria-label</th><th>contrast light / dark</th></tr>
+ <tr><td>open</td><td><code>text-success</code></td><td>git-pull-request</td><td>success</td><td>Open — ready for review</td><td>Pull request #431, Open</td><td>5.04 (R1) / 9.01</td></tr>
+ <tr><td>draft</td><td><code>text-ink-muted</code></td><td>git-pull-request-draft</td><td>neutral</td><td>Draft — not ready for review</td><td>Pull request #429, Draft</td><td>6.32 / 7.03</td></tr>
+ <tr><td>merged</td><td><code>text-accent-ink</code></td><td>git-merge</td><td>accent</td><td>Merged</td><td>Pull request #422, Merged</td><td>7.90 / 9.16</td></tr>
+ <tr><td>closed</td><td><code>text-danger</code></td><td>git-pull-request-closed</td><td>danger</td><td>Closed without merging</td><td>Pull request #418, Closed</td><td>5.63 / 6.35</td></tr></table></div>
+ <p class="cap">Where it renders (every current site): PR list row, PR inspector header, <code>ReferenceChip</code> for PRs (prose, activity, composer), issue-table PR column, issue page PR block and events, Project timeline <code>pr</code> events, Project Workers trail. The full table with files is in the spec §4.4.</p>
+</div></div>
+
+<div class="kicker">04 · PR list and inspector</div>
+<h2>A Linked column that never wraps, and a header that leads with the key and the state<small>Linked Substrate refs show the first ref plus +N, with the full list in a popover. The inspector header reads “key title”, then a small state chip, branch, diff and file count.</small></h2>
+<div class="spec"><div class="spec-h"><h3>PR list: PrKey and LinkedRefs</h3><span class="src">src/github/PullsSurface.tsx · src/ui/linked-refs.tsx (new)</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> which PRs touch which Substrate issues? Click <b>+2</b> to open the popover; the state dot column is gone.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--teal)"></i><b>9.5 rem</b> Linked column</span><span class="kc"><i style="--c:var(--accent)"></i><b>1 + N</b> refs shown</span><span class="kc"><i></i><b>0</b> wrapped rows</span></div>
+ <div class="pair" data-s="pulls"></div>
+ <figcaption class="cap">The overflow came from three issue chips inside the title cell. The chips now live in their own column; the first chip truncates before <b>+N</b> is pushed out.</figcaption>
+</div></div>
+<div class="spec"><div class="spec-h"><h3>PR inspector header</h3><span class="src">src/github/PullPanel.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what is this PR, what state is it in, and what does it change?</p>
+ <div class="pair" data-s="prDrawer"></div>
+ <figcaption class="cap">Line 1: key and title. Line 2: state chip (GitHub-style), head → base, diff, file count. Line 3: author and age. Linked Substrate issues move directly under the header; the Overview rows that repeated author, branch and change are removed.</figcaption>
+</div></div>
+</div>
+
+<!-- ================= PROJECT ================= -->
+<div class="view" id="view-project" hidden>
+<div class="kicker">05 · Project section</div>
+<h2>Five surfaces on the same rows, rail and chips<small>Overview ranks what needs attention, Timeline is an agenda (no Gantt), Workers is a tree, Follow-ups and Jira are rows with word chips. All read-only in this tranche (ADR-002 §D2).</small></h2>
+
+<div class="spec"><div class="spec-h"><h3>Overview: attention list</h3><span class="src">src/project/overview/AttentionList.tsx · ProjectShell.tsx · IntegrationState.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what needs me now? Rows are ranked: question, blocked worker, claim expiring, due follow-up, then awareness.</p>
+ <div class="pair" data-s="overview"></div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>Timeline: day-grouped agenda</h3><span class="src">src/project/timeline/{DayGroup,EventRow,NowMarker}.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what happened today, and what is next? A now marker splits past from upcoming. No lanes, no bars.</p>
+ <div class="pair" data-s="timeline"></div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>Workers: tree of lead → worker → specialist activation, with the issue → PR trail</h3><span class="src">src/project/workers/{WorkersTree,WorkerNode}.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> who is running, under whom, on which issue, with which PR, and how full is the context? Rows reuse the NavRail hairline; roles and states are words.</p>
+ <div class="pair wide" data-s="workers"></div>
+ <figure class="canvas"><svg id="lineage" viewBox="0 0 1000 222" role="img" aria-label="Workers lineage: a lead pane parents worker panes through parent_session_id; a worker pane owns specialist activations through owning_pane_id; an activation names its issue through bead_id; the issue reaches its pull request through the branch name"></svg>
+  <figcaption>Where each hop comes from. S1 is the status board <code>workers/*</code> record, S2 is the core topology projection (<code>xt host</code>, <code>GET /v1/topology</code>), S3 is Substrate. Issue and PR render as the node's trail, not as extra tree levels, because one issue has many activations and one PR can close several issues.</figcaption></figure>
+ <details open><summary>Data source per field (real fields only)</summary><div class="tbox"><table><tr><th>column or node</th><th>field</th><th>source</th></tr>
+ <tr><td>tree edge lead → worker</td><td><code>agent.parent_session_id</code>, <code>agent.parent_pane_id</code> (tmux <code>@agent_parent_session</code>, <code>@agent_parent_pane</code>); fallback board <code>reportsTo</code></td><td>S2; S1</td></tr>
+ <tr><td>name</td><td><code>pane.session_name</code>; board <code>name</code></td><td>S2; S1</td></tr>
+ <tr><td>role word</td><td><code>agent.role</code> (<code>@agent_role</code>, role launches only); board <code>kind</code></td><td>S2; S1</td></tr>
+ <tr><td>state word</td><td><code>agent.state</code> (<code>@agent_state</code>, runtime lifecycle, never done-ness); board <code>status</code>; activation <code>jobs[].status</code></td><td>S2; S1</td></tr>
+ <tr><td>activation node</td><td><code>jobs[].specialist</code>, <code>jobs[].owning_pane_id</code>, <code>jobs[].chain_id</code>, <code>jobs[].started_at_ms</code></td><td>S2 (<code>sp ps</code> jobs)</td></tr>
+ <tr><td>issue key</td><td><code>agent.bead_id</code> (<code>@agent_bead</code>), <code>jobs[].bead_id</code>; board <code>issue</code></td><td>S2; S1</td></tr>
+ <tr><td>issue status chip</td><td><code>issueStatus()</code> on the Substrate issue; <code>bead.status</code> as fallback</td><td>S3; S2</td></tr>
+ <tr><td>PR key</td><td><code>pull_request.number/state/is_draft/merged_at</code> matched by branch; <code>primaryPr</code></td><td>S2; S3</td></tr>
+ <tr><td>context %</td><td>board <code>ctxPct</code> (no topology equivalent; UNKNOWN without a board row)</td><td>S1</td></tr>
+ <tr><td>claim</td><td>Substrate claim expiry; board <code>claimUntil</code></td><td>S3; S1</td></tr>
+ <tr><td>row tooltip</td><td><code>agent.branch</code>, <code>agent.worktree</code>, <code>agent_session.provider</code></td><td>S2</td></tr></table></div>
+ <div class="note"><b>Not verified:</b> the name join between a board worker and a pane (the Substrate claim holder is not the launcher's agent name in the live session); join on the issue ref first. Native specialist activations are not in the topology projection, and the app does not consume the projection yet. Both are follow-up candidates in the spec §6 and §10.</div></details>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>Follow-ups</h3><span class="src">src/project/followups/FollowUpRow.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what is promised and not done? Status is a chip with a word; refs resolve through the issue index and never render dead.</p>
+ <div class="pair" data-s="followups"></div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>Jira: rows and chips</h3><span class="src">src/project/jira/{JiraRow,JiraChip}.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> which Jira issues are bound to this repository, and are they in sync? The same chip appears on issue rows and in the Inspector header. A sync state other than OK is a word.</p>
+ <div class="pair" data-s="jira"></div>
+</div></div>
+</div>
+
+<!-- ================= FACTORY ================= -->
+<div class="view" id="view-factory" hidden>
+<div class="kicker">06 · Specialists Factory</div>
+<h2>One list, one drawer, three sections<small>The six Factory issues (XTRM-454..459) collapse into a regular list under System → Specialists and the Inspector Drawer for one specialist. No competing drawer, no six panels.</small></h2>
+<div class="spec"><div class="spec-h"><h3>Catalog</h3><span class="src">src/surfaces/SpecialistsSurface.tsx · XTRM-455</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> which specialists exist, where does each come from, and can it be dispatched now? The dispatch chip is a word with the reason in its tooltip.</p>
+ <div class="pair" data-s="catalog"></div>
+</div></div>
+<div class="spec"><div class="spec-h"><h3>Drawer, section 1: Effective configuration with provenance and the field editor</h3><span class="src">Inspector drawer · XTRM-455, 456, 457, 459</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what value applies, which layer set it, and can I change it here? Each field carries a LayerChip. An edit is one popover with the units, the inherited value, a reset and the CLI-equivalent preview.</p>
+ <div class="pair" data-s="factory1"></div>
+</div></div>
+<div class="spec"><div class="spec-h"><h3>Drawer, sections 2 and 3: Skills and rules, Diagnostics and launch preview</h3><span class="src">Inspector drawer · XTRM-458, 459</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what text will be injected, is anything wrong, and what would launch now? Findings come first; unavailable values say so.</p>
+ <div class="pair" data-s="factory2"></div>
+ <div class="tbox"><table><tr><th>issue</th><th>lands as</th></tr>
+ <tr><td>XTRM-454 adapter and bridge</td><td>unchanged: list, effective config, provenance, skills, rules, diagnostics, capabilities</td></tr>
+ <tr><td>XTRM-455 catalog and effective view</td><td>Catalog list and drawer section “Effective”</td></tr>
+ <tr><td>XTRM-456 global override builder</td><td>per-field FieldEditor popover inside “Effective”</td></tr>
+ <tr><td>XTRM-457 repo-local custom specialists</td><td>“Customize” menu in the drawer header and one fork/override dialog</td></tr>
+ <tr><td>XTRM-458 skills and rules</td><td>drawer section “Skills and rules”</td></tr>
+ <tr><td>XTRM-459 diagnostics, preview, copy context</td><td>drawer section “Diagnostics and launch preview” and the header “Copy context” button</td></tr></table></div>
+</div></div>
+</div>
+
+<!-- ================= TOKENS ================= -->
+<div class="view" id="view-tokens" hidden>
+<div class="kicker">07 · Tokens and registry</div>
+<h2>No new colour, no new surface level<small>Four additions, all derived: two icon sizes, one badge tone, one PR state map. Everything else is a role the system already has.</small></h2>
+<div class="spec"><div class="spec-h"><h3>Console tokens used by this system</h3><span class="src">src/styles.css</span></div><div class="spec-b">
+ <div class="pair" data-s="tokens"></div>
+ <div class="spec-b" style="padding:12px 0 0"><p class="q"><b>Icon scale against a 13 px title and 11.5 px meta.</b> <code>micro</code> 12 and <code>text</code> 13 are new; <code>xs</code> 14 leaves rows and toolbars; <code>nav</code> 16 stays for top-level sidebar destinations.</p></div>
+ <div class="pair" data-s="iconScale"></div>
+</div></div>
+<div class="spec"><div class="spec-h"><h3>Registry search record</h3><span class="src">ADR-001 Decision 6 · shadcn and spectrum-ui MCP, 2026-11-18</span></div><div class="spec-b">
+ <div class="tbox"><table><tr><th>query</th><th>result</th><th>disposition</th></tr>
+ <tr><td><code>sidebar</code> (shadcn)</td><td>@reui/c-sidebar-3, c-sidebar-2, @spectrumui/sidebar-navbar</td><td>Reference. They need the shadcn Sidebar provider; the app owns <code>sidebar.tsx</code> on Base UI.</td></tr>
+ <tr><td><code>tree view</code> (shadcn)</td><td>@reui/c-collapsible-10, app-shell-33</td><td>Reference for disclosure semantics; hand-built for per-row columns and virtualisation.</td></tr>
+ <tr><td><code>tree</code> (spectrum-ui)</td><td>@spectrumui/tree-nav (rail and spring marker, needs <code>motion</code>)</td><td>Reference only; the spring marker is rejected, the rail shape is confirmed.</td></tr>
+ <tr><td><code>expanding search input</code></td><td>no match</td><td>Hand-built ListFilter.</td></tr>
+ <tr><td><code>badge</code></td><td>@reui/badge, c-badge-1..7</td><td>One derived tone added to the app's own Badge.</td></tr>
+ <tr><td><code>hover card popover</code></td><td>data-grid-filtering-4</td><td>Reference; LinkedRefs uses <code>src/ui/popover.tsx</code>.</td></tr>
+ <tr><td><code>org chart node graph flow</code></td><td>no graph component</td><td>Workers tree hand-built.</td></tr>
+ <tr><td><code>gantt-view</code> (@reui)</td><td>surfaced under “tree view”</td><td>Rejected: Gantt is a non-goal.</td></tr></table></div>
+</div></div>
+<div class="spec"><div class="spec-h"><h3>Rulings requested</h3><span class="src">spec §9</span></div><div class="spec-b"><div class="tbox"><table><tr><th>id</th><th>question</th><th>default</th></tr>
+ <tr><td>R1</td><td>Darken light <code>--x-success</code> from #1f8a4c (4.38:1 on white) to #1b7f46 (5.04:1)?</td><td>Apply</td></tr>
+ <tr><td>R2</td><td>State glyph inside PrKey (non-colour carrier in a list that loses its state dot)?</td><td>On in lists, chips, headers</td></tr>
+ <tr><td>R3</td><td>Merged uses violet (accent-ink), which ADR-002 §D9 reserves for selection, focus, references, attention?</td><td>Keep; glyph separates it from a reference chip</td></tr>
+ <tr><td>R4</td><td>ListFilter shortcut “/” and the filter glyph instead of the magnifier?</td><td>Adopt</td></tr>
+ <tr><td>R5</td><td>Selected toolbar tab = ink text plus 2 px ink bar, no fill?</td><td>Adopt</td></tr></table></div></div></div>
+</div>
+</div>
+
+<script>
+/* ---- icons (lucide paths, 24 grid) ---- */
+const P={
+ 'chevron-down':'<path d="m6 9 6 6 6-6"/>','chevron-right':'<path d="m9 18 6-6-6-6"/>',
+ 'search':'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>','list-filter':'<path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/>',
+ 'plus':'<path d="M5 12h14"/><path d="M12 5v14"/>','copy':'<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+ 'check':'<path d="M20 6 9 17l-5-5"/>','x':'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>','more':'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+ 'pull':'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/>',
+ 'draft':'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M18 6h.01"/><path d="M6 9v12"/><path d="M18 9v3"/>',
+ 'merge':'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+ 'closed':'<circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="m21 3-6 6"/><path d="m21 9-6-6"/><path d="M18 11v7"/><circle cx="18" cy="18" r="3"/>',
+ 'file':'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+ 'issues':'<path d="M4 10c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2"/><path d="M10 16c-1.1 0-2-.9-2-2v-4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2"/><rect x="14" y="14" width="8" height="8" rx="2"/>',
+ 'box':'<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+ 'activity':'<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+ 'agent':'<path d="M12.586 12.586 19 19"/><path d="M3.688 3.037a.497.497 0 0 0-.651.651l6.5 15.999a.501.501 0 0 0 .947-.062l1.569-6.083a2 2 0 0 1 1.448-1.479l6.124-1.579a.5.5 0 0 0 .063-.947z"/>',
+ 'flask':'<path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>',
+ 'tag':'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/>',
+ 'spec':'<circle cx="10" cy="8" r="5"/><path d="M2 21a8 8 0 0 1 10.434-7.62"/><circle cx="18" cy="18" r="3"/><path d="m19.5 14.3-.4.9"/><path d="m16.9 20.8-.4.9"/><path d="m21.7 19.5-.9-.4"/><path d="m15.1 17.5-.9-.4"/><path d="m21.7 16.5-.9.4"/><path d="m15.1 18.5-.9.4"/><path d="m19.5 21.7-.4-.9"/><path d="m16.9 15.2-.4-.9"/>',
+ 'layers':'<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+ 'alert':'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+ 'external':'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+ 'lock':'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+ 'clock':'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>','back':'<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>','forward':'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+ 'open':'<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>','pin':'<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+ 'list':'<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>','board':'<path d="M6 5v11"/><path d="M12 5v6"/><path d="M18 5v14"/>',
+ 'comment':'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>','question':'<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+ 'flag':'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>','git':'<circle cx="12" cy="12" r="3"/><path d="M12 3v6"/><path d="M12 15v6"/>'
+};
+const ic=(n,c='')=>`<svg class="ic ${c}" viewBox="0 0 24 24" aria-hidden="true">${P[n]||''}</svg>`;
+
+/* ---- component helpers ---- */
+const PR={open:{w:'Open',i:'pull',tone:'success',tip:'Open — ready for review'},draft:{w:'Draft',i:'draft',tone:'neutral',tip:'Draft — not ready for review'},merged:{w:'Merged',i:'merge',tone:'accent',tip:'Merged'},closed:{w:'Closed',i:'closed',tone:'danger',tip:'Closed without merging'}};
+const pk=(s,n,o={})=>{const d=PR[s];return `<span class="pk s-${s}" title="${d.tip}" aria-label="Pull request #${n}, ${d.w}" tabindex="0">${o.glyph===false?'':ic(d.i,'m')}#${n}${o.repo?`<span class="f"> ${o.repo}</span>`:''}</span>`};
+const bd=(tone,t,sz='')=>`<span class="bd ${tone} ${sz}">${t}</span>`;
+const prc=(s,sz='')=>`<span class="bd ${PR[s].tone} ${sz}" title="${PR[s].tip}">${ic(PR[s].i,'m')}${PR[s].w}</span>`;
+const ST={'In progress':'active','Ready':'accent','Blocked':'danger','Done':'muted','Draft':'muted','Deferred':'muted','Attested':'neutral'};
+const st=(l)=>`<span class="bd xs ${ST[l]}" style="width:4.25rem" title="${l}">${l}</span>`;
+const ref=k=>`<span class="rf">${k}</span>`;
+const pri=n=>`<span class="pri3" aria-label="priority ${n}">${[0,1,2].map(i=>`<i class="${i<3-n?'f':''}" style="height:${5+i*3}px"></i>`).join('')}</span>`;
+const ch=(open)=>`<span class="chv">${ic(open?'chevron-down':'chevron-right','m')}</span>`;
+const cp=l=>`<button class="btn" aria-label="Copy ${l}" data-copy title="Copy ${l}">${ic('copy')}</button>`;
+const st2=(c,t)=>`<span class="st"><span class="dot ${c}"></span>${t}</span>`;
+
+/* ---- specimens (each returns HTML for one themed frame) ---- */
+const S={};
+const navFull=(cur)=>`<div class="sb" role="navigation" aria-label="Work navigation">
+ <div class="sh"><span>Workspace</span>${ic('chevron-down','m')}</div>
+ <div class="nr">${ic('activity','n')}<span>Activity</span></div>
+ <div class="nr">${ic('issues','n')}<span>Issues</span><span class="ct tab">41</span></div>
+ <div class="nr sel" data-open>${ic('box','n')}<span>Project</span><button class="tg" aria-label="Collapse Project" aria-expanded="true">${ic('chevron-down','m')}</button></div>
+ <div class="rail" role="group" aria-label="Project">
+  <div class="nc"><span>Overview</span></div><div class="nc"><span>Timeline</span></div><div class="nc"><span>Questions</span><span class="ct tab">2</span></div>
+  <div class="nc act" aria-current="page"><span>Workers</span><span class="ct tab">5</span></div><div class="nc"><span>Follow-ups</span><span class="ct tab">4</span></div><div class="nc"><span>Jira</span></div><div class="nc def"><span>Integration</span></div></div>
+ <div class="nr def">${ic('agent','n')}<span>Agents</span></div>
+ <div class="nr shut">${ic('flask','n')}<span>Research</span><button class="tg" aria-label="Expand Research" aria-expanded="false">${ic('chevron-down','m')}</button></div>
+ <div class="rail" role="group" aria-label="Research"><div class="nc"><span>Experiments</span><span class="ct tab">12</span></div><div class="nc"><span>Recent Runs</span><span class="ct tab">64</span></div></div>
+ <div class="sh" style="margin-top:8px"><span>GitHub</span>${ic('chevron-down','m')}</div>
+ <div class="nr">${ic('pull','n')}<span>Pull requests</span><span class="ct tab">7</span></div><div class="nr">${ic('tag','n')}<span>Releases</span></div></div>`;
+S.nav=()=>`<div style="display:flex">${navFull()}<div style="flex:1;background:var(--x-surface);padding:14px 16px;display:flex;flex-direction:column;gap:10px"><span class="f" style="font-size:11.5px">Content area · Project / Workers</span>${[80,62,70,48].map(w=>`<span style="height:8px;width:${w}%;border-radius:4px;background:var(--x-control)"></span>`).join('')}</div></div>`;
+
+const tbToday=`<div class="tb"><span class="tbn pri chipy">${ic('plus','big')} New issue</span><span class="tbn chipy">Status ${ic('chevron-down','m')}</span><span class="tbn chipy">Priority ${ic('chevron-down','m')}</span><span class="tbn chipy">Type ${ic('chevron-down','m')}</span><span class="tbn chipy">Order by ${ic('chevron-down','m')}</span><span class="tbn chipy" style="gap:6px;width:150px;color:var(--x-ink-faint)">${ic('search','m')}Search</span><span class="seg"><span class="ib on">${ic('list')}</span><span class="ib">${ic('board')}</span></span></div>`;
+S.tbToday=()=>tbToday;
+const gs=`<div class="gs"><span>xtrm / Issues</span><span class="pal">${ic('search','m')}Search everything <kbd>Ctrl K</kbd></span></div>`;
+S.tb=()=>`${gs}
+<div class="tb" aria-label="resting"><span class="tbn pri">${ic('plus')} New issue</span><span class="tbn">Status ${ic('chevron-down','m')}</span><span class="tbn">Priority ${ic('chevron-down','m')}</span><span class="tbn">Type ${ic('chevron-down','m')}</span><span class="tbn">Order by ${ic('chevron-down','m')}</span>
+ <label class="lf" title="Filter this list (/)">${ic('list-filter')}<input aria-label="Filter this list" placeholder="Filter this list"><span class="m tab"></span></label><span class="seg"><span class="ib on">${ic('list')}</span><span class="ib">${ic('board')}</span><span class="ib">${ic('more')}</span></span></div>
+<div class="tb" style="border-top:1px solid var(--x-bs)" aria-label="active filter"><span class="tbn pri">${ic('plus')} New issue</span><span class="tbn val">Status: open ${ic('chevron-down','m')}</span><span class="tbn">Priority ${ic('chevron-down','m')}</span><span class="tbn">Type ${ic('chevron-down','m')}</span>
+ <label class="lf" title="Filter this list (/)">${ic('list-filter')}<input aria-label="Filter this list" placeholder="Filter this list"><span class="m tab"></span></label></div>
+<div class="tb" style="border-top:1px solid var(--x-bs)" aria-label="focused filter with a value"><span class="tbn pri">${ic('plus')} New issue</span><span class="tbn">Status ${ic('chevron-down','m')}</span><span class="tbn">Priority ${ic('chevron-down','m')}</span>
+ <label class="lf on">${ic('list-filter')}<input aria-label="Filter this list" value="rail"><span class="m tab">3 of 41</span></label></div>
+<div class="tb" style="border-top:1px solid var(--x-bs)" aria-label="tabs"><span class="tbn tabsel">Open <span class="n">7</span></span><span class="tbn">Merged <span class="n">21</span></span><span class="tbn">Closed <span class="n">3</span></span>
+ <label class="lf" title="Filter this list (/)">${ic('list-filter')}<input aria-label="Filter this list" placeholder="Filter this list"><span class="m tab"></span></label><span class="tbn">Recently updated ${ic('chevron-down','m')}</span></div>`;
+
+const ROWS=[
+ {d:0,open:1,k:'work',key:'XTRM-811',s:'In progress',t:'Repository Project surface: status board and Jira',pr:['merged',417],u:'2h',p:1},
+ {d:1,k:'issues',key:'XTRM-817',s:'Blocked',t:'Overview with attention list and integration health',pr:null,u:'5h',p:1,sel:1},
+ {d:1,k:'issues',key:'XTRM-853',s:'In progress',t:'Console v2 UI system: rail, toolbar, rows, PR identity',pr:['open',431],u:'now',p:0,hov:1},
+ {d:1,k:'alert',key:'XTRM-454',s:'Ready',t:'Specialists Factory adapter and bridge route',pr:null,u:'1d',p:2},
+ {d:1,k:'issues',key:'XTRM-812',s:'Done',t:'Bridge status-board-api, allowlisted reads',pr:['merged',422],u:'3d',p:2,done:1}];
+const COLS='minmax(0,1fr) 5.6rem 3.6rem';
+S.rowsToday=()=>`<div class="tbl today"><div class="th" style="grid-template-columns:${COLS}"><span>Title</span><span style="text-align:right">PR</span><span style="text-align:right">Updated</span></div>`+ROWS.slice(0,3).map(r=>`<div class="tr ${r.hov?'hov':''}" style="grid-template-columns:${COLS}"><div style="gap:6px;padding-left:${8+r.d*20}px">${ch(r.open)}${ic(r.k,'big f')}${pri(r.p)}${st(r.s)}<span class="ti"><span class="ik">${r.key}</span>  ${r.t}</span></div><div class="r">${r.pr?`<span class="mu">#${r.pr[1]}</span> ${bd('muted',r.pr[0],'xs')}`:''}</div><div class="r tab">${r.u}</div>${r.hov?`<span class="ra"><button class="btn" aria-label="Open">${ic('open','big')}</button><button class="btn" aria-label="Copy">${ic('copy','big')}</button></span>`:''}</div>`).join('')+`</div>`;
+S.rows=()=>`<div class="tbl"><div class="th" style="grid-template-columns:${COLS}"><span>Title</span><span style="text-align:right">PR</span><span style="text-align:right">Updated</span></div>`+ROWS.map(r=>`<div class="tr ${r.hov?'hov':''} ${r.sel?'sel':''}" style="grid-template-columns:${COLS}"><div class="${r.done?'done':''}" style="gap:6px;padding-left:${8+r.d*20}px"><span class="chv">${r.open!==undefined&&r.d===0?ic(r.open?'chevron-down':'chevron-right'):''}</span>${ic(r.k,'f')}${pri(r.p)}<span class="ik" style="width:4.7rem;flex:none">${r.key}</span>${st(r.s)}<span class="ti">${r.t}</span></div><div class="r">${r.pr?pk(r.pr[0],r.pr[1]):''}</div><div class="r tab">${r.u}</div>${r.hov?`<span class="ra">${cp(r.key)}</span>`:''}</div>`).join('')+`</div>`;
+
+S.prKeys=()=>`<div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+${['open','draft','merged','closed'].map((s,i)=>`<div class="row" style="gap:14px;height:28px">${pk(s,[431,429,422,418][i])}${prc(s)}<span class="f" style="font-size:11.5px">${PR[s].tip}</span></div>`).join('')}
+<div class="f" style="font-size:11.5px;border-top:1px solid var(--x-bm);padding-top:8px">In prose: “Merged in ${pk('merged',422,{glyph:false})} after ${pk('open',431,{glyph:false})} was rebased.” The sentence names the state, so the glyph is dropped.</div></div>`;
+
+const PCOLS='minmax(0,1fr) 9.5rem 5.4rem 4.4rem';
+const PRS=[{s:'open',n:431,t:'docs(design): console UI system spec and design page',l:['XTRM-853'],a:'worker',d:'+482 −37',u:'2m'},
+ {s:'open',n:430,t:'feat(xtrm-app): NavRail for Project and Research sections',l:['XTRM-817','XTRM-818','XTRM-819'],a:'worker',d:'+210 −96',u:'1h',pop:1},
+ {s:'draft',n:429,t:'feat(xtrm-app): LinkedRefs cell with overflow popover',l:['XTRM-855'],a:'worker',d:'+88 −4',u:'3h'},
+ {s:'merged',n:422,t:'feat(substrate): dispatcher participant and session on the provenance dispatch binding',l:['XTRM-839'],a:'worker',d:'+301 −12',u:'1d'},
+ {s:'closed',n:418,t:'wip: sidebar tree guides (superseded)',l:[],a:'worker',d:'+54 −0',u:'4d'}];
+const LT={'XTRM-817':'Overview with attention list','XTRM-818':'Timeline as a day-grouped agenda','XTRM-819':'Workers and Follow-ups'};
+S.pulls=()=>`<div class="tb"><span class="tbn tabsel">Open <span class="n">3</span></span><span class="tbn">Merged <span class="n">21</span></span><span class="tbn">Closed <span class="n">3</span></span><label class="lf" title="Filter this list (/)">${ic('list-filter')}<input aria-label="Filter this list" placeholder="Filter this list"><span class="m"></span></label><span class="tbn">Recently updated ${ic('chevron-down','m')}</span></div>
+<div class="tbl"><div class="th" style="grid-template-columns:${PCOLS}"><span>Pull request</span><span>Linked</span><span style="text-align:right">Diff</span><span style="text-align:right">Updated</span></div>`+PRS.map(p=>`<div class="tr" style="grid-template-columns:${PCOLS}"><div style="gap:8px">${pk(p.s,p.n)}<span class="ti">${p.t}</span></div>
+ <div class="lg" style="gap:4px;overflow:visible">${p.l.length?`${ref(p.l[0])}${p.l.length>1?`<span class="pw"><button class="bd xs neutral" data-pop aria-label="${p.l.length-1} more linked issues" aria-expanded="${p.pop?'true':'false'}" style="border:0;cursor:pointer">+${p.l.length-1}</button><div class="pop ${p.pop?'open':''}" role="dialog" aria-label="Linked issues" style="left:-60px"><div class="hd">${p.l.length} linked Substrate issues</div>${p.l.map(k=>`<div class="pr">${ref(k)}<span class="t">${LT[k]||''}</span></div>`).join('')}</div></span>`:''}`:'<span class="f">—</span>'}</div>
+ <div class="r"><span class="add tab">${p.d.split(' ')[0]}</span>&nbsp;<span class="del tab">${p.d.split(' ')[1]}</span></div><div class="r tab">${p.u}</div></div>`).join('')+`</div><div style="height:96px"></div>`;
+
+S.prDrawer=()=>`<div class="dr"><div class="dh"><span class="btn">${ic('back')}</span><span class="btn">${ic('forward')}</span><span class="t">Inspector</span><span class="e"><span class="btn">${ic('pin')}</span><span class="btn">${ic('more')}</span><span class="btn">${ic('x')}</span></span></div>
+ <div class="ph"><h2>${pk('open',431)}<span>docs(design): console UI system spec and design page</span><span class="gh">${ic('external','m')} Open on GitHub</span></h2>
+  <p class="meta">${prc('open')}<span class="br" title="xt/xtrm-853-ui-design → main">xt/xtrm-853-ui-design → main</span><span class="tab"><span class="add">+482</span> <span class="del">−37</span></span><span class="tab">6 files</span></p>
+  <p class="meta"><span>worker opened 3h ago · updated 2m ago</span></p></div>
+ <div class="sec"><h3>Linked Substrate issues</h3><div class="row" style="gap:8px;flex-wrap:wrap">${ref('XTRM-853')}<span>Console v2 UI system: rail, toolbar, rows, PR identity</span></div></div>
+ <div class="sec"><h3>Overview</h3><dl><dt>Checks</dt><dd><span class="st"><span class="dot"></span>pending 2 of 5</span></dd><dt>Review</dt><dd>awaiting review</dd><dt>Mergeable</dt><dd>mergeable · clean</dd><dt>Updated</dt><dd>2m ago</dd></dl></div>
+ <div class="sec"><h3>Files changed · 6 <span class="a f">summary only</span></h3>
+  <div class="fl">${ic('file','m')}<span class="fn">packages/xtrm-app/docs/design/console-ui-system.md</span><span class="tab"><span class="add">+398</span> <span class="del">−0</span></span></div>
+  <div class="fl">${ic('file','m')}<span class="fn">packages/xtrm-app/docs/design/mocks/console-ui-system.html</span><span class="tab"><span class="add">+84</span> <span class="del">−37</span></span></div></div></div>`;
+
+S.overview=()=>`<div class="ps"><b>xtrm</b><span class="f">owner/xtrm</span>${bd('neutral','bound · Substrate + status board')}${bd('neutral','Jira XTRM')}<span class="f" style="margin-left:auto;font-size:11.5px">synced 2m ago</span></div>
+ <div class="nn"><div><small>Now</small><b>XTRM-853</b> UI system design pass<br><span class="f">worker · claim 1h 22m left</span></div><div><small>Next</small><b>XTRM-817</b> Overview surface<br><span class="f">blocked by XTRM-813</span></div></div>
+ ${[['danger','Question','Answer needed: ship Specialists write path in this tranche?','XTRM-454','1d','Questions'],['danger','Blocked','Worker xtrm-xt-claude-3b2a waits on XTRM-813','XTRM-817','5h','Workers'],['neutral','Claim expiring','Claim on XTRM-455 ends in 42m','XTRM-455','42m','Workers'],['neutral','Follow-up due','Re-attest XTRM-456 after the drawer change','XTRM-456','today','Follow-ups'],['muted','Awareness','PR #431 opened by worker','XTRM-853','2m','Timeline']].map(r=>`<div class="at"><span>${bd(r[0],r[1],'xs')}</span><span class="w">${r[2]}<small>${ref(r[3])}</small></span><span class="f tab" style="font-size:11.5px">${r[4]}</span><span class="f" title="Open ${r[5]}">${ic('forward','m')}</span></div>`).join('')}`;
+S.timeline=()=>`<div class="dg"><span>Today · Wed 18 Nov</span><span>4 events</span></div>
+ <div class="ev past"><span class="tab f">03:40</span><span class="k">${ic('git','m')} handover</span><span>Worker launched on XTRM-853</span><span>${ref('XTRM-853')}</span></div>
+ <div class="ev past"><span class="tab f">03:49</span><span class="k">${ic('file','m')} report</span><span>Spec draft journaled</span><span>${ref('XTRM-853')}</span></div>
+ <div class="now"><span>now 04:02</span><i></i></div>
+ <div class="ev"><span class="tab">06:00</span><span class="k">${ic('clock','m')} window</span><span>Console deploy window</span><span class="f">window</span></div>
+ <div class="ev"><span class="tab">09:30</span><span class="k">${ic('pull','m')} pr</span><span>Review of ${pk('open',431,{glyph:false})} requested</span><span>${pk('open',431)}</span></div>
+ <div class="dg"><span>Tomorrow · Thu 19 Nov</span><span>1 event</span></div>
+ <div class="ev"><span class="tab">10:00</span><span class="k">${ic('alert','m')} incident</span><span>Post-window review of status-board sync</span><span class="f">incident</span></div>`;
+
+const wrow=(d,name,role,rc,state,sc,issue,statusL,pr,ctx,claim,icn)=>`<div class="wr d${d}" role="treeitem" aria-level="${d+1}"><div class="wn">${d?'':ch(1)}${ic(icn,'f')}<span class="nm" title="${name}">${name}</span>${bd(rc,role,'xs')}</div><div>${st2(sc,state)}</div><div class="tx">${issue?`${ref(issue)}${st(statusL)}`:'<span class="f">—</span>'}</div><div>${pr?pk(pr[0],pr[1]):'<span class="f">—</span>'}</div><div class="rr tab">${ctx||'—'}</div><div class="rr tab">${claim||'—'}</div></div>`;
+S.workers=()=>`<div class="wt"><div class="wh"><span>Name</span><span>State</span><span>Issue</span><span>PR</span><span style="text-align:right">Ctx</span><span style="text-align:right">Claim</span></div>
+ ${wrow(0,'xtrm-xt-claude-e9rd','lead','neutral','working','',null,'',null,'61%','—','agent')}
+ <div class="g1" role="group">
+  ${wrow(1,'xtrm-xt-claude-xtrm-853-ui-design','worker','neutral','working','','XTRM-853','In progress',['open',431],'38%','1h 22m','agent')}
+  <div class="g2" role="group">${wrow(2,'explorer','activation','dash','running','','XTRM-853','In progress',null,'—','12m','spec')}</div>
+  ${wrow(1,'xtrm-xt-claude-3b2a','worker','neutral','idle','idle','XTRM-817','Blocked',null,'22%','5h','agent')}
+  ${wrow(1,'xtrm-xt-claude-77c1','worker','neutral','working','','XTRM-839','Done',['merged',422],'74%','expired','agent')}
+  <div class="g2" role="group">${wrow(2,'pr-reviewer','activation','dash','done','done','XTRM-839','Done',['merged',422],'—','—','spec')}</div>
+ </div></div>`;
+S.followups=()=>{const R=[['Re-attest XTRM-456 after the drawer change','Open','active','lead','today',['XTRM-456'],1],['Add activations read to the Substrate adapter','Open','active','worker','this week',['XTRM-819'],2],['Verify board worker ↔ pane join on live data','Waiting','neutral','worker','Fri',['XTRM-819'],1],['Screenshots light and dark per slice','Done','muted','worker','done',['XTRM-817'],3]];
+ return `<div class="dg"><span>Open · 2</span></div>`+R.map((r,i)=>`${i===2?'<div class="dg"><span>Waiting · 1</span></div>':''}${i===3?'<div class="dg"><span>Done · 1</span></div>':''}<div class="fu">${pri(r[6]-1)}<span class="ti" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${r[1]==='Done'?'color:var(--x-ink-muted)':''}">${r[0]}</span>${bd(r[2],r[1],'xs')}<span class="f">${r[3]}</span><span class="f tab">${r[4]}</span><span>${r[5].map(ref).join(' ')}</span></div>`).join('')};
+S.jira=()=>{const J=[['XTRM-1204','Project surface: Overview and attention list','In Progress','neutral','ok','a.rossi'],['XTRM-1209','Workers tree and Follow-ups','To Do','muted','ok','—'],['XTRM-1188','Jira read path','Done','muted','stale','m.bianchi']];
+ return `<div class="ps"><span class="f" style="font-size:11.5px">Chip on an issue row:</span><span class="ik">XTRM-817</span>${st('Blocked')}<span class="jk" title="Jira XTRM-1204, In Progress">${ic('external','m')}XTRM-1204 <span class="w">In Progress</span></span></div>
+ <div class="th" style="display:grid;grid-template-columns:6rem minmax(0,1fr) 5.4rem 5rem 4.2rem;padding:0 12px;gap:0 10px;background:var(--x-surface)"><span>Key</span><span>Summary</span><span>Status</span><span>Assignee</span><span>Sync</span></div>`+J.map(j=>`<div class="jr"><span class="jk">${j[0]}</span><span class="ti" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:20px">${j[1]}</span>${bd(j[3],j[2],'xs')}<span class="f">${j[5]}</span>${bd(j[4]==='ok'?'neutral':'danger',j[4]==='ok'?'in sync':'stale','xs')}</div>`).join('')};
+
+const SP=[['executor','implement','default','Dispatchable','done','gpt-5'],['pr-reviewer','review','repo','Dispatchable','done','claude'],['explorer','research','user','Dispatchable','done','sonnet'],['quant-methodologist','research','default','Blocked','danger','opus'],['debugger','debug','default','Dispatchable','done','sonnet']];
+S.catalog=()=>`<div class="tb"><span class="tbn tabsel">All <span class="n">24</span></span><span class="tbn">Implement</span><span class="tbn">Review</span><span class="tbn">Research</span><label class="lf" title="Filter this list (/)">${ic('list-filter')}<input aria-label="Filter this list" placeholder="Filter this list"><span class="m"></span></label></div>
+<div class="th" style="display:grid;grid-template-columns:minmax(9.5rem,1fr) 5.4rem 4rem 6rem 4.4rem;gap:0 8px;padding:0 12px;background:var(--x-surface)"><span>Specialist</span><span>Category</span><span>Source</span><span>Dispatch</span><span style="text-align:right">Model</span></div>`+SP.map((s,i)=>`<div class="fr ${i===1?'sel':''}"><span class="row" style="gap:8px;white-space:nowrap">${ic('spec','f')}<span style="font-weight:500">${s[0]}</span></span><span>${bd('neutral',s[1],'xs')}</span><span>${layer(s[2])}</span><span>${bd(s[4]==='danger'?'danger':'neutral',s[3],'xs')}</span><span class="r f" style="text-align:right;font-size:11.5px">${s[5]}</span></div>`).join('');
+const layer=l=>l==='locked'?`<span class="bd xs dash">${ic('lock','m')}locked</span>`:bd(l==='repo'?'accent':l==='user'?'neutral':'muted',l,'xs');
+const dh=(t)=>`<div class="dh"><span class="btn">${ic('back')}</span><span class="btn">${ic('forward')}</span><span class="t">Inspector</span><span class="e"><span class="tbn">${ic('copy','m')} Copy context</span><span class="btn">${ic('pin')}</span><span class="btn">${ic('x')}</span></span></div>`;
+S.factory1=()=>`<div class="dr" style="position:relative">${dh()}
+ <div class="ph"><h2><span>pr-reviewer</span>${layer('repo')}${bd('neutral','Dispatchable','xs')}<span class="tbn" style="margin-left:auto">Customize ${ic('chevron-down','m')}</span></h2><p class="meta"><span>review · <span class="mono">.specialists/user/pr-reviewer.specialist.json</span></span></p></div>
+ <div class="sec"><h3>Effective configuration <span class="a">${bd('muted','2 overridden','xs')}</span></h3>
+  <div class="ff"><span class="k">Model</span><span class="v">claude-opus-5-5</span>${layer('repo')}<span class="sub">inherited: claude-sonnet-5-5 (user)</span></div>
+  <div class="ff"><span class="k">Thinking level</span><span class="v">high</span>${layer('user')}<span class="sub">inherited: medium (default)</span></div>
+  <div class="ff"><span class="k">Timeout</span><span class="v inh">900 s</span>${layer('default')}</div>
+  <div class="ff"><span class="k">Write lease</span><span class="v inh">required</span>${layer('locked')}<span class="sub">locked by policy · changes in core defaults</span></div>
+  <div class="ff"><span class="k">System prompt</span><span class="v inh">12 lines · collapsed</span>${layer('default')}</div></div>
+ <div class="fe" style="top:262px" role="dialog" aria-label="Edit Thinking level"><b style="font-size:12.5px">Thinking level</b><span class="f" style="font-size:11.5px">How much reasoning the model spends before answering. One of: low, medium, high.</span>
+  <div class="row" style="gap:6px">${bd('neutral','low')}${bd('neutral','medium')}<span class="bd active" style="outline:1px solid var(--x-accent)">high</span></div>
+  <span class="f" style="font-size:11.5px">Inherited: medium · Reset to inherit</span><div class="cli">specialists config set pr-reviewer thinking_level high --scope user</div>
+  <div class="acts"><span class="tbn">Cancel</span><span class="tbn val">Save</span></div></div>
+ <div style="height:150px"></div></div>`;
+S.factory2=()=>`<div class="dr">${dh()}
+ <div class="sec"><h3>Skills and rules <span class="a">${bd('muted','3 skills · 6 rules','xs')}</span></h3>
+  <div class="ff"><span class="k">engineering-quality</span><span class="v mono" style="font-size:11.5px">pack default · a41c9e2</span>${layer('default')}</div>
+  <div class="ff"><span class="k">using-specialists</span><span class="v mono" style="font-size:11.5px">pack default · 77b0d13</span>${layer('default')}</div>
+  <div class="ff"><span class="k">pr-review</span><span class="v mono" style="font-size:11.5px">repo · .specialists/skills</span>${layer('repo')}<span class="sub">${bd('dash','fallback resolution','xs')} two packs matched; the repo copy won</span></div>
+  <div class="ff"><span class="k">Rule: session boundary</span><span class="v">required</span>${layer('locked')}</div>
+  <div class="cp">[required] You are one worker in XTRM. The pinned Substrate Issue revision is the executable work contract…</div></div>
+ <div class="sec"><h3>Diagnostics and launch preview <span class="a">${bd('danger','1 finding','xs')}</span></h3>
+  <div class="ban warn"><span>${ic('alert')}</span><div><b>Repo layer warns</b><br><span class="mu">The repo override sets <span class="mono">execution.model</span>; the loader applies it, but the user layer pins a different model.</span></div></div>
+  <div class="ff"><span class="k">Launch model</span><span class="v">claude-opus-5-5</span>${layer('repo')}</div>
+  <div class="ff"><span class="k">Worktree</span><span class="v inh">unavailable</span>${bd('muted','unavailable','xs')}<span class="sub">no issue is bound to this preview</span></div>
+  <div class="ff"><span class="k">Skills injected</span><span class="v">3</span>${layer('default')}</div></div></div>`;
+
+const tokenRows=[['--x-surface','#ffffff','#151515','rows, drawer'],['--x-sidebar','#f4f4f5','#232323','NavRail host'],['--x-control','#efeff1','#262626','day headings, inputs'],['--x-ink','#18181b','#ececef','text'],['--x-ink-muted','#5f5f68','#a0a0a8','secondary, draft key'],['--x-ink-faint','#94949c','#6a6a72','meta'],['--x-border-muted','ink 7%','white 8%','rail, section rules'],['--x-accent','#4f46e5','#818cf8','active marker, focus'],['--x-accent-ink','#4338ca','#a5b4fc','merged key, references'],['--x-success','#1b7f46 (R1; was #1f8a4c)','#5ccb8a','open key, diff add'],['--x-danger','#c42b2b','#f07171','closed key, blocked']];
+S.tokens=(th)=>`<div style="padding:12px 14px;display:grid;grid-template-columns:1fr;gap:6px">${tokenRows.map(r=>`<div class="row" style="gap:10px;font-size:12px"><span style="width:18px;height:18px;border-radius:4px;border:1px solid var(--x-b);flex:none;background:var(${r[0]==='--x-border-muted'?'--x-bm':r[0]})"></span><span class="mono" style="width:9.5rem;flex:none">${r[0]}</span><span class="mono f" style="width:12.5rem;flex:none;font-size:11px">${th==='dark'?r[2]:r[1]}</span><span class="mu">${r[3]}</span></div>`).join('')}</div>`;
+S.iconScale=()=>`<div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">${[['micro 12','m','Badge xs, dense PrKey'],['text 13','','rows, toolbar, row actions (new)'],['xs 14','big','leaves rows and toolbars'],['nav 16','n','top-level sidebar only']].map(r=>`<div class="row" style="gap:12px;height:24px"><span class="mono" style="width:5.5rem;flex:none;font-size:11.5px">${r[0]}</span>${ic('pull',r[1])}<span style="font-size:13px;white-space:nowrap">Title 13 px</span><span class="f" style="font-size:11.5px;white-space:nowrap">meta 11.5</span><span class="mu" style="margin-left:auto;font-size:11.5px;text-align:right">${r[2]}</span></div>`).join('')}</div>`;
+</script>
+<script>
+/* ---- render pairs ---- */
+document.querySelectorAll('.pair').forEach(p=>{
+  const fn=S[p.dataset.s]; if(!fn) return;
+  const themes=p.dataset.one?[p.dataset.one]:['light','dark'];
+  themes.forEach(th=>{const w=document.createElement('div');w.className='cxw';
+    w.innerHTML=`<div class="cxh"><b>${th==='light'?'Light':'Dark'}</b><span>Console tokens · ${th}${p.dataset.one?' · current source':''}</span></div><div class="cxi"><div class="cx" data-theme="${th}">${fn(th)}</div></div>`;p.appendChild(w)});
+});
+/* lineage figure (Mercury grammar: node cards, labelled edges) */
+(function(){const el=document.getElementById('lineage');if(!el)return;
+ const N=[['Lead pane','agent.role = lead','session_name','S2 · S1'],['Worker pane','agent.state','agent.bead_id','S2 · S1'],['Activation','jobs[].specialist','jobs[].status','S2'],['Issue','issueStatus()','bead.title','S3 · S2'],['Pull request','pull_request.state','checks_state','S2 · S3']];
+ const E=['parent_session_id','owning_pane_id','bead_id','branch =|head_branch'];
+ const w=116,g=98,x0=14,y=70,h=84;let s='<defs><marker id="mk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker></defs>';
+ N.forEach((n,i)=>{const x=x0+i*(w+g);
+  s+=`<g tabindex="0"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" style="fill:var(--surface);stroke:var(--line2)"/><text x="${x+12}" y="${y+24}" font-size="12.5" font-weight="600">${n[0]}</text><text x="${x+12}" y="${y+44}" font-size="9" font-family="ui-monospace,monospace" style="fill:var(--mut)">${n[1]}</text><text x="${x+12}" y="${y+58}" font-size="9" font-family="ui-monospace,monospace" style="fill:var(--mut)">${n[2]}</text>
+  <rect x="${x+w-46}" y="${y-9}" width="40" height="16" rx="8" style="fill:var(--accentbg)"/><text x="${x+w-26}" y="${y+2.5}" text-anchor="middle" font-size="8.5" font-weight="700" style="fill:var(--accent)">${n[3]}</text></g>`;
+  if(i<4){const ax=x+w,bx=x+w+g;s+=`<path d="M${ax+2},${y+h/2} L${bx-4},${y+h/2}" style="stroke:var(--accent);stroke-width:1.6;fill:none" marker-end="url(#mk)"/>`;
+   const t=E[i].split('|');const wd=Math.max(...t.map(q=>q.length))*5.1+10;
+   s+=`<rect x="${ax+g/2-wd/2}" y="${y+h/2-(t.length>1?20:10)}" width="${wd}" height="${t.length>1?24:15}" rx="7" style="fill:var(--surface);stroke:var(--line)"/>`+t.map((q,j)=>`<text x="${ax+g/2}" y="${y+h/2-(t.length>1?8:-1.5)+j*10+ (t.length>1?0:-8)}" text-anchor="middle" font-size="8.5" font-family="ui-monospace,monospace">${q}</text>`).join('');}
+ });
+ s+=`<text x="14" y="36" font-size="11" font-weight="650" style="fill:var(--mut)" letter-spacing=".08em">PARENT CHAIN (TREE)</text><text x="${x0+3*(w+g)}" y="36" font-size="11" font-weight="650" style="fill:var(--mut)" letter-spacing=".08em">TRAIL COLUMNS (LEAVES)</text>
+ <path d="M14,52 H${x0+2*w+2*g+w}" style="stroke:var(--line2);stroke-dasharray:4 3"/><path d="M${x0+3*(w+g)},52 H${x0+4*(w+g)+w}" style="stroke:var(--line2);stroke-dasharray:4 3"/>
+ <text x="14" y="188" font-size="11.5" style="fill:var(--mut)">S1 board workers/* · S2 core topology projection (xtrm.topology.projection.v1) · S3 Substrate</text>
+ <text x="14" y="208" font-size="11.5" style="fill:var(--mut)">Join on the issue ref first: the claim holder and the launcher agent name differ in the live session.</text>`;
+ el.innerHTML=s;})();
+/* ---- interactions ---- */
+document.addEventListener('click',e=>{
+ const tg=e.target.closest('.nr .tg');if(tg){const r=tg.closest('.nr');const sh=r.classList.toggle('shut');tg.setAttribute('aria-expanded',String(!sh));return}
+ const pb=e.target.closest('[data-pop]');
+ document.querySelectorAll('.pop.open').forEach(p=>{if(!pb||p!==pb.parentElement.querySelector('.pop'))p.classList.remove('open')});
+ if(pb){const p=pb.parentElement.querySelector('.pop');const o=p.classList.toggle('open');pb.setAttribute('aria-expanded',String(o));return}
+ const c=e.target.closest('[data-copy]');if(c&&!c.dataset.done){c.dataset.done=1;const o=c.innerHTML;c.innerHTML=ic('check');setTimeout(()=>{c.innerHTML=o;delete c.dataset.done},1200)}
+ const lf=e.target.closest('.lf');if(lf){const i=lf.querySelector('input');if(i)i.focus()}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.pop.open').forEach(p=>p.classList.remove('open'))});
+document.addEventListener('input',e=>{const i=e.target.closest('.lf input');if(!i)return;const lf=i.closest('.lf'),m=lf.querySelector('.m');lf.classList.toggle('on',i.value.length>0);m.textContent=i.value?`${Math.max(0,41-i.value.length*7)} of 41`:''});
+/* ---- tabs ---- */
+const V=['shell','pulls','project','factory','tokens'];
+function show(){const h=(location.hash||'#shell').slice(1);const v=V.includes(h)?h:'shell';V.forEach(n=>{document.getElementById('view-'+n).hidden=n!==v});document.querySelectorAll('.tabs a').forEach(a=>{if(a.dataset.v===v)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')})}
+addEventListener('hashchange',show);show();
+</script>
+</body></html>

@@ -100,11 +100,28 @@ Closure and reopen apply the same canonicalization to their execution envelopes;
 an invalid identity leaves lifecycle and Closure history unchanged. Historical
 rows are not rewritten by these validation rules.
 
-Human `sb provenance trace` names each binding's participant, activation and
-session, shows `(unattributed)` for absent execution identity, and bounds long
+A binding can also record who dispatched it: `--dispatcher-participant
+<holder>` and `--dispatcher-session <id>` (a lowercase UUID or a tmux `$N`
+id). Both are optional and independent, are stored as observed labels beside
+the executor identity (`--participant`, `--session`), and are never defaulted
+from the environment. A binding written without them, including every binding
+written before migration 017, reads as absent (`null` in `--json`), never as a
+placeholder. A malformed value fails closed and writes no binding.
+
+```bash
+sb provenance dispatch XTRM-123 --participant worker-1 --session '$2' \
+  --dispatcher-participant lead-1 --dispatcher-session '$1'
+```
+
+Human `sb provenance trace` names each binding's participant, activation,
+session and dispatcher (`dispatched by <participant> (sess <id>)`), shows
+`(unattributed)` for absent execution identity, and bounds long
 sections with an omitted-item count. Use `sb provenance trace XTRM-123 --json`
 for the untruncated service view. Rendering does not manufacture missing
-bindings, receipts or identity.
+bindings, receipts or identity. `sb provenance session <id>` and
+`sb provenance activation <id>` print a `dispatchers:` block with the same
+`dispatched by …` line per binding, or `dispatchers: (none recorded)`; their
+`--json` carries a `dispatchers` array with `null` for an absent field.
 
 Sources: [`execution-context.ts`](../src/domain/execution-context.ts),
 [`provenance-service.ts`](../src/service/provenance-service.ts),
