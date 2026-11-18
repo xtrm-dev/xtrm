@@ -10,8 +10,24 @@ const SIZE = {
 
 const MARK = { sm: 12, md: 14 } as const;
 
-/** GitHub's own primary-button look, so "Open on GitHub" reads as an affordance rather than a link. */
-export function GithubPill({ href, children = "Open on GitHub", size = "md", className }: { href: string; children?: ReactNode; size?: keyof typeof SIZE; className?: string }) {
+/**
+ * GitHub's own primary-button look, so "Open on GitHub" reads as an affordance rather than a link.
+ * `variant="ghost"` is the header form (§2 Restraint): a filled pill is a chip background in a
+ * header, so the PR inspector header asks for the ghost wash instead.
+ */
+export function GithubPill({
+  href,
+  children = "Open on GitHub",
+  size = "md",
+  variant = "solid",
+  className,
+}: {
+  href: string;
+  children?: ReactNode;
+  size?: keyof typeof SIZE;
+  variant?: "solid" | "ghost";
+  className?: string;
+}) {
   return (
     <a
       href={href}
@@ -19,7 +35,9 @@ export function GithubPill({ href, children = "Open on GitHub", size = "md", cla
       rel="noreferrer"
       data-testid="github-pill"
       className={cx(
-        "inline-flex shrink-0 items-center rounded-full bg-github font-medium text-github-ink outline-none transition-colors hover:bg-github-hover focus-visible:ring-2 focus-visible:ring-accent/40",
+        variant === "ghost"
+          ? "inline-flex shrink-0 items-center rounded-md text-ink-muted outline-none transition-colors hover:bg-hover hover:text-ink focus-visible:bg-hover"
+          : "inline-flex shrink-0 items-center rounded-full bg-github font-medium text-github-ink outline-none transition-colors hover:bg-github-hover focus-visible:ring-2 focus-visible:ring-accent/40",
         SIZE[size],
         className,
       )}

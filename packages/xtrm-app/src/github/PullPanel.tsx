@@ -45,7 +45,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
             <PrKey number={p.number} state={p.state} draft={p.draft} className="shrink-0" />
             <h2 className="min-w-0 text-base leading-snug font-medium text-pretty text-ink">{p.title}</h2>
           </span>
-          <GithubPill href={p.url} size="sm" />
+          <GithubPill href={p.url} size="sm" variant="ghost" />
         </div>
         <div className="flex min-w-0 items-center gap-2 text-xs">
           <PrStateChip state={p.state} draft={p.draft} />

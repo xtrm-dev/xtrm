@@ -140,6 +140,7 @@ export function ReferenceChip({
   showTitle,
   fallback,
   unresolved,
+  showAlias = true,
   className,
 }: {
   reference: ContextReference;
@@ -147,11 +148,13 @@ export function ReferenceChip({
   fallback?: string;
   /** Rendered as-is when the reference does not resolve (e.g. prose text that only looks like a key, such as UTF-8). */
   unresolved?: ReactNode;
+  /** `false` renders the primary key alone; the alias moves to the tooltip (§4.5 Linked cell). */
+  showAlias?: boolean;
   className?: string;
 }) {
   if (reference.kind === "gh-issue") return <GithubIssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} className={className} />;
   if (reference.kind === "pr") return <PullReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} className={className} />;
-  return <IssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} unresolved={unresolved} className={className} />;
+  return <IssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} unresolved={unresolved} showAlias={showAlias} className={className} />;
 }
 
 
@@ -290,12 +293,14 @@ function IssueReferenceChip({
   showTitle,
   fallback,
   unresolved,
+  showAlias = true,
   className,
 }: {
   reference: { kind: "issue"; ref: string };
   showTitle?: boolean;
   fallback?: string;
   unresolved?: ReactNode;
+  showAlias?: boolean;
   className?: string;
 }) {
   const index = useIssueIndex();
@@ -325,9 +330,11 @@ function IssueReferenceChip({
       )}
     >
       <StatusDot tone={lifecycleTone(issue.lifecycle)} label={lifecycleLabel(issue.lifecycle)} />
-      <IssueKey locator={issue.locator} humanRef={issue.ref} />
+      <IssueKey locator={issue.locator} humanRef={issue.ref} showAlias={showAlias} />
       {showTitle && <span className={cx("truncate text-sm", issue.lifecycle === "open" ? "text-ink" : "text-ink-muted")}>{issue.title}</span>}
     </button>
   );
-  return showTitle ? chip : <Tip label={`${issue.title} · ${lifecycleLabel(issue.lifecycle)}`}>{chip}</Tip>;
+  // The alias a compact cell cannot show still travels in the tooltip, so nothing is lost.
+  const alias = !showAlias && issue.locator && issue.locator !== issue.ref ? ` · ${issue.ref}` : "";
+  return showTitle ? chip : <Tip label={`${issue.title} · ${lifecycleLabel(issue.lifecycle)}${alias}`}>{chip}</Tip>;
 }

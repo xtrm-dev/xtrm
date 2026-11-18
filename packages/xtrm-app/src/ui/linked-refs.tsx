@@ -28,7 +28,7 @@ export function LinkedRefs({ refs, max = 1, onOpen }: { refs: string[]; max?: nu
     <span className="flex min-w-0 flex-nowrap items-center gap-0.5 overflow-hidden whitespace-nowrap">
       {first.map((ref) => (
         <span key={ref} data-ref={ref} className="min-w-0 truncate" {...route}>
-          <ReferenceChip reference={{ kind: "issue", ref }} />
+          <ReferenceChip reference={{ kind: "issue", ref }} showAlias={false} />
         </span>
       ))}
       {extra > 0 && (

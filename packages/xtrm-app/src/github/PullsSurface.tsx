@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PullRequestSummary } from "../adapters/index.tsx";
 import { usePulls } from "../app/queries.ts";
-import { filterPulls, usePrLinkedRefs, checkLabel, checkShortLabel, checkTone, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
+import { filterPulls, usePrLinkedRefs, checkLabel, checkShortLabel, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
 import { ReferenceActionsProvider } from "../refs/references.tsx";
 import { GithubNotice } from "./auth.tsx";
 import { useShell } from "../shell/context.tsx";
@@ -78,14 +78,14 @@ function PullRow({ pull, fullName, selected, onOpen }: { pull: PullRequestSummar
           {pull.additions === null || pull.deletions === null ? (
             <span className="text-ink-faint">unknown</span>
           ) : (
-            <>
-              <span className="text-success">+{pull.additions}</span>
-              <span className="text-danger">−{pull.deletions}</span>
-            </>
+            // Restraint rule 1: in the list the key is the one coloured element, so the diff is ink.
+            <span className="text-ink-muted">
+              +{pull.additions} −{pull.deletions}
+            </span>
           )}
         </div>
         <div className={cx(CELL, "gap-1.5 text-xs text-ink-faint")} title={checkLabel(pull.checks)}>
-          <StatusDot tone={checkTone(pull.checks)} label={checkLabel(pull.checks)} />
+          <StatusDot tone="neutral" label={checkLabel(pull.checks)} />
           <span className="truncate">
             {checkShortLabel(pull.checks)}
           </span>

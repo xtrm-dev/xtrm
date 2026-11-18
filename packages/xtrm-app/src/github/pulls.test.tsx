@@ -94,8 +94,14 @@ describe("Pull requests surface", () => {
 
     const counted = await screen.findByText("chore(XTRM-857): two reviews, three comments");
     const countedRow = counted.closest('[data-testid="pull-row"]') as HTMLElement;
-    expect(within(countedRow).getByText("+24")).toBeTruthy();
-    expect(within(countedRow).getByText("\u22127")).toBeTruthy();
+    // Restraint rule 1: the key is the one coloured element in the list, so the diff is plain ink.
+    const diff = within(countedRow).getByTitle("24 added, 7 removed").querySelector("span") as HTMLElement;
+    expect(diff.textContent).toBe("+24 \u22127");
+    expect(diff.className).toContain("text-ink-muted");
+    // Checks stay neutral in the list: no coloured dot survives in the row.
+    const dots = Array.from(countedRow.querySelectorAll("[title^='checks']"));
+    expect(dots.length).toBeGreaterThan(0);
+    for (const dot of dots) expect(dot.querySelector(".bg-danger, .bg-success, .bg-ink-faint")).toBeNull();
     expect(within(countedRow).getByTitle(/3 conversation comments/)).toBeTruthy();
     expect(within(countedRow).getByTitle("24 added, 7 removed")).toBeTruthy();
     expect(within(countedRow).getByTitle("approved \u00b7 2 reviews")).toBeTruthy();
@@ -199,6 +205,9 @@ describe("PR identity (§4.4-4.5)", () => {
     const title = await screen.findByText("fix(XTRM-305): silence virtual-bead spam");
     const row = title.closest("[data-testid='pull-row']") as HTMLElement;
     expect(within(row).getAllByRole("button").filter((b) => b.getAttribute("data-reference")?.startsWith("@issue:"))).toHaveLength(1);
+    // The compact cell shows the primary key alone; the alias lives in the tooltip and the popover.
+    const compact = within(row).getAllByRole("button").filter((b) => b.getAttribute("data-reference")?.startsWith("@issue:"))[0];
+    expect(compact.textContent ?? "").not.toContain("/");
     const more = within(row).getByLabelText("1 more linked issues");
     expect(more.textContent).toBe("+1");
     fireEvent.click(more);
@@ -218,6 +227,10 @@ describe("PR identity (§4.4-4.5)", () => {
     expect(within(header).getByText("−88")).toBeTruthy();
     expect(within(header).getByText("3 files")).toBeTruthy();
     expect(within(header).getByText(/opened/)).toBeTruthy();
+    // Restraint rule 3: the header control is a ghost, not a filled pill.
+    const pill = within(header).getByTestId("github-pill");
+    expect(pill.className).toContain("hover:bg-hover");
+    expect(pill.className).not.toContain("bg-github");
     // Author, Branch and Change left the Overview: the header is their only home now.
     expect(within(el).queryByText("Change")).toBeNull();
   });
