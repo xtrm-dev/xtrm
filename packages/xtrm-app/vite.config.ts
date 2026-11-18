@@ -13,7 +13,6 @@ const consoleUrl = process.env.XTRM_CONSOLE_URL ?? "http://127.0.0.1:3030";
 // (`npm run research:serve`) is the same app without the dev server's per-module cost.
 const proxy = {
   "/api/github": { target: consoleUrl, changeOrigin: true },
-  "/api/programme": { target: consoleUrl, changeOrigin: true },
 };
 // Tailnet access via MagicDNS; not public.
 const allowedHosts = [".ts.net"];

@@ -178,7 +178,7 @@ describe("URL codec and deep links", () => {
   });
 
   it("deep link to maximized collapses the sidebar via the normal rule", () => {
-    const s = layoutFromSearch(initialLayout, { inspect: "program:WS-003", drawer: "maximized" });
+    const s = layoutFromSearch(initialLayout, { inspect: "activity:xtrm-dev/xtrm:42", drawer: "maximized" });
     expect(s.inspector.state).toBe("MAXIMIZED");
     expect(s.sidebar.open).toBe(false);
   });

@@ -604,39 +604,6 @@ export interface SubstrateAdapter {
   createIssue(projectId: string, input: IssueCreate): Promise<string>;
 }
 
-// --- program --------------------------------------------------------------
-
-export type ProgramItemKind = "workstream" | "assignment" | "decision";
-
-export interface ProgramItem {
-  id: string;
-  kind: ProgramItemKind;
-  title: string;
-  status: string;
-  path: string;
-  updatedAt: string | null;
-  jiraRefs: string[];
-  /**
-   * Typed references to executable work. Program never carries the referenced
-   * issue's state; the drawer resolves it through the substrate adapter.
-   */
-  issueRefs: string[];
-}
-
-export interface ProgramView {
-  source: { repository: string; branch: string; shortSha: string | null; generatedAt: string };
-  freshness: "fresh" | "stale" | "degraded";
-  healthMessage: string | null;
-  now: { title: string; evidenceCutoff: string | null } | null;
-  items: ProgramItem[];
-  activity: Array<{ sha: string; date: string; subject: string; url: string }>;
-}
-
-export interface ProgramAdapter {
-  readonly source: DataSource;
-  snapshot(): Promise<ProgramView>;
-}
-
 /**
  * The git source of the Activity feed (XTRM-757): the LOCAL log of the
  * repository on disk, read by the bridge. GitHub never supplies commits, so
@@ -654,6 +621,5 @@ export interface Adapters {
   github: GithubAdapter;
   githubAuth: GithubAuthAdapter;
   substrate: SubstrateAdapter;
-  program: ProgramAdapter;
   research: ResearchAdapter;
 }

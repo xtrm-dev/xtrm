@@ -43,7 +43,7 @@ test("§36.11-1 the Console/Agent switch is visible in every mode and restores e
     log(s, `§36.11-1 Console mode ${mode}: ${page.url()} switch visible`);
   }
   await page.getByTestId("context-sidebar").getByRole("button", { name: "Project", exact: true }).click();
-  await expect(page).toHaveURL(/\/program/);
+  await expect(page).toHaveURL(/\/project$/);
   const consoleRoute = new URL(page.url()).pathname;
   // Agent restores the last Agent route; Console restores the last Console route; Mod+. toggles.
   await page.getByRole("radio", { name: "Agent" }).click();

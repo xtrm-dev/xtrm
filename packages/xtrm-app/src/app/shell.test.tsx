@@ -32,7 +32,7 @@ describe("Console v2 shell", () => {
     expect(screen.getAllByText("/ XTRM-301").length).toBeGreaterThan(0);
   });
 
-  it("groups destinations as Workspace, GitHub and System, with Project's rows nested", async () => {
+  it("groups destinations as Workspace, GitHub and System, with Project's repository sub-routes nested", async () => {
     const { router } = renderAt("/rep/xtrm-dev/xtrm/work/issues");
     const sidebar = await screen.findByTestId("context-sidebar");
     for (const header of ["Workspace", "GitHub", "System"]) {
@@ -43,14 +43,20 @@ describe("Console v2 shell", () => {
     }
     // Graph and Repository observability left navigation; Project's own rows are visible immediately.
     expect(within(sidebar).queryByText("Repository observability")).toBeNull();
-    expect(within(sidebar).getByText("Workstreams")).toBeTruthy();
+    for (const label of ["Overview", "Timeline", "Questions", "Workers", "Follow-ups", "Jira", "Integration"]) {
+      expect(within(sidebar).getAllByText(label).length).toBeGreaterThan(0);
+    }
+    // No user-visible string says "Program" (ADR-002 D1).
+    expect(within(sidebar).queryByText(/Program/)).toBeNull();
 
     // The disclosure chevron collapses the nested rows without navigating.
     fireEvent.click(within(sidebar).getByRole("button", { name: "Collapse Project" }));
-    await waitFor(() => expect(within(sidebar).queryByText("Workstreams")).toBeNull());
+    await waitFor(() => expect(within(sidebar).queryByText("Overview")).toBeNull());
 
+    // The Project row resolves to the selected repository, never the retired global route.
     fireEvent.click(within(sidebar).getByRole("button", { name: /^Project/ }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/program"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/rep/xtrm-dev/xtrm/project"));
+    expect((await screen.findByRole("region", { name: "Overview" })).textContent).toContain("Overview is not part of this vertical");
   });
 
   it("renders deferred modes as explicit placeholders, not broken routes", async () => {
@@ -108,16 +114,15 @@ describe("Console v2 shell", () => {
     await waitFor(() => expect(search(router)).toMatchObject({ inspect: "issue:XTRM-302", drawer: "pinned" }));
   });
 
-  it("traverses Program → issue in the drawer stack and back", async () => {
-    renderAt("/program");
-    fireEvent.click(await screen.findByText("XTRM Console v2"));
-    const el = await screen.findByTestId("inspector-drawer");
-    fireEvent.click(await within(el).findByText("@issue:XTRM-300"));
-    expect(await within(drawer()!).findByText("Readiness")).toBeTruthy();
-    fireEvent.click(within(drawer()!).getByRole("button", { name: "Back" }));
-    expect(await within(drawer()!).findByText("Executable work")).toBeTruthy();
-    // Program shows references, never the referenced issue's lifecycle state.
-    expect(within(drawer()!).queryByText("Readiness")).toBeNull();
+  it("navigates Project sub-routes from the sidebar and keeps the selected repository", async () => {
+    const { router } = renderAt("/rep/mercury/market-data/project");
+    const sidebar = await screen.findByTestId("context-sidebar");
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Timeline" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/rep/mercury/market-data/project/timeline"));
+    expect((await screen.findByRole("region", { name: "Timeline" })).textContent).toContain("Project Timeline arrives with XTRM-818");
+    // The Overview row is the section root only, so it is not selected on a child route.
+    expect(within(sidebar).getByRole("button", { name: "Timeline" }).getAttribute("aria-current")).toBe("true");
+    expect(within(sidebar).getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBeNull();
   });
 
   it("Ctrl+B toggles the contextual sidebar and Escape closes the drawer", async () => {

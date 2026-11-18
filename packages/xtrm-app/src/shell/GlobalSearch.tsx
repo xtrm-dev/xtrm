@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { REPO_SECTIONS, destinationHref, repoHref } from "../app/destinations.ts";
-import { projectForRepo, useIssues, useIssuesForProjects, useProgram, useProjects, useRepos } from "../app/queries.ts";
+import { projectForRepo, useIssues, useIssuesForProjects, useProjects, useRepos } from "../app/queries.ts";
 import { CommandMenu, type CommandEntry, type CommandGroupData } from "../ui/command-menu.tsx";
 import { cx } from "../ui/primitives.tsx";
 import { useGo } from "./ContextSidebar.tsx";
@@ -23,7 +23,6 @@ export function GlobalSearch() {
   const project = projectForRepo(projects.data, repo);
   const repoIssues = useIssues(project?.id);
   const allIssues = useIssuesForProjects(projects.data?.map((p) => p.id) ?? [], searching && workspace);
-  const program = useProgram();
 
   const groups = useMemo<CommandGroupData[]>(() => {
     if (commandMode) {
@@ -67,14 +66,6 @@ export function GlobalSearch() {
       icon: "issues",
       onSelect: () => shell.inspect({ kind: "issue", ref: i.ref }),
     }));
-    const programItems: CommandEntry[] = (program.data?.items ?? []).map((p) => ({
-      id: p.id,
-      label: p.title,
-      hint: `${p.id} · ${p.kind}`,
-      keywords: [p.id],
-      icon: "program",
-      onSelect: () => shell.inspect({ kind: "program", ref: p.id }),
-    }));
     const repositories: CommandEntry[] = (repos.data ?? [])
       .filter((r) => workspace || r.fullName === repo.fullName || r.owner === repo.owner)
       .map((r) => ({ id: r.fullName, label: r.fullName, icon: "repositories", onSelect: () => go(repoHref(r, "/work/issues")) }));
@@ -94,10 +85,9 @@ export function GlobalSearch() {
     return [
       { heading: "Go to", entries: rank(destinations) },
       { heading: "Issues", entries: issues },
-      { heading: "Program", entries: rank(programItems) },
       { heading: "Repositories", entries: rank(repositories) },
     ];
-  }, [commandMode, workspace, layout, repo, repoIssues.data, allIssues, program.data, repos.data, palette.query, shell, dispatch, go]);
+  }, [commandMode, workspace, layout, repo, repoIssues.data, allIssues, repos.data, palette.query, shell, dispatch, go]);
 
   const scopeToggle = !commandMode && (
     <div role="radiogroup" aria-label="Search scope" className="flex shrink-0 items-center rounded-md border border-border-muted p-0.5 text-xs">
@@ -122,7 +112,7 @@ export function GlobalSearch() {
       onOpenChange={(open) => setPalette(open ? { open } : { open, query: "" })}
       query={palette.query}
       onQueryChange={(query) => setPalette({ query })}
-      placeholder={commandMode ? "Run a command…" : workspace ? "Search issues, Program, and repositories across the workspace" : `Search ${repo.name}`}
+      placeholder={commandMode ? "Run a command…" : workspace ? "Search issues and repositories across the workspace" : `Search ${repo.name}`}
       groups={groups}
       shouldFilter={commandMode}
       toolbar={scopeToggle}

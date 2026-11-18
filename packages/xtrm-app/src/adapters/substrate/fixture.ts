@@ -13,7 +13,7 @@ const TITLES: Array<[string, string, string]> = [
   ["task", "open", "Root-export readiness types from @jaggerxtrm/substrate"],
   ["bug", "open", "Console v1 24h event counts presented as open totals"],
   ["task", "done", "Canonical Console v2 documentation baseline"],
-  ["task", "open", "Program typed references to executable work"],
+  ["task", "open", "Governance typed references to executable work"],
   ["task", "open", "Retire Console v1 RightSidebar after cutover"],
   ["task", "deferred", "Agent/Frames runtime tranche contract"],
   ["task", "open", "Activity surface virtualization budget"],

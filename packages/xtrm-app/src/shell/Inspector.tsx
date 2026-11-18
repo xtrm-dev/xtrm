@@ -4,7 +4,7 @@ import type { RefKind, RepoEvent } from "../adapters/index.tsx";
 import { HostRefPanel, SessionPanel } from "../agent/DrawerPanels.tsx";
 import { useAgentStore } from "../agent/workspace.tsx";
 import { readAccounting, readVersionRef } from "../adapters/research/manifest.ts";
-import { useEvents, useIssue, useProgram, useResearchMetrics, useResearchRun, useResearchSamples, useResearchTail } from "../app/queries.ts";
+import { useEvents, useIssue, useResearchMetrics, useResearchRun, useResearchSamples, useResearchTail } from "../app/queries.ts";
 import { GithubIssuePanel } from "../github/GithubIssuePanel.tsx";
 import { PullPanel } from "../github/PullPanel.tsx";
 import { DevicePanel } from "../github/auth.tsx";
@@ -48,61 +48,6 @@ function IssuePanel({ issueRef, follow }: { issueRef: string; follow: boolean })
   if (q.isPending) return <LoadingState rows={6} label="Loading issue" />;
   if (q.isError) return <ErrorState title={`Could not read ${issueRef}`} error={q.error} />;
   return <IssueView issue={q.data} canWrite={canWrite} variant="panel" nav={{ onOpenIssue: (ref) => inspect({ kind: "issue", ref }), onOpenPull: (ref) => inspect({ kind: "pr", ref }) }} />;
-}
-
-// --- program ----------------------------------------------------------------
-
-function ProgramPanel({ id, follow }: { id: string; follow: boolean }) {
-  const { inspect } = useShell();
-  const q = useProgram(follow);
-  if (q.isPending) return <LoadingState rows={5} label="Loading program item" />;
-  if (q.isError) return <ErrorState title="Program read model unavailable" error={q.error} />;
-  const item = q.data.items.find((i) => i.id === id);
-  if (!item) return <EmptyState icon="program" title={`${id} is not in the current Program snapshot`} />;
-  return (
-    <>
-      <Title
-        eyebrow={
-          <>
-            <span className="font-mono">{item.id}</span>
-            <span>·</span>
-            <span>{item.kind}</span>
-            <span>·</span>
-            <span>{label(item.status)}</span>
-          </>
-        }
-      >
-        {item.title}
-      </Title>
-      <InspectorSection title="Governance">
-        <Fields
-          rows={[
-            ["Status", label(item.status)],
-            ["Record", <span className="font-mono text-xs">{item.path}</span>],
-            ["Updated", item.updatedAt ? ago(item.updatedAt) : "—"],
-            ["Jira", item.jiraRefs.length ? item.jiraRefs.join(", ") : <span className="text-ink-faint">—</span>],
-            ["Snapshot", `${q.data.source.repository}@${q.data.source.shortSha ?? "?"}`],
-          ]}
-        />
-      </InspectorSection>
-      <InspectorSection title="Executable work">
-        {item.issueRefs.length ? (
-          <div className="-mx-2 flex flex-col">
-            {item.issueRefs.map((ref) => (
-              <Row key={ref} density="sidebar" onActivate={() => inspect({ kind: "issue", ref })}>
-                <Icon name="issues" size="xs" className="text-ink-faint" />
-                <span className="font-mono text-xs text-accent-ink">@issue:{ref}</span>
-                <Icon name="forward" size="xs" className="ml-auto text-ink-faint" />
-              </Row>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-ink-faint">No typed references to executable work.</p>
-        )}
-        <p className="text-xs text-ink-faint">Program references issues; their state is read from Substrate when opened, never copied here.</p>
-      </InspectorSection>
-    </>
-  );
 }
 
 // --- activity ---------------------------------------------------------------
@@ -341,14 +286,12 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
   if (!entity)
     return (
       <EmptyState icon="inspector" title="Nothing inspected">
-        Select an issue, Program item, activity event, pull request, or GitHub issue to inspect it here without leaving the current surface.
+        Select an issue, activity event, pull request, or GitHub issue to inspect it here without leaving the current surface.
       </EmptyState>
     );
   switch (entity.kind) {
     case "issue":
       return <IssuePanel key={entity.ref} issueRef={entity.ref} follow={follow} />;
-    case "program":
-      return <ProgramPanel key={entity.ref} id={entity.ref} follow={follow} />;
     case "activity":
       return <ActivityPanel key={entity.ref} refValue={entity.ref} follow={follow} />;
     case "pr":
@@ -381,7 +324,6 @@ export function InspectorBody({ entity, follow }: { entity: DrawerRef | null; fo
 
 const KIND_LABEL: Record<DrawerRef["kind"], string> = {
   issue: "Issue",
-  program: "Program",
   activity: "Activity",
   pr: "Pull request",
   "gh-issue": "GitHub issue",
