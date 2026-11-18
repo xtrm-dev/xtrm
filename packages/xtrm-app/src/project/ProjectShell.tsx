@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import type { DataSource } from "../adapters/types.ts";
 import type { ProjectBinding, ProjectHealth } from "../adapters/status-board/types.ts";
 import { useShell } from "../shell/context.tsx";
-import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { SourceBadge, SurfaceToolbar, ago } from "../ui/primitives.tsx";
 
@@ -43,9 +42,9 @@ export function ProjectShell({
           </span>
         </span>
         {binding !== null && (
-          <Badge tone={binding.configured ? "success" : "neutral"} size="xs" className="shrink-0" data-testid="project-binding">
+          <span className="shrink-0 text-xs text-ink-muted" data-testid="project-binding">
             {binding.configured ? "bound" : "unbound"}
-          </Badge>
+          </span>
         )}
         <span className="shrink-0 text-[11px] text-ink-faint tabular" data-testid="project-freshness">
           {freshness(health)}

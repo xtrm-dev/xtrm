@@ -155,7 +155,7 @@ export function buildAttention(input: AttentionInput, now: number): AttentionIte
       ageLabel: at === null ? "" : ago(at),
       href: `${project}/questions`,
       section: "Questions",
-      tone: "accent",
+      tone: "neutral",
     });
   }
 
@@ -198,7 +198,7 @@ export function buildAttention(input: AttentionInput, now: number): AttentionIte
       ageLabel: followUp.doc.when ?? "",
       href: `${project}/followups`,
       section: "Follow-ups",
-      tone: "accent",
+      tone: "neutral",
     });
   }
 
@@ -239,7 +239,7 @@ export function buildAttention(input: AttentionInput, now: number): AttentionIte
       // The proposal's own Substrate issue is the durable surface; a proposal without one is skipped above.
       href: `${input.repoBase}/work/issues/${ref}`,
       section: "Issue",
-      tone: "muted",
+      tone: "neutral",
     });
   }
 
