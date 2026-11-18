@@ -134,7 +134,9 @@ binding's executor to its Issue), `dispatched_by` (the binding's recorded
 dispatcher to the executor) and `delivers` (an Issue to a live `created_from`
 PR link). The executor is the binding's activation, else its participant, else
 its session: an `xt` launch records the dispatcher and the session and leaves
-the holder to the claim, so a session executor is the honest read. An
+the holder to the claim, so a session executor is the honest read. The
+dispatcher is a vertex on the same terms: its participant, else its session, so
+a recorded dispatcher session is drawable and not a scalar of the edge alone. An
 activation node carries its holder in `participantId`, so a leaf worker that
 dispatched nothing still has an identity. `--since` bounds the binding window
 by millisecond timestamp or ISO timestamp; `--limit` defaults to 200 and is
@@ -142,9 +144,14 @@ capped at 1000 newest bindings. `matchedBindings`, `omittedBindings` and
 `truncated` state exactly what the bound cut, so a truncated answer is never
 mistaken for a complete one. A binding with no recorded dispatcher keeps its
 `dispatched_by` edge with a `null` source, and a binding with no execution
-identity contributes no edge; nothing is defaulted from the environment. The
-same read is available to the typed service as `provenance.dispatchGraph`
-(`projectId`, optional `since` and `limit`).
+identity contributes no edge; nothing is defaulted from the environment. A
+`delivers` edge requires a live `created_from` link — a superseded link or a
+mere mention is not delivery — and one PR is drawn once, at the earliest link
+time. `--since` bounds dispatch activity only, so a binding inside the window
+keeps its Issue's live links even when a link predates the window; and the count
+follows each Issue's current project, so a moved Issue is counted, and
+labelled, where it now belongs. The same read is available to the typed service
+as `provenance.dispatchGraph` (`projectId`, optional `since` and `limit`).
 
 Sources: [`execution-context.ts`](../src/domain/execution-context.ts),
 [`provenance-service.ts`](../src/service/provenance-service.ts),

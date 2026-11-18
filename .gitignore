@@ -1,5 +1,5 @@
 # Node / package managers
-node_modules/
+node_modules
 .pnpm-store/
 .pnp.*
 pnpm-debug.log*

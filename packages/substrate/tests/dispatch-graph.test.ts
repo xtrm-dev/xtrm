@@ -39,11 +39,27 @@ function readyIssue(svc: IssueService, title: string) {
   return issue;
 }
 
-function linkPr(db: ReturnType<typeof scratch>["db"], issueId: string, repository: string, number: number, createdAt: number) {
+function linkPr(
+  db: ReturnType<typeof scratch>["db"],
+  issueId: string,
+  repository: string,
+  number: number,
+  createdAt: number,
+  opts: { relation?: "created_from" | "mentioned"; source?: string; supersededAt?: number | null } = {},
+) {
   db.prepare(
-    `INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at)
-     VALUES (?, ?, ?, 'created_from', 'explicit', ?, 'w', ?)`,
-  ).run(issueId, repository, number, `https://github.com/${repository}/pull/${number}`, createdAt);
+    `INSERT INTO issue_pull_requests (issue_id, repository, number, relation, source, url, actor, created_at, superseded_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'w', ?, ?)`,
+  ).run(
+    issueId,
+    repository,
+    number,
+    opts.relation ?? "created_from",
+    opts.source ?? "explicit",
+    `https://github.com/${repository}/pull/${number}`,
+    createdAt,
+    opts.supersededAt ?? null,
+  );
 }
 
 const edgeKinds = (graph: { edges: Array<{ kind: string }> }) => graph.edges.map((e) => e.kind).sort();
@@ -181,6 +197,92 @@ describe("XTRM-868 project dispatch graph", () => {
       ["dispatched_by", "participant:lead", "session:01a1eee0-4ded-72d6-adf2-a25093b735a1"],
       ["works_on", "session:01a1eee0-4ded-72d6-adf2-a25093b735a1", `issue:${issue.id}`],
     ]);
+  });
+
+  // The delivers edge is delivery evidence only while the link is live and only
+  // for a link that claims to have created the PR. Both predicates are pinned
+  // here: removing either one turns the matching case red.
+  it("a superseded PR link is not delivery evidence", () => {
+    const issue = readyIssue(s.svc, "superseded link");
+    s.prov.dispatch(issue.id, { workspace: s.dir, participantId: "worker-a" });
+    linkPr(s.db, issue.id, "xtrm-dev/xtrm", 31, 500, { supersededAt: 900 });
+
+    const graph = s.prov.dispatchGraph("prj_xtrm");
+    // The binding still contributes its own edges; only delivery is withdrawn.
+    assert.deepEqual(edgeKinds(graph), ["dispatched_by", "works_on"]);
+    assert.equal(graph.nodes.some((n) => n.kind === "pull_request"), false);
+  });
+
+  it("a mentioned PR link is not delivery evidence", () => {
+    const issue = readyIssue(s.svc, "mentioned link");
+    s.prov.dispatch(issue.id, { workspace: s.dir, participantId: "worker-a" });
+    linkPr(s.db, issue.id, "xtrm-dev/xtrm", 32, 500, { relation: "mentioned" });
+
+    const graph = s.prov.dispatchGraph("prj_xtrm");
+    assert.deepEqual(edgeKinds(graph), ["dispatched_by", "works_on"]);
+    assert.equal(graph.nodes.some((n) => n.kind === "pull_request"), false);
+  });
+
+  // One link is stored once per evidence source, and the graph must not draw
+  // the same delivery twice or move its time to the later row.
+  it("one PR delivered from two sources is one edge at the earliest time", () => {
+    const issue = readyIssue(s.svc, "two sources");
+    s.prov.dispatch(issue.id, { workspace: s.dir, participantId: "worker-a" });
+    linkPr(s.db, issue.id, "xtrm-dev/xtrm", 33, 700, { source: "title" });
+    linkPr(s.db, issue.id, "xtrm-dev/xtrm", 33, 500, { source: "explicit" });
+
+    const graph = s.prov.dispatchGraph("prj_xtrm");
+    const delivers = graph.edges.filter((e) => e.kind === "delivers");
+    assert.equal(delivers.length, 1);
+    assert.equal(delivers[0]?.to, "pull_request:xtrm-dev/xtrm#33");
+    assert.equal(delivers[0]?.at, 500);
+    assert.equal(graph.nodes.filter((n) => n.kind === "pull_request").length, 1);
+  });
+
+  // Symmetry with the executor fallback: a dispatcher session is a vertex, not
+  // a scalar only the JSON reader can see.
+  it("a dispatcher session without a participant is a session vertex", () => {
+    const issue = readyIssue(s.svc, "session dispatcher");
+    s.prov.dispatch(issue.id, {
+      workspace: s.dir,
+      participantId: "worker-a",
+      dispatcherSessionId: "$9",
+    });
+
+    const graph = s.prov.dispatchGraph("prj_xtrm");
+    const session = graph.nodes.find((n) => n.kind === "session");
+    assert.equal(session?.id, "session:$9");
+    const dispatched = graph.edges.find((e) => e.kind === "dispatched_by");
+    assert.equal(dispatched?.from, "session:$9");
+    assert.equal(dispatched?.dispatcherSessionId, "$9");
+  });
+
+  // since bounds dispatch activity, not delivery: a link older than the window
+  // still delivers a binding made inside it.
+  it("since bounds bindings, and delivers follows the Issue not the link time", () => {
+    const issue = readyIssue(s.svc, "old link new binding");
+    s.prov.dispatch(issue.id, { workspace: s.dir, participantId: "worker-a" }, { now: 2000 });
+    linkPr(s.db, issue.id, "xtrm-dev/xtrm", 34, 100);
+
+    const graph = s.prov.dispatchGraph("prj_xtrm", { since: 1500 });
+    assert.equal(graph.matchedBindings, 1);
+    const delivers = graph.edges.find((e) => e.kind === "delivers");
+    assert.equal(delivers?.to, "pull_request:xtrm-dev/xtrm#34");
+    assert.equal(delivers?.at, 100);
+  });
+
+  // A binding is counted under the Issue's current project, because the graph is
+  // a read of the Issue tree, not of the binding's origin.
+  it("the count follows the Issue's current project", () => {
+    const issue = readyIssue(s.svc, "moving issue");
+    s.prov.dispatch(issue.id, { workspace: s.dir, participantId: "worker-a" });
+    s.svc.createProject({ id: "prj_other", prefix: "OTHER", name: "o" });
+    s.db.prepare("UPDATE issues SET project_id = ? WHERE id = ?").run("prj_other", issue.id);
+
+    assert.equal(s.prov.dispatchGraph("prj_xtrm").matchedBindings, 0);
+    const moved = s.prov.dispatchGraph("prj_other");
+    assert.equal(moved.matchedBindings, 1);
+    assert.deepEqual(moved.nodes.filter((n) => n.kind === "issue").map((n) => n.label), ["OTHER-1"]);
   });
 
   it("truncation reports the bindings the bound left out", () => {
