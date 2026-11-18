@@ -3,9 +3,9 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ListFilter, ToolbarButton, ToolbarTabs } from "./toolbar.tsx";
 
-function FilterHarness({ count }: { count?: number }) {
+function FilterHarness({ count, total }: { count?: number; total?: number }) {
   const [value, setValue] = useState("");
-  return <ListFilter value={value} onChange={setValue} count={count} />;
+  return <ListFilter value={value} onChange={setValue} count={count} total={total} />;
 }
 
 const filterInput = () => screen.getByPlaceholderText("Filter this list") as HTMLInputElement;
@@ -66,6 +66,13 @@ describe("ListFilter", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
     expect(filterInput().value).toBe("");
+  });
+
+  it("renders `matched of total` when the consumer passes a total", () => {
+    render(<FilterHarness count={12} total={41} />);
+    fireEvent.keyDown(document, { key: "/" });
+    fireEvent.change(filterInput(), { target: { value: "open" } });
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe("12 of 41");
   });
 });
 

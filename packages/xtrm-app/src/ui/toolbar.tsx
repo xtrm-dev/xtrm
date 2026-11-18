@@ -97,8 +97,10 @@ export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id
  * The local list filter (§4.2), distinct from Ctrl+K: it filters the rows already loaded in the
  * current surface and never navigates. At rest it is a 28px `filter` icon button; on click, `/` or
  * keyboard focus it widens to 192px and takes focus. Escape clears and collapses.
+ * With a value, `count` is the matched rows and the optional `total` the loaded rows: `12 of 41`
+ * when the consumer passes both, `12` when it has no total yet.
  */
-export function ListFilter({ value, onChange, placeholder = "Filter this list", count }: { value: string; onChange: (v: string) => void; placeholder?: string; count?: number }) {
+export function ListFilter({ value, onChange, placeholder = "Filter this list", count, total }: { value: string; onChange: (v: string) => void; placeholder?: string; count?: number; total?: number }) {
   const [open, setOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
@@ -147,7 +149,7 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
           />
           {value !== "" && count !== undefined && (
             <span aria-live="polite" title="Rows matching this filter" className="shrink-0 text-xs tabular text-ink-faint">
-              {count}
+              {total === undefined ? count : `${count} of ${total}`}
             </span>
           )}
           {value !== "" && (
