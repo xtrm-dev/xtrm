@@ -94,7 +94,11 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
 /* PrKey */
 .cx .pk{display:inline-flex;align-items:center;gap:4px;font:12px/16px var(--cm);white-space:nowrap}
 .cx .pk.s-open{color:var(--x-success)}.cx .pk.s-draft{color:var(--x-ink-muted)}.cx .pk.s-merged{color:var(--x-accent-ink)}.cx .pk.s-closed{color:var(--x-danger)}
-.cx .rf{font:12px/16px var(--cm);color:var(--x-accent-ink);white-space:nowrap}
+.cx .rf{font:12px/16px var(--cm);color:var(--x-ink-muted);white-space:nowrap}.cx .rf:hover{color:var(--x-accent-ink);text-decoration:underline}
+.cx .pk.quiet{color:var(--x-ink-muted)}
+.cx .ll{font-size:11.5px;color:var(--x-ink-faint);white-space:nowrap;display:inline-flex;align-items:center;gap:4px}.cx .ll.repo{color:var(--x-ink-muted)}
+.cx .pl{font-size:11.5px;color:var(--x-ink-faint);white-space:nowrap}
+.cx .opt{display:inline-flex;gap:12px;font-size:12px}.cx .opt span{color:var(--x-ink-muted);padding-bottom:1px}.cx .opt span.on{color:var(--x-ink);font-weight:600;box-shadow:0 2px 0 var(--x-ink)}
 .cx .ik{font:12px/16px var(--cm);color:var(--x-ink-muted);white-space:nowrap}
 /* sidebar + NavRail */
 .cx .sb{width:264px;max-width:100%;background:var(--x-sidebar);padding:8px;display:flex;flex-direction:column;gap:1px}
@@ -201,7 +205,7 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
 .cx .dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--x-accent);flex:none}.cx .dot.idle{border:1px solid var(--x-ink-muted)}.cx .dot.done{background:var(--x-ink-faint);border:0}.cx .dot.bad{background:var(--x-danger);border:0}
 .cx .fu{display:grid;grid-template-columns:16px minmax(0,1fr) 5.2rem 4.6rem 4rem auto;gap:0 10px;align-items:center;min-height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface)}
 .cx .jr{display:grid;grid-template-columns:6rem minmax(0,1fr) 5.4rem 5rem 4.2rem;gap:0 10px;align-items:center;min-height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface)}
-.cx .jk{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:4px;border:1px solid var(--x-bx);font:11px/1 var(--cm);color:var(--x-ink);white-space:nowrap}
+.cx .jk{display:inline-flex;align-items:center;gap:4px;font:11.5px/16px var(--cm);color:var(--x-ink-muted);white-space:nowrap}
 .cx .jk .w{font:10.5px var(--cf);color:var(--x-ink-muted)}
 .cx .ban{display:flex;gap:10px;align-items:flex-start;border-left:2px solid var(--x-ink-faint);padding:6px 10px;margin:8px 12px;background:var(--x-surface);border-radius:0 6px 6px 0;font-size:12px}
 .cx .ban.warn{border-left-color:var(--x-accent)}.cx .ban b{font-weight:600}
@@ -223,6 +227,8 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
 <p class="dek">The operator's review of 2026-11-18 asked for a coherent UI system before more surfaces land. This page shows the six answers in the Console's own tokens, in light and dark. The committed spec <code>packages/xtrm-app/docs/design/console-ui-system.md</code> names every token and component, with file, props and consuming surfaces.</p>
 <div class="meta"><span>Status: proposal for lead review, then operator look</span><span>Binding: ADR-002 §D9 and §12, XTRM-632/636/637</span><span>Nothing in <code>src/</code> changes under XTRM-853</span></div>
 <div class="note good"><b>Reading the page.</b> The page chrome follows the Mercury style (light grey page, white cards). Each “Console” frame inside a card is a faithful miniature of the app, rendered with the token values of <code>src/styles.css</code> in the light theme and in the dark theme. Rows, keys and titles are sample data (merged PR numbers and issue keys come from repository history; open, draft and closed states are illustrative). The one deliberate token deviation is the light <code>--x-success</code> shown at the proposed <code>#1b7f46</code> (ruling R1).</div>
+
+<div class="note" style="border-left-color:var(--teal);background:var(--card)"><b>Restraint (binding for every slice, operator 2026-11-18).</b> The app must not become too colourful or fill the viewport with pills. (1) At most one coloured element per row: a PR key or a status, not both. (2) Chips only for state, never for metadata: counts, branches, refs, roles and layers are plain text or mono. (3) No chip backgrounds in toolbars or headers. (4) Colour only through the existing tokens. (5) A surface may not add a pill row: use a count plus a popover. The frames below already follow it; the PR state chip appears only in the PR inspector header.</div>
 
 <div class="facts">
  <div class="fact" style="--c:var(--accent)"><div class="v">1 rail</div><div class="k">nested sections, no child icons</div></div>
@@ -310,7 +316,7 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
  <tr><td>draft</td><td><code>text-ink-muted</code></td><td>git-pull-request-draft</td><td>neutral</td><td>Draft — not ready for review</td><td>Pull request #429, Draft</td><td>6.32 / 7.03</td></tr>
  <tr><td>merged</td><td><code>text-accent-ink</code></td><td>git-merge</td><td>accent</td><td>Merged</td><td>Pull request #422, Merged</td><td>7.90 / 9.16</td></tr>
  <tr><td>closed</td><td><code>text-danger</code></td><td>git-pull-request-closed</td><td>danger</td><td>Closed without merging</td><td>Pull request #418, Closed</td><td>5.63 / 6.35</td></tr></table></div>
- <p class="cap">Where it renders (every current site): PR list row, PR inspector header, <code>ReferenceChip</code> for PRs (prose, activity, composer), issue-table PR column, issue page PR block and events, Project timeline <code>pr</code> events, Project Workers trail. The full table with files is in the spec §4.4.</p>
+ <p class="cap">The state chip (<code>PrStateChip</code>, tone column) appears only in the PR inspector header; elsewhere the key alone carries the state, and rows that already show a coloured status use the quiet key. Where it renders (every current site): PR list row, PR inspector header, <code>ReferenceChip</code> for PRs (prose, activity, composer), issue-table PR column, issue page PR block and events, Project timeline <code>pr</code> events, Project Workers trail. The full table with files is in the spec §4.4.</p>
 </div></div>
 
 <div class="kicker">04 · PR list and inspector</div>
@@ -379,11 +385,11 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
 <div class="kicker">06 · Specialists Factory</div>
 <h2>One list, one drawer, three sections<small>The six Factory issues (XTRM-454..459) collapse into a regular list under System → Specialists and the Inspector Drawer for one specialist. No competing drawer, no six panels.</small></h2>
 <div class="spec"><div class="spec-h"><h3>Catalog</h3><span class="src">src/surfaces/SpecialistsSurface.tsx · XTRM-455</span></div><div class="spec-b">
- <p class="q"><b>The question:</b> which specialists exist, where does each come from, and can it be dispatched now? The dispatch chip is a word with the reason in its tooltip.</p>
+ <p class="q"><b>The question:</b> which specialists exist, where does each come from, and can it be dispatched now? Category, source and dispatch are plain text; only a specialist that cannot be dispatched gets a chip, with the reason in its tooltip.</p>
  <div class="pair" data-s="catalog"></div>
 </div></div>
 <div class="spec"><div class="spec-h"><h3>Drawer, section 1: Effective configuration with provenance and the field editor</h3><span class="src">Inspector drawer · XTRM-455, 456, 457, 459</span></div><div class="spec-b">
- <p class="q"><b>The question:</b> what value applies, which layer set it, and can I change it here? Each field carries a LayerChip. An edit is one popover with the units, the inherited value, a reset and the CLI-equivalent preview.</p>
+ <p class="q"><b>The question:</b> what value applies, which layer set it, and can I change it here? Each field carries a LayerLabel. An edit is one popover with the units, the inherited value, a reset and the CLI-equivalent preview.</p>
  <div class="pair" data-s="factory1"></div>
 </div></div>
 <div class="spec"><div class="spec-h"><h3>Drawer, sections 2 and 3: Skills and rules, Diagnostics and launch preview</h3><span class="src">Inspector drawer · XTRM-458, 459</span></div><div class="spec-b">
@@ -461,12 +467,13 @@ const ic=(n,c='')=>`<svg class="ic ${c}" viewBox="0 0 24 24" aria-hidden="true">
 
 /* ---- component helpers ---- */
 const PR={open:{w:'Open',i:'pull',tone:'success',tip:'Open — ready for review'},draft:{w:'Draft',i:'draft',tone:'neutral',tip:'Draft — not ready for review'},merged:{w:'Merged',i:'merge',tone:'accent',tip:'Merged'},closed:{w:'Closed',i:'closed',tone:'danger',tip:'Closed without merging'}};
-const pk=(s,n,o={})=>{const d=PR[s];return `<span class="pk s-${s}" title="${d.tip}" aria-label="Pull request #${n}, ${d.w}" tabindex="0">${o.glyph===false?'':ic(d.i,'m')}#${n}${o.repo?`<span class="f"> ${o.repo}</span>`:''}</span>`};
+const pk=(s,n,o={})=>{const d=PR[s];return `<span class="pk s-${s}${o.quiet?' quiet':''}" title="${d.tip}" aria-label="Pull request #${n}, ${d.w}" tabindex="0">${o.glyph===false?'':ic(d.i,'m')}#${n}${o.repo?`<span class="f"> ${o.repo}</span>`:''}</span>`};
 const bd=(tone,t,sz='')=>`<span class="bd ${tone} ${sz}">${t}</span>`;
 const prc=(s,sz='')=>`<span class="bd ${PR[s].tone} ${sz}" title="${PR[s].tip}">${ic(PR[s].i,'m')}${PR[s].w}</span>`;
 const ST={'In progress':'active','Ready':'accent','Blocked':'danger','Done':'muted','Draft':'muted','Deferred':'muted','Attested':'neutral'};
 const st=(l)=>`<span class="bd xs ${ST[l]}" style="width:4.25rem" title="${l}">${l}</span>`;
 const ref=k=>`<span class="rf">${k}</span>`;
+const ll=l=>l==='locked'?`<span class="ll repo">${ic('lock','m')}locked</span>`:`<span class="ll ${l==='repo'?'repo':''}">${l}</span>`;
 const pri=n=>`<span class="pri3" aria-label="priority ${n}">${[0,1,2].map(i=>`<i class="${i<3-n?'f':''}" style="height:${5+i*3}px"></i>`).join('')}</span>`;
 const ch=(open)=>`<span class="chv">${ic(open?'chevron-down':'chevron-right','m')}</span>`;
 const cp=l=>`<button class="btn" aria-label="Copy ${l}" data-copy title="Copy ${l}">${ic('copy')}</button>`;
@@ -510,11 +517,11 @@ const ROWS=[
  {d:1,k:'issues',key:'XTRM-812',s:'Done',t:'Bridge status-board-api, allowlisted reads',pr:['merged',422],u:'3d',p:2,done:1}];
 const COLS='minmax(0,1fr) 5.6rem 3.6rem';
 S.rowsToday=()=>`<div class="tbl today"><div class="th" style="grid-template-columns:${COLS}"><span>Title</span><span style="text-align:right">PR</span><span style="text-align:right">Updated</span></div>`+ROWS.slice(0,3).map(r=>`<div class="tr ${r.hov?'hov':''}" style="grid-template-columns:${COLS}"><div style="gap:6px;padding-left:${8+r.d*20}px">${ch(r.open)}${ic(r.k,'big f')}${pri(r.p)}${st(r.s)}<span class="ti"><span class="ik">${r.key}</span>  ${r.t}</span></div><div class="r">${r.pr?`<span class="mu">#${r.pr[1]}</span> ${bd('muted',r.pr[0],'xs')}`:''}</div><div class="r tab">${r.u}</div>${r.hov?`<span class="ra"><button class="btn" aria-label="Open">${ic('open','big')}</button><button class="btn" aria-label="Copy">${ic('copy','big')}</button></span>`:''}</div>`).join('')+`</div>`;
-S.rows=()=>`<div class="tbl"><div class="th" style="grid-template-columns:${COLS}"><span>Title</span><span style="text-align:right">PR</span><span style="text-align:right">Updated</span></div>`+ROWS.map(r=>`<div class="tr ${r.hov?'hov':''} ${r.sel?'sel':''}" style="grid-template-columns:${COLS}"><div class="${r.done?'done':''}" style="gap:6px;padding-left:${8+r.d*20}px"><span class="chv">${r.open!==undefined&&r.d===0?ic(r.open?'chevron-down':'chevron-right'):''}</span>${ic(r.k,'f')}${pri(r.p)}<span class="ik" style="width:4.7rem;flex:none">${r.key}</span>${st(r.s)}<span class="ti">${r.t}</span></div><div class="r">${r.pr?pk(r.pr[0],r.pr[1]):''}</div><div class="r tab">${r.u}</div>${r.hov?`<span class="ra">${cp(r.key)}</span>`:''}</div>`).join('')+`</div>`;
+S.rows=()=>`<div class="tbl"><div class="th" style="grid-template-columns:${COLS}"><span>Title</span><span style="text-align:right">PR</span><span style="text-align:right">Updated</span></div>`+ROWS.map(r=>`<div class="tr ${r.hov?'hov':''} ${r.sel?'sel':''}" style="grid-template-columns:${COLS}"><div class="${r.done?'done':''}" style="gap:6px;padding-left:${8+r.d*20}px"><span class="chv">${r.open!==undefined&&r.d===0?ic(r.open?'chevron-down':'chevron-right'):''}</span>${ic(r.k,'f')}${pri(r.p)}<span class="ik" style="width:4.7rem;flex:none">${r.key}</span>${st(r.s)}<span class="ti">${r.t}</span></div><div class="r">${r.pr?pk(r.pr[0],r.pr[1],{quiet:true}):''}</div><div class="r tab">${r.u}</div>${r.hov?`<span class="ra">${cp(r.key)}</span>`:''}</div>`).join('')+`</div>`;
 
 S.prKeys=()=>`<div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
-${['open','draft','merged','closed'].map((s,i)=>`<div class="row" style="gap:14px;height:28px">${pk(s,[431,429,422,418][i])}${prc(s)}<span class="f" style="font-size:11.5px">${PR[s].tip}</span></div>`).join('')}
-<div class="f" style="font-size:11.5px;border-top:1px solid var(--x-bm);padding-top:8px">In prose: “Merged in ${pk('merged',422,{glyph:false})} after ${pk('open',431,{glyph:false})} was rebased.” The sentence names the state, so the glyph is dropped.</div></div>`;
+${['open','draft','merged','closed'].map((s,i)=>`<div class="row" style="gap:14px;height:28px">${pk(s,[431,429,422,418][i])}<span class="f" style="font-size:11.5px">${PR[s].tip}</span></div>`).join('')}
+<div class="f" style="font-size:11.5px;border-top:1px solid var(--x-bm);padding-top:8px">Quiet variant (a row that already has a coloured status): ${pk('open',431,{quiet:true})} ${pk('merged',422,{quiet:true})}. In prose: “Merged in ${pk('merged',422,{glyph:false})} after ${pk('open',431,{glyph:false})} was rebased.” The sentence names the state, so the glyph is dropped.</div></div>`;
 
 const PCOLS='minmax(0,1fr) 9.5rem 5.4rem 4.4rem';
 const PRS=[{s:'open',n:431,t:'docs(design): console UI system spec and design page',l:['XTRM-853'],a:'worker',d:'+482 −37',u:'2m'},
@@ -525,11 +532,11 @@ const PRS=[{s:'open',n:431,t:'docs(design): console UI system spec and design pa
 const LT={'XTRM-817':'Overview with attention list','XTRM-818':'Timeline as a day-grouped agenda','XTRM-819':'Workers and Follow-ups'};
 S.pulls=()=>`<div class="tb"><span class="tbn tabsel">Open <span class="n">3</span></span><span class="tbn">Merged <span class="n">21</span></span><span class="tbn">Closed <span class="n">3</span></span><label class="lf" title="Filter this list (/)">${ic('list-filter')}<input aria-label="Filter this list" placeholder="Filter this list"><span class="m"></span></label><span class="tbn">Recently updated ${ic('chevron-down','m')}</span></div>
 <div class="tbl"><div class="th" style="grid-template-columns:${PCOLS}"><span>Pull request</span><span>Linked</span><span style="text-align:right">Diff</span><span style="text-align:right">Updated</span></div>`+PRS.map(p=>`<div class="tr" style="grid-template-columns:${PCOLS}"><div style="gap:8px">${pk(p.s,p.n)}<span class="ti">${p.t}</span></div>
- <div class="lg" style="gap:4px;overflow:visible">${p.l.length?`${ref(p.l[0])}${p.l.length>1?`<span class="pw"><button class="bd xs neutral" data-pop aria-label="${p.l.length-1} more linked issues" aria-expanded="${p.pop?'true':'false'}" style="border:0;cursor:pointer">+${p.l.length-1}</button><div class="pop ${p.pop?'open':''}" role="dialog" aria-label="Linked issues" style="left:-60px"><div class="hd">${p.l.length} linked Substrate issues</div>${p.l.map(k=>`<div class="pr">${ref(k)}<span class="t">${LT[k]||''}</span></div>`).join('')}</div></span>`:''}`:'<span class="f">—</span>'}</div>
+ <div class="lg" style="gap:4px;overflow:visible">${p.l.length?`${ref(p.l[0])}${p.l.length>1?`<span class="pw"><button class="btn" data-pop aria-label="${p.l.length-1} more linked issues" aria-expanded="${p.pop?'true':'false'}" style="width:auto;padding:0 4px;font-size:11.5px;color:var(--x-ink-faint)">+${p.l.length-1}</button><div class="pop ${p.pop?'open':''}" role="dialog" aria-label="Linked issues" style="left:-60px"><div class="hd">${p.l.length} linked Substrate issues</div>${p.l.map(k=>`<div class="pr">${ref(k)}<span class="t">${LT[k]||''}</span></div>`).join('')}</div></span>`:''}`:'<span class="f">—</span>'}</div>
  <div class="r"><span class="add tab">${p.d.split(' ')[0]}</span>&nbsp;<span class="del tab">${p.d.split(' ')[1]}</span></div><div class="r tab">${p.u}</div></div>`).join('')+`</div><div style="height:96px"></div>`;
 
 S.prDrawer=()=>`<div class="dr"><div class="dh"><span class="btn">${ic('back')}</span><span class="btn">${ic('forward')}</span><span class="t">Inspector</span><span class="e"><span class="btn">${ic('pin')}</span><span class="btn">${ic('more')}</span><span class="btn">${ic('x')}</span></span></div>
- <div class="ph"><h2>${pk('open',431)}<span>docs(design): console UI system spec and design page</span><span class="gh">${ic('external','m')} Open on GitHub</span></h2>
+ <div class="ph"><h2>${pk('open',431,{quiet:true})}<span>docs(design): console UI system spec and design page</span><span class="tbn" style="margin-left:auto">${ic('external','m')} Open on GitHub</span></h2>
   <p class="meta">${prc('open')}<span class="br" title="xt/xtrm-853-ui-design → main">xt/xtrm-853-ui-design → main</span><span class="tab"><span class="add">+482</span> <span class="del">−37</span></span><span class="tab">6 files</span></p>
   <p class="meta"><span>worker opened 3h ago · updated 2m ago</span></p></div>
  <div class="sec"><h3>Linked Substrate issues</h3><div class="row" style="gap:8px;flex-wrap:wrap">${ref('XTRM-853')}<span>Console v2 UI system: rail, toolbar, rows, PR identity</span></div></div>
@@ -538,19 +545,19 @@ S.prDrawer=()=>`<div class="dr"><div class="dh"><span class="btn">${ic('back')}<
   <div class="fl">${ic('file','m')}<span class="fn">packages/xtrm-app/docs/design/console-ui-system.md</span><span class="tab"><span class="add">+398</span> <span class="del">−0</span></span></div>
   <div class="fl">${ic('file','m')}<span class="fn">packages/xtrm-app/docs/design/mocks/console-ui-system.html</span><span class="tab"><span class="add">+84</span> <span class="del">−37</span></span></div></div></div>`;
 
-S.overview=()=>`<div class="ps"><b>xtrm</b><span class="f">owner/xtrm</span>${bd('neutral','bound · Substrate + status board')}${bd('neutral','Jira XTRM')}<span class="f" style="margin-left:auto;font-size:11.5px">synced 2m ago</span></div>
+S.overview=()=>`<div class="ps"><b>xtrm</b><span class="f">owner/xtrm</span><span class="pl">bound · Substrate + status board</span><span class="pl">Jira XTRM</span><span class="f" style="margin-left:auto;font-size:11.5px">synced 2m ago</span></div>
  <div class="nn"><div><small>Now</small><b>XTRM-853</b> UI system design pass<br><span class="f">worker · claim 1h 22m left</span></div><div><small>Next</small><b>XTRM-817</b> Overview surface<br><span class="f">blocked by XTRM-813</span></div></div>
- ${[['danger','Question','Answer needed: ship Specialists write path in this tranche?','XTRM-454','1d','Questions'],['danger','Blocked','Worker xtrm-xt-claude-3b2a waits on XTRM-813','XTRM-817','5h','Workers'],['neutral','Claim expiring','Claim on XTRM-455 ends in 42m','XTRM-455','42m','Workers'],['neutral','Follow-up due','Re-attest XTRM-456 after the drawer change','XTRM-456','today','Follow-ups'],['muted','Awareness','PR #431 opened by worker','XTRM-853','2m','Timeline']].map(r=>`<div class="at"><span>${bd(r[0],r[1],'xs')}</span><span class="w">${r[2]}<small>${ref(r[3])}</small></span><span class="f tab" style="font-size:11.5px">${r[4]}</span><span class="f" title="Open ${r[5]}">${ic('forward','m')}</span></div>`).join('')}`;
+ ${[['neutral','Question','Answer needed: ship Specialists write path in this tranche?','XTRM-454','1d','Questions'],['danger','Blocked','Worker xtrm-xt-claude-3b2a waits on XTRM-813','XTRM-817','5h','Workers'],['neutral','Claim expiring','Claim on XTRM-455 ends in 42m','XTRM-455','42m','Workers'],['neutral','Follow-up due','Re-attest XTRM-456 after the drawer change','XTRM-456','today','Follow-ups'],['muted','Awareness','PR #431 opened by worker','XTRM-853','2m','Timeline']].map(r=>`<div class="at"><span>${bd(r[0],r[1],'xs')}</span><span class="w">${r[2]}<small>${ref(r[3])}</small></span><span class="f tab" style="font-size:11.5px">${r[4]}</span><span class="f" title="Open ${r[5]}">${ic('forward','m')}</span></div>`).join('')}`;
 S.timeline=()=>`<div class="dg"><span>Today · Wed 18 Nov</span><span>4 events</span></div>
  <div class="ev past"><span class="tab f">03:40</span><span class="k">${ic('git','m')} handover</span><span>Worker launched on XTRM-853</span><span>${ref('XTRM-853')}</span></div>
  <div class="ev past"><span class="tab f">03:49</span><span class="k">${ic('file','m')} report</span><span>Spec draft journaled</span><span>${ref('XTRM-853')}</span></div>
  <div class="now"><span>now 04:02</span><i></i></div>
  <div class="ev"><span class="tab">06:00</span><span class="k">${ic('clock','m')} window</span><span>Console deploy window</span><span class="f">window</span></div>
- <div class="ev"><span class="tab">09:30</span><span class="k">${ic('pull','m')} pr</span><span>Review of ${pk('open',431,{glyph:false})} requested</span><span>${pk('open',431)}</span></div>
+ <div class="ev"><span class="tab">09:30</span><span class="k">${ic('pull','m')} pr</span><span>Review requested</span><span>${pk('open',431)}</span></div>
  <div class="dg"><span>Tomorrow · Thu 19 Nov</span><span>1 event</span></div>
  <div class="ev"><span class="tab">10:00</span><span class="k">${ic('alert','m')} incident</span><span>Post-window review of status-board sync</span><span class="f">incident</span></div>`;
 
-const wrow=(d,name,role,rc,state,sc,issue,statusL,pr,ctx,claim,icn)=>`<div class="wr d${d}" role="treeitem" aria-level="${d+1}"><div class="wn">${d?'':ch(1)}${ic(icn,'f')}<span class="nm" title="${name}">${name}</span>${bd(rc,role,'xs')}</div><div>${st2(sc,state)}</div><div class="tx">${issue?`${ref(issue)}${st(statusL)}`:'<span class="f">—</span>'}</div><div>${pr?pk(pr[0],pr[1]):'<span class="f">—</span>'}</div><div class="rr tab">${ctx||'—'}</div><div class="rr tab">${claim||'—'}</div></div>`;
+const wrow=(d,name,role,rc,state,sc,issue,statusL,pr,ctx,claim,icn)=>`<div class="wr d${d}" role="treeitem" aria-level="${d+1}"><div class="wn">${d?'':ch(1)}${ic(icn,'f')}<span class="nm" title="${name}">${name}</span><span class="pl">${role}</span></div><div>${st2(sc,state)}</div><div class="tx">${issue?`${ref(issue)}${st(statusL)}`:'<span class="f">—</span>'}</div><div>${pr?pk(pr[0],pr[1],{quiet:true}):'<span class="f">—</span>'}</div><div class="rr tab">${ctx||'—'}</div><div class="rr tab">${claim||'—'}</div></div>`;
 S.workers=()=>`<div class="wt"><div class="wh"><span>Name</span><span>State</span><span>Issue</span><span>PR</span><span style="text-align:right">Ctx</span><span style="text-align:right">Claim</span></div>
  ${wrow(0,'xtrm-xt-claude-e9rd','lead','neutral','working','',null,'',null,'61%','—','agent')}
  <div class="g1" role="group">
@@ -560,41 +567,41 @@ S.workers=()=>`<div class="wt"><div class="wh"><span>Name</span><span>State</spa
   ${wrow(1,'xtrm-xt-claude-77c1','worker','neutral','working','','XTRM-839','Done',['merged',422],'74%','expired','agent')}
   <div class="g2" role="group">${wrow(2,'pr-reviewer','activation','dash','done','done','XTRM-839','Done',['merged',422],'—','—','spec')}</div>
  </div></div>`;
-S.followups=()=>{const R=[['Re-attest XTRM-456 after the drawer change','Open','active','lead','today',['XTRM-456'],1],['Add activations read to the Substrate adapter','Open','active','worker','this week',['XTRM-819'],2],['Verify board worker ↔ pane join on live data','Waiting','neutral','worker','Fri',['XTRM-819'],1],['Screenshots light and dark per slice','Done','muted','worker','done',['XTRM-817'],3]];
+S.followups=()=>{const R=[['Re-attest XTRM-456 after the drawer change','Open','neutral','lead','today',['XTRM-456'],1],['Add activations read to the Substrate adapter','Open','neutral','worker','this week',['XTRM-819'],2],['Verify board worker ↔ pane join on live data','Waiting','neutral','worker','Fri',['XTRM-819'],1],['Screenshots light and dark per slice','Done','muted','worker','done',['XTRM-817'],3]];
  return `<div class="dg"><span>Open · 2</span></div>`+R.map((r,i)=>`${i===2?'<div class="dg"><span>Waiting · 1</span></div>':''}${i===3?'<div class="dg"><span>Done · 1</span></div>':''}<div class="fu">${pri(r[6]-1)}<span class="ti" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${r[1]==='Done'?'color:var(--x-ink-muted)':''}">${r[0]}</span>${bd(r[2],r[1],'xs')}<span class="f">${r[3]}</span><span class="f tab">${r[4]}</span><span>${r[5].map(ref).join(' ')}</span></div>`).join('')};
 S.jira=()=>{const J=[['XTRM-1204','Project surface: Overview and attention list','In Progress','neutral','ok','a.rossi'],['XTRM-1209','Workers tree and Follow-ups','To Do','muted','ok','—'],['XTRM-1188','Jira read path','Done','muted','stale','m.bianchi']];
  return `<div class="ps"><span class="f" style="font-size:11.5px">Chip on an issue row:</span><span class="ik">XTRM-817</span>${st('Blocked')}<span class="jk" title="Jira XTRM-1204, In Progress">${ic('external','m')}XTRM-1204 <span class="w">In Progress</span></span></div>
- <div class="th" style="display:grid;grid-template-columns:6rem minmax(0,1fr) 5.4rem 5rem 4.2rem;padding:0 12px;gap:0 10px;background:var(--x-surface)"><span>Key</span><span>Summary</span><span>Status</span><span>Assignee</span><span>Sync</span></div>`+J.map(j=>`<div class="jr"><span class="jk">${j[0]}</span><span class="ti" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:20px">${j[1]}</span>${bd(j[3],j[2],'xs')}<span class="f">${j[5]}</span>${bd(j[4]==='ok'?'neutral':'danger',j[4]==='ok'?'in sync':'stale','xs')}</div>`).join('')};
+ <div class="th" style="display:grid;grid-template-columns:6rem minmax(0,1fr) 5.4rem 5rem 4.2rem;padding:0 12px;gap:0 10px;background:var(--x-surface)"><span>Key</span><span>Summary</span><span>Status</span><span>Assignee</span><span>Sync</span></div>`+J.map(j=>`<div class="jr"><span class="jk">${j[0]}</span><span class="ti" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:20px">${j[1]}</span>${bd(j[3],j[2],'xs')}<span class="f">${j[5]}</span>${j[4]==='ok'?'<span class="pl">in sync</span>':bd('danger','stale','xs')}</div>`).join('')};
 
 const SP=[['executor','implement','default','Dispatchable','done','gpt-5'],['pr-reviewer','review','repo','Dispatchable','done','claude'],['explorer','research','user','Dispatchable','done','sonnet'],['quant-methodologist','research','default','Blocked','danger','opus'],['debugger','debug','default','Dispatchable','done','sonnet']];
 S.catalog=()=>`<div class="tb"><span class="tbn tabsel">All <span class="n">24</span></span><span class="tbn">Implement</span><span class="tbn">Review</span><span class="tbn">Research</span><label class="lf" title="Filter this list (/)">${ic('list-filter')}<input aria-label="Filter this list" placeholder="Filter this list"><span class="m"></span></label></div>
-<div class="th" style="display:grid;grid-template-columns:minmax(9.5rem,1fr) 5.4rem 4rem 6rem 4.4rem;gap:0 8px;padding:0 12px;background:var(--x-surface)"><span>Specialist</span><span>Category</span><span>Source</span><span>Dispatch</span><span style="text-align:right">Model</span></div>`+SP.map((s,i)=>`<div class="fr ${i===1?'sel':''}"><span class="row" style="gap:8px;white-space:nowrap">${ic('spec','f')}<span style="font-weight:500">${s[0]}</span></span><span>${bd('neutral',s[1],'xs')}</span><span>${layer(s[2])}</span><span>${bd(s[4]==='danger'?'danger':'neutral',s[3],'xs')}</span><span class="r f" style="text-align:right;font-size:11.5px">${s[5]}</span></div>`).join('');
-const layer=l=>l==='locked'?`<span class="bd xs dash">${ic('lock','m')}locked</span>`:bd(l==='repo'?'accent':l==='user'?'neutral':'muted',l,'xs');
+<div class="th" style="display:grid;grid-template-columns:minmax(9.5rem,1fr) 5.4rem 4rem 6rem 4.4rem;gap:0 8px;padding:0 12px;background:var(--x-surface)"><span>Specialist</span><span>Category</span><span>Source</span><span>Dispatch</span><span style="text-align:right">Model</span></div>`+SP.map((s,i)=>`<div class="fr ${i===1?'sel':''}"><span class="row" style="gap:8px;white-space:nowrap">${ic('spec','f')}<span style="font-weight:500">${s[0]}</span></span><span class="pl">${s[1]}</span><span>${layer(s[2])}</span><span>${s[4]==='danger'?bd('danger',s[3],'xs'):`<span class="pl">${s[3]}</span>`}</span><span class="r f" style="text-align:right;font-size:11.5px">${s[5]}</span></div>`).join('');
+const layer=ll;
 const dh=(t)=>`<div class="dh"><span class="btn">${ic('back')}</span><span class="btn">${ic('forward')}</span><span class="t">Inspector</span><span class="e"><span class="tbn">${ic('copy','m')} Copy context</span><span class="btn">${ic('pin')}</span><span class="btn">${ic('x')}</span></span></div>`;
 S.factory1=()=>`<div class="dr" style="position:relative">${dh()}
- <div class="ph"><h2><span>pr-reviewer</span>${layer('repo')}${bd('neutral','Dispatchable','xs')}<span class="tbn" style="margin-left:auto">Customize ${ic('chevron-down','m')}</span></h2><p class="meta"><span>review · <span class="mono">.specialists/user/pr-reviewer.specialist.json</span></span></p></div>
- <div class="sec"><h3>Effective configuration <span class="a">${bd('muted','2 overridden','xs')}</span></h3>
+ <div class="ph"><h2><span>pr-reviewer</span>${layer('repo')}<span class="pl">Dispatchable</span><span class="tbn" style="margin-left:auto">Customize ${ic('chevron-down','m')}</span></h2><p class="meta"><span>review · <span class="mono">.specialists/user/pr-reviewer.specialist.json</span></span></p></div>
+ <div class="sec"><h3>Effective configuration <span class="a"><span class="pl">2 overridden</span></span></h3>
   <div class="ff"><span class="k">Model</span><span class="v">claude-opus-5-5</span>${layer('repo')}<span class="sub">inherited: claude-sonnet-5-5 (user)</span></div>
   <div class="ff"><span class="k">Thinking level</span><span class="v">high</span>${layer('user')}<span class="sub">inherited: medium (default)</span></div>
   <div class="ff"><span class="k">Timeout</span><span class="v inh">900 s</span>${layer('default')}</div>
   <div class="ff"><span class="k">Write lease</span><span class="v inh">required</span>${layer('locked')}<span class="sub">locked by policy · changes in core defaults</span></div>
   <div class="ff"><span class="k">System prompt</span><span class="v inh">12 lines · collapsed</span>${layer('default')}</div></div>
  <div class="fe" style="top:262px" role="dialog" aria-label="Edit Thinking level"><b style="font-size:12.5px">Thinking level</b><span class="f" style="font-size:11.5px">How much reasoning the model spends before answering. One of: low, medium, high.</span>
-  <div class="row" style="gap:6px">${bd('neutral','low')}${bd('neutral','medium')}<span class="bd active" style="outline:1px solid var(--x-accent)">high</span></div>
+  <span class="opt"><span>low</span><span>medium</span><span class="on">high</span></span>
   <span class="f" style="font-size:11.5px">Inherited: medium · Reset to inherit</span><div class="cli">specialists config set pr-reviewer thinking_level high --scope user</div>
   <div class="acts"><span class="tbn">Cancel</span><span class="tbn val">Save</span></div></div>
  <div style="height:150px"></div></div>`;
 S.factory2=()=>`<div class="dr">${dh()}
- <div class="sec"><h3>Skills and rules <span class="a">${bd('muted','3 skills · 6 rules','xs')}</span></h3>
+ <div class="sec"><h3>Skills and rules <span class="a"><span class="pl">3 skills · 6 rules</span></span></h3>
   <div class="ff"><span class="k">engineering-quality</span><span class="v mono" style="font-size:11.5px">pack default · a41c9e2</span>${layer('default')}</div>
   <div class="ff"><span class="k">using-specialists</span><span class="v mono" style="font-size:11.5px">pack default · 77b0d13</span>${layer('default')}</div>
-  <div class="ff"><span class="k">pr-review</span><span class="v mono" style="font-size:11.5px">repo · .specialists/skills</span>${layer('repo')}<span class="sub">${bd('dash','fallback resolution','xs')} two packs matched; the repo copy won</span></div>
+  <div class="ff"><span class="k">pr-review</span><span class="v mono" style="font-size:11.5px">repo · .specialists/skills</span>${layer('repo')}<span class="sub"><span class="pl">fallback resolution:</span> two packs matched; the repo copy won</span></div>
   <div class="ff"><span class="k">Rule: session boundary</span><span class="v">required</span>${layer('locked')}</div>
   <div class="cp">[required] You are one worker in XTRM. The pinned Substrate Issue revision is the executable work contract…</div></div>
- <div class="sec"><h3>Diagnostics and launch preview <span class="a">${bd('danger','1 finding','xs')}</span></h3>
+ <div class="sec"><h3>Diagnostics and launch preview <span class="a"><span class="pl">1 finding</span></span></h3>
   <div class="ban warn"><span>${ic('alert')}</span><div><b>Repo layer warns</b><br><span class="mu">The repo override sets <span class="mono">execution.model</span>; the loader applies it, but the user layer pins a different model.</span></div></div>
   <div class="ff"><span class="k">Launch model</span><span class="v">claude-opus-5-5</span>${layer('repo')}</div>
-  <div class="ff"><span class="k">Worktree</span><span class="v inh">unavailable</span>${bd('muted','unavailable','xs')}<span class="sub">no issue is bound to this preview</span></div>
+  <div class="ff"><span class="k">Worktree</span><span class="v inh">unavailable</span><span></span><span class="sub">no issue is bound to this preview</span></div>
   <div class="ff"><span class="k">Skills injected</span><span class="v">3</span>${layer('default')}</div></div></div>`;
 
 const tokenRows=[['--x-surface','#ffffff','#151515','rows, drawer'],['--x-sidebar','#f4f4f5','#232323','NavRail host'],['--x-control','#efeff1','#262626','day headings, inputs'],['--x-ink','#18181b','#ececef','text'],['--x-ink-muted','#5f5f68','#a0a0a8','secondary, draft key'],['--x-ink-faint','#94949c','#6a6a72','meta'],['--x-border-muted','ink 7%','white 8%','rail, section rules'],['--x-accent','#4f46e5','#818cf8','active marker, focus'],['--x-accent-ink','#4338ca','#a5b4fc','merged key, references'],['--x-success','#1b7f46 (R1; was #1f8a4c)','#5ccb8a','open key, diff add'],['--x-danger','#c42b2b','#f07171','closed key, blocked']];
