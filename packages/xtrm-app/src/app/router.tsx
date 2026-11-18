@@ -15,6 +15,7 @@ import { ReleasesSurface } from "../github/ReleasesSurface.tsx";
 import { PullsSurface } from "../github/PullsSurface.tsx";
 import { ExperimentDetailSurface, ExperimentListSurface, RunAnalysisSurface, RunComparisonSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
 import { OverviewSurface } from "../project/overview/OverviewSurface.tsx";
+import { TimelineSurface, validateTimelineSearch } from "../project/timeline/TimelineSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { SettingsSurface } from "../settings/SettingsSurface.tsx";
 import { MODES, PROJECT_ROOT, PROJECT_SECTIONS, REPO_SECTIONS, RESEARCH_SECTIONS, type Destination } from "./destinations.ts";
@@ -23,7 +24,12 @@ import { validateCompareSearch } from "./research-compare-search.ts";
 // URL contract: docs/console-v2-shell-architecture.md §9.1.
 
 /** Project sections with a live surface; every other section stays an explicit coming-state. */
-const PROJECT_SURFACES: Partial<Record<string, ComponentType>> = { overview: OverviewSurface };
+const PROJECT_SURFACES: Partial<Record<string, ComponentType>> = { overview: OverviewSurface, timeline: TimelineSurface };
+
+/** A Project section's own search keys; the drawer's keys stay valid alongside them. */
+const PROJECT_SEARCH: Partial<Record<string, (search: Record<string, unknown>) => Record<string, unknown>>> = {
+  timeline: (search) => ({ ...validateDrawerSearch(search), ...validateTimelineSearch(search) }),
+};
 
 const REPO_STORAGE_KEY = "xtrm.console.repo.v1";
 
@@ -151,6 +157,7 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
       return createRoute({
         getParentRoute: () => repoRoute,
         path: s.repoPath,
+        validateSearch: PROJECT_SEARCH[s.id],
         component: Surface ? () => <Surface /> : () => <DeferredSurface title={s.label} icon={s.icon} reason={s.deferred ?? `${s.label} is not implemented yet`} />,
       });
     }),
