@@ -153,11 +153,15 @@ def test_migrate_refuses_a_last_sync_in_the_future(tmp_path: Path) -> None:
 
 
 def test_migrate_refuses_when_nothing_exists_before_last_sync(tmp_path: Path) -> None:
+    """The stamp IS committed (so the anchor exists) but its date predates every commit we can see:
+    nothing lowers the anchor, so it is refused rather than trusted."""
     legacy = Legacy(tmp_path)
     legacy.registry["services"]["db"]["last_sync"] = _iso(STAMP - timedelta(days=60))
     legacy._write()
+    _commit(legacy.repo, "ancient stamp", STAMP + timedelta(days=6))
     results = drift_detector.migrate_legacy_refs(str(legacy.repo), apply=True)
-    assert results[0]["status"] == "refused" and "no commit" in results[0]["reason"]
+    assert results[0]["status"] == "refused" and "first-parent" in results[0]["reason"]
+    assert "last_sync_ref" not in legacy.service()
 
 
 def test_migrate_skips_never_synced_and_already_verifiable_services(tmp_path: Path) -> None:

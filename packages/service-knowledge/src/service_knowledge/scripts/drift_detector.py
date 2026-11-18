@@ -291,6 +291,7 @@ def migrate_legacy_refs(project_root: str | None = None, apply: bool = False) ->
         LOWER the anchor: the result is the older of the two, or their merge base when
         they diverge. Every outcome is an ancestor of the anchor.
 
+    "Main line" means HEAD's first-parent chain, so run ``drift migrate`` on the integration branch.
     Known limit (git cannot distinguish them): a MAIN-LINE commit dated before ``last_sync`` whose
     stamp was committed only later looks the same as a commit made during the sync; such a change
     is treated as already verified. Review ``drift migrate`` output (dry-run) before ``--apply``.
@@ -343,8 +344,13 @@ def migrate_legacy_refs(project_root: str | None = None, apply: bool = False) ->
             continue
         candidates["registry-stamp-parent"] = parent
         before = _git_out(root, "rev-list", "-1", "--first-parent", f"--before={sync_time.isoformat()}", "HEAD")
-        if before and _is_valid_ref(before, root):
-            candidates["rev-list-before"] = before
+        if not before or not _is_valid_ref(before, root):
+            # Nothing on the first-parent chain at or before last_sync: the stamp date predates the
+            # history we can see (clone/graft/rewritten), so the anchor alone is not trustworthy.
+            item.update(status="refused", reason="no commit on the current branch's first-parent history at or "
+                        "before last_sync (history older than the stamp is missing or rewritten)")
+            continue
+        candidates["rev-list-before"] = before
         item["candidates"] = candidates
         chosen: str | None = None
         for sha in candidates.values():
