@@ -22,6 +22,7 @@ const ISSUES: JiraIssue[] = [
     url: `${FIXTURE_JIRA_SITE}/browse/MMD-551`,
     syncState: "in_sync",
     issueRef: "XTRM-816",
+    bindingsAvailable: true,
   },
   {
     key: "MMD-612",
@@ -31,6 +32,7 @@ const ISSUES: JiraIssue[] = [
     url: `${FIXTURE_JIRA_SITE}/browse/MMD-612`,
     syncState: null,
     issueRef: null,
+    bindingsAvailable: true,
   },
   {
     key: "MMD-700",
@@ -40,6 +42,7 @@ const ISSUES: JiraIssue[] = [
     url: `${FIXTURE_JIRA_SITE}/browse/MMD-700`,
     syncState: "pending",
     issueRef: "XTRM-820",
+    bindingsAvailable: true,
   },
 ];
 
@@ -88,7 +91,8 @@ export function createJiraFixtureAdapter(opts: { repository?: string } = {}): Ji
       if (guard && guard.trim() !== "" && guard.replace(/\s+/g, " ").trim().toUpperCase() !== `PROJECT = ${FIXTURE_JIRA_PROJECT}`) {
         throw new JiraError("bad_request", "jql is not supported beyond the bound project", 400);
       }
-      return { issues: ISSUES, truncated: false, cachedAt: null };
+      // The fixture is its own store: every row's link state is known, and the join is complete.
+      return { issues: ISSUES, truncated: false, bindingsAvailable: true, bindingsReason: null, cachedAt: null };
     },
     async links(repository, keys): Promise<JiraLinks> {
       if (!bound(repository)) return Promise.reject(new JiraError("unbound", "repository has no jira binding", 404));
@@ -96,7 +100,7 @@ export function createJiraFixtureAdapter(opts: { repository?: string } = {}): Ji
       for (const key of keys) {
         resolved.push(read(repository, key));
       }
-      return { links: resolved, bindingsAvailable: true, cachedAt: null };
+      return { links: resolved, bindingsAvailable: true, bindingsReason: null, cachedAt: null };
     },
   };
 }

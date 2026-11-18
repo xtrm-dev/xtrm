@@ -1,4 +1,13 @@
-import { JiraError, type JiraAdapter, type JiraBinding, type JiraIssue, type JiraLinks, type JiraMissingReason, type JiraSearchPage } from "./types.ts";
+import {
+  JiraError,
+  type JiraAdapter,
+  type JiraBinding,
+  type JiraBindingsReason,
+  type JiraIssue,
+  type JiraLinks,
+  type JiraMissingReason,
+  type JiraSearchPage,
+} from "./types.ts";
 
 // Wire shapes of the read-only Jira bridge (server/jira-api.ts). Only the fields read here; the
 // bridge owns the Jira host, the credential and the project restriction, so no URL is built from
@@ -26,11 +35,14 @@ export interface WireJiraIssue {
   url: string;
   syncState: string | null;
   issueRef: string | null;
+  bindingsAvailable?: boolean;
 }
 
 export interface WireIssueBody {
   ok: boolean;
   issue?: WireJiraIssue;
+  bindingsAvailable?: boolean;
+  bindingsReason?: string | null;
   cachedAt?: string | null;
 }
 
@@ -38,6 +50,8 @@ export interface WireSearchBody {
   ok: boolean;
   issues?: WireJiraIssue[];
   truncated?: boolean;
+  bindingsAvailable?: boolean;
+  bindingsReason?: string | null;
   cachedAt?: string | null;
 }
 
@@ -45,6 +59,7 @@ export interface WireLinksBody {
   ok: boolean;
   links?: WireJiraIssue[];
   bindingsAvailable?: boolean;
+  bindingsReason?: string | null;
   cachedAt?: string | null;
 }
 
@@ -54,7 +69,8 @@ export interface WireBindingBody {
 }
 
 const RESOLVED_BY: readonly JiraBinding["resolvedBy"][] = ["explicit", "env", "repo_slug", "repo_name", "none"];
-const MISSING_REASONS: readonly JiraMissingReason[] = ["config_absent", "repo_not_bound", "jira_not_configured"];
+const MISSING_REASONS: readonly JiraMissingReason[] = ["config_absent", "repo_not_bound", "jira_not_configured", "jira_invalid_config"];
+const BINDINGS_REASONS: readonly JiraBindingsReason[] = ["sb_project_missing", "sb_unavailable", "sb_truncated"];
 
 const text = (value: unknown): string | null => (typeof value === "string" && value.length > 0 ? value : null);
 
@@ -63,6 +79,10 @@ const resolvedByOf = (value: unknown): JiraBinding["resolvedBy"] =>
 
 const missingReasonOf = (value: unknown): JiraMissingReason | null =>
   typeof value === "string" && (MISSING_REASONS as readonly string[]).includes(value) ? (value as JiraMissingReason) : null;
+
+/** A join reason the bridge did not state is "unavailable", never "complete". */
+const bindingsReasonOf = (value: unknown): JiraBindingsReason | null =>
+  typeof value === "string" && (BINDINGS_REASONS as readonly string[]).includes(value) ? (value as JiraBindingsReason) : null;
 
 export function mapBinding(wire: WireJiraBinding): JiraBinding {
   return {
@@ -90,6 +110,8 @@ export function mapIssue(wire: WireJiraIssue): JiraIssue {
     url: text(wire.url) ?? "",
     syncState: text(wire.syncState),
     issueRef: text(wire.issueRef),
+    // A wire row without the flag is unknown, not "no binding": only the bridge can say it knows.
+    bindingsAvailable: wire.bindingsAvailable === true,
   };
 }
 
@@ -143,7 +165,11 @@ export function createJiraLiveAdapter(opts: LiveJiraOptions = {}): JiraAdapter {
       if (route === "issue") return new JiraError("not_found", "jira issue not found", status);
       return new JiraError("upstream", "jira read failed", status);
     }
-    if (status === 503) return new JiraError("credential", "jira credential unavailable", status);
+    if (status === 503) {
+      // Unusable operator config is not a credential fault: the two must read differently.
+      if (body["reason"] === "jira_invalid_config") return new JiraError("config", "jira binding config is unusable", status);
+      return new JiraError("credential", "jira credential unavailable", status);
+    }
     return new JiraError("upstream", "jira read failed", status);
   };
 
@@ -186,7 +212,13 @@ export function createJiraLiveAdapter(opts: LiveJiraOptions = {}): JiraAdapter {
       if (status !== 200) throw fail(status, body, "search");
       const wire = body as unknown as WireSearchBody;
       if (!Array.isArray(wire.issues)) throw new JiraError("malformed", "jira bridge returned no search page", status);
-      return { issues: wire.issues.map(mapIssue), truncated: wire.truncated === true, cachedAt: text(wire.cachedAt) };
+      return {
+        issues: wire.issues.map(mapIssue),
+        truncated: wire.truncated === true,
+        bindingsAvailable: wire.bindingsAvailable === true,
+        bindingsReason: bindingsReasonOf(wire.bindingsReason),
+        cachedAt: text(wire.cachedAt),
+      };
     },
 
     async links(repository, keys) {
@@ -194,7 +226,12 @@ export function createJiraLiveAdapter(opts: LiveJiraOptions = {}): JiraAdapter {
       if (status !== 200) throw fail(status, body, "links");
       const wire = body as unknown as WireLinksBody;
       if (!Array.isArray(wire.links)) throw new JiraError("malformed", "jira bridge returned no links", status);
-      return { links: wire.links.map(mapIssue), bindingsAvailable: wire.bindingsAvailable === true, cachedAt: text(wire.cachedAt) };
+      return {
+        links: wire.links.map(mapIssue),
+        bindingsAvailable: wire.bindingsAvailable === true,
+        bindingsReason: bindingsReasonOf(wire.bindingsReason),
+        cachedAt: text(wire.cachedAt),
+      };
     },
   };
 }

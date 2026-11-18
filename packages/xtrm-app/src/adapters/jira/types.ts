@@ -3,7 +3,10 @@ import type { DataSource } from "../types.ts";
 // Typed view models for the Jira bridge (server/jira-api.ts). UI components depend on these,
 // never on the wire shapes in live.ts. ADR-002 §3 (JiraIssue) and §D5 (Substrate owns the link).
 
-export type JiraMissingReason = "config_absent" | "repo_not_bound" | "jira_not_configured";
+export type JiraMissingReason = "config_absent" | "repo_not_bound" | "jira_not_configured" | "jira_invalid_config";
+
+/** Why a join could not answer for a key; `null` means the read was complete and a null state is real. */
+export type JiraBindingsReason = "sb_project_missing" | "sb_unavailable" | "sb_truncated";
 
 /** Substrate `external_bindings.sync_state` (ADR-002 §D5); displayed, never inferred. */
 export const JIRA_SYNC_STATES = ["in_sync", "pending", "drift", "uncertain"] as const;
@@ -37,12 +40,22 @@ export interface JiraIssue {
   syncState: string | null;
   /** The owning Substrate Issue reference (`XTRM-816`), `null` when unbound. */
   issueRef: string | null;
+  /**
+   * False when this row's Substrate identity is unknown (the join failed, or this key fell past a
+   * truncated page): `syncState`/`issueRef` are then null because nobody could read them, never
+   * because the issue is unbound.
+   */
+  bindingsAvailable: boolean;
 }
 
 export interface JiraSearchPage {
   issues: JiraIssue[];
   /** More issues matched than this page carries; the surface must say so, never silently cap. */
   truncated: boolean;
+  /** False when the Substrate join could not answer for every issue in this page. */
+  bindingsAvailable: boolean;
+  /** Why the join is incomplete; `null` when it was complete. */
+  bindingsReason: JiraBindingsReason | null;
   /** When the upstream data was fetched (bridged cache entry time), never "now". */
   cachedAt: string | null;
 }
@@ -50,14 +63,16 @@ export interface JiraSearchPage {
 export interface JiraLinks {
   links: JiraIssue[];
   /**
-   * False when the Substrate bindings read failed: `syncState`/`issueRef` are then null because
-   * they are unknown, not because the issues are unbound.
+   * False when the Substrate bindings read failed or was truncated: `syncState`/`issueRef` are then
+   * null because they are unknown, not because the issues are unbound.
    */
   bindingsAvailable: boolean;
+  /** Why the join is incomplete; `null` when it was complete. */
+  bindingsReason: JiraBindingsReason | null;
   cachedAt: string | null;
 }
 
-export type JiraErrorKind = "bad_request" | "unbound" | "forbidden" | "credential" | "not_found" | "upstream" | "malformed";
+export type JiraErrorKind = "bad_request" | "unbound" | "forbidden" | "credential" | "config" | "not_found" | "upstream" | "malformed";
 
 /** A typed bridge failure. The message never carries a credential, an upstream URL, or a body. */
 export class JiraError extends Error {

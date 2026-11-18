@@ -29,6 +29,7 @@ const wireIssue = (key: string, overrides: Partial<JiraIssue> = {}) => ({
   url: `${FIXTURE_JIRA_SITE}/browse/${key}`,
   syncState: "in_sync",
   issueRef: "XTRM-816",
+  bindingsAvailable: true,
   ...overrides,
 });
 
@@ -83,6 +84,7 @@ describe("live jira adapter: reads through the bridge only", () => {
       url: `${FIXTURE_JIRA_SITE}/browse/MMD-551`,
       syncState: "in_sync",
       issueRef: "XTRM-816",
+      bindingsAvailable: true,
     });
     expect(calls[0]).toContain("key=MMD-551");
 
@@ -90,19 +92,27 @@ describe("live jira adapter: reads through the bridge only", () => {
       status: 200,
       body: {
         ok: true,
-        issues: [wireIssue("MMD-551"), wireIssue("MMD-612", { summary: null, status: null, assignee: null, syncState: null, issueRef: null })],
+        issues: [
+          wireIssue("MMD-551"),
+          wireIssue("MMD-612", { summary: null, status: null, assignee: null, syncState: null, issueRef: null, bindingsAvailable: false }),
+        ],
         truncated: true,
+        bindingsAvailable: false,
+        bindingsReason: "sb_truncated",
         cachedAt: "2026-11-17T22:00:00.000Z",
       },
     };
     const page = await adapter.search(REPO, { jql: "project = MMD" });
     expect(page.truncated).toBe(true);
+    expect(page.bindingsAvailable).toBe(false);
+    expect(page.bindingsReason).toBe("sb_truncated");
     expect(page.cachedAt).toBe("2026-11-17T22:00:00.000Z");
-    expect(page.issues[1]).toMatchObject({ key: "MMD-612", summary: null, status: null, assignee: null, syncState: null, issueRef: null });
+    expect(page.issues[1]).toMatchObject({ key: "MMD-612", summary: null, status: null, assignee: null, syncState: null, issueRef: null, bindingsAvailable: false });
 
-    reply = { status: 200, body: { ok: true, links: [wireIssue("MMD-551")], bindingsAvailable: false, cachedAt: null } };
+    reply = { status: 200, body: { ok: true, links: [wireIssue("MMD-551")], bindingsAvailable: false, bindingsReason: "sb_unavailable", cachedAt: null } };
     const links = await adapter.links(REPO, ["MMD-551"]);
     expect(links.bindingsAvailable).toBe(false);
+    expect(links.bindingsReason).toBe("sb_unavailable");
     expect(links.links.map((i) => i.key)).toEqual(["MMD-551"]);
   });
 
@@ -113,6 +123,7 @@ describe("live jira adapter: reads through the bridge only", () => {
       { name: "unbound", status: 404, body: { ok: false, configured: false, reason: "repo_not_bound" }, kind: "unbound" },
       { name: "missing issue", status: 404, body: { ok: false, error: "jira issue not found" }, kind: "not_found" },
       { name: "credential", status: 503, body: { ok: false, error: "jira credential unavailable" }, kind: "credential" },
+      { name: "unusable config", status: 503, body: { ok: false, configured: false, reason: "jira_invalid_config" }, kind: "config" },
       { name: "upstream", status: 502, body: { ok: false, error: "jira read failed" }, kind: "upstream" },
     ];
     for (const c of cases) {
@@ -159,6 +170,7 @@ describe("fixture jira adapter", () => {
       url: `${FIXTURE_JIRA_SITE}/browse/MMD-551`,
       syncState: "in_sync",
       issueRef: "XTRM-816",
+      bindingsAvailable: true,
     });
 
     // The live adapter, given the same bridge payload, yields the identical typed view.
@@ -182,12 +194,16 @@ describe("fixture jira adapter", () => {
     const page = await fixtureJira.search(FIXTURE_JIRA_REPO, { jql: "project = MMD" });
     expect(page.issues).toHaveLength(3);
     expect(page.truncated).toBe(false);
+    expect(page.bindingsAvailable).toBe(true);
+    expect(page.bindingsReason).toBeNull();
+    expect(page.issues.every((i) => i.bindingsAvailable)).toBe(true);
     expect(page.issues.map((i) => i.syncState)).toContain("in_sync");
     expect(page.issues.map((i) => i.syncState)).toContain("pending");
     await expect(fixtureJira.search(FIXTURE_JIRA_REPO, { jql: "project = OTHER" })).rejects.toMatchObject({ kind: "bad_request" });
 
     const links = await fixtureJira.links(FIXTURE_JIRA_REPO, ["MMD-551", "MMD-700"]);
     expect(links.bindingsAvailable).toBe(true);
+    expect(links.bindingsReason).toBeNull();
     expect(links.links.map((i) => i.issueRef)).toEqual(["XTRM-816", "XTRM-820"]);
   });
 });

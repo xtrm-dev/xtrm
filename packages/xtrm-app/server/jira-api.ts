@@ -29,6 +29,8 @@ const CACHE_MS = 30_000;
 const UPSTREAM_TIMEOUT_MS = 8_000;
 const MAX_KEYS = 50;
 const MAX_RESULTS = 50;
+/** `sb external list` reports at most this many rows in one page (500 is `sb`'s hard cap). */
+export const EXTERNAL_LIST_LIMIT = 500;
 const FIELDS = "summary,status,assignee";
 const ISSUE_PATH = "/rest/api/3/issue";
 /** Jira Cloud's current search endpoint; `/rest/api/3/search` is its deprecated predecessor. */
@@ -37,9 +39,41 @@ const SEARCH_PATH = "/rest/api/3/search/jql";
 /** The key shape the contract pins: `PROJECT-123`, project key at least two characters. */
 export const JIRA_KEY_RE = /^[A-Z][A-Z0-9_]+-\d+$/;
 
+/**
+ * The shape a project key must have before it enters the JQL template. A configured value that
+ * does not match would widen every search past the bound project (`MMD OR project = HR`), so it is
+ * refused as a config error instead of being used.
+ */
+export const JIRA_PROJECT_RE = /^[A-Z][A-Z0-9_]+$/;
+
 const str = (value: unknown, max = 400): string | null => (typeof value === "string" && value.length > 0 && value.length <= max ? value : null);
 
-export type JiraMissingReason = "config_absent" | "repo_not_bound" | "jira_not_configured";
+/**
+ * A Jira site the bridge may send a credential to: an absolute `https:` URL. An `http:` site would
+ * put the Authorization header on the wire in plaintext, so it is a config error, not a warning.
+ */
+export function httpsSiteOf(value: unknown): string | null {
+  const site = str(value);
+  if (!site) return null;
+  try {
+    return new URL(site).protocol === "https:" ? site : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Why a Jira document carries no Substrate identity. `jira_invalid_config` is unusable operator
+ * config (a malformed project key, a non-https site), reported as 503 before any upstream call;
+ * the rest are honest "not bound" states.
+ */
+export type JiraMissingReason = "config_absent" | "repo_not_bound" | "jira_not_configured" | "jira_invalid_config";
+
+/**
+ * Why the Substrate join could not answer for a key. Absent (null) means the read was complete, so
+ * a null `syncState` is a real "no binding" rather than an unknown one.
+ */
+export type JiraBindingsReason = "sb_project_missing" | "sb_unavailable" | "sb_truncated";
 
 /** The binding as a caller may see it: paths and presence, never a credential value. */
 export interface JiraBinding {
@@ -67,6 +101,12 @@ export interface JiraIssue {
   syncState: string | null;
   /** The owning Substrate Issue reference, e.g. `XTRM-816`; null when unbound. */
   issueRef: string | null;
+  /**
+   * False when this row's Substrate identity is unknown (the join failed, or this key fell past a
+   * truncated page): `syncState`/`issueRef` are then null because nobody could read them, never
+   * because the issue is unbound.
+   */
+  bindingsAvailable: boolean;
 }
 
 /** Project part of a key (`MMD-12` -> `MMD`). The key is already validated by `JIRA_KEY_RE`. */
@@ -156,15 +196,22 @@ export function readJiraAuth(path: string | null, read: (path: string) => string
 
 /** Map a configured repository binding onto the Jira facts a caller may see. */
 export function jiraBindingOf(binding: BoardBinding, credentialPresent: boolean): JiraBinding {
-  const site = str(binding.jira.site);
-  const project = str(binding.jira.project);
+  const rawSite = str(binding.jira.site);
+  const rawProject = str(binding.jira.project);
+  // Both values reach the upstream call, so both are checked here: the site must be https (a
+  // credential must never travel in plaintext) and the project must be one token (it lands in the
+  // JQL template). Present-but-unusable is a config error, absent is "not configured".
+  const site = httpsSiteOf(rawSite);
+  const project = rawProject !== null && JIRA_PROJECT_RE.test(rawProject) ? rawProject : null;
   const reason: JiraMissingReason | null = !binding.configured
     ? binding.configPresent
       ? "repo_not_bound"
       : "config_absent"
-    : site && project
-      ? null
-      : "jira_not_configured";
+    : rawSite === null || rawProject === null
+      ? "jira_not_configured"
+      : site === null || project === null
+        ? "jira_invalid_config"
+        : null;
   return {
     repository: binding.repository,
     configured: reason === null,
@@ -186,12 +233,20 @@ export interface JiraBindingJoin {
   url: string | null;
 }
 
+/** One `sb external list` page: the rows it carried and whether it stopped at a limit. */
+export interface ExternalBindingsPage {
+  rows: Map<string, JiraBindingJoin>;
+  /** `sb` said the answer was cut short: a key absent from `rows` is unknown, not unbound. */
+  truncated: boolean;
+}
+
 /**
- * `sb external list --json` envelope -> `remoteKey -> binding`. Returns null when the envelope is
- * not a successful substrate-cli/v1 answer, so the caller can say "bindings unavailable" instead
- * of "unbound": a failed read is not evidence that no Jira link exists.
+ * `sb external list --json` envelope -> `remoteKey -> binding` plus its truncation flag. Returns
+ * null when the envelope is not a successful substrate-cli/v1 answer, so the caller can say
+ * "bindings unavailable" instead of "unbound": a failed read is not evidence that no Jira link
+ * exists.
  */
-export function parseExternalBindings(raw: string): Map<string, JiraBindingJoin> | null {
+export function parseExternalBindings(raw: string): ExternalBindingsPage | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -214,7 +269,7 @@ export function parseExternalBindings(raw: string): Map<string, JiraBindingJoin>
     if (!remoteKey || !issueRef || !JIRA_KEY_RE.test(remoteKey)) continue;
     out.set(remoteKey, { issueRef, syncState: str(record["syncState"], 40), url: str(record["url"], 400) });
   }
-  return out;
+  return { rows: out, truncated: (data as Record<string, unknown>)["truncated"] === true };
 }
 
 /** One upstream Jira issue row -> the typed view, before the Substrate join. */
@@ -255,10 +310,36 @@ export function parseSearch(raw: unknown): { rows: JiraIssueFields[]; truncated:
 /** `sb external list` for one bound scope. Injected so a test needs no sb binary. */
 export type ExternalListRun = (argv: string[]) => Promise<{ status: number; body: string }>;
 
-function defaultRunExternal(bin: string): ExternalListRun {
+/** Runs one binary and reports its stdout; injected so a test needs no real `sb`. */
+export type SbExec = (bin: string, argv: string[], done: (error: Error | null, stdout: string) => void) => void;
+
+const defaultExec: SbExec = (bin, argv, done) => {
+  execFile(bin, argv, { timeout: UPSTREAM_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => done(error, stdout ?? ""));
+};
+
+/**
+ * `sb`'s own global flags, exactly as `substrateCliApi` builds them (`server/substrate-cli.ts`):
+ * `--db` before the subcommand, then `--json`. Without this the join would read the default
+ * database while the rest of the console reads `XTRM_SB_DB`, and the two would disagree.
+ */
+export const externalListArgv = (argv: string[], db: string | undefined): string[] => [...(db ? ["--db", db] : []), "--json", ...argv];
+
+/**
+ * The `sb` binary and database the binding join uses. Resolved like `substrateCliApi`: explicit
+ * option, then `XTRM_SB_BIN`/`XTRM_SB_DB`, then PATH. A deployed console therefore joins with the
+ * same `sb` and database its other panels read.
+ */
+export function resolveSbJoin(
+  opts: { sbBin?: string; sbDb?: string },
+  env: NodeJS.ProcessEnv = process.env,
+): { bin: string; db: string | undefined } {
+  return { bin: resolveSbBin(opts.sbBin ?? env.XTRM_SB_BIN ?? "sb"), db: opts.sbDb ?? (env.XTRM_SB_DB || undefined) };
+}
+
+function defaultRunExternal(bin: string, db: string | undefined, exec: SbExec): ExternalListRun {
   return (argv) =>
     new Promise((resolve) => {
-      execFile(bin, ["--json", ...argv], { timeout: UPSTREAM_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => {
+      exec(bin, externalListArgv(argv, db), (_error, stdout) => {
         const body = (stdout ?? "").trim();
         if (body.startsWith("{")) return resolve({ status: 200, body });
         resolve({ status: 502, body: "" });
@@ -270,9 +351,13 @@ export interface JiraApiOptions {
   configPath?: string;
   prefix?: string;
   fetchImpl?: typeof fetch;
-  /** The `sb` binary the binding join uses; resolved like the substrate bridge does. */
+  /** The `sb` binary the binding join uses; defaults to `XTRM_SB_BIN`, resolved like the substrate bridge. */
   sbBin?: string;
+  /** The `sb` database the binding join reads; defaults to `XTRM_SB_DB`, as the substrate bridge does. */
+  sbDb?: string;
   runExternal?: ExternalListRun;
+  /** The process runner behind the default `runExternal`; injected so a test can see the real argv. */
+  execSb?: SbExec;
   now?: () => number;
   readFile?: (path: string) => string;
 }
@@ -303,13 +388,21 @@ class JiraStatus extends Error {
   }
 }
 
+/** What the binding join knows: the rows it resolved, and whether it answered for every key. */
+interface JoinState {
+  rows: Map<string, JiraBindingJoin>;
+  complete: boolean;
+  reason: JiraBindingsReason | null;
+}
+
 export function jiraApi(opts: JiraApiOptions = {}): Plugin {
   const prefix = opts.prefix ?? PREFIX;
   const configPath = opts.configPath ?? defaultConfigPath();
   const config = loadPmConfig(configPath);
   if (!config) console.log(`[jira bridge] no project-management config at ${configPath}: every repository is unconfigured`);
   const doFetch = opts.fetchImpl ?? fetch;
-  const runExternal = opts.runExternal ?? defaultRunExternal(resolveSbBin(opts.sbBin ?? "sb"));
+  const sbJoin = resolveSbJoin(opts);
+  const runExternal = opts.runExternal ?? defaultRunExternal(sbJoin.bin, sbJoin.db, opts.execSb ?? defaultExec);
   const now = opts.now ?? Date.now;
   const readFile = opts.readFile;
 
@@ -353,27 +446,59 @@ export function jiraApi(opts: JiraApiOptions = {}): Plugin {
     return { status: response.status, body };
   };
 
-  /** The join with Substrate bindings (XTRM-814). null = "could not read", not "no links". */
-  const bindingsFor = async (binding: JiraBinding): Promise<Map<string, JiraBindingJoin> | null> => {
-    if (!binding.site || !binding.project) return null;
-    const scope = remoteScope(binding.site, binding.project);
-    if (!scope) return null;
-    const key = `bindings:${scope}:${binding.substrateProject ?? ""}`;
+  /**
+   * The join with Substrate bindings (XTRM-814). `complete: false` means "could not answer for every
+   * key", never "no links": a truncated page, a failed read and a missing Substrate Project all
+   * leave a key's state unknown, and an unknown state is not reported as unbound.
+   */
+  const bindingsFor = async (binding: JiraBinding): Promise<JoinState> => {
+    const unavailable = (reason: JiraBindingsReason): JoinState => ({ rows: new Map(), complete: false, reason });
+    const site = binding.site;
+    const project = binding.project;
+    const substrateProject = binding.substrateProject;
+    if (!site || !project) return unavailable("sb_project_missing");
+    // Without the bound Substrate Project the read would answer from the ambient one (the Vite
+    // process's git root or SUBSTRATE_PROJECT), i.e. from another Project's bindings: that is
+    // unknown data, not an unbound answer, so the list is not run at all.
+    if (!substrateProject) return unavailable("sb_project_missing");
+    const scope = remoteScope(site, project);
+    if (!scope) return unavailable("sb_unavailable");
+    const key = `bindings:${scope}:${substrateProject}`;
     try {
-      const { value } = await cached(key, async () => {
-        const argv = ["external", "list", "--provider", "jira", "--scope", scope, ...(binding.substrateProject ? ["--project", binding.substrateProject] : [])];
-        const result = await runExternal(argv);
-        if (result.status !== 200) return null;
-        return parseExternalBindings(result.body);
-      }, (value) => value !== null);
+      const { value } = await cached(
+        key,
+        async () => {
+          const argv = [
+            "external",
+            "list",
+            "--provider",
+            "jira",
+            "--scope",
+            scope,
+            "--project",
+            substrateProject,
+            "--limit",
+            String(EXTERNAL_LIST_LIMIT),
+          ] satisfies string[];
+          const result = await runExternal(argv);
+          if (result.status !== 200) return unavailable("sb_unavailable");
+          const page = parseExternalBindings(result.body);
+          if (!page) return unavailable("sb_unavailable");
+          // A truncated page cannot answer for the keys it did not carry: those stay unknown.
+          if (page.truncated) return { rows: page.rows, complete: false, reason: "sb_truncated" } satisfies JoinState;
+          return { rows: page.rows, complete: true, reason: null } satisfies JoinState;
+        },
+        // An incomplete answer is the condition most likely to be fixed next; it is not cached.
+        (value) => value.reason === null,
+      );
       return value;
     } catch {
-      return null;
+      return unavailable("sb_unavailable");
     }
   };
 
-  const withJoin = (row: JiraIssueFields, binding: JiraBinding, join: Map<string, JiraBindingJoin> | null): JiraIssue => {
-    const linked = join?.get(row.key) ?? null;
+  const withJoin = (row: JiraIssueFields, binding: JiraBinding, join: JoinState): JiraIssue => {
+    const linked = join.rows.get(row.key) ?? null;
     return {
       key: row.key,
       summary: row.summary,
@@ -382,6 +507,9 @@ export function jiraApi(opts: JiraApiOptions = {}): Plugin {
       url: browseUrl(binding.site ?? "", row.key),
       syncState: linked?.syncState ?? null,
       issueRef: linked?.issueRef ?? null,
+      // Known when the read was complete (an absent binding is a real "unbound") or when this key
+      // came back; unknown otherwise, so a null state never reads as "unbound".
+      bindingsAvailable: linked !== null || join.complete,
     };
   };
 
@@ -394,6 +522,11 @@ export function jiraApi(opts: JiraApiOptions = {}): Plugin {
     if (!repository) return json(res, 400, { ok: false, error: "expected ?repo=<owner>/<name>" });
 
     const binding = bindingFor(repository);
+    // Unusable config is a deployment fault, not an unbound repository: 503 before any upstream
+    // call, so an invalid project key never reaches the JQL template or a credential a request.
+    if (binding.reason === "jira_invalid_config") {
+      return json(res, 503, { ok: false, configured: false, reason: binding.reason, error: "jira binding config is unusable", repository, resolvedBy: binding.resolvedBy });
+    }
     if (!binding.configured) return json(res, 404, unboundBody(binding));
     if (path === "/binding") return json(res, 200, { ok: true, binding });
 
@@ -443,9 +576,9 @@ export function jiraApi(opts: JiraApiOptions = {}): Plugin {
       });
       const join = await bindingsFor(binding);
       const issues = value.rows.map((row) => withJoin(row, binding, join));
-      if (path === "/issue") return json(res, 200, { ok: true, issue: issues[0], cachedAt });
-      if (path === "/links") return json(res, 200, { ok: true, links: issues, bindingsAvailable: join !== null, cachedAt });
-      return json(res, 200, { ok: true, issues, truncated: value.truncated, cachedAt });
+      if (path === "/issue") return json(res, 200, { ok: true, issue: issues[0], bindingsAvailable: join.complete, bindingsReason: join.reason, cachedAt });
+      if (path === "/links") return json(res, 200, { ok: true, links: issues, bindingsAvailable: join.complete, bindingsReason: join.reason, cachedAt });
+      return json(res, 200, { ok: true, issues, truncated: value.truncated, bindingsAvailable: join.complete, bindingsReason: join.reason, cachedAt });
     } catch (error) {
       if (error instanceof JiraStatus) return json(res, error.status, { ok: false, error: error.message });
       return json(res, 502, { ok: false, error: "jira read failed" });

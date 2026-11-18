@@ -2,8 +2,9 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  EXTERNAL_LIST_LIMIT,
   JIRA_KEY_RE,
   acceptsJqlGuard,
   browseUrl,
@@ -17,6 +18,8 @@ import {
   projectJql,
   readJiraAuth,
   remoteScope,
+  resolveSbJoin,
+  type SbExec,
 } from "./jira-api.ts";
 
 // The Jira bridge is the only component that holds the token or reaches Jira Cloud. These tests
@@ -72,8 +75,8 @@ const issueBody = (key: string, summary = "Ship the Project surface", status = "
 
 const searchBody = (keys: string[], isLast = true) => ({ issues: keys.map((key) => issueBody(key)), isLast });
 
-const envelope = (bindings: unknown[]) =>
-  JSON.stringify({ schema: "substrate-cli/v1", command: "external.list", ok: true, data: { bindings, limit: 100, truncated: false } });
+const envelope = (bindings: unknown[], extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ schema: "substrate-cli/v1", command: "external.list", ok: true, data: { bindings, limit: EXTERNAL_LIST_LIMIT, truncated: false, ...extra } });
 
 function responder(reply: (url: string) => Reply) {
   const calls: string[] = [];
@@ -89,7 +92,15 @@ function responder(reply: (url: string) => Reply) {
 
 const noBindings = () => Promise.resolve({ status: 200, body: envelope([]) });
 
-function setup(overrides: { writeToken?: boolean; runExternal?: (argv: string[]) => Promise<{ status: number; body: string }> } = {}) {
+function setup(
+  overrides: {
+    writeToken?: boolean;
+    runExternal?: (argv: string[]) => Promise<{ status: number; body: string }>;
+    execSb?: SbExec;
+    sbBin?: string;
+    sbDb?: string;
+  } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), "jira-bridge-"));
   const tokenFile = join(dir, "jira-token");
   if (overrides.writeToken !== false) writeFileSync(tokenFile, TOKEN);
@@ -102,11 +113,18 @@ function setup(overrides: { writeToken?: boolean; runExternal?: (argv: string[])
         mercury: { repo_slug: REPO, repo_name: "market-data", sb_project_id: "prj_mmd", jira_project: "MMD" },
         // Bound for the board, never for Jira.
         boardonly: { repo_slug: "someone/board-only", sb_project_id: "prj_board" },
+        // Bound for Jira with no Substrate Project: the join must never fall back to the ambient one.
+        nosb: { repo_slug: "someone/no-sb", jira_site: "https://someone.atlassian.net", jira_project: "NSB" },
+        // Unusable config: a project key that would widen the JQL, and a plaintext site.
+        badproject: { repo_slug: "someone/bad-project", sb_project_id: "prj_bad", jira_site: "https://someone.atlassian.net", jira_project: "MMD OR project = HR" },
+        badhttps: { repo_slug: "someone/bad-https", sb_project_id: "prj_bad", jira_site: "http://someone.atlassian.net", jira_project: "BAD" },
       },
     }),
   );
+  // With an `execSb` seam the real default runner is exercised, so its argv (bin, --db) is visible.
+  const runExternal = overrides.runExternal ?? (overrides.execSb ? undefined : noBindings);
   const middleware = (fetchImpl: typeof fetch, hook: Hook = "configureServer") =>
-    mount(jiraApi({ configPath, fetchImpl, runExternal: overrides.runExternal ?? noBindings }), hook);
+    mount(jiraApi({ configPath, fetchImpl, runExternal, execSb: overrides.execSb, sbBin: overrides.sbBin, sbDb: overrides.sbDb }), hook);
   return { configPath, tokenFile, middleware };
 }
 
@@ -158,11 +176,13 @@ describe("jira bridge: pure boundaries", () => {
 
   it("parses the sb external-bindings envelope and refuses anything else", () => {
     const parsed = parseExternalBindings(envelope([{ issue: "XTRM-816", remoteKey: "MMD-551", syncState: "in_sync", url: "https://x/browse/MMD-551" }]));
-    expect(parsed?.get("MMD-551")).toEqual({ issueRef: "XTRM-816", syncState: "in_sync", url: "https://x/browse/MMD-551" });
+    expect(parsed?.rows.get("MMD-551")).toEqual({ issueRef: "XTRM-816", syncState: "in_sync", url: "https://x/browse/MMD-551" });
+    expect(parsed?.truncated).toBe(false);
+    expect(parseExternalBindings(envelope([], { truncated: true }))?.truncated).toBe(true);
     expect(parseExternalBindings("{}")).toBeNull();
     expect(parseExternalBindings("not json")).toBeNull();
     expect(parseExternalBindings(JSON.stringify({ schema: "substrate-cli/v1", ok: false, error: "nope" }))).toBeNull();
-    expect(parseExternalBindings(envelope([{ issue: "XTRM-1", remoteKey: "not-a-key" }]))?.size).toBe(0);
+    expect(parseExternalBindings(envelope([{ issue: "XTRM-1", remoteKey: "not-a-key" }]))?.rows.size).toBe(0);
   });
 
   it("parses issue and search rows without inventing fields", () => {
@@ -188,7 +208,10 @@ describe.each(HOOKS)("jira middleware (%s)", (hook) => {
       url: "https://mtl.atlassian.net/browse/MMD-551",
       syncState: null,
       issueRef: null,
+      bindingsAvailable: true,
     });
+    expect(res.body.bindingsAvailable).toBe(true);
+    expect(res.body.bindingsReason).toBeNull();
     expect(JSON.stringify(res.body)).not.toContain(TOKEN);
     expect(calls).toHaveLength(1);
     const upstreamUrl = new URL(calls[0]!);
@@ -234,7 +257,7 @@ describe.each(HOOKS)("jira middleware (%s)", (hook) => {
     expect(res.body.links.map((i: { key: string }) => i.key)).toEqual(["MMD-551", "MMD-700"]);
     expect(res.body.links[0]).toMatchObject({ key: "MMD-551", issueRef: "XTRM-816", syncState: "in_sync" });
     expect(res.body.links[1]).toMatchObject({ key: "MMD-700", issueRef: "XTRM-820", syncState: "pending" });
-    expect(argvSeen[0]).toEqual(["external", "list", "--provider", "jira", "--scope", "mtl.atlassian.net:MMD", "--project", "prj_mmd"]);
+    expect(argvSeen[0]).toEqual(["external", "list", "--provider", "jira", "--scope", "mtl.atlassian.net:MMD", "--project", "prj_mmd", "--limit", "500"]);
     expect(new URL(calls[0]!).searchParams.get("jql")).toBe("key in (MMD-551, MMD-700) ORDER BY updated DESC");
   });
 
@@ -345,5 +368,113 @@ describe.each(HOOKS)("jira middleware (%s)", (hook) => {
     expect((await send(middleware, "GET", `/xtrm-api/jira/write?repo=${encodeURIComponent(REPO)}`)).status).toBe(404);
     expect((await send(middleware, "GET", "/xtrm-api/jira/issue?key=MMD-551")).status).toBe(400);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("jira bridge: Substrate join and config guards (#423 delta)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("does not read a truncated bindings page as 'unbound'", async () => {
+    const { fetchImpl } = responder(() => ({ status: 200, body: searchBody(["MMD-551", "MMD-700"]) }));
+    const runExternal = () =>
+      Promise.resolve({
+        status: 200,
+        body: envelope([{ issue: "XTRM-816", remoteKey: "MMD-551", syncState: "in_sync", url: null }], { truncated: true }),
+      });
+    const res = await send(setup({ runExternal }).middleware(fetchImpl), "GET", linksUrl("MMD-551,MMD-700"));
+
+    expect(res.status).toBe(200);
+    expect(res.body.bindingsAvailable).toBe(false);
+    expect(res.body.bindingsReason).toBe("sb_truncated");
+    // The key the page carried keeps its real state.
+    expect(res.body.links[0]).toMatchObject({ key: "MMD-551", syncState: "in_sync", issueRef: "XTRM-816", bindingsAvailable: true });
+    // The key past the cut is unknown, never "unbound".
+    expect(res.body.links[1]).toMatchObject({ key: "MMD-700", syncState: null, issueRef: null, bindingsAvailable: false });
+  });
+
+  it("never runs the list without the bound Substrate Project", async () => {
+    const { fetchImpl } = responder(() => ({ status: 200, body: searchBody(["NSB-1"]) }));
+    const argvSeen: string[][] = [];
+    const runExternal = async (argv: string[]) => {
+      argvSeen.push(argv);
+      return { status: 200, body: envelope([]) };
+    };
+    const res = await send(setup({ runExternal }).middleware(fetchImpl), "GET", `/xtrm-api/jira/links?repo=someone%2Fno-sb&keys=NSB-1`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.bindingsAvailable).toBe(false);
+    expect(res.body.bindingsReason).toBe("sb_project_missing");
+    expect(res.body.links[0]).toMatchObject({ key: "NSB-1", syncState: null, issueRef: null, bindingsAvailable: false });
+    expect(argvSeen).toEqual([]);
+  });
+
+  it("carries the join state on /issue and /search, not only /links", async () => {
+    const { fetchImpl } = responder((url) => ({
+      status: 200,
+      body: new URL(url, "http://local").pathname.endsWith("/search/jql") ? searchBody(["MMD-551"]) : issueBody("MMD-551"),
+    }));
+    const middleware = setup({ runExternal: () => Promise.resolve({ status: 502, body: "" }) }).middleware(fetchImpl);
+
+    const issue = await send(middleware, "GET", issueUrl("MMD-551"));
+    expect(issue.status).toBe(200);
+    expect(issue.body).toMatchObject({ bindingsAvailable: false, bindingsReason: "sb_unavailable" });
+    expect(issue.body.issue).toMatchObject({ syncState: null, issueRef: null, bindingsAvailable: false });
+
+    const search = await send(middleware, "GET", searchUrl("project = MMD"));
+    expect(search.status).toBe(200);
+    expect(search.body).toMatchObject({ bindingsAvailable: false, bindingsReason: "sb_unavailable" });
+    expect(search.body.issues[0]).toMatchObject({ bindingsAvailable: false });
+  });
+
+  it("refuses an unusable jira_project before the JQL template or any upstream call", async () => {
+    const { fetchImpl, calls } = responder(() => ({ status: 200, body: searchBody([]) }));
+    const argvSeen: string[][] = [];
+    const runExternal = async (argv: string[]) => {
+      argvSeen.push(argv);
+      return { status: 200, body: envelope([]) };
+    };
+    const res = await send(setup({ runExternal }).middleware(fetchImpl), "GET", `/xtrm-api/jira/search?repo=someone%2Fbad-project`);
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ configured: false, reason: "jira_invalid_config" });
+    expect(JSON.stringify(res.body)).not.toContain("project = HR");
+    expect(calls).toEqual([]);
+    expect(argvSeen).toEqual([]);
+  });
+
+  it("refuses a non-https jira_site so a credential never travels in plaintext", async () => {
+    const { fetchImpl, headers } = responder(() => ({ status: 200, body: issueBody("BAD-1") }));
+    const res = await send(setup().middleware(fetchImpl), "GET", `/xtrm-api/jira/issue?repo=someone%2Fbad-https&key=BAD-1`);
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ configured: false, reason: "jira_invalid_config" });
+    expect(headers).toEqual([]);
+  });
+
+  it("joins with the sb binary and database the rest of the console uses", async () => {
+    expect(resolveSbJoin({}, {}).db).toBeUndefined();
+
+    const { fetchImpl } = responder(() => ({ status: 200, body: searchBody(["MMD-551"]) }));
+    const seen: Array<{ bin: string; argv: string[] }> = [];
+    const execSb: SbExec = (bin, argv, done) => {
+      seen.push({ bin, argv });
+      done(null, envelope([]));
+    };
+
+    const explicit = await send(setup({ execSb, sbBin: "/opt/sb/bin/sb", sbDb: "/tmp/dev.db" }).middleware(fetchImpl), "GET", linksUrl("MMD-551"));
+    expect(explicit.status).toBe(200);
+    expect(seen[0]!.bin).toBe("/opt/sb/bin/sb");
+    expect(seen[0]!.argv.slice(0, 4)).toEqual(["--db", "/tmp/dev.db", "--json", "external"]);
+    expect(seen[0]!.argv).toContain("prj_mmd");
+
+    // The deployed console sets the environment, not the options.
+    vi.stubEnv("XTRM_SB_BIN", "/srv/sb/bin/sb");
+    vi.stubEnv("XTRM_SB_DB", "/srv/sb/prod.db");
+    const fromEnv = await send(setup({ execSb }).middleware(fetchImpl), "GET", linksUrl("MMD-551"));
+    expect(fromEnv.status).toBe(200);
+    expect(seen[1]!.bin).toBe("/srv/sb/bin/sb");
+    expect(seen[1]!.argv.slice(0, 4)).toEqual(["--db", "/srv/sb/prod.db", "--json", "external"]);
   });
 });
