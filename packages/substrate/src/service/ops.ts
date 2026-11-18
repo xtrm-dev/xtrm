@@ -287,6 +287,11 @@ export const OPERATIONS: Record<string, Handler> = {
     }),
   "provenance.sessionDetail": (s, a) => s.provenance.sessionDetail(text(a, "sessionId")),
   "provenance.activationDetail": (s, a) => s.provenance.activationDetail(text(a, "activationId")),
+  "provenance.dispatchGraph": (s, a) =>
+    s.provenance.dispatchGraph(text(a, "projectId"), {
+      since: optionalInteger(a, "since"),
+      limit: optionalBounded(a, "limit", 1, MAX_LIMIT),
+    }),
 
   // ---- resume capsule (ResumeService): build, then render on the caller's side ----
   "resume.buildCapsule": (s, a) => s.resume.buildCapsule(text(a, "issueId")),
@@ -383,6 +388,7 @@ export const ARGS: Record<string, readonly string[]> = {
   "provenance.listArtifacts": ["receiptId", "liveOnly"],
   "provenance.sessionDetail": ["sessionId"],
   "provenance.activationDetail": ["activationId"],
+  "provenance.dispatchGraph": ["projectId", "since", "limit"],
   "resume.buildCapsule": ["issueId"],
   "resume.renderCapsule": ["capsule"],
   "authority.record": ["activationId", "specialist", "state", "issueRef", "lastActivityAt"],

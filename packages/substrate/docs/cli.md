@@ -180,6 +180,41 @@ not accept `--session`: it inherits the execution binding. Receipt allocation,
 checkpoint links and commit binding are documented in
 [Provenance and Closure](provenance-and-closure.md#allocate-and-link-a-receipt).
 
+## Dispatch graph
+
+`sb provenance graph` answers who dispatched which worker or activation, on
+which Issue, producing which PR — for a whole project, in one bounded read.
+
+```bash
+sb provenance graph --project prj_xtrm --json
+sb provenance graph --project prj_xtrm --since 2026-11-18T00:00:00Z --limit 500
+```
+
+The read is additive: it writes nothing, changes no revision, and needs no
+schema beyond the dispatcher columns that migration 017 added. `--project`
+resolves from the flag, then `SUBSTRATE_PROJECT`, then the checkout's binding,
+so a worker inside a repository can omit it. `--since` takes epoch
+milliseconds or an ISO timestamp; `--limit` bounds the binding scan (default
+200, maximum 1000, newest first).
+
+The JSON envelope carries `projectId`, `since`, `limit`, `nodes`, `edges`,
+`matchedBindings`, `omittedBindings` and `truncated`. Node ids are namespaced
+(`participant:<holder>`, `activation:<id>`, `session:<id>`, `issue:<issueId>`,
+`pull_request:<repo>#<n>`); node labels are the human names a Console renders
+(the holder, the activation id, the session id, `XTRM-123`, `repo#7`). The
+executor of a binding is its activation, else its participant, else its
+session, because an `xt` launch records the session and leaves the holder to
+the claim. Edges name their
+`issueId`, their binding (`null` for a `delivers` edge) and the dispatcher
+session when the binding recorded one.
+
+Unknown stays unknown: a binding written before migration 017, or without
+`--dispatcher-participant`, yields a `dispatched_by` edge whose `from` is
+`null`; a binding with no execution identity at all contributes no edge. The
+human view prints `(no execution bindings in this project)` rather than an
+empty table, and `omitted N older binding(s): raise --limit or narrow --since`
+when the bound cut the answer.
+
 ## One-way Beads import
 
 ```bash

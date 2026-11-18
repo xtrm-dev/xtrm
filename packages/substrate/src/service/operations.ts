@@ -34,6 +34,7 @@ const READ_OPERATIONS: ReadonlySet<string> = new Set([
   "journal.since",
   "journal.timeline",
   "provenance.activationDetail",
+  "provenance.dispatchGraph",
   "provenance.findByCommit",
   "provenance.findByPr",
   "provenance.listArtifacts",
