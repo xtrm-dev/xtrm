@@ -278,15 +278,21 @@ def migrate_legacy_refs(project_root: str | None = None, apply: bool = False) ->
 
     ``scan_drift`` fails closed on those (legacy registries predate refs). The derivation is an
     estimate, so it errs towards an OLDER commit (a ref that is too old over-reports drift; one
-    that is too new would hide it). Two independent candidates, the older one wins:
+    that is too new would hide it).
 
-      * ``rev-list-before``: ``git rev-list -1 --before=<last_sync> HEAD`` (breaks under clock
-        skew, which is why it is never used alone);
-      * ``registry-stamp-parent``: the parent of the commit that landed this exact ``last_sync``
-        string in the registry file (pickaxe), i.e. the tree the stamp was written against.
+      * ``registry-stamp-parent`` is the ANCHOR and is required: the parent of the OLDEST commit
+        that introduced this exact ``last_sync`` string into any ``<registry>`` file (pickaxe on the
+        bare value, over every path the registry has had, so formatting and a moved registry do not
+        matter). The stamp was written after the verified state, so its parent is topologically
+        at or after it, and nothing the derivation returns is ever newer than it.
+      * ``rev-list-before`` (``git rev-list -1 --before=<last_sync> HEAD``) is selected by commit
+        DATE, not topology (a branch commit dated before the sync but merged after it fools it), so
+        it can only LOWER the anchor: the result is the older of the two, or their merge base when
+        they diverge. Every outcome is an ancestor of the anchor.
 
     Refuses (per service, with a named reason) on a shallow clone, a ``last_sync`` in the future,
-    no resolvable candidate, or diverged candidates. Dry-run unless ``apply``; ``apply`` writes
+    a ``last_sync`` that no committed registry history contains (nothing to anchor on), or a
+    stamp commit with no parent. Dry-run unless ``apply``; ``apply`` writes
     ``last_sync_ref`` and ``last_sync_ref_derived: true`` (cleared by any real sync/reconcile stamp).
     Never-synced services are skipped: they need an initial verified sync, not a migration."""
     root = project_root if project_root is not None else get_project_root()
@@ -318,18 +324,23 @@ def migrate_legacy_refs(project_root: str | None = None, apply: bool = False) ->
             item.update(status="refused", reason="last_sync is in the future")
             continue
         candidates: dict[str, str] = {}
-        before = _git_out(root, "rev-list", "-1", f"--before={sync_time.isoformat()}", "HEAD")
-        if before:
-            candidates["rev-list-before"] = before
-        stamp = _git_out(root, "log", "-1", "--format=%H", "-S", f'"last_sync": "{raw}"', "--", registry_rel)
-        parent = _git_out(root, "rev-parse", f"{stamp}^") if stamp else None
-        if parent:
-            candidates["registry-stamp-parent"] = parent
-        candidates = {name: sha for name, sha in candidates.items() if _is_valid_ref(sha, root)}
-        item["candidates"] = candidates
-        if not candidates:
-            item.update(status="refused", reason="no commit found at or before last_sync")
+        registry_name = os.path.basename(registry_rel)
+        stamps = _git_out(root, "log", "--reverse", "--format=%H", "-S", raw, "--",
+                          registry_rel, f":(glob)**/{registry_name}", registry_name)
+        stamp = stamps.splitlines()[0] if stamps else None
+        if not stamp:
+            item.update(status="refused", reason="no commit in the registry history introduced this last_sync "
+                        "(uncommitted or hand-edited stamp): nothing to anchor a conservative ref on")
             continue
+        parent = _git_out(root, "rev-parse", f"{stamp}^")
+        if not parent or not _is_valid_ref(parent, root):
+            item.update(status="refused", reason="the commit that introduced this last_sync has no parent commit")
+            continue
+        candidates["registry-stamp-parent"] = parent
+        before = _git_out(root, "rev-list", "-1", f"--before={sync_time.isoformat()}", "HEAD")
+        if before and _is_valid_ref(before, root):
+            candidates["rev-list-before"] = before
+        item["candidates"] = candidates
         chosen: str | None = None
         for sha in candidates.values():
             chosen = sha if chosen is None else _older_commit(root, chosen, sha)

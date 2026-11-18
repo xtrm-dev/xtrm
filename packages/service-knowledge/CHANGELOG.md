@@ -14,12 +14,15 @@ All notable changes to the `service-knowledge` package.
   add `--apply`) or verify a service and run `drift_detector.py sync <service_id>`.
 
 ### Added — `service-knowledge drift migrate`
-- Derives a conservative `last_sync_ref` for legacy registries: the older of
-  `git rev-list --before=<last_sync>` and the parent of the commit that landed
-  that `last_sync` in the registry. Refuses (per service, with a reason) on a
-  shallow clone, a future `last_sync`, or no commit at/before it. Dry-run by
-  default; `--apply` also writes `last_sync_ref_derived: true`, which any real
-  sync/reconcile stamp clears. `scan_drift` itself stays fail-closed.
+- Derives a conservative `last_sync_ref`, anchored on the parent of the oldest
+  commit that introduced that exact `last_sync` value into any registry file
+  (works for compact/re-formatted or re-added registries). A date-based
+  candidate (`git rev-list --before`) may only lower it, never raise it, so
+  the result is always an ancestor of the anchor. Refuses (per service, with a
+  reason) on a shallow clone, a future `last_sync`, a stamp no committed history
+  contains, or a root-commit stamp. Dry-run by default; `--apply` also writes
+  `last_sync_ref_derived: true`, which any real sync/reconcile stamp clears.
+  `scan_drift` itself stays fail-closed.
 - `scan_drift` raises `UnverifiableHistory` (a `RuntimeError`) with `.service_ids`;
   `ci_drift_check` prints one `unverifiable: <id>` line per service and a
   `$GITHUB_STEP_SUMMARY` list, so a long list is never cut off by log limits.

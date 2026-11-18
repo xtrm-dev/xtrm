@@ -40,7 +40,9 @@ def _commit(repo: Path, message: str, when: datetime) -> str:
 class Legacy:
     """c1 init (T-10d) -> c2 schema change (T-5d) -> c3 registry stamp (T) -> c4 new file (T+5d)."""
 
-    def __init__(self, root: Path, c4_date: datetime | None = None) -> None:
+    def __init__(self, root: Path, c4_date: datetime | None = None, stamp_delay: timedelta = timedelta(0),
+                 compact: bool = False) -> None:
+        self.compact = compact
         self.repo = root / "repo"
         umb = self.repo / ".xtrm" / "skills" / "acme" / "service-knowledge"
         svc = umb / "services" / "db"
@@ -61,12 +63,13 @@ class Legacy:
         self.c2 = _commit(self.repo, "schema change", STAMP - timedelta(days=5))
         self.registry["services"]["db"]["last_sync"] = _iso(STAMP)  # legacy: timestamp only, no ref
         self._write()
-        self.c3 = _commit(self.repo, "stamp registry", STAMP)
+        self.c3 = _commit(self.repo, "stamp registry", STAMP + stamp_delay)
         (self.repo / "db" / "new.sql").write_text("-- new\n", encoding="utf-8")
         self.c4 = _commit(self.repo, "add file", c4_date or STAMP + timedelta(days=5))
 
     def _write(self) -> None:
-        self.reg_path.write_text(json.dumps(self.registry, indent=2) + "\n", encoding="utf-8")
+        text = json.dumps(self.registry, separators=(",", ":")) if self.compact else json.dumps(self.registry, indent=2)
+        self.reg_path.write_text(text + "\n", encoding="utf-8")
 
     def service(self) -> dict:
         return json.loads(self.reg_path.read_text(encoding="utf-8"))["services"]["db"]
@@ -219,3 +222,72 @@ def test_version_prints_package_version_first_then_vaultctl(capsys) -> None:
     lines = capsys.readouterr().out.strip().splitlines()
     assert re.match(r"service-knowledge \d+\.\d+\.\d+", lines[0])
     assert lines[1].startswith("vaultctl ")
+
+
+def _merge_late_branch_commit(legacy: Legacy) -> str:
+    """F: a branch commit cut from c2 and DATED before last_sync, merged into main AFTER the sync."""
+    _git(["checkout", "-q", "-b", "feature", legacy.c2], legacy.repo)
+    (legacy.repo / "db" / "feature.sql").write_text("-- feature\n", encoding="utf-8")
+    f = _commit(legacy.repo, "feature", STAMP - timedelta(hours=1))
+    _git(["checkout", "-q", "-"], legacy.repo)
+    _git(["merge", "--no-ff", "-q", "-m", "merge feature", "feature"], legacy.repo, STAMP + timedelta(days=7))
+    return f
+
+
+def test_a_branch_commit_dated_before_the_sync_but_merged_after_it_is_never_hidden(tmp_path: Path) -> None:
+    """Regression (review of #427): `rev-list --before` selects by date, so it returned F, and the
+    old 'older of' rule kept F, making `ref..HEAD` blind to F's own change. The stamp anchor bounds it."""
+    legacy = Legacy(tmp_path, stamp_delay=timedelta(seconds=30), compact=True)
+    f = _merge_late_branch_commit(legacy)
+    results = drift_detector.migrate_legacy_refs(str(legacy.repo), apply=True)
+    assert results[0]["candidates"]["rev-list-before"] == f  # the date-based pick really is the trap
+    assert results[0]["ref"] != f
+    files = {d["file_path"] for d in drift_detector.scan_drift(str(legacy.repo), use_gitnexus=False)}
+    assert "db/feature.sql" in files and "db/new.sql" in files
+
+
+def test_compact_registry_formatting_does_not_defeat_the_anchor(tmp_path: Path) -> None:
+    legacy = Legacy(tmp_path, compact=True)
+    results = drift_detector.migrate_legacy_refs(str(legacy.repo), apply=False)
+    assert results[0]["candidates"]["registry-stamp-parent"] == legacy.c2
+
+
+def test_a_registry_rewritten_after_the_sync_still_anchors_on_the_original_stamp(tmp_path: Path) -> None:
+    """The registry file is deleted and re-added later (a layout migration does the same): the
+    pickaxe must still find the OLDEST commit that introduced the stamp, not the re-add."""
+    legacy = Legacy(tmp_path)
+    content = legacy.reg_path.read_bytes()
+    legacy.reg_path.unlink()
+    _commit(legacy.repo, "drop registry", STAMP + timedelta(days=8))
+    legacy.reg_path.write_bytes(content)
+    _commit(legacy.repo, "re-add registry", STAMP + timedelta(days=9))
+    results = drift_detector.migrate_legacy_refs(str(legacy.repo), apply=False)
+    assert results[0]["status"] == "derived" and results[0]["candidates"]["registry-stamp-parent"] == legacy.c2
+
+
+def test_an_uncommitted_stamp_has_nothing_to_anchor_on_and_is_refused(tmp_path: Path) -> None:
+    legacy = Legacy(tmp_path)
+    legacy.registry["services"]["db"]["last_sync"] = _iso(STAMP + timedelta(days=1))  # never committed
+    legacy._write()
+    results = drift_detector.migrate_legacy_refs(str(legacy.repo), apply=True)
+    assert results[0]["status"] == "refused" and "anchor" in results[0]["reason"]
+    assert "last_sync_ref" not in legacy.service()
+
+
+def test_a_stamp_in_the_root_commit_is_refused(tmp_path: Path) -> None:
+    repo = tmp_path / "root"
+    umb = repo / ".xtrm" / "skills" / "acme" / "service-knowledge"
+    (umb / "services" / "db").mkdir(parents=True)
+    (umb / "services" / "db" / "SKILL.md").write_text("# db\n", encoding="utf-8")
+    (repo / "db").mkdir()
+    (repo / "db" / "a.sql").write_text("x\n", encoding="utf-8")
+    registry = {"version": "1.0", "pack": "acme", "services": {"db": {
+        "name": "db", "description": "d", "last_sync": _iso(STAMP),
+        "skill_path": ".xtrm/skills/acme/service-knowledge/services/db/SKILL.md", "territory": ["db/**"]}}}
+    (umb / "service-registry.json").write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
+    _git(["init", "-q"], repo)
+    _git(["config", "user.email", "t@t"], repo)
+    _git(["config", "user.name", "t"], repo)
+    _commit(repo, "everything at once", STAMP)
+    results = drift_detector.migrate_legacy_refs(str(repo), apply=False)
+    assert results[0]["status"] == "refused" and "no parent" in results[0]["reason"]
