@@ -22,7 +22,7 @@ sends hundreds of unbundled modules with no caching headers, so the Issues page
 needed about 6 s to reach networkidle (XT-214). `npm run research:serve` runs
 `vite build` and then `vite preview`. The Substrate, research and agent-host
 bridges are Vite plugins that also hook the preview server, so they work
-unchanged, and `/api/github` and `/api/programme` use the same proxy as in dev.
+unchanged, and `/api/github` uses the same proxy as in dev.
 `npm run research:dev` is unchanged for local development.
 
 The build runs inside `research:serve` on every start, because
