@@ -73,9 +73,11 @@ uses):
 ```bash
 service-knowledge index query "<task concept>"
 service-knowledge index query "" --paths <file[,file]>
-# From an MCP host:
-#   knowledge_evidence_for_files(paths=[...])
-#   knowledge_search(query="...")
+# In a session with the plugin or the pi extension, call the tool instead:
+#   knowledge_evidence_for_files(paths=[...])   # paths already known
+#   knowledge_search(query="...")               # only a symptom
+#   knowledge_status()                           # results empty or stale?
+#   knowledge_drift()                            # territory changed recently?
 ```
 
 Then confirm with the code graph when needed (the `scope.py` footer prints these when an

@@ -49,8 +49,8 @@ from .telemetry import Timer, emit_run
 
 __version__ = VERIFIER_VERSION
 
-# service-skills/references/service_skill_contract.json — two levels up from this package.
-_CONTRACT_PATH = Path(__file__).resolve().parents[2] / "references" / "service_skill_contract.json"
+# service_knowledge/contracts/service_skill_contract.json — two levels up from this package.
+_CONTRACT_PATH = Path(__file__).resolve().parents[2] / "contracts" / "service_skill_contract.json"
 
 
 def load_canonical_headings(contract_path: Path | None = None) -> list[str]:
@@ -85,7 +85,7 @@ def verify_candidate(
     headings = canonical_headings if canonical_headings is not None else load_canonical_headings()
 
     diff = parse_diff(candidate_text, current_text)
-    structural = validate_structure(candidate_text, canonical_headings=headings)
+    structural = validate_structure(candidate_text, canonical_headings=headings, current_text=current_text)
     claims = extract_claims(
         candidate_text,
         diff.changed_line_numbers,

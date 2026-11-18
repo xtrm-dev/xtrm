@@ -1,8 +1,58 @@
 # service-knowledge extension
 
-Self-gating service-registry status + drift notice for repos that carry a
-service-knowledge registry. Replaces the retired `service-skills` extension
-(which was blind to the canonical layout).
+Self-gating service-knowledge surface for repos that carry a service registry: five read-only
+knowledge tools, a registry/drift context note, and a `/service-knowledge:status` command.
+Replaces the retired `service-skills` extension (which was blind to the canonical layout).
+
+## Tools (v1.1, CORE-2714)
+
+With a registry present, the extension registers five tools. They are at parity with the Claude
+Code plugin's MCP tools: the same names, schemas and descriptions, generated from one Python
+source of truth.
+
+| Tool | Use it when |
+|---|---|
+| `knowledge_search` | the symptom → service mapping is unclear; before grep |
+| `knowledge_get` | one item by `item_id`, or one full `SKILL.md` by `skill_path` |
+| `knowledge_evidence_for_files` | before reading service source; routes by territory ownership |
+| `knowledge_status` | results look stale or empty; is the index installed, indexed and current? |
+| `knowledge_drift` | before trusting knowledge about recently changed code |
+
+Reach for a tool **before** grep or source reading. Results are evidence with citations, not
+conclusions: verify a load-bearing claim against the tree before acting on it. `knowledge_drift`
+is advisory — it never blocks work.
+
+The names are bare (`knowledge_search`, not `service_knowledge_search`). If another extension
+already holds a name, this extension skips that tool with a notice and keeps the rest: a flat pi
+namespace must never break a session.
+
+### How parity is enforced
+
+`tool-definitions.json` beside this file is generated from the Python package:
+
+```bash
+service-knowledge mcp specs --json > packages/service-knowledge-ext/tool-definitions.json
+```
+
+The extension renders those definitions verbatim — it never authors a description or a schema.
+Two tests pin the arrangement, one on each side:
+
+- pytest (`index/tests/test_mcp_jsonrpc.py`) asserts `tool_specs() == tool-definitions.json["tools"]`
+- bun (`tests/service-knowledge.test.ts`) asserts the extension registers exactly that set
+
+Edit a tool in `packages/service-knowledge/src/service_knowledge/mcp/`, then regenerate. The
+`service-knowledge tests` workflow fails if you forget.
+
+### Execution path and root resolution
+
+Each call runs `service-knowledge mcp call <tool>` — the same code the Claude plugin serves over
+MCP. `SERVICE_KNOWLEDGE_ROOT` is set explicitly, per call, to the git toplevel of the session cwd.
+That matters: the Python resolver trusts `$CLAUDE_PROJECT_DIR` before git, and a pi worker
+launched from a Claude session inherits it. Without an explicit root, a worker could silently read
+its parent's repository.
+
+A missing or too-old CLI is returned as a named error result, never thrown: the session keeps
+working and the message says what to install.
 
 ## Self-gating
 
@@ -85,6 +135,12 @@ behind git HEAD) is **advisory** — it never blocks work. Memory priority:
 Suggest the reconcile, proceed with current knowledge + commit corpus in
 parallel; stamp `last_sync_ref` only after a successful reconcile, and rebuild
 the index only after that.
+
+## Requirements
+
+`service-knowledge` **>= 0.9.0** on `PATH` (from an xtrm checkout: `packages/service-knowledge/install.sh`, which also installs the `vaultctl` dependency). The `mcp`
+subcommand, which every tool call uses, ships in 0.9.0. Without it each call returns a named error
+result and the rest of the session is unaffected.
 
 ## Non-goals (v1)
 

@@ -223,6 +223,28 @@ Kind doctrine and examples: [`journal.md`](./journal.md).
 
 Graphs and closure doctrine: [`provenance.md`](./provenance.md).
 
+## external — Jira identity of an Issue
+
+Both verbs read and write `external_bindings` only. Neither calls Jira, reads
+the inbox or enqueues an outbox row (XTRM-814).
+
+- `external bind <ref> --provider jira --scope <site:KEY> --id <n> --key <KEY-123> --url <browse-url> [--state pending|in_sync]` —
+  record that the Issue is known in Jira by one key. Mode is `mirror_read`;
+  `--state` defaults to `pending`, and a re-bind that omits it keeps the row's
+  state. `--scope` is `<site>:<projectKey>`, `--id` the numeric Jira issue id,
+  `--key` a key of that project, `--url` the browse URL ending `/browse/<key>`.
+  The result `status` is `created`, `noop` (same identity, URL and state: the
+  row is untouched) or `updated` (same identity, new URL or state). A key or
+  id already bound to another Issue is refused with that Issue's reference,
+  and nothing is written. The verb states intent and identity; it never
+  claims that a remote read succeeded.
+- `external list [--provider <github|jira>] [--scope <remote-scope>] [--limit <n>] [--project <id>]` —
+  bounded read of one Project's bindings, ordered by provider, scope and
+  remote id, each row with the owning Issue's reference. `--limit` defaults to
+  100 (maximum 500); `truncated: true` means more rows matched.
+
+`provenance trace <ref> --json` lists the same rows under `externalBindings`.
+
 ## import / export
 
 - `import beads --file <export.jsonl> --project <id>` — one-way Beads

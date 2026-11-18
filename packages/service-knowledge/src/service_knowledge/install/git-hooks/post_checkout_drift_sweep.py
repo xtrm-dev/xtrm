@@ -18,8 +18,8 @@ Contract (XTRM-641 §3-§4, B2 touches gate carried over):
     ``reason=range-unknown`` marker, never a scan or rebuild.
   - Touches gate on ``prev..new``: registry / skill-body / umbrella
     paths OR tracked files matching a registered territory glob. Tracked-only:
-    ``git diff --name-only`` intersected with ``git ls-files`` — untracked
-    agent scratch dirs (``.pi/``, ``.specialists/``) can never match.
+    NUL-delimited, no-renames diffs intersected with current tracked paths or
+    historical tree endpoints — untracked agent scratch can never match.
   - Marker-only: no index rebuild, no mtime/scan_detector scan, no gitnexus
     fan-out. The marker carries ``trigger, range, reason, services,
     timestamp``; an existing marker keeps its earliest range start.
@@ -131,10 +131,22 @@ def _tracked_files(root: Path) -> set[str] | None:
 
 def _diff_files(root: Path, prev: str, new: str) -> list[str] | None:
     """Names changed in prev..new; None on git failure."""
-    r = _git(root, ["diff", "--name-only", prev, new, "--"], timeout=10)
+    r = _git(root, ["diff", "--no-renames", "--name-only", "-z", prev, new, "--"], timeout=10)
     if r is None or r.returncode != 0:
         return None
-    return [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
+    return [path for path in r.stdout.split("\0") if path]
+
+
+def _historical_files(root: Path, refs: list[str], paths: set[str]) -> set[str] | None:
+    historical: set[str] = set()
+    for ref in dict.fromkeys(refs):
+        result = _git(root, [
+            "--literal-pathspecs", "ls-tree", "-r", "--name-only", "-z", ref, "--", *sorted(paths),
+        ], timeout=10)
+        if result is None or result.returncode != 0:
+            return None
+        historical.update(path for path in result.stdout.split("\0") if path)
+    return historical
 
 
 def _load_registries(root: Path) -> list[tuple[Path, dict]]:
@@ -440,7 +452,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        changed = {p for p in diff if p in tracked}
+        missing = set(diff) - tracked
+        historical: set[str] | None = set()
+        if _touches_gate(missing, registries, root)[0]:
+            refs = [prev, new]
+            historical = _historical_files(root, refs, missing)
+        if historical is None:
+            _write_unknown_and_notice(root)
+            return 0
+        changed = set(diff) & (tracked | historical)
     except Exception:
         return 0
     if not changed:

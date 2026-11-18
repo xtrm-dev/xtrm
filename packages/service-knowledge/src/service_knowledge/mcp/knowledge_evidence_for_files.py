@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from service_knowledge import index
-from service_knowledge.mcp._root import resolve_consumer_root
+from service_knowledge.mcp._root import NoRegistry, resolve_registry_root
 
 TOOL_NAME = "knowledge_evidence_for_files"
 DESCRIPTION = (
@@ -28,5 +28,9 @@ PARAMETERS = {
 
 
 def run(paths: list[str], limit: int = 7, consumer_root: str | None = None, **_: Any) -> dict[str, Any]:
-    root = resolve_consumer_root(consumer_root)
+    try:
+        root = resolve_registry_root(consumer_root)
+    except (NoRegistry, ValueError) as exc:
+        # See knowledge_search.run: refuse before the gate writes .xtrm/ into a non-consumer repo.
+        return {"error": str(exc)}
     return index.evidence_for_files(root, list(paths), limit=limit)

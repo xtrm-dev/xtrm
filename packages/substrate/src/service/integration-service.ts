@@ -2,6 +2,7 @@ import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { IssueService } from "./issue-service.ts";
 import { JournalService } from "./journal-service.ts";
 import { clipWithMarker, JOURNAL_SUMMARY_MAX, type JournalEntry } from "../domain/journal.ts";
+import { formatHumanRef } from "../domain/issue.ts";
 import { mutateOnce, withTransaction } from "../store/transactions.ts";
 import { hashMappedContent } from "../projections/types.ts";
 import {
@@ -34,6 +35,93 @@ export interface BindExternalInput {
   remoteKey?: string;
   url?: string;
   mode: BindingMode;
+}
+
+/** Sync states a Jira bind may record. Bind states intent; `drift` and `uncertain` come only from reads and sends. */
+export const JIRA_BIND_SYNC_STATES = ["pending", "in_sync"] as const;
+
+export const PROJECT_BINDINGS_DEFAULT_LIMIT = 100;
+export const PROJECT_BINDINGS_MAX_LIMIT = 500;
+
+export interface BindExternalKeyInput {
+  provider: "jira";
+  /** `<site>:<projectKey>`, e.g. `mercury.atlassian.net:MMD`. */
+  remoteScope: string;
+  /** Numeric Jira issue id. */
+  remoteId: string;
+  /** Jira key, `KEY-123`; its project key must equal the scope's. */
+  remoteKey: string;
+  /** Browse URL, ending `/browse/<key>`. */
+  url: string;
+  /** Defaults to `pending` for a new row and to the row's current state on a re-bind. */
+  syncState?: (typeof JIRA_BIND_SYNC_STATES)[number];
+  actor?: string;
+}
+
+export interface BindExternalKeyResult {
+  status: "created" | "noop" | "updated";
+  binding: ExternalBinding;
+  issueRef: string;
+}
+
+export interface ListProjectBindingsInput {
+  projectId: string;
+  provider?: Provider;
+  remoteScope?: string;
+  limit?: number;
+}
+
+export interface ProjectBinding extends ExternalBinding {
+  /** Durable human reference of the owning Issue, e.g. `XTRM-814`. */
+  issueRef: string;
+}
+
+export interface ProjectBindingPage {
+  bindings: ProjectBinding[];
+  limit: number;
+  /** True when more rows matched than `limit` returned. */
+  truncated: boolean;
+}
+
+/** A Jira identity that another Issue already owns, or that this Issue records differently. */
+export class ExternalBindingConflictError extends Error {
+  readonly ownerRef: string;
+  readonly ownerIssueId: string;
+
+  constructor(message: string, ownerRef: string, ownerIssueId: string) {
+    super(message);
+    this.name = "ExternalBindingConflictError";
+    this.ownerRef = ownerRef;
+    this.ownerIssueId = ownerIssueId;
+  }
+}
+
+const JIRA_SCOPE = /^(\S+):([A-Z][A-Z0-9_]*)$/;
+const JIRA_KEY = /^([A-Z][A-Z0-9_]*)-[1-9][0-9]*$/;
+const JIRA_ID = /^[1-9][0-9]*$/;
+
+function validateJiraIdentity(input: BindExternalKeyInput): { remoteScope: string; remoteId: string; remoteKey: string; url: string } {
+  if (input.provider !== "jira") throw new Error(`bindExternalKey binds jira only (got ${String(input.provider)})`);
+  const remoteScope = input.remoteScope.trim();
+  const remoteId = input.remoteId.trim();
+  const remoteKey = input.remoteKey.trim();
+  const url = input.url.trim();
+  const scope = JIRA_SCOPE.exec(remoteScope);
+  if (!scope) throw new Error(`remoteScope must be <site>:<projectKey> (got ${JSON.stringify(remoteScope)})`);
+  if (!JIRA_ID.test(remoteId)) throw new Error(`remoteId must be the numeric Jira issue id (got ${JSON.stringify(remoteId)})`);
+  const key = JIRA_KEY.exec(remoteKey);
+  if (!key) throw new Error(`remoteKey must look like KEY-123 (got ${JSON.stringify(remoteKey)})`);
+  if (key[1] !== scope[2]) throw new Error(`remoteKey ${remoteKey} is not in project ${scope[2]} of scope ${remoteScope}`);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`url must be the Jira browse URL (got ${JSON.stringify(url)})`);
+  }
+  if ((parsed.protocol !== "https:" && parsed.protocol !== "http:") || !parsed.pathname.endsWith(`/browse/${remoteKey}`)) {
+    throw new Error(`url must be an http(s) browse URL ending /browse/${remoteKey} (got ${JSON.stringify(url)})`);
+  }
+  return { remoteScope, remoteId, remoteKey, url };
 }
 
 export interface EnqueueInput {
@@ -235,6 +323,129 @@ export class IntegrationService {
       provider, remoteScope, remoteId,
     );
     return r ? this.toBinding(r) : null;
+  }
+
+  // -- Jira identity: bounded read and key bind (XTRM-814) ---------------------
+  //
+  // Both operations touch `external_bindings` only. They make no network call,
+  // enqueue nothing and read no inbox: the bind records which remote key an
+  // Issue is known by, and never that a remote read succeeded.
+
+  /**
+   * Bounded read of the bindings of one Project, optionally narrowed by provider
+   * and remote scope. The scope of a binding is its Issue's Project: a binding of
+   * another Project never appears here, whatever its provider or scope.
+   */
+  listProjectBindings(input: ListProjectBindingsInput): ProjectBindingPage {
+    const limit = input.limit ?? PROJECT_BINDINGS_DEFAULT_LIMIT;
+    if (!Number.isInteger(limit) || limit < 1 || limit > PROJECT_BINDINGS_MAX_LIMIT) {
+      throw new Error(`limit must be an integer from 1 to ${PROJECT_BINDINGS_MAX_LIMIT}`);
+    }
+    if (input.provider !== undefined && !(PROVIDERS as readonly string[]).includes(input.provider)) {
+      throw new Error(`unknown provider: ${input.provider}`);
+    }
+    if (input.remoteScope !== undefined && !input.remoteScope.trim()) throw new Error("remoteScope must be non-empty when given");
+    const where = ["i.project_id = ?"];
+    const params: SQLInputValue[] = [input.projectId];
+    if (input.provider !== undefined) {
+      where.push("b.provider = ?");
+      params.push(input.provider);
+    }
+    if (input.remoteScope !== undefined) {
+      where.push("b.remote_scope = ?");
+      params.push(input.remoteScope);
+    }
+    // One extra row tells the caller the page was cut without a second count query.
+    const found = rows<Row>(
+      this.db,
+      `SELECT b.*, i.human_number AS human_number, p.prefix AS prefix
+         FROM external_bindings b
+         JOIN issues i ON i.id = b.issue_id
+         JOIN projects p ON p.id = i.project_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY b.provider, b.remote_scope, b.remote_id, b.issue_id
+        LIMIT ?`,
+      ...params,
+      limit + 1,
+    );
+    const page = found.slice(0, limit).map((r) => ({
+      ...this.toBinding(r),
+      issueRef: formatHumanRef(r["prefix"] as string, r["human_number"] as number),
+    }));
+    return { bindings: page, limit, truncated: found.length > limit };
+  }
+
+  /**
+   * Record that an existing Issue is known in Jira by a remote key. Mode is always
+   * `mirror_read`. The same identity bound again to the same Issue changes nothing
+   * (`noop`); a different URL or sync state on that identity updates the row
+   * (`updated`); an identity bound to another Issue is refused naming that Issue.
+   */
+  bindExternalKey(issueId: string, input: BindExternalKeyInput): BindExternalKeyResult {
+    const fields = validateJiraIdentity(input);
+    const syncState: SyncState = input.syncState ?? "pending";
+    if (!(JIRA_BIND_SYNC_STATES as readonly string[]).includes(syncState)) {
+      throw new Error(`syncState must be one of ${JIRA_BIND_SYNC_STATES.join("|")} (got ${syncState})`);
+    }
+    return withTransaction(this.db, () => {
+      const issue = this.issues.getIssue(issueId);
+      // The same remote issue is identified by its numeric id and by its key. Either
+      // match on another Issue is a conflict; a match on this Issue must agree on both.
+      const clashes = rows<Row>(
+        this.db,
+        `SELECT b.*, i.human_number AS human_number, p.prefix AS prefix
+           FROM external_bindings b
+           JOIN issues i ON i.id = b.issue_id
+           JOIN projects p ON p.id = i.project_id
+          WHERE b.provider = 'jira' AND b.remote_scope = ? AND (b.remote_id = ? OR b.remote_key = ?)
+          ORDER BY b.issue_id`,
+        fields.remoteScope, fields.remoteId, fields.remoteKey,
+      );
+      const foreign = clashes.find((r) => (r["issue_id"] as string) !== issue.id);
+      if (foreign) {
+        const ownerRef = formatHumanRef(foreign["prefix"] as string, foreign["human_number"] as number);
+        throw new ExternalBindingConflictError(
+          `Jira ${fields.remoteKey} (${fields.remoteScope}, id ${fields.remoteId}) is already bound to ${ownerRef}; ${issue.humanRef} was not bound and nothing was written`,
+          ownerRef,
+          foreign["issue_id"] as string,
+        );
+      }
+      const own = clashes.find((r) => (r["remote_id"] as string) === fields.remoteId && (r["remote_key"] as string | null) === fields.remoteKey);
+      const mismatch = clashes.find((r) => r !== own);
+      if (mismatch) {
+        throw new ExternalBindingConflictError(
+          `${issue.humanRef} already records Jira id ${mismatch["remote_id"] as string} as ${(mismatch["remote_key"] as string | null) ?? "(no key)"} in ${fields.remoteScope}; it is not ${fields.remoteKey} (id ${fields.remoteId})`,
+          issue.humanRef,
+          issue.id,
+        );
+      }
+      const now = Date.now();
+      if (!own) {
+        this.db
+          .prepare(
+            `INSERT INTO external_bindings (issue_id, provider, remote_scope, remote_id, remote_key, url, mode,
+              last_pushed_revision, last_seen_remote_version, mapped_content_hash, sync_state, created_at, updated_at)
+             VALUES (?, 'jira', ?, ?, ?, ?, 'mirror_read', NULL, NULL, NULL, ?, ?, ?)`,
+          )
+          .run(issue.id, fields.remoteScope, fields.remoteId, fields.remoteKey, fields.url, syncState, now, now);
+        this.issues.appendEvent(issue.id, "external_binding.created", {
+          provider: "jira", scope: fields.remoteScope, remote: fields.remoteId, key: fields.remoteKey, mode: "mirror_read", syncState, actor: input.actor ?? null,
+        });
+        return { status: "created", binding: this.requireBinding(issue.id, "jira", fields.remoteScope, fields.remoteId), issueRef: issue.humanRef };
+      }
+      // A re-bind that names no state keeps the row's: it must not reset `drift` to `pending`.
+      const nextState = input.syncState ?? (own["sync_state"] as SyncState);
+      if ((own["url"] as string | null) === fields.url && (own["sync_state"] as string) === nextState) {
+        return { status: "noop", binding: this.toBinding(own), issueRef: issue.humanRef };
+      }
+      this.db
+        .prepare("UPDATE external_bindings SET url = ?, sync_state = ?, updated_at = ? WHERE issue_id = ? AND provider = 'jira' AND remote_scope = ? AND remote_id = ?")
+        .run(fields.url, nextState, now, issue.id, fields.remoteScope, fields.remoteId);
+      this.issues.appendEvent(issue.id, "external_binding.updated", {
+        provider: "jira", scope: fields.remoteScope, remote: fields.remoteId, key: fields.remoteKey, syncState: nextState, actor: input.actor ?? null,
+      });
+      return { status: "updated", binding: this.requireBinding(issue.id, "jira", fields.remoteScope, fields.remoteId), issueRef: issue.humanRef };
+    });
   }
 
   // -- projection outbox (PRD §§32-34) ----------------------------------------

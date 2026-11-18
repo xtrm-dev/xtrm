@@ -1,0 +1,94 @@
+name: service-knowledge tests
+
+# CORE-2714 — the gate that keeps the plugin and the pi extension at parity with the Python tool
+# definitions. Without it, editing a description in `service_knowledge/mcp/*.py` without
+# regenerating the extension's `tool-definitions.json` merges silently, and the two hosts drift
+# apart in the exact way this work exists to prevent.
+#
+# Two runs, one job, both sides of the parity assertion:
+#   - pytest over the package: the MCP JSON-RPC surface, plugin packaging, and the assertion that
+#     `tool_specs()` equals the extension's committed `tool-definitions.json`
+#   - bun test over the extension: it registers exactly that committed set, and the zero-surface
+#     path still registers nothing
+#
+# `service-knowledge` must be installed so `test_cli_index.py` can find the console script. The
+# editable install is the documented developer path (install.sh does the same thing with pipx).
+#
+# Required-check setup (repo settings → branches → require status checks):
+#   mark `service-knowledge tests` required so a parity break blocks merge.
+
+on:
+  push:
+    paths:
+      - "packages/service-knowledge/**"
+      - "packages/service-knowledge-ext/**"
+      - ".github/workflows/service-knowledge-tests.yml"
+  pull_request:
+    paths:
+      - "packages/service-knowledge/**"
+      - "packages/service-knowledge-ext/**"
+      - ".github/workflows/service-knowledge-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: service-knowledge tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # 3.13, not 3.12: `Path.glob("source/**")` only recurses into the pattern's
+      # subdirectories from 3.13. On 3.11/3.12 the same glob matches nothing, so the verifier
+      # fixtures load an EMPTY source corpus and every claim degrades to UNKNOWN with the
+      # advisory "no source_ref meets required authority 7". Measured on this repo:
+      #   3.11.14 -> []; 3.12.12 -> []; 3.13.3 -> ['source/config/redaction.py', 'source/metrics.py']
+      # The verifier suite is therefore 3.13-only in practice, which pyproject's
+      # `requires-python = ">=3.10"` does not reflect (follow-up candidate, CORE-2714).
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: "1.4.4"
+
+      # Pinned: an unpinned `--upgrade` makes the gate non-reproducible and lets a new pytest
+      # release turn a green PR red with no code change.
+      - name: Install pytest
+        run: python3 -m pip install "pytest==8.4.2"
+
+      # The CLI's index path imports vaultctl (the ONE cross-package dependency), which lives in a
+      # separate repo and is not published to PyPI. A clone beside the checkout matches
+      # install.sh's documented layout; without it the suite cannot import the package at all.
+      # The repository is public, so the default workflow token can clone it unauthenticated.
+      # Pinned to a commit, not a branch tip: this gate must not execute whatever three-party
+      # default-branch code happens to be landed on the morning CI runs. Bump the SHA deliberately.
+      - name: Provide the vaultctl dependency
+        env:
+          VAULTCTL_SHA: c4ac78dde7fc9ec2f033cbe51f37650e5d8050e2
+        run: |
+          git clone https://github.com/Jaggerxtrm/vaultctl.git ../vaultctl
+          git -C ../vaultctl checkout --detach "$VAULTCTL_SHA"
+          test "$(git -C ../vaultctl rev-parse HEAD)" = "$VAULTCTL_SHA"
+          python3 -m pip install -e ../vaultctl
+
+      - name: Install service-knowledge (editable, console script on PATH)
+        run: python3 -m pip install -e packages/service-knowledge
+
+      - name: Python tests (MCP surface, plugin packaging, parity)
+        run: python3 -m pytest packages/service-knowledge/src -q
+
+      - name: Extension dependency check
+        working-directory: packages/service-knowledge-ext
+        run: bun test tests/
