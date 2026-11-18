@@ -103,7 +103,7 @@ export function Row({ density = "list", selected, onActivate, actions, className
     >
       {children}
       {actions && (
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
+        <div className="pointer-events-none ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100" onClick={(e) => e.stopPropagation()}>
           {actions}
         </div>
       )}

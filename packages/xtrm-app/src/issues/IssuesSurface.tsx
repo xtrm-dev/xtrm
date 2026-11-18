@@ -30,7 +30,15 @@ const VIEWS: Array<[View, string, (i: IssueSummary) => boolean]> = [
   ["all", "All", () => true],
 ];
 
-const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
+/** The clipboard write is a write: it resolves `true` only when the text reached the clipboard. */
+const copy = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** Summary takes the spare width; the key column is sized from the data, see `keyColumnRem`. */
 const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "right" }> = [
@@ -303,8 +311,15 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
           {relativeTime(rollup.activityAt)}
         </div>
         <div className={cx(CELL_EDGE, "justify-end")} onClick={(e) => e.stopPropagation()}>
-          <span className="flex size-5 items-center justify-center opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
-            <RowAction icon="copy" label={`Copy ${issue.ref}`} onAct={() => copy(issue.ref)} doneLabel="Copied" />
+          {/* At rest the action is invisible and takes no pointer events, so the row keeps the click. */}
+          <span className="pointer-events-none flex size-5 items-center justify-center opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100">
+            <RowAction
+              icon="copy"
+              label={`Copy ${issue.ref}`}
+              onAct={() => copy(issue.ref)}
+              doneLabel="Copied"
+              failLabel="Copy failed"
+            />
           </span>
         </div>
       </div>
