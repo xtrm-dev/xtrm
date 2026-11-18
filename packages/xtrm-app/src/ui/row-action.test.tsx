@@ -47,13 +47,15 @@ describe("RowAction", () => {
     expect(onRow).not.toHaveBeenCalled();
   });
 
-  it("swaps to check for 1.2s and announces doneLabel", () => {
+  it("swaps to check for 1.2s and announces doneLabel once the act resolves", async () => {
     vi.useFakeTimers();
     render(<RowAction icon="copy" label="Copy XTRM-1" onAct={() => {}} doneLabel="Copied" />);
     const button = screen.getByRole("button", { name: "Copy XTRM-1" });
     expect(svgClass(button)).toContain("lucide-copy");
 
-    fireEvent.click(button);
+    await act(async () => {
+      fireEvent.click(button);
+    });
     expect(svgClass(button)).toContain("lucide-check");
     const live = document.querySelector('[aria-live="polite"]')!;
     expect(live.textContent).toBe("Copied");
@@ -61,5 +63,19 @@ describe("RowAction", () => {
     act(() => vi.advanceTimersByTime(1200));
     expect(svgClass(button)).toContain("lucide-copy");
     expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe("");
+  });
+
+  it("announces failLabel and keeps the glyph when the act reports a failure", async () => {
+    vi.useFakeTimers();
+    render(
+      <RowAction icon="copy" label="Copy XTRM-1" onAct={() => Promise.reject(new Error("denied"))} doneLabel="Copied" failLabel="Copy failed" />,
+    );
+    const button = screen.getByRole("button", { name: "Copy XTRM-1" });
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(svgClass(button)).toContain("lucide-copy");
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe("Copy failed");
   });
 });
