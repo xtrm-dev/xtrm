@@ -22,7 +22,7 @@ export function WorkersTree({ model, now }: { model: WorkersTreeModel; now: numb
       return next;
     });
 
-  const total = model.roots.length + model.unknown.length + model.orphans.length;
+  const total = model.roots.length + model.unknown.length + model.cycles.length + model.orphans.length;
   if (total === 0) {
     return <EmptyState icon="specialists" title="No workers">Neither the dispatch graph nor the board reports a worker for this repository.</EmptyState>;
   }
@@ -32,6 +32,18 @@ export function WorkersTree({ model, now }: { model: WorkersTreeModel; now: numb
       {model.roots.map((node) => (
         <WorkerRow key={node.id} node={node} depth={0} expanded={expanded} onToggle={toggle} now={now} />
       ))}
+
+      {model.cycles.length > 0 && (
+        <section aria-label="Dispatch cycle" className="mt-3 border-t border-border-muted pt-2" data-testid="workers-cycles">
+          <h3 className="px-1.5 text-xs font-medium text-ink-muted">dispatch cycle</h3>
+          <p className="px-1.5 pb-1 text-xs text-ink-faint">
+            These workers dispatch each other in a cycle, so no worker sits above them. The tree does not guess a parent.
+          </p>
+          {model.cycles.map((node) => (
+            <WorkerRow key={node.id} node={node} depth={0} expanded={expanded} onToggle={toggle} now={now} />
+          ))}
+        </section>
+      )}
 
       {(model.unknown.length > 0 || model.orphans.length > 0) && (
         <section aria-label="Unknown dispatcher" className="mt-3 border-t border-border-muted pt-2">

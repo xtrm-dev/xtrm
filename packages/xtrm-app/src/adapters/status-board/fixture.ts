@@ -116,7 +116,7 @@ function documents(now: () => number): WireRecord[] {
     record("answers/Q-103", { qid: "Q-103", answer: "yes", at: iso(now, -2 * DAY), by: "manager" }),
   ];
   const followups = [
-    record("followups/XTRM-820", { ref: "XTRM-820", title: "Jira chips on issue pages", plain: "show the linked Jira issue", status: "open", priority: "P2", area: "console", owner: "quant-reviewer", when: "after XTRM-815", refs: ["XTRM-815"] }),
+    record("followups/XTRM-820", { ref: "XTRM-820", title: "Jira chips on issue pages", plain: "show the linked Jira issue", status: "open", priority: "P2", area: "console", owner: "quant-reviewer", when: "after XTRM-815", refs: ["XTRM-815", "XTRM-317"] }),
     record("followups/XTRM-821", { ref: "XTRM-821", title: "Answer writing", plain: "answer a board question from the app", status: "deferred", priority: "P3", area: "console", owner: "operator", refs: ["XTRM-820", "XTRM-816"] }),
   ];
   const status = [

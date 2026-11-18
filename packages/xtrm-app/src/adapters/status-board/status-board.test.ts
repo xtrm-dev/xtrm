@@ -275,7 +275,7 @@ describe("statusBoard fixture adapter", () => {
 
     expect((await fixtureStatusBoard.listQuestions(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
     expect((await fixtureStatusBoard.listFollowUps(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
-    expect((await fixtureStatusBoard.listFollowUps(FIXTURE_BOARD_REPO)).records[0]!.doc.refs).toEqual(["XTRM-815"]);
+    expect((await fixtureStatusBoard.listFollowUps(FIXTURE_BOARD_REPO)).records[0]!.doc.refs).toEqual(["XTRM-815", "XTRM-317"]);
     expect((await fixtureStatusBoard.listAnswers(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
     expect((await fixtureStatusBoard.listStatus(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
     expect((await fixtureStatusBoard.listProposals(FIXTURE_BOARD_REPO)).records).toHaveLength(1);

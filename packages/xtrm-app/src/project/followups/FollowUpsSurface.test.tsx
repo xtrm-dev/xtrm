@@ -35,6 +35,14 @@ describe("Project Follow-ups", () => {
     expect(row.textContent).toContain(first.when ?? "—");
     // Every ref renders: a chip when it resolves, its plain text when it does not — never a dead link.
     for (const ref of first.refs ?? []) expect(row.textContent).toContain(ref);
+    // The fixture carries one ref the issue index resolves (XTRM-317), so the chip assertion is not
+    // vacuous: a resolved ref renders an interactive chip (the app inspects in place), an unresolved
+    // one stays plain text, and every anchor that does exist points somewhere real.
+    expect(first.refs).toContain("XTRM-317");
+    const chip = row.querySelector('[data-reference*="XTRM-317"]');
+    expect(chip).not.toBeNull();
+    expect(chip!.tagName).toBe("BUTTON");
+    expect(row.querySelector('[data-reference*="XTRM-815"]')).toBeNull();
     for (const anchor of row.querySelectorAll("a")) expect(anchor.getAttribute("href")).not.toMatch(/undefined|XTRM-\d+$/);
   });
 

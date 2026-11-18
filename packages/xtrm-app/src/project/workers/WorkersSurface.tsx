@@ -145,7 +145,7 @@ export function WorkersSurface() {
       </div>
       {graph.error && (
         <p className="px-1.5 py-1 text-xs text-danger" data-testid="graph-error">
-          The dispatch graph could not be read: {graph.error instanceof Error ? graph.error.message : "unknown error"}. Every worker is listed under unknown dispatcher.
+          The dispatch graph could not be read: {graph.error instanceof Error ? graph.error.message : "unknown error"}. The board records are listed below, grouped by status, without dispatcher edges.
         </p>
       )}
       {model ? (

@@ -97,6 +97,12 @@ export interface WorkersTreeModel {
   roots: TreeNode[];
   /** Vertices with no `dispatched_by` parent: an unknown dispatcher, never a guessed one. */
   unknown: TreeNode[];
+  /**
+   * Vertices that sit on a dispatch cycle. Every member has a parent, so no rooted walk reaches
+   * them; sweeping them into their own group keeps them visible instead of silently dropping a
+   * self-dispatched worker (`a -> a`) or a two-node cycle (`a -> b -> a`).
+   */
+  cycles: TreeNode[];
   /** Board records whose issue ref no graph vertex carries: on the board, absent from the graph. */
   orphans: Worker[];
   /** Issue refs the graph covers — the join key the enrichment uses. */
@@ -250,13 +256,49 @@ export function buildWorkersTree(graph: ProjectDispatchGraph, workers: Worker[])
     if (dispatchedBy.has(id)) unknown.push(build(id, new Set()));
     else roots.push(build(id, new Set()));
   }
+
+  // Sweep what the rooted walk never reached. A vertex with a parent that no root leads to is
+  // either on a cycle or hangs off one; the first must not disappear, the second must not be
+  // presented as an unknown dispatcher it does not have.
+  const reached = new Set<string>();
+  const mark = (node: TreeNode): void => {
+    reached.add(node.id);
+    for (const child of node.children) mark(child);
+  };
+  for (const node of [...roots, ...unknown]) mark(node);
+
+  const cycles: TreeNode[] = [];
+  const onCycle = (start: string): boolean => {
+    // Follow the dispatcher chain; returning to a vertex already visited on this walk is a cycle.
+    const path = new Set<string>([start]);
+    let cursor: string | null | undefined = dispatchedBy.get(start);
+    for (let step = 0; step < 64 && cursor; step++) {
+      if (cursor === start) return true;
+      if (path.has(cursor)) return true;
+      path.add(cursor);
+      cursor = dispatchedBy.has(cursor) ? dispatchedBy.get(cursor) : undefined;
+    }
+    return false;
+  };
+  for (const id of [...vertexIds].sort()) {
+    if (reached.has(id)) continue;
+    if (onCycle(id)) {
+      logContractGap(`dispatch graph cycle at "${id}": the vertex is not reachable from any root`);
+      cycles.push(build(id, new Set()));
+    } else {
+      logContractGap(`dispatch graph vertex "${id}" is not reachable from any root`);
+      unknown.push(build(id, new Set()));
+    }
+  }
+
   roots.sort((a, b) => a.name.localeCompare(b.name));
   unknown.sort((a, b) => a.name.localeCompare(b.name));
+  cycles.sort((a, b) => a.name.localeCompare(b.name));
 
   const orphans = workers.filter((w) => !w.issue || !graphRefs.has(w.issue));
   const unenriched = [...worksOn.keys()].filter((id) => !nodes.has(id) || !worksOn.get(id)?.some((ref) => byIssue.has(ref))).length;
 
-  return { roots, unknown, orphans, graphRefs, unenriched };
+  return { roots, unknown, cycles, orphans, graphRefs, unenriched };
 }
 
 export interface FlatGroup {
