@@ -41,9 +41,12 @@ describe("board PR column", () => {
     render(<RouterProvider router={router} />);
     const header = await screen.findByRole("columnheader", { name: /PR/ });
     expect(header).toBeTruthy();
-    const cell = await screen.findByText("#211");
-    expect(cell).toBeTruthy();
-    expect(within(cell.parentElement as HTMLElement).getByText("merged")).toBeTruthy();
+    // The column shows the key alone. The row's lifecycle badge already carries the colour, so the
+    // key stays quiet (§4.4 Restraint rule 1) and the state travels in the glyph and the aria-label.
+    const key = await screen.findByLabelText("Pull request #211, merged");
+    expect(key.textContent).toContain("#211");
+    expect(key.className).toContain("text-ink-muted");
+    expect(key.querySelector("svg")).not.toBeNull();
     fireEvent.click(within(header).getByRole("button"));
     expect(header.getAttribute("aria-sort")).not.toBe("none");
   });
@@ -57,10 +60,10 @@ describe("pull request live state", () => {
     render(<RouterProvider router={router} />);
     const section = await screen.findByRole("region", { name: "Pull requests" });
     expect(within(section).getByText("Add console feature")).toBeTruthy();
-    const merged = within(section).getByText("merged");
-    expect(merged.getAttribute("data-slot")).toBe("badge");
-    expect(merged.className).toContain("bg-accent-soft");
-    expect(within(section).getByText("unknown")).toBeTruthy();
+    const merged = within(section).getByText("Merged");
+    expect(merged.closest("[data-slot='badge']")).toBeTruthy();
+    expect(merged.closest("[data-slot='badge']")!.className).toContain("bg-accent-soft");
+    expect(within(section).getByText("Unknown")).toBeTruthy();
     expect(within(section).getByText(/provenance/)).toBeTruthy();
   });
 });

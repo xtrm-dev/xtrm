@@ -13,7 +13,7 @@ import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
 import { buildTree, defaultDesc, issueStatus, keyColumnRem, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
-import { PrStateBadge } from "./pr-state.tsx";
+import { PrKey } from "../ui/pr-key.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
@@ -291,9 +291,8 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
         </div>
         <div className={cx(CELL, "justify-end")}>
           {issue.primaryPr && (
-            <span title={issue.primaryPr.relation} className="flex min-w-0 items-center justify-end gap-1.5">
-              <span className="truncate text-xs text-ink-muted tabular">#{issue.primaryPr.number}</span>
-              <PrStateBadge state={issue.primaryPr.state} size="xs" />
+            <span title={issue.primaryPr.relation} className="flex min-w-0 items-center justify-end">
+              <PrKey number={issue.primaryPr.number} state={issue.primaryPr.state} quiet className="min-w-0" />
             </span>
           )}
         </div>

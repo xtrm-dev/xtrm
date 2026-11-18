@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type MouseEvent, type ReactNode } f
 import type { IssueSummary } from "../adapters/index.tsx";
 import { projectForRepo, useGithubIssue, useIssues, useProjects, usePull } from "../app/queries.ts";
 import { pullStateLabel, pullUrl, resolvePullReference } from "../github/pr.ts";
+import { PrKey } from "../ui/pr-key.tsx";
 import { githubIssueUrl, issueStateLabel, issueStateTone, parseGithubIssueRef } from "../github/issues.ts";
 import { IssueKey, lifecycleLabel, lifecycleTone } from "../issues/meta.tsx";
 import { useShell } from "../shell/context.tsx";
@@ -139,6 +140,7 @@ export function ReferenceChip({
   showTitle,
   fallback,
   unresolved,
+  showAlias = true,
   className,
 }: {
   reference: ContextReference;
@@ -146,11 +148,13 @@ export function ReferenceChip({
   fallback?: string;
   /** Rendered as-is when the reference does not resolve (e.g. prose text that only looks like a key, such as UTF-8). */
   unresolved?: ReactNode;
+  /** `false` renders the primary key alone; the alias moves to the tooltip (§4.5 Linked cell). */
+  showAlias?: boolean;
   className?: string;
 }) {
   if (reference.kind === "gh-issue") return <GithubIssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} className={className} />;
   if (reference.kind === "pr") return <PullReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} className={className} />;
-  return <IssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} unresolved={unresolved} className={className} />;
+  return <IssueReferenceChip reference={reference} showTitle={showTitle} fallback={fallback} unresolved={unresolved} showAlias={showAlias} className={className} />;
 }
 
 
@@ -252,7 +256,6 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
     else shell.inspect(target);
   };
 
-  const short = `#${parsed.number}`;
   const title = pull.data?.title;
   const state = pull.data?.state;
   const chip = (
@@ -260,7 +263,7 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
       <button
         type="button"
         data-reference={formatReference({ kind: "pr", ref: `${parsed.fullName}#${parsed.number}` })}
-        aria-label={`${parsed.fullName}#${parsed.number}${title ? ` ${title}` : ""}`}
+        aria-label={`${parsed.fullName}#${parsed.number}${state ? ` ${pullStateLabel(state, pull.data.draft)}` : ""}${title ? ` ${title}` : ""}`}
         onClick={open}
         onAuxClick={(e) => {
           if (e.button !== 1) return;
@@ -270,10 +273,8 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
         onDoubleClick={(e) => e.stopPropagation()}
         className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40"
       >
-        <span className="truncate font-mono text-xs text-accent-ink">
-          {short}
-          <span className="text-ink-faint"> {parsed.fullName}</span>
-        </span>
+        <PrKey number={parsed.number} state={state ?? null} draft={pull.data.draft} glyph={false} className="min-w-0" />
+        <span className="truncate font-mono text-xs text-ink-faint">{parsed.fullName}</span>
         {title && (
           <span className={cx("text-ink", showTitle ? "text-sm" : "text-xs text-ink-muted")} data-testid="pr-chip-title">
             {title}
@@ -292,12 +293,14 @@ function IssueReferenceChip({
   showTitle,
   fallback,
   unresolved,
+  showAlias = true,
   className,
 }: {
   reference: { kind: "issue"; ref: string };
   showTitle?: boolean;
   fallback?: string;
   unresolved?: ReactNode;
+  showAlias?: boolean;
   className?: string;
 }) {
   const index = useIssueIndex();
@@ -327,9 +330,11 @@ function IssueReferenceChip({
       )}
     >
       <StatusDot tone={lifecycleTone(issue.lifecycle)} label={lifecycleLabel(issue.lifecycle)} />
-      <IssueKey locator={issue.locator} humanRef={issue.ref} />
+      <IssueKey locator={issue.locator} humanRef={issue.ref} showAlias={showAlias} />
       {showTitle && <span className={cx("truncate text-sm", issue.lifecycle === "open" ? "text-ink" : "text-ink-muted")}>{issue.title}</span>}
     </button>
   );
-  return showTitle ? chip : <Tip label={`${issue.title} · ${lifecycleLabel(issue.lifecycle)}`}>{chip}</Tip>;
+  // The alias a compact cell cannot show still travels in the tooltip, so nothing is lost.
+  const alias = !showAlias && issue.locator && issue.locator !== issue.ref ? ` · ${issue.ref}` : "";
+  return showTitle ? chip : <Tip label={`${issue.title} · ${lifecycleLabel(issue.lifecycle)}${alias}`}>{chip}</Tip>;
 }

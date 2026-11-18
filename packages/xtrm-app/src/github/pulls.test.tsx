@@ -94,8 +94,14 @@ describe("Pull requests surface", () => {
 
     const counted = await screen.findByText("chore(XTRM-857): two reviews, three comments");
     const countedRow = counted.closest('[data-testid="pull-row"]') as HTMLElement;
-    expect(within(countedRow).getByText("+24")).toBeTruthy();
-    expect(within(countedRow).getByText("\u22127")).toBeTruthy();
+    // Restraint rule 1: the key is the one coloured element in the list, so the diff is plain ink.
+    const diff = within(countedRow).getByTitle("24 added, 7 removed").querySelector("span") as HTMLElement;
+    expect(diff.textContent).toBe("+24 \u22127");
+    expect(diff.className).toContain("text-ink-muted");
+    // Checks stay neutral in the list: no coloured dot survives in the row.
+    const dots = Array.from(countedRow.querySelectorAll("[title^='checks']"));
+    expect(dots.length).toBeGreaterThan(0);
+    for (const dot of dots) expect(dot.querySelector(".bg-danger, .bg-success, .bg-ink-faint")).toBeNull();
     expect(within(countedRow).getByTitle(/3 conversation comments/)).toBeTruthy();
     expect(within(countedRow).getByTitle("24 added, 7 removed")).toBeTruthy();
     expect(within(countedRow).getByTitle("approved \u00b7 2 reviews")).toBeTruthy();
@@ -116,7 +122,9 @@ describe("Pull requests surface", () => {
     expect(await within(el).findByText("Reviews \u00b7 2")).toBeTruthy();
     // The header and the Overview field both state the branch.
     expect(within(el).getAllByText(/xt\/x857-counts \u2192 main/).length).toBeGreaterThan(0);
-    expect(within(el).getByText(/\u00b7 2 files \u00b7 2 commits/)).toBeTruthy();
+    // The header carries the diff and the file count; commits keep an Overview row.
+    expect(within(el).getByText("2 files")).toBeTruthy();
+    expect(within(el).getByText("2 commits")).toBeTruthy();
   });
 
   it("renders the drawer's unknown branch, diff and review state as unknown", async () => {
@@ -175,5 +183,68 @@ describe("Pull requests surface", () => {
     expect(within(chip).getByText("fix(XTRM-305): silence virtual-bead spam")).toBeTruthy();
     expect(within(el).getByRole("link", { name: /Open Jaggerxtrm\/console#211 on GitHub/ }).getAttribute("href"))
       .toBe("https://github.com/Jaggerxtrm/console/pull/211");
+  });
+});
+
+describe("PR identity (§4.4-4.5)", () => {
+  it("shows the key, the linked column and the copy action, and no state dot, in the list", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+    const title = await screen.findByText("feat(XTRM-301): rail keyboard model v2");
+    const row = title.closest("[data-testid='pull-row']") as HTMLElement;
+    const key = within(row).getByLabelText("Pull request #212, open");
+    expect(key.className).toContain("text-success");
+    expect(key.querySelector("svg")).not.toBeNull();
+    // Restraint rule 1: the key is the row's only coloured element, and the state word never repeats.
+    expect(row.querySelectorAll("[class*='text-success']")).toHaveLength(1);
+    expect(row.querySelector("[title='checks accepted']")).toBeNull();
+    expect(within(row).queryByText("open")).toBeNull();
+    expect(within(row).getByLabelText("Copy xtrm-dev/xtrm#212")).toBeTruthy();
+  });
+
+  it("collapses surplus linked refs into +N instead of overflowing the cell", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+    const title = await screen.findByText("fix(XTRM-305): silence virtual-bead spam");
+    const row = title.closest("[data-testid='pull-row']") as HTMLElement;
+    expect(within(row).getAllByRole("button").filter((b) => b.getAttribute("data-reference")?.startsWith("@issue:"))).toHaveLength(1);
+    // The compact cell shows the primary key alone; the alias lives in the tooltip and the popover.
+    const compact = within(row).getAllByRole("button").filter((b) => b.getAttribute("data-reference")?.startsWith("@issue:"))[0];
+    expect(compact.textContent ?? "").not.toContain("/");
+    const more = within(row).getByLabelText("1 more linked issues");
+    expect(more.textContent).toBe("+1");
+    fireEvent.click(more);
+    const chips = await screen.findAllByRole("button", { name: /XTRM-\d+/ });
+    expect(chips.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("opens the +N popover on Enter without opening the inspector", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls");
+    const title = await screen.findByText("fix(XTRM-305): silence virtual-bead spam");
+    const row = title.closest("[data-testid='pull-row']") as HTMLElement;
+    const more = within(row).getByLabelText("1 more linked issues");
+    // Enter must not bubble into the row's own activation; the trigger opens its own popover.
+    fireEvent.keyDown(more, { key: "Enter" });
+    expect(screen.queryByTestId("inspector-drawer")).toBeNull();
+    fireEvent.click(more);
+    expect(await screen.findByRole("button", { name: /XTRM-94/ })).toBeTruthy();
+  });
+
+  it("renders the §4.5 inspector header: key, state chip, branch, diff, files, author, dates", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls?inspect=pr:xtrm-dev/xtrm%23212");
+    const el = await screen.findByTestId("inspector-drawer");
+    const header = await within(el).findByTestId("pull-header");
+    expect(within(header).getByLabelText("Pull request #212, open")).toBeTruthy();
+    const chip = within(header).getByText("Open").closest("[data-slot='badge']") as HTMLElement;
+    expect(chip.className).toContain("bg-success");
+    expect(within(header).getByText(/xt\/o8h2 → main/)).toBeTruthy();
+    expect(within(header).getByText("+412")).toBeTruthy();
+    expect(within(header).getByText("−88")).toBeTruthy();
+    expect(within(header).getByText("3 files")).toBeTruthy();
+    expect(within(header).getByText(/opened/)).toBeTruthy();
+    // Restraint rule 3: the header control is a ghost, not a filled pill.
+    const pill = within(header).getByTestId("github-pill");
+    expect(pill.className).toContain("hover:bg-hover");
+    expect(pill.className).not.toContain("bg-github");
+    // Author, Branch and Change left the Overview: the header is their only home now.
+    expect(within(el).queryByText("Change")).toBeNull();
   });
 });

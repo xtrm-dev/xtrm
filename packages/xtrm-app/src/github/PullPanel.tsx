@@ -1,34 +1,22 @@
-import { useMemo } from "react";
 import { usePull } from "../app/queries.ts";
-import { checkLabel, checkTone, conversationUnavailable, extractIssueKeys, mergeableText, parsePullRef, pullStateLabel, pullStateTone, reviewLabel } from "./pr.ts";
-import { ReferenceActionsProvider, ReferenceChip, useIssueIndex } from "../refs/references.tsx";
+import { checkLabel, checkTone, conversationUnavailable, mergeableText, parsePullRef, reviewLabel, usePrLinkedRefs } from "./pr.ts";
+import { ReferenceActionsProvider, ReferenceChip } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { EmptyState, ErrorState, LoadingState, StatusDot, ago } from "../ui/primitives.tsx";
+import { PrKey, PrStateChip } from "../ui/pr-key.tsx";
 import { Fields, InspectorSection } from "../ui/drawer.tsx";
 import { GithubPill } from "../ui/github-pill.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { AuthorInline } from "./identity.tsx";
 import { PullConversation } from "./PullConversation.tsx";
 
-function LinkedIssues({ title, branch, body }: { title: string; branch: string | null; body: string | null }) {
-  const index = useIssueIndex();
-  const keys = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const key of extractIssueKeys(title, branch, body)) {
-      const resolved = index.get(key)?.ref ?? key;
-      if (!seen.has(resolved)) {
-        seen.add(resolved);
-        out.push(key);
-      }
-    }
-    return out;
-  }, [title, branch, body, index]);
-  if (!keys.length) return <span className="text-ink-faint">None detected</span>;
+/** The full linked list, under the header (§4.5): the list column is the compact form of it. */
+function LinkedIssues({ refs }: { refs: string[] }) {
+  if (!refs.length) return <span className="text-ink-faint">None detected</span>;
   return (
-    <span className="flex flex-wrap items-center gap-0.5">
-      {keys.map((key) => (
+    <span className="flex min-w-0 flex-wrap items-center gap-0.5">
+      {refs.map((key) => (
         <ReferenceChip key={key} reference={{ kind: "issue", ref: key }} showTitle />
       ))}
     </span>
@@ -40,6 +28,8 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
   const { inspect } = useShell();
   const parsed = parsePullRef(refValue);
   const pull = usePull(parsed?.fullName ?? "", parsed?.number ?? null, follow);
+  // Called before the early returns so the hook order never depends on the query state.
+  const refs = usePrLinkedRefs(pull.data ?? null);
 
   if (!parsed) return <EmptyState icon="pull" title="Not a pull request reference" />;
   if (pull.isPending) return <LoadingState rows={6} label="Loading pull request" />;
@@ -49,34 +39,51 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
   return (
     <ReferenceActionsProvider open={(r) => inspect(r)} repo={parsed.fullName}>
       <div data-testid="pull-header" className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
-        <div className="flex items-center gap-2 text-xs text-ink-faint">
-          <StatusDot tone={pullStateTone(p.state)} label={pullStateLabel(p.state, p.draft)} />
-          <span className="font-mono">#{p.number}</span>
-          <span>·</span>
-          <span>{pullStateLabel(p.state, p.draft)}</span>
-          {p.draft && (
-            <>
-              <span>·</span>
-              <span>draft</span>
-            </>
-          )}
-          <span className="ml-auto">{ago(p.updatedAt)}</span>
-        </div>
         <div className="flex items-start gap-3">
-          <h2 className="min-w-0 flex-1 text-base leading-snug font-medium text-pretty text-ink">{p.title}</h2>
-          <GithubPill href={p.url} size="sm" />
+          <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-2">
+            <PrKey number={p.number} state={p.state} draft={p.draft} quiet className="shrink-0" />
+            <h2 className="min-w-0 text-base leading-snug font-medium text-pretty text-ink">{p.title}</h2>
+          </span>
+          <GithubPill href={p.url} size="sm" variant="ghost" />
+        </div>
+        <div className="flex min-w-0 items-center gap-2 text-xs">
+          <PrStateChip state={p.state} draft={p.draft} />
+          <span
+            className="min-w-0 truncate font-mono text-xs text-ink-muted"
+            title={`${p.headBranch ?? "unknown"} → ${p.baseBranch ?? "unknown"}`}
+          >
+            {p.headBranch ?? "unknown"} → {p.baseBranch ?? "unknown"}
+          </span>
+          <span
+            className="shrink-0 tabular text-xs"
+            title={p.additions === null && p.deletions === null ? "Diff counts unavailable from the source" : "Diff counts from the pull request"}
+          >
+            {p.additions === null && p.deletions === null ? (
+              <span className="text-ink-faint">diff unknown</span>
+            ) : (
+              <>
+                <span className="text-diff-add">+{p.additions ?? "?"}</span>{" "}
+                <span className="text-diff-del">−{p.deletions ?? "?"}</span>
+              </>
+            )}
+          </span>
+          <span className="shrink-0 text-ink-faint">{p.changedFiles === null ? "files unknown" : `${p.changedFiles} files`}</span>
         </div>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
           <AuthorInline login={p.author} />
-          <span className="truncate">· {p.headBranch ?? "unknown"} → {p.baseBranch ?? "unknown"}</span>
+          <span className="truncate">
+            · opened {ago(p.createdAt)} · updated {ago(p.updatedAt)}
+          </span>
         </p>
       </div>
+
+      <InspectorSection title="Linked Substrate issues">
+        <LinkedIssues refs={refs} />
+      </InspectorSection>
 
       <InspectorSection title="Overview">
         <Fields
           rows={[
-            ["Author", <AuthorInline key="author" login={p.author} />],
-            ["Branch", `${p.headBranch ?? "unknown"} → ${p.baseBranch ?? "unknown"}`],
             [
               "Checks",
               <span className="inline-flex items-center gap-1.5" key="checks">
@@ -86,29 +93,11 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
             ],
             ["Review", reviewLabel(p.review)],
             ["Mergeable", mergeableText(p.mergeable, p.mergeableState) ?? <span className="text-ink-faint">—</span>],
-            [
-              "Change",
-              <span className="tabular" key="change">
-                {p.additions === null && p.deletions === null ? (
-                  <span className="text-ink-faint" title="Diff counts unavailable from the source">unknown</span>
-                ) : (
-                  <>
-                    <span className="text-diff-add">+{p.additions ?? "?"}</span> <span className="text-diff-del">−{p.deletions ?? "?"}</span>
-                  </>
-                )}
-                <span className="text-ink-faint">
-                  {p.changedFiles === null ? " · files unknown" : ` · ${p.changedFiles} files`} ·{" "}
-                  {p.commits === null ? "commits unknown" : `${p.commits} commits`}
-                </span>
-              </span>,
-            ],
+            // Commits lost its home when Change left the Overview (§4.5); the count stays visible.
+            ["Commits", p.commits === null ? <span className="text-ink-faint">commits unknown</span> : `${p.commits} commits`],
             ["Updated", ago(p.updatedAt)],
           ]}
         />
-      </InspectorSection>
-
-      <InspectorSection title="Linked Substrate issues">
-        <LinkedIssues title={p.title} branch={p.headBranch} body={p.body} />
       </InspectorSection>
 
       {p.body && (
