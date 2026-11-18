@@ -46,6 +46,14 @@ describe("Console v2 shell", () => {
     for (const label of ["Overview", "Timeline", "Questions", "Workers", "Follow-ups", "Jira", "Integration"]) {
       expect(within(sidebar).getAllByText(label).length).toBeGreaterThan(0);
     }
+    // XTRM-854: Project's own rows hang on one NavRail group under the parent row, and carry no icons.
+    const rail = within(sidebar).getByRole("group", { name: "Project" });
+    expect(rail.className).toContain("border-l");
+    for (const label of ["Overview", "Timeline", "Integration"]) {
+      const child = within(rail).getByText(label).closest("[role='button']") as HTMLElement;
+      expect(child.querySelector("svg")).toBeNull();
+      expect(child.className).toContain("pl-[var(--x-rail-gutter)]");
+    }
     // No user-visible string says "Program" (ADR-002 D1).
     expect(within(sidebar).queryByText(/Program/)).toBeNull();
 
@@ -56,7 +64,9 @@ describe("Console v2 shell", () => {
     // The Project row resolves to the selected repository, never the retired global route.
     fireEvent.click(within(sidebar).getByRole("button", { name: /^Project/ }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/rep/xtrm-dev/xtrm/project"));
-    expect((await screen.findByRole("region", { name: "Overview" })).textContent).toContain("Overview is not part of this vertical");
+    // Overview is live; this repository has no binding, so the honest unintegrated state renders.
+    expect((await screen.findByRole("region", { name: "Overview" })).textContent).toContain("not integrated");
+    expect(screen.getByTestId("integration-unbound")).toBeTruthy();
   });
 
   it("renders deferred modes as explicit placeholders, not broken routes", async () => {
@@ -121,8 +131,24 @@ describe("Console v2 shell", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/rep/mercury/market-data/project/timeline"));
     expect((await screen.findByRole("region", { name: "Timeline" })).textContent).toContain("Project Timeline arrives with XTRM-818");
     // The Overview row is the section root only, so it is not selected on a child route.
-    expect(within(sidebar).getByRole("button", { name: "Timeline" }).getAttribute("aria-current")).toBe("true");
+    expect(within(sidebar).getByRole("button", { name: "Timeline" }).getAttribute("aria-current")).toBe("page");
     expect(within(sidebar).getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("lists Research sections on their own rail", async () => {
+    renderAt("/research/experiments");
+    const sidebar = await screen.findByTestId("context-sidebar");
+    const rail = await within(sidebar).findByRole("group", { name: "Research" });
+    expect(rail.className).toContain("border-l");
+    expect(rail.className).toContain("border-border-muted");
+    const runs = within(rail).getByRole("button", { name: /^Recent Runs/ });
+    expect(runs.className).toContain("pl-[var(--x-rail-gutter)]");
+    expect(runs.querySelector("svg")).toBeNull();
+    // A section whose children expressions are all false must not render an empty rail (review finding 1).
+    // Project is expanded by default, so it does have a rail even off-project: that is the existing state.
+    const groups = within(sidebar).getAllByRole("group").map((node) => node.getAttribute("aria-label"));
+    expect(groups).not.toContain("Agents");
+    expect(groups.every((label) => label !== null && label !== "")).toBe(true);
   });
 
   it("Ctrl+B toggles the contextual sidebar and Escape closes the drawer", async () => {

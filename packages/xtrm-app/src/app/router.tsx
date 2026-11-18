@@ -14,12 +14,16 @@ import { GithubIssuesSurface } from "../github/IssuesSurface.tsx";
 import { ReleasesSurface } from "../github/ReleasesSurface.tsx";
 import { PullsSurface } from "../github/PullsSurface.tsx";
 import { ExperimentDetailSurface, ExperimentListSurface, RunAnalysisSurface, RunComparisonSurface, RunListSurface } from "../surfaces/ResearchSurface.tsx";
+import { OverviewSurface } from "../project/overview/OverviewSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { SettingsSurface } from "../settings/SettingsSurface.tsx";
 import { MODES, PROJECT_ROOT, PROJECT_SECTIONS, REPO_SECTIONS, RESEARCH_SECTIONS, type Destination } from "./destinations.ts";
 import { validateCompareSearch } from "./research-compare-search.ts";
 
 // URL contract: docs/console-v2-shell-architecture.md §9.1.
+
+/** Project sections with a live surface; every other section stays an explicit coming-state. */
+const PROJECT_SURFACES: Partial<Record<string, ComponentType>> = { overview: OverviewSurface };
 
 const REPO_STORAGE_KEY = "xtrm.console.repo.v1";
 
@@ -142,13 +146,14 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     }),
     // Project subtree (ADR-002 D2): the root is Overview; every section is URL-addressable and a
     // typed coming-state until its own issue lands, never invented UI.
-    ...PROJECT_SECTIONS.map((s) =>
-      createRoute({
+    ...PROJECT_SECTIONS.map((s) => {
+      const Surface = PROJECT_SURFACES[s.id];
+      return createRoute({
         getParentRoute: () => repoRoute,
         path: s.repoPath,
-        component: () => <DeferredSurface title={s.label} icon={s.icon} reason={s.deferred ?? `${s.label} is not implemented yet`} />,
-      }),
-    ),
+        component: Surface ? () => <Surface /> : () => <DeferredSurface title={s.label} icon={s.icon} reason={s.deferred ?? `${s.label} is not implemented yet`} />,
+      });
+    }),
     ...REPO_SECTIONS.flatMap((s) => s.items)
       .filter((i): i is Destination & { repoPath: string; deferred: string } => !!i.deferred && !!i.repoPath)
       .map((i) => createRoute({ getParentRoute: () => repoRoute, path: i.repoPath, component: () => <DeferredSurface title={i.label} icon={i.icon} reason={i.deferred} /> })),

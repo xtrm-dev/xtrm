@@ -59,7 +59,9 @@ describe("retired routes redirect", () => {
     localStorage.setItem(REPO_KEY, "mercury/market-data");
     const { router } = renderAt("/program");
     await waitFor(() => expect(router.state.location.pathname).toBe("/rep/mercury/market-data/project"));
-    expect((await screen.findByRole("region", { name: "Overview" })).textContent).toContain("Overview is not part of this vertical");
+    // Overview is a live surface now; the bound fixture repository renders its composition.
+    expect((await screen.findByRole("region", { name: "Overview" })).textContent).toContain("mercury/market-data");
+    expect(await screen.findByTestId("attention-count")).toBeTruthy();
   });
 
   it("/program without a selected repository lands on the repository picker, not a dead route", async () => {

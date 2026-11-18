@@ -127,7 +127,11 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
   - Child row: `h-7` (28px), **no icon**, `pl-[18px]` so the label x is 16 + 18 = 34px: the child label aligns with the parent label (the aligned label column). Label 13px, weight 500, `text-ink-muted`; count right-aligned `text-xs text-ink-faint tabular`.
   - Active child: `text-ink font-semibold bg-hover`, plus a 2px marker on the rail: `before:absolute before:-left-px before:inset-y-1.5 before:w-0.5 before:rounded-full before:bg-accent`. The marker replaces the hairline at that row; the hairline is continuous elsewhere.
   - Hover and focus: `bg-hover` on the row only; the rail does not move.
-  - Deferred child: `text-ink-faint` (existing deferred convention), still navigable.
+  - Inactive child: `text-ink-muted` (5.75:1 on the light sidebar, 6.05:1 on the dark one).
+  - Deferred destination, at both levels: the label keeps its full ink and the row carries `data-deferred`;
+    deferred is deliberately not a fainter ink, because `text-ink-faint` is 2.74:1 and 2.93:1 on `--x-sidebar`,
+    below the 4.5:1 minimum for 13px text. A deferred destination stays navigable and its own surface states
+    what arrives later (lead ruling, 2026-11-18, on the UI-2 visual review).
   - Motion: none beyond the existing `grid-rows` collapse (150ms), disabled under `prefers-reduced-motion`.
 - **Props:**
   ```ts
@@ -136,9 +140,16 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
     label: string; count?: number | null; selected?: boolean; deferred?: boolean; onActivate?: () => void })
   SidebarRow({ …existing, children?: ReactNode })                                    // children render inside a NavRail below the row; `indent` is removed
   ```
-- **Accessibility:** parent toggle keeps `aria-expanded` and the label `Expand|Collapse <label>`; the active child carries `aria-current="page"` (already set by `Row` when `selected`); ArrowRight expands and ArrowLeft collapses on the parent row (same keys as issue-tree rows, `sidebar-restyle.md` §12); the marker is decorative, the active state is also carried by weight and ink.
+- **Accessibility:** parent toggle keeps `aria-expanded` and the label `Expand|Collapse <label>`; the active child carries `aria-current="page"` (set by `NavRailItem`; `Row` emits `aria-current="true"` for a selected row); ArrowRight expands and ArrowLeft collapses on the parent row (same keys as issue-tree rows, `sidebar-restyle.md` §12); the marker is decorative, the active state is also carried by weight and ink.
 - **Consumers:** `ContextSidebar.tsx` → `WorkSidebar` (Project: Overview, Timeline, Questions, Workers, Follow-ups, Jira, Integration; Research: Experiments, Recent Runs, Saved Comparisons, Workloads). `src/agent/AgentSidebar.tsx` does not use nested rows today and is not changed.
 - **Tests that change:** `src/ui/sidebar.test.tsx` (nested rows no longer pass `indent`), `src/app/shell.test.tsx` (Project and Research nesting assertions).
+- **Usage (UI-2):** `src/ui/nav-rail.tsx` exports `NavRail` and `NavRailItem`; `src/ui/sidebar.tsx` re-exports both, so a surface keeps one import. `SidebarRow` takes the nested rows as `children` and wraps them in a `NavRail` under its own label, and the parent keeps the disclosure state:
+  ```tsx
+  <SidebarRow icon="program" label="Project" expanded={open} onToggle={() => setOpen((v) => !v)}>
+    <NavRailItem label="Overview" selected={pathname === href} onActivate={() => go(href)} />
+  </SidebarRow>
+  ```
+  Geometry is tokenised in `src/styles.css`: `--x-rail-indent: 15px` (rail x), `--x-rail-gutter: 18px` (child text inset, so the label x is 34px) and `--x-rail-marker: 2px` (active marker width). No colour token is added: the hairline is `--x-border-muted` and the marker `--x-accent` (Restraint rule 4).
 
 ### 4.2 Toolbar — ghost controls and the local list filter (item 2)
 

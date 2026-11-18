@@ -1,6 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { Children, useState, type ReactNode } from "react";
 import { Icon, type IconName } from "./icon.tsx";
+import { NavRail } from "./nav-rail.tsx";
 import { Row, StatusDot, cx, type Tone } from "./primitives.tsx";
+
+export { NavRail, NavRailItem } from "./nav-rail.tsx";
 
 /** Collapsible labelled group: Workspace / GitHub / System. */
 export function SidebarSection({ label, children, defaultOpen = true }: { label: string; children: ReactNode; defaultOpen?: boolean }) {
@@ -33,7 +36,7 @@ export function SidebarRow({
   status,
   selected,
   deferred,
-  indent,
+  children,
   expanded,
   onToggle,
   onActivate,
@@ -45,25 +48,40 @@ export function SidebarRow({
   status?: { tone: Tone; label: string };
   selected?: boolean;
   deferred?: boolean;
-  /** Sub-row under the destination it belongs to. */
-  indent?: boolean;
-  /** Nested rows shown below this one; pass with `onToggle` to render the disclosure chevron. */
+  /** Nested rows, rendered on a NavRail below this one (§4.1). */
+  children?: ReactNode;
+  /** Nested rows are shown below this one; pass with `onToggle` to render the disclosure chevron. */
   expanded?: boolean;
   onToggle?: () => void;
   onActivate?: () => void;
   actions?: ReactNode;
 }) {
-  return (
+  const row = (
     <Row
       density="sidebar"
       selected={selected}
       onActivate={onActivate}
       actions={actions}
-      style={indent ? { paddingLeft: "1.25rem" } : undefined}
+      // Deferred is a fact for the surface, not a fainter ink: ink-faint fails 4.5:1 at 13px on the sidebar.
+      data-deferred={deferred || undefined}
+      // ArrowRight expands and ArrowLeft collapses, the same keys as the issue-tree rows (§4.1).
+      onKeyDown={
+        onToggle
+          ? (event) => {
+              if (event.key === "ArrowRight" && !expanded) {
+                event.preventDefault();
+                onToggle();
+              } else if (event.key === "ArrowLeft" && expanded) {
+                event.preventDefault();
+                onToggle();
+              }
+            }
+          : undefined
+      }
       className={cx("h-[30px]", selected ? "bg-pressed text-ink" : "text-ink-muted")}
     >
       <Icon name={icon} size="nav" className={selected ? "text-ink" : "text-ink-faint"} />
-      <span className={cx("truncate font-semibold", deferred && "text-ink-faint")}>{label}</span>
+      <span className="truncate font-semibold">{label}</span>
       {status && <StatusDot tone={status.tone} label={status.label} />}
       {count != null && <span className={cx("text-xs text-ink-faint tabular group-hover/row:hidden group-focus-within/row:hidden", !onToggle && "ml-auto")}>{count}</span>}
       {onToggle && (
@@ -81,5 +99,14 @@ export function SidebarRow({
         </button>
       )}
     </Row>
+  );
+  // Expression children such as `{flag && <Rows/>}` arrive as `[false, false]`, which is truthy:
+  // count rendered children instead, so a section never shows an empty rail group (review finding 1).
+  if (Children.toArray(children).length === 0) return row;
+  return (
+    <>
+      {row}
+      <NavRail label={label}>{children}</NavRail>
+    </>
   );
 }

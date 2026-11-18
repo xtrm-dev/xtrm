@@ -68,19 +68,26 @@ export function IssuesSurface() {
 
   const counts = useMemo(() => Object.fromEntries(VIEWS.map(([v, , pred]) => [v, (issues.data ?? []).filter(pred).length])) as Record<View, number>, [issues.data]);
 
-  const matching = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    return (issues.data ?? []).filter((i) => {
-      if (q && !i.title.toLowerCase().includes(q) && !i.ref.toLowerCase().includes(q) && !i.locator.toLowerCase().includes(q) && !(i.parentLocator ?? "").toLowerCase().includes(q)) return false;
-      if (priorityFilter !== null && i.priority !== priorityFilter) return false;
-      if (typeFilter !== null && i.kind !== typeFilter) return false;
-      if (statusFilter !== null && i.lifecycle !== statusFilter) return false;
-      return true;
-    });
-  }, [issues.data, filter, priorityFilter, typeFilter, statusFilter]);
+  // The toolbar facets are one population; the local query is the only thing the filter narrows, so
+  // its "n of m" reads against the same set the operator can see under the current view.
+  const facets = useMemo(
+    () =>
+      (issues.data ?? []).filter((i) => {
+        if (priorityFilter !== null && i.priority !== priorityFilter) return false;
+        if (typeFilter !== null && i.kind !== typeFilter) return false;
+        if (statusFilter !== null && i.lifecycle !== statusFilter) return false;
+        return true;
+      }),
+    [issues.data, priorityFilter, typeFilter, statusFilter],
+  );
+  const query = filter.trim().toLowerCase();
+  const matchesQuery = (i: IssueSummary) =>
+    !query || [i.title, i.ref, i.locator, i.parentLocator ?? ""].some((v) => v.toLowerCase().includes(query));
+  const matching = useMemo(() => (query ? facets.filter(matchesQuery) : facets), [facets, query]);
+  const population = useMemo(() => facets.filter(VIEWS.find(([v]) => v === view)![2]), [facets, view]);
 
   const rollups = useMemo(() => rollupActivity(issues.data ?? []), [issues.data]);
-  const visible = useMemo(() => matching.filter(VIEWS.find(([v]) => v === view)![2]), [matching, view]);
+  const visible = useMemo(() => (query ? population.filter(matchesQuery) : population), [population, query]);
   const tree = useMemo(() => buildTree(visible, rollups, sort, collapsed), [visible, rollups, sort, collapsed]);
   const toggle = (ref: string) =>
     setCollapsed((c) => {
@@ -179,7 +186,7 @@ export function IssuesSurface() {
             { label: "Key", onSelect: () => setSort({ key: "key", desc: false }) },
           ]}
         />
-        <ListFilter value={filter} onChange={setFilter} placeholder="Filter issues" count={matching.length} total={issues.data?.length} />
+        <ListFilter value={filter} onChange={setFilter} placeholder="Filter issues" count={visible.length} total={population.length} />
         <div role="radiogroup" aria-label="Layout" className="ml-auto flex h-7 items-center rounded-sm p-0.5">
           {(["list", "board"] as const).map((l) => (
             <IconButton key={l} icon={l} label={l === "list" ? "List" : "Board"} role="radio" aria-checked={layout === l} active={layout === l} onClick={() => setLayout(l)} className="size-6" />
