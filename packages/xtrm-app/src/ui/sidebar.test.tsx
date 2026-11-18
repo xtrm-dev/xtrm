@@ -140,7 +140,11 @@ describe("NavRail", () => {
     expect(overview.getAttribute("aria-current")).toBe("true");
 
     const deferred = screen.getByText("Timeline").closest("[role='button']") as HTMLElement;
-    expect(deferred.className).toContain("text-ink-faint");
+    // Inactive children keep ink-muted in both themes (5.75:1 light, 6.05:1 dark on --x-sidebar);
+    // deferred is a data fact, not ink-faint, which is 2.74:1 / 2.93:1 and fails for 13px text.
+    expect(deferred.className).toContain("text-ink-muted");
+    expect(deferred.className).not.toContain("text-ink-faint");
+    expect(deferred.getAttribute("data-deferred")).toBe("true");
     expect(deferred.className).not.toContain("before:bg-accent");
     expect(deferred.getAttribute("aria-current")).toBeNull();
   });

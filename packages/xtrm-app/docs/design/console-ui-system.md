@@ -127,7 +127,10 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
   - Child row: `h-7` (28px), **no icon**, `pl-[18px]` so the label x is 16 + 18 = 34px: the child label aligns with the parent label (the aligned label column). Label 13px, weight 500, `text-ink-muted`; count right-aligned `text-xs text-ink-faint tabular`.
   - Active child: `text-ink font-semibold bg-hover`, plus a 2px marker on the rail: `before:absolute before:-left-px before:inset-y-1.5 before:w-0.5 before:rounded-full before:bg-accent`. The marker replaces the hairline at that row; the hairline is continuous elsewhere.
   - Hover and focus: `bg-hover` on the row only; the rail does not move.
-  - Deferred child: `text-ink-faint` (existing deferred convention), still navigable.
+  - Inactive child: `text-ink-muted` (5.75:1 on the light sidebar, 6.05:1 on the dark one). Deferred children are
+    not a fainter ink: `text-ink-faint` is 2.74:1 and 2.93:1 there, below the 4.5:1 minimum for 13px text, so a
+    deferred child carries `data-deferred` for the surface and stays navigable without relying on colour alone
+    (lead ruling, 2026-11-18, on the UI-2 visual review).
   - Motion: none beyond the existing `grid-rows` collapse (150ms), disabled under `prefers-reduced-motion`.
 - **Props:**
   ```ts

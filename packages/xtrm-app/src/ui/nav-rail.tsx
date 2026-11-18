@@ -33,15 +33,16 @@ export function NavRailItem({
     <Row
       density="sidebar"
       selected={selected}
+      // Deferred is a fact for the surface, not a colour: ink-faint is 2.74:1 on the light sidebar
+      // and 2.93:1 on the dark one, below the 4.5:1 minimum for 13px text (lead ruling, 2026-11-18).
+      data-deferred={deferred || undefined}
       onActivate={onActivate}
       className={cx(
         "h-7 pl-[var(--x-rail-gutter)] text-[13px] font-medium",
         // The marker sits at -left-px, so it covers the rail's own border on this row only.
         selected
           ? "bg-hover font-semibold text-ink before:absolute before:-left-px before:inset-y-1.5 before:w-[var(--x-rail-marker)] before:rounded-full before:bg-accent"
-          : deferred
-            ? "text-ink-faint"
-            : "text-ink-muted",
+          : "text-ink-muted",
       )}
     >
       <span className="truncate">{label}</span>
