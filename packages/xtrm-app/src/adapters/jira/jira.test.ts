@@ -183,10 +183,10 @@ describe("fixture jira adapter", () => {
     await expect(fixtureJira.issue(FIXTURE_JIRA_REPO, "bad")).rejects.toMatchObject({ kind: "bad_request" });
     await expect(fixtureJira.issue(FIXTURE_JIRA_REPO, "OTHER-1")).rejects.toMatchObject({ kind: "forbidden" });
     await expect(fixtureJira.issue(FIXTURE_JIRA_REPO, "MMD-999")).rejects.toMatchObject({ kind: "not_found" });
-    await expect(fixtureJira.issue("xtrm-dev/core", "MMD-551")).rejects.toMatchObject({ kind: "unbound" });
-    await expect(fixtureJira.links("xtrm-dev/core", ["MMD-551"])).rejects.toMatchObject({ kind: "unbound" });
+    await expect(fixtureJira.issue("xtrm-dev/xtrm", "MMD-551")).rejects.toMatchObject({ kind: "unbound" });
+    await expect(fixtureJira.links("xtrm-dev/xtrm", ["MMD-551"])).rejects.toMatchObject({ kind: "unbound" });
 
-    expect(await fixtureJira.binding("xtrm-dev/core")).toMatchObject({ configured: false, reason: "repo_not_bound" });
+    expect(await fixtureJira.binding("xtrm-dev/xtrm")).toMatchObject({ configured: false, reason: "repo_not_bound" });
     expect(await fixtureJira.binding(FIXTURE_JIRA_REPO)).toMatchObject({ configured: true, project: "MMD", credentialPresent: true });
   });
 

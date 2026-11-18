@@ -51,9 +51,9 @@ describe("jira surface", () => {
   });
 
   it("says the repository is not linked instead of listing an empty project", async () => {
-    renderJira("xtrm-dev/core");
+    renderJira("xtrm-dev/xtrm");
     const reason = await screen.findByTestId("jira-unbound-reason");
-    expect(reason.textContent).toContain("xtrm-dev/core has no Jira binding");
+    expect(reason.textContent).toContain("xtrm-dev/xtrm has no Jira binding");
     expect(screen.getByText("This repository is not linked to Jira")).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Jira issues in the bound project" })).toBeNull();
   });
