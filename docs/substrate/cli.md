@@ -224,7 +224,11 @@ Kind doctrine and examples: [`journal.md`](./journal.md).
   activations, sessions, Issues and pull requests; edges are `works_on`,
   `dispatched_by` and `delivers`. Newest 200 bindings by default, 1000 at
   most; `matchedBindings`, `omittedBindings` and `truncated` state what the
-  bound cut. An unrecorded dispatcher stays `null`, never a guess.
+  bound cut. An unrecorded dispatcher stays `null`, never a guess; a
+  dispatcher session without a participant is a `session:` vertex, like the
+  executor's. `delivers` draws live `created_from` links only, once per PR;
+  `--since` bounds bindings, not link time, and the count follows each Issue's
+  current project.
 - `provenance bundle <ref>` — portable evidence set.
 
 Graphs and closure doctrine: [`provenance.md`](./provenance.md).
