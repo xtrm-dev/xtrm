@@ -127,5 +127,8 @@ describe("Project Integration", () => {
     expect(screen.queryByTestId("integration-health")).toBeNull();
     expect(screen.queryByTestId("integration-gaps")).toBeNull();
     expect(healthRead).toBe(0);
+    // The toolbar says the repository is unbound; it must not wait for a gap scan that never runs.
+    await waitFor(() => expect(field("integration-gap-count")).toBe("not integrated"));
+    expect(screen.getByTestId("integration-gap-count").dataset["state"]).toBe("unbound");
   });
 });

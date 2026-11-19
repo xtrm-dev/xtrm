@@ -227,6 +227,7 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
             <IconButton
               icon="close"
               label="Clear filter"
+              iconSize="text"
               onClick={() => {
                 onChange("");
                 input.current?.focus();
@@ -236,7 +237,7 @@ export function ListFilter({ value, onChange, placeholder = "Filter this list", 
           )}
         </>
       ) : (
-        <IconButton icon="filter" label="Filter this list" shortcut="/" onClick={openIt} />
+        <IconButton icon="filter" label="Filter this list" shortcut="/" iconSize="text" onClick={openIt} />
       )}
     </div>
   );

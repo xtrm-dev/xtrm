@@ -222,8 +222,21 @@ export function IntegrationSurface() {
     enabled: bound,
   });
 
+  // The toolbar states what this repository can be asked about. An unbound repository has no gaps to
+  // read, so it says so instead of "reading gaps" forever: the query is disabled, never pending.
   const gapCount = gaps.data ? gaps.data.gaps.length + gaps.data.failed.length : null;
-  const toolbar = <span className="text-xs text-ink-faint" data-testid="integration-gap-count">{gapCount === null ? "reading gaps" : `${gapCount} gap${gapCount === 1 ? "" : "s"}`}</span>;
+  const gapSummary = binding.isPending
+    ? "resolving binding"
+    : !bound
+      ? "not integrated"
+      : gapCount === null
+        ? "reading gaps"
+        : `${gapCount} gap${gapCount === 1 ? "" : "s"}`;
+  const toolbar = (
+    <span className="text-xs text-ink-faint" data-testid="integration-gap-count" data-state={binding.isPending ? "pending" : bound ? "bound" : "unbound"}>
+      {gapSummary}
+    </span>
+  );
 
   const shell = (children: ReactNode) => (
     <ProjectShell title="Integration" binding={binding.data ?? null} health={health.data ?? null} source={statusBoard.source} toolbar={toolbar}>
