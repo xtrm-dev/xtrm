@@ -82,7 +82,7 @@ export const PROJECT_SECTIONS: ProjectSection[] = [
   { id: "workers", label: "Workers", icon: "specialists", repoPath: "/project/workers" },
   { id: "followups", label: "Follow-ups", icon: "issues", repoPath: "/project/followups" },
   { id: "jira", label: "Jira", icon: "link", repoPath: "/project/jira" },
-  { id: "settings", label: "Integration", icon: "settings", repoPath: "/project/settings", deferred: "Binding configuration and drift detail arrive with a later Project surface" },
+  { id: "settings", label: "Integration", icon: "settings", repoPath: "/project/settings" },
 ];
 
 export interface Destination {

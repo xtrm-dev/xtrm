@@ -90,5 +90,12 @@ describe("retired routes redirect", () => {
     expect(await screen.findByRole("region", { name: "Questions" })).toBeTruthy();
     expect(await screen.findByTestId("questions-count")).toBeTruthy();
     expect(screen.queryByText(/Project Questions arrive read-only/)).toBeNull();
+
+    // Integration is a live read-only surface now (XTRM-900), not a typed coming-state.
+    const settings = renderAt("/rep/mercury/market-data/project/settings");
+    expect(settings.router.state.location.pathname).toBe("/rep/mercury/market-data/project/settings");
+    expect(await screen.findByRole("region", { name: "Integration" })).toBeTruthy();
+    expect(await screen.findByTestId("integration-gap-count")).toBeTruthy();
+    expect(screen.queryByText(/Binding configuration and drift detail arrive/)).toBeNull();
   });
 });
