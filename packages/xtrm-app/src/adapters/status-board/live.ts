@@ -311,8 +311,51 @@ function mapDoc<T extends object>(
   return { value, gaps };
 }
 
+const QUESTION_FIELDS = ["ref", "by", "q", "rec", "why", "at", "owner"] as const;
+
+/** One question document in its flat form: identity is the record's path segment (`questions/<qid>`). */
 export function mapQuestion(wire: WireRecord): Mapped<Question> {
-  return mapDoc(wire, () => ({ id: segment(wire.path) }), ["ref", "by", "q", "rec", "why", "at", "owner"]);
+  return mapDoc(wire, () => ({ id: segment(wire.path) }), QUESTION_FIELDS);
+}
+
+/**
+ * One `questions/<owner>` document → its questions. The board files a document per owner
+ * (`pm_question.py`) whose `rows[]` carry the questions; a document written before that shape
+ * still maps as a single flat question. The owner is the document's path segment unless the row
+ * carries its own `owner`, so grouping never depends on a field a row may omit.
+ *
+ * A document with `rows: []` is an owner with no open question: zero questions, no gap.
+ */
+export function mapQuestionDocument(wire: WireRecord): Mapped<Question[]> {
+  const { doc, gap } = normaliseDoc(wire.path, wire.doc);
+  const source = objectOf(doc);
+  const gaps: BoardGap[] = gap ? [gap] : [];
+  const rows = source?.["rows"];
+  if (rows === undefined || rows === null) {
+    const flat = mapQuestion(wire);
+    return { value: [flat.value], gaps: [...gaps, ...flat.gaps] };
+  }
+  if (!Array.isArray(rows)) {
+    gaps.push({ path: wire.path, field: "rows", value: typeof rows === "object" ? JSON.stringify(rows) : String(rows) });
+    return { value: [], gaps };
+  }
+  const owner = segment(wire.path);
+  const value: Question[] = [];
+  rows.forEach((raw, index) => {
+    const row = objectOf(raw);
+    if (!row) {
+      gaps.push({ path: wire.path, field: `rows[${index}]`, value: typeof raw === "object" ? JSON.stringify(raw) : String(raw) });
+      return;
+    }
+    flagUnusable(gaps, wire.path, row, { strings: QUESTION_FIELDS });
+    const question: Question = { id: text(row["id"]) ?? `${owner}#${index}`, owner: text(row["owner"]) ?? owner };
+    for (const field of QUESTION_FIELDS) {
+      const found = text(row[field]);
+      if (found !== undefined) question[field] = found;
+    }
+    value.push(question);
+  });
+  return { value, gaps };
 }
 
 export function mapAnswer(wire: WireRecord): Mapped<Answer> {
@@ -346,6 +389,22 @@ export function assemblePage<T>(wire: WireListBody, map: (record: WireRecord) =>
     }
     const mapped = map(raw);
     records.push(recordOf(raw, mapped.value, mapped.gaps));
+    gaps.push(...mapped.gaps);
+  }
+  return { records, truncated: wire.truncated === true, gaps, cachedAt: text(wire.cachedAt) ?? null };
+}
+
+/** Assemble one bridge page of `questions/<owner>` documents into a flat question list. */
+export function assembleQuestionPage(wire: WireListBody): BoardPage<Question> {
+  const records: BoardRecord<Question>[] = [];
+  const gaps: BoardGap[] = [];
+  for (const raw of Array.isArray(wire.records) ? wire.records : []) {
+    if (!raw || typeof raw.path !== "string") {
+      gaps.push({ path: "<unknown>", field: "record", value: "record without a path" });
+      continue;
+    }
+    const mapped = mapQuestionDocument(raw);
+    for (const question of mapped.value) records.push(recordOf(raw, question, mapped.gaps));
     gaps.push(...mapped.gaps);
   }
   return { records, truncated: wire.truncated === true, gaps, cachedAt: text(wire.cachedAt) ?? null };
@@ -553,7 +612,12 @@ export function createStatusBoardLiveAdapter(opts: LiveStatusBoardOptions = {}):
       return assembleSchedulePage(body as unknown as WireListBody);
     },
 
-    listQuestions: (repository, opts) => list(repository, "questions", opts?.limit, mapQuestion),
+    async listQuestions(repository, opts) {
+      const { status, body } = await get("/list", { repo: repository, prefix: "questions", limit: clampLimit(opts?.limit) });
+      if (status === 404 && body["configured"] === false) return emptyPage<Question>();
+      if (status !== 200) throw fail(status, body);
+      return assembleQuestionPage(body as unknown as WireListBody);
+    },
     listAnswers: (repository, opts) => list(repository, "answers", opts?.limit, mapAnswer),
     listFollowUps: (repository, opts) => list(repository, "followups", opts?.limit, mapFollowUp),
     listStatus: (repository, opts) => list(repository, "status", opts?.limit, mapStatusRow),

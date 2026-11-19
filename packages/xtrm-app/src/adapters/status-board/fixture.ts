@@ -1,4 +1,4 @@
-import { assemblePage, assembleSchedulePage, mapAnswer, mapBoardNext, mapFollowUp, mapProposal, mapQuestion, mapStatusRow, mapWorker, normaliseDoc, recordOf, type WireListBody, type WireRecord } from "./live.ts";
+import { assemblePage, assembleQuestionPage, assembleSchedulePage, mapAnswer, mapBoardNext, mapFollowUp, mapProposal, mapStatusRow, mapWorker, normaliseDoc, recordOf, type WireListBody, type WireRecord } from "./live.ts";
 import type { BoardGap, BoardNext, BoardRecord, ProjectBinding, ProjectHealth, StatusBoardAdapter, UnboundReason } from "./types.ts";
 
 // A small, realistic slice of the board for one repository (ADR-002 §3 shapes). Content is
@@ -107,13 +107,49 @@ function documents(now: () => number): WireRecord[] {
     }),
   ];
 
+  // The board files one document per owner; each document's `rows[]` carries the questions
+  // (pm_question.py). The long texts and the MMD-style owner names reproduce the operator's board.
   const questions = [
-    record("questions/console-lead", { ref: "Q-104", by: "operator", q: "Which surface ships first?", rec: "Overview", why: "it unblocks the rest", at: added, owner: "console-lead" }),
-    record("questions/sre-ops", { ref: "Q-105", by: "operator", q: "Is the board sync healthy?", at: added, owner: "sre-ops" }),
+    record("questions/MMD-4417-engine-lead", {
+      from: "MMD-4417-engine-lead",
+      rows: [
+        {
+          id: "q-104-surface-order",
+          ref: "XTRM-817",
+          by: "operator",
+          q: "Should the Project Overview ship before the Jira read path, or can both land in one tranche without holding the attention list for a week?",
+          rec: "Overview first; Jira in its own issue",
+          why: "the attention list is the operator's daily read, and Jira carries the longest dependency chain in the surface",
+          at: iso(now, -6 * 60 * MINUTE),
+        },
+        {
+          id: "q-104-board-pressure",
+          ref: "XTRM-820",
+          by: "operator",
+          q: "Does the console show board pressure per repository, or one fleet-wide number?",
+          rec: "Per repository",
+          why: "each repository binds its own board, so one fleet-wide number would mix two boards",
+          at: iso(now, -2 * 60 * MINUTE),
+        },
+      ],
+      updatedAt: added,
+      updatedBy: "pm-question",
+    }),
+    record("questions/sre-ops", {
+      from: "sre-ops",
+      rows: [{ id: "q-105-sync-health", ref: "XTRM-811", by: "operator", q: "Is the board sync healthy?", at: iso(now, -45 * MINUTE) }],
+      updatedAt: added,
+      updatedBy: "pm-question",
+    }),
+    // An owner with no open question: the document exists, its `rows` are empty.
+    record("questions/quant-lead", { from: "quant-lead", rows: [], updatedAt: iso(now, -DAY), updatedBy: "pm-question" }),
   ];
+  // Answers are keyed by the question's own id (`answers/<qid>`); the third answers a question the
+  // board no longer carries, which is what the live board looks like after a close.
   const answers = [
-    record("answers/Q-104", { qid: "Q-104", answer: "Overview", comment: "XTRM-817", at: iso(now, -30 * MINUTE), by: "console-lead" }),
-    record("answers/Q-103", { qid: "Q-103", answer: "yes", at: iso(now, -2 * DAY), by: "manager" }),
+    record("answers/q-104-surface-order", { qid: "q-104-surface-order", answer: "Overview first", comment: "XTRM-817", at: iso(now, -30 * MINUTE), by: "console-lead" }),
+    record("answers/q-105-sync-health", { qid: "q-105-sync-health", answer: "Healthy; drift per repository", at: iso(now, -20 * MINUTE), by: "sre-ops" }),
+    record("answers/q-999-retired", { qid: "q-999-retired", answer: "yes", at: iso(now, -2 * DAY), by: "manager" }),
   ];
   const followups = [
     record("followups/XTRM-820", { ref: "XTRM-820", title: "Jira chips on issue pages", plain: "show the linked Jira issue", status: "open", priority: "P2", area: "console", owner: "quant-reviewer", when: "after XTRM-815", refs: ["XTRM-815", "XTRM-317"] }),
@@ -241,7 +277,10 @@ export function createStatusBoardFixtureAdapter(opts: FixtureStatusBoardOptions 
       if (!boundFor(repository)) return Promise.resolve(assembleSchedulePage(page([])));
       return Promise.resolve(assembleSchedulePage(page(byPrefix(docs(), "schedule"), iso(now, -4 * MINUTE))));
     },
-    listQuestions: (repository) => list(repository, "questions", mapQuestion),
+    listQuestions: (repository) => {
+      if (!boundFor(repository)) return Promise.resolve(assembleQuestionPage(page([])));
+      return Promise.resolve(assembleQuestionPage(page(byPrefix(docs(), "questions"), iso(now, -4 * MINUTE))));
+    },
     listAnswers: (repository) => list(repository, "answers", mapAnswer),
     listFollowUps: (repository) => list(repository, "followups", mapFollowUp),
     listStatus: (repository) => list(repository, "status", mapStatusRow),

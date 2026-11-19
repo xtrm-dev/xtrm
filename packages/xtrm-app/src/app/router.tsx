@@ -18,6 +18,7 @@ import { OverviewSurface } from "../project/overview/OverviewSurface.tsx";
 import { JiraSurface } from "../project/jira/JiraSurface.tsx";
 import { TimelineSurface, validateTimelineSearch } from "../project/timeline/TimelineSurface.tsx";
 import { FollowUpsSurface } from "../project/followups/FollowUpsSurface.tsx";
+import { QuestionsSurface } from "../project/questions/QuestionsSurface.tsx";
 import { WorkersSurface, validateWorkersSearch } from "../project/workers/WorkersSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
 import { SettingsSurface } from "../settings/SettingsSurface.tsx";
@@ -27,7 +28,7 @@ import { validateCompareSearch } from "./research-compare-search.ts";
 // URL contract: docs/console-v2-shell-architecture.md §9.1.
 
 /** Project sections with a live surface; every other section stays an explicit coming-state. */
-const PROJECT_SURFACES: Partial<Record<string, ComponentType>> = { overview: OverviewSurface, timeline: TimelineSurface, jira: JiraSurface, workers: WorkersSurface, followups: FollowUpsSurface };
+const PROJECT_SURFACES: Partial<Record<string, ComponentType>> = { overview: OverviewSurface, timeline: TimelineSurface, jira: JiraSurface, workers: WorkersSurface, followups: FollowUpsSurface, questions: QuestionsSurface };
 
 /** A Project section's own search keys; the drawer's keys stay valid alongside them. */
 const PROJECT_SEARCH: Partial<Record<string, (search: Record<string, unknown>) => Record<string, unknown>>> = {

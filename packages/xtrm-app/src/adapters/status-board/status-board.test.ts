@@ -109,6 +109,43 @@ describe("statusBoard live adapter: page assembly", () => {
     expect(gaps.map((g) => g.value)).toEqual(["mystery", "<absent>"]);
   });
 
+  it("fans a questions/<owner> document's rows out to one question per row, and keeps a flat document whole", async () => {
+    const { fetchImpl } = responder(() =>
+      okPage([
+        wire("questions/MMD-4417-engine-lead", {
+          from: "MMD-4417-engine-lead",
+          rows: [
+            { id: "q-1", ref: "MMD-2331", by: "operator", q: "keep the tick folder?", rec: "yes", why: "archival", at: "2026-11-17T20:00:00.000Z" },
+            { id: "q-2", ref: "MMD-2332", q: "restart the engine?" },
+          ],
+        }),
+        // An owner document with no open question contributes nothing and no gap.
+        wire("questions/quant-lead", { from: "quant-lead", rows: [] }),
+        // A document written before the rows shape still maps as one question keyed by its path.
+        wire("questions/legacy-owner", { ref: "MMD-2300", q: "flat question", owner: "legacy-owner" }),
+      ]),
+    );
+    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listQuestions(REPO);
+
+    expect(page.records).toHaveLength(3);
+    expect(page.records.map((r) => r.doc.id)).toEqual(["q-1", "q-2", "legacy-owner"]);
+    // The owner document is the grouping key even when a row omits an owner of its own.
+    expect(page.records.map((r) => r.doc.owner)).toEqual(["MMD-4417-engine-lead", "MMD-4417-engine-lead", "legacy-owner"]);
+    expect(page.records[0]!.doc).toEqual({ id: "q-1", owner: "MMD-4417-engine-lead", ref: "MMD-2331", by: "operator", q: "keep the tick folder?", rec: "yes", why: "archival", at: "2026-11-17T20:00:00.000Z" });
+    expect(page.gaps).toEqual([]);
+  });
+
+  it("reports a questions document whose rows are not an array, and a row that is not an object", async () => {
+    const { fetchImpl } = responder(() =>
+      okPage([wire("questions/broken", { rows: { id: "q-1" } }), wire("questions/partial", { rows: [{ id: "q-2" }, "not a row"] })]),
+    );
+    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listQuestions(REPO);
+
+    expect(page.records.map((r) => r.doc.id)).toEqual(["q-2"]);
+    expect(gapsFor(page.gaps, "rows").map((g) => g.value)).toEqual([JSON.stringify({ id: "q-1" })]);
+    expect(gapsFor(page.gaps, "rows[1]").map((g) => g.value)).toEqual(["not a row"]);
+  });
+
   it("reports an unparseable document as a gap instead of an empty record", () => {
     const { doc, gap } = normaliseDoc("workers/broken", "{not json");
     expect(doc).toEqual({});
@@ -273,10 +310,15 @@ describe("statusBoard fixture adapter", () => {
     expect(schedule.gaps).toEqual([]);
     expect(new Set(schedule.records.map((r) => r.doc.kind))).toEqual(new Set(["window", "report", "handover", "pr", "incident"]));
 
-    expect((await fixtureStatusBoard.listQuestions(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
+    const questions = await fixtureStatusBoard.listQuestions(FIXTURE_BOARD_REPO);
+    // One record per question row, not per owner document: 3 rows across 2 owners, the empty owner none.
+    expect(questions.records).toHaveLength(3);
+    expect(questions.records.map((r) => r.doc.owner)).toEqual(["MMD-4417-engine-lead", "MMD-4417-engine-lead", "sre-ops"]);
+    expect(questions.records.every((r) => r.doc.id && r.doc.ref && r.doc.q)).toBe(true);
+    expect(questions.gaps).toEqual([]);
     expect((await fixtureStatusBoard.listFollowUps(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
     expect((await fixtureStatusBoard.listFollowUps(FIXTURE_BOARD_REPO)).records[0]!.doc.refs).toEqual(["XTRM-815", "XTRM-317"]);
-    expect((await fixtureStatusBoard.listAnswers(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
+    expect((await fixtureStatusBoard.listAnswers(FIXTURE_BOARD_REPO)).records).toHaveLength(3);
     expect((await fixtureStatusBoard.listStatus(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
     expect((await fixtureStatusBoard.listProposals(FIXTURE_BOARD_REPO)).records).toHaveLength(1);
     expect((await fixtureStatusBoard.boardNext(FIXTURE_BOARD_REPO))?.doc).toMatchObject({ ref: "XTRM-817" });

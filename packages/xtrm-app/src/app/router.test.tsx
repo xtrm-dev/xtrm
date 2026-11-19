@@ -84,9 +84,11 @@ describe("retired routes redirect", () => {
     expect(await screen.findByTestId("workers-count")).toBeTruthy();
     expect(screen.queryByText(/Program/)).toBeNull();
 
-    // Questions stays a typed coming-state until its own issue lands.
+    // Questions is a live read-only surface now (XTRM-899), not a typed coming-state.
     const next = renderAt("/rep/mercury/market-data/project/questions");
     expect(next.router.state.location.pathname).toBe("/rep/mercury/market-data/project/questions");
-    expect((await screen.findByRole("region", { name: "Questions" })).textContent).toContain("Project Questions arrive read-only with XTRM-817–XTRM-820");
+    expect(await screen.findByRole("region", { name: "Questions" })).toBeTruthy();
+    expect(await screen.findByTestId("questions-count")).toBeTruthy();
+    expect(screen.queryByText(/Project Questions arrive read-only/)).toBeNull();
   });
 });
