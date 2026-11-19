@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import { useAdapters } from "../../adapters/index.tsx";
 import { projectForRepo, useProjects } from "../../app/queries.ts";
+import { useIssueIndex } from "../../refs/references.tsx";
 import { useShell } from "../../shell/context.tsx";
 import { ErrorState, LoadingState, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx } from "../../ui/primitives.tsx";
 import { IntegrationState } from "../IntegrationState.tsx";
@@ -58,6 +59,10 @@ export function WorkersSurface() {
   const rows = (workers.data?.records ?? []).map((r) => r.doc);
   const model = graph.data ? buildWorkersTree(graph.data, rows) : null;
   const flat = buildFlatGroups(rows, { includeArchived });
+  // A vertex the graph names only by session UUID borrows its issue's title. The reference
+  // chips already read this index on this surface, so the titles cost no extra read (XTRM-912).
+  const issues = useIssueIndex();
+  const titleOf = useCallback((ref: string) => issues.get(ref)?.title ?? null, [issues]);
 
   const setSearch = (next: { view?: string; archived?: boolean }) =>
     navigate({ to: `${base}/project/workers`, search: { ...next } as never, replace: true });
@@ -100,7 +105,7 @@ export function WorkersSurface() {
       {graph.data && (
         <span className="text-xs text-ink-faint" data-testid="graph-count">
           graph {graph.data.nodes.length} nodes, {graph.data.edges.length} edges
-          {graph.data.truncated ? ` (${graph.data.omittedBindings} bindings omitted)` : ""}
+          {graph.data.truncated ? `; the graph read is capped, so ${graph.data.omittedBindings} bindings are not shown` : ""}
         </span>
       )}
     </>
@@ -149,7 +154,7 @@ export function WorkersSurface() {
         </p>
       )}
       {model ? (
-        <WorkersTree model={model} now={now} />
+        <WorkersTree model={model} now={now} titleOf={titleOf} />
       ) : (
         <div data-testid="workers-board-only">
           {flat.groups.map((group) =>
