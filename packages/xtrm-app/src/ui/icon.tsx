@@ -127,6 +127,25 @@ export type IconName = keyof typeof registry;
 const SIZES = { micro: 12, text: 13, xs: 14, sm: 16, nav: 16, md: 18, lg: 20 } as const;
 
 /**
+ * The same ladder in rem, applied as CSS. The `size` attribute is a fixed px fallback; the class is
+ * what the browser uses, so a glyph keeps its relation to the text beside it when the root font size
+ * is not 16px (XTRM-897: a 13px glyph beside 9.75px body text). Class values equal `SIZES` at a
+ * 16px root and the unit test pins that equivalence.
+ */
+const SIZE_CLASS = {
+  micro: "size-[0.75rem]",
+  text: "size-[0.8125rem]",
+  xs: "size-[0.875rem]",
+  sm: "size-4",
+  nav: "size-4",
+  md: "size-[1.125rem]",
+  lg: "size-5",
+} as const;
+
+/** The rem size each icon size resolves to; the unit test compares it with `SIZES`. */
+export const ICON_REM = { micro: 0.75, text: 0.8125, xs: 0.875, sm: 1, nav: 1, md: 1.125, lg: 1.25 } as const;
+
+/**
  * Lucide ships 2; the sidebar and the tables read better at 2.25
  * (docs/mocks/sidebar-weight-connection-activity.html A1). At 12–13px the smaller weight closes the
  * counters of `git-pull-request` and its siblings (docs/design/console-ui-system.md §3.2).
@@ -145,5 +164,12 @@ export function Icon({
   className?: string;
 }) {
   const Comp = registry[name];
-  return <Comp size={SIZES[size]} strokeWidth={strokeWidth ?? defaultStroke(size)} className={className} aria-hidden />;
+  return (
+    <Comp
+      size={SIZES[size]}
+      strokeWidth={strokeWidth ?? defaultStroke(size)}
+      className={className ? `${SIZE_CLASS[size]} ${className}` : SIZE_CLASS[size]}
+      aria-hidden
+    />
+  );
 }

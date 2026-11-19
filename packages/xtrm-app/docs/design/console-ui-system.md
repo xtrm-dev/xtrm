@@ -100,11 +100,13 @@ No new colour token and no new surface level. Four additions, all derived from e
 
 | addition | file | definition | why |
 |---|---|---|---|
-| Icon size `text` | `src/ui/icon.tsx` `SIZES` | `text: 13` (equals `--text-sm`) | Row and toolbar icons are 14px today (`xs`) beside 13px titles and 11.5px meta. Operator: "icons are larger than text". |
-| Icon size `micro` | `src/ui/icon.tsx` `SIZES` | `micro: 12` (equals the `text-xs` cap height plus 0.5px) | Icons inside `Badge xs`, `PrKey` in dense cells, `LinkedRefs`. |
+| Icon size `text` | `src/ui/icon.tsx` `SIZES` | `text: 0.8125rem`, the length of `--text-sm` (13px at the default 16px root) | Row and toolbar icons are 14px today (`xs`) beside 13px titles and 11.5px meta. Operator: "icons are larger than text". |
+| Icon size `micro` | `src/ui/icon.tsx` `SIZES` | `micro: 0.75rem` (12px at the default root; equals the `text-xs` cap height plus 0.5px) | Icons inside `Badge xs`, `PrKey` in dense cells, `LinkedRefs`. |
 | Stroke rule | `src/ui/icon.tsx` | `strokeWidth` defaults to `2` for sizes `micro` and `text`; `2.25` stays for `nav`, `sm`, `md`, `lg` | 2.25 at 13px closes the counters of `git-pull-request`. |
 | Badge tone `success` | `src/ui/badge.tsx` `TONE` | `success: "bg-success/12 text-success-ink"` (same pattern as `danger: "bg-danger/12 text-danger"`, with the ink token of §3.1 so the tint stays readable: 5.85:1 on white, 5.34:1 on the canvas) | GitHub-style Open chip. The only way to express it today is `active`, which is accent-soft and reads as "reference". |
 | PR state map | `src/ui/pr-key.tsx` (new) | `PR_STATES` (§4.4) | One table for the key colour, the chip tone, the glyph, the word and the tooltip, so list, inspector, chips and prose cannot drift. |
+
+**Unit rule (XTRM-897).** The type scale is rem: `body` takes `--text-sm` = `0.8125rem`. Every glyph size is therefore applied as a rem class (`size-[0.8125rem]`, `size-4`), with the px `size` attribute kept only as a no-CSS fallback, and every new component names the token (`text-sm`) instead of copying its current px value. A px literal beside rem text renders 1.33x too large at a 12px root: the operator's browser uses exactly that, and the sidebar sub-section labels came out larger than their parent rows (`e2e/ui-scale.spec.ts`).
 
 `--x-success` in light is `#1b7f46`: 5.04:1 on `#ffffff` and 4.58:1 on `#f4f4f5`. R1 darkened it from `#1f8a4c`, which read 4.38:1 and 3.98:1, below the 4.5:1 text minimum at 11.5–13px; it is the `PrKey` open colour. Dark is unchanged (`#5ccb8a`, 9.0:1 on `#151515`).
 
@@ -123,8 +125,8 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
 - **File:** `src/ui/sidebar.tsx` (Existing; adds two exports, removes `indent`).
 - **Anatomy** (measured from `SidebarRow` today: `px-2`, icon 16, `gap-2.5`, label x = 8 + 16 + 10 = 34px):
   - Parent row: unchanged (`h-[30px]`, 16px `nav` icon, label 13px semibold, count or trailing chevron).
-  - Rail: a `div` with `ml-[15px] border-l border-border-muted`. The rail x equals the centre of the parent icon (8px padding + 8px half icon = 16px; the 1px border sits at 15–16px).
-  - Child row: `h-7` (28px), **no icon**, `pl-[18px]` so the label x is 16 + 18 = 34px: the child label aligns with the parent label (the aligned label column). Label 13px, weight 500, `text-ink-muted`; count right-aligned `text-xs text-ink-faint tabular`.
+  - Rail: a `div` with `ml-[var(--x-rail-indent)] border-l border-border-muted`. The rail x equals the centre of the parent icon (8px padding + 8px half icon = 16px; the 1px border sits at 15–16px at the default root).
+  - Child row: `h-7` (`1.75rem`), **no icon**, `pl-[var(--x-rail-gutter)]` so the label x equals the parent label's x: the aligned label column. Label `text-sm` (the parent row's own token, `0.8125rem`), weight 500, `text-ink-muted`; count right-aligned `text-xs text-ink-faint tabular`.
   - Active child: `text-ink font-semibold bg-hover`, plus a 2px marker on the rail: `before:absolute before:-left-px before:inset-y-1.5 before:w-0.5 before:rounded-full before:bg-accent`. The marker replaces the hairline at that row; the hairline is continuous elsewhere.
   - Hover and focus: `bg-hover` on the row only; the rail does not move.
   - Inactive child: `text-ink-muted` (5.75:1 on the light sidebar, 6.05:1 on the dark one).
@@ -149,7 +151,7 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
     <NavRailItem label="Overview" selected={pathname === href} onActivate={() => go(href)} />
   </SidebarRow>
   ```
-  Geometry is tokenised in `src/styles.css`: `--x-rail-indent: 15px` (rail x), `--x-rail-gutter: 18px` (child text inset, so the label x is 34px) and `--x-rail-marker: 2px` (active marker width). No colour token is added: the hairline is `--x-border-muted` and the marker `--x-accent` (Restraint rule 4).
+  Geometry is tokenised in `src/styles.css`: `--x-rail-indent: calc(1rem - 1px)` (rail x; 15px at the default root), `--x-rail-gutter: 1.125rem` (child text inset; 18px at the default root) and `--x-rail-marker: 2px` (active marker width). The two lengths are rem because the row padding, the nav icon and `h-7` are rem: a px inset would drop the label column at any other root. No colour token is added: the hairline is `--x-border-muted` and the marker `--x-accent` (Restraint rule 4).
 
 ### 4.2 Toolbar — ghost controls and the local list filter (item 2)
 
