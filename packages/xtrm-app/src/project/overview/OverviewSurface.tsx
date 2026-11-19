@@ -95,9 +95,15 @@ export function OverviewSurface() {
 
 const REASON_ORDER: AttentionReason[] = ["Question", "Blocked", "Claim expiring", "Follow-up due", "Proposal", "Drift"];
 
-/** The board's one current pointer, never a synthesized agenda. */
+const ISSUE_KEY = /^[A-Za-z][A-Za-z0-9]*-\d+(?:\.\d+)*$/;
+
+/**
+ * The board's one current pointer, never a synthesized agenda. The live `board/next` document
+ * carries `rows[]`; a flat document written before that shape still renders as one row.
+ */
 function NowNext({ record, base }: { record: BoardRecord<BoardNext> | null; base: string }) {
   const navigate = useNavigate();
+  const rows = record?.doc.rows ?? [];
   const ref = record?.doc.ref ?? null;
   const href = ref ? `${base}/work/issues/${ref}` : null;
   return (
@@ -106,7 +112,24 @@ function NowNext({ record, base }: { record: BoardRecord<BoardNext> | null; base
         <h2 className="text-[11px] font-medium tracking-wide text-ink-faint uppercase">Now / next</h2>
         <span className="ml-auto text-[11px] text-ink-faint">from board/next</span>
       </header>
-      {record ? (
+      {record && rows.length > 0 ? (
+        <ul className="flex flex-col" data-testid="now-next-rows">
+          {rows.map((row) => {
+            const rowHref = ISSUE_KEY.test(row.key) ? `${base}/work/issues/${row.key}` : null;
+            return (
+              <li key={row.key}>
+                <Row density="list" title={row.why ?? row.title ?? row.key} onActivate={rowHref ? () => void navigate({ to: rowHref } as never) : undefined} data-testid="now-next-row" data-key={row.key}>
+                  <span className="min-w-0 flex-1 truncate text-ink">{row.title ?? row.key}</span>
+                  {row.status && <span className="shrink-0 text-xs text-ink-faint">{row.status}</span>}
+                  <span className="shrink-0 font-mono text-xs text-ink-faint">{row.key}</span>
+                  <span className="w-24 shrink-0 text-right text-xs text-ink-faint tabular">{row.start ? ago(row.start) : row.end ? ago(row.end) : ""}</span>
+                  {rowHref && <RowHint section="Issue" className="w-20" />}
+                </Row>
+              </li>
+            );
+          })}
+        </ul>
+      ) : record ? (
         <ul className="flex flex-col">
           <li>
             <Row density="list" title={record.doc.title ?? record.path} onActivate={href ? () => void navigate({ to: href } as never) : undefined}>

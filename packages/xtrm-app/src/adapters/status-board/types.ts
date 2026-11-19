@@ -137,6 +137,11 @@ export interface ScheduleEvent {
   note?: string;
   noteSrc?: string;
   url?: string;
+  /**
+   * The event's own title when the board wrote `title` instead of `label` (both occur in the store);
+   * a renderer prefers `label`, then `title`. Never copied across: the two fields stay distinct.
+   */
+  title?: string;
   /** A known kind, or an unknown one preserved as carried (see `BoardGap`); absent when unreadable. */
   kind?: string;
   createdBy?: string;
@@ -173,13 +178,31 @@ export interface FollowUp {
   area?: string;
   owner?: string;
   when?: string;
+  /** The operator's free-form note on the commitment, when the record carries one. */
+  note?: string;
+  /** The ISO instant the record was written at, distinct from the free-form `when`. */
+  at?: string;
   refs?: string[];
 }
 
 /** `status/<session>` — the board's per-session status row (read by Overview only, §D2). */
+/** One link a `status/<session>` row carries; the board writes `{label, url}`. */
+export interface StatusLink {
+  label: string;
+  url?: string;
+}
+
 export interface StatusRow {
   session: string;
   at?: string;
+  /** The session that wrote the row (`status/<session>` doc field `from`). */
+  from?: string;
+  /** What is true now, as the board wrote it. */
+  now?: string;
+  /** What comes next, as the board wrote it. */
+  next?: string;
+  /** Links the row carries; the board writes `[{label, url}]`, a bare string is kept as a label. */
+  links?: StatusLink[];
   state?: string;
   status?: string;
   note?: string;
@@ -187,6 +210,13 @@ export interface StatusRow {
 }
 
 /** `proposals/<date>` — the board's proposals (read by Overview only, §D2). */
+export interface ProposalSlip {
+  ref?: string;
+  /** Where the slipped item moved to, as the board wrote it (a date or a sentence). */
+  to?: string;
+  why?: string;
+}
+
 export interface Proposal {
   id: string;
   at?: string;
@@ -195,15 +225,37 @@ export interface Proposal {
   owner?: string;
   refs?: string[];
   note?: string;
+  /** Why the proposal exists, as the board wrote it. */
+  why?: string;
+  /** The hard deadline the board wrote, when it wrote one. */
+  deadline?: string;
+  /** The open questions the proposal still waits on. */
+  open?: string[];
+  /** The items the proposal re-slotted, each with its own reason. */
+  slips?: ProposalSlip[];
 }
 
-/** `board/next` — the board's own "what is next" pointer (Overview only, §D2). */
+/** One row of `board/next` as the board writes it: a key, a title, optional window and reason. */
+export interface BoardNextRow {
+  key: string;
+  title?: string;
+  why?: string;
+  start?: string;
+  end?: string;
+  status?: string;
+}
+
+/**
+ * `board/next` — the board's own "what is next" pointer (Overview only, §D2). The live document
+ * carries `rows[]`; a flat document written before that shape still maps into the flat fields.
+ */
 export interface BoardNext {
   title?: string;
   at?: string;
   owner?: string;
   ref?: string;
   note?: string;
+  rows?: BoardNextRow[];
 }
 
 export type StatusBoardErrorKind = "bad_request" | "unbound" | "credential" | "upstream" | "malformed";

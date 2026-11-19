@@ -35,7 +35,7 @@ describe("Project Timeline", () => {
     const today = utcDay(0);
     await screen.findByTestId(`day-group-${today}`);
     const events = await eventsOf(board, today);
-    expect(events.map((event) => event.id)).toEqual(["evt-3", "evt-4"]);
+    expect(events.map((event) => event.id)).toEqual(["e_0830_XTRM-816", "e_0945_XTRM-816"]);
 
     const rows = screen.getAllByTestId(/^event-row-/);
     expect(rows.map((row) => row.getAttribute("data-event-id"))).toEqual(events.map((event) => event.id));
@@ -63,6 +63,8 @@ describe("Project Timeline", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Previous day" }));
     await screen.findByTestId(`day-group-${yesterday}`);
+    // An event whose document wrote `title` instead of `label` still shows its own name.
+    expect(screen.getByText("Daily close-out")).toBeTruthy();
     await waitFor(() => expect(router.state.location.search).toMatchObject({ day: yesterday }));
     expect(screen.queryByTestId("now-marker")).toBeNull();
     expect(screen.getAllByTestId(/^event-row-/)).toHaveLength((await eventsOf(board, yesterday)).length);
@@ -72,8 +74,8 @@ describe("Project Timeline", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next day" }));
     await screen.findByTestId(`day-group-${tomorrow}`);
     const tomorrowEvents = await eventsOf(board, tomorrow);
-    expect(tomorrowEvents.map((event) => event.id)).toEqual(["evt-5"]);
-    expect(screen.getAllByTestId(/^event-row-/).map((row) => row.getAttribute("data-event-id"))).toEqual(["evt-5"]);
+    expect(tomorrowEvents.map((event) => event.id)).toEqual(["e_0800_XTRM-811"]);
+    expect(screen.getAllByTestId(/^event-row-/).map((row) => row.getAttribute("data-event-id"))).toEqual(["e_0800_XTRM-811"]);
     expect(screen.queryByTestId("now-marker")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Today" }));
@@ -94,10 +96,10 @@ describe("Project Timeline", () => {
 
   it("exposes the record's provenance in the per-event detail row", async () => {
     renderTimeline();
-    const row = await screen.findByTestId("event-row-evt-4");
+    const row = await screen.findByTestId("event-row-e_0945_XTRM-816");
     fireEvent.click(row);
 
-    const detail = await screen.findByTestId("event-detail-evt-4");
+    const detail = await screen.findByTestId("event-detail-e_0945_XTRM-816");
     expect(row.getAttribute("aria-expanded")).toBe("true");
     expect(detail.textContent).toContain("XTRM-816");
     expect(detail.textContent).toContain("Project is a repository section");
@@ -105,7 +107,7 @@ describe("Project Timeline", () => {
     expect(detail.textContent).toContain("console-lead");
 
     fireEvent.click(row);
-    await waitFor(() => expect(screen.queryByTestId("event-detail-evt-4")).toBeNull());
+    await waitFor(() => expect(screen.queryByTestId("event-detail-e_0945_XTRM-816")).toBeNull());
   });
 
   it("keeps an unknown kind as the word the board carried, with its note source", async () => {

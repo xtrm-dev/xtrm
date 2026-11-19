@@ -4,16 +4,19 @@ import {
   type Answer,
   type BoardGap,
   type BoardNext,
+  type BoardNextRow,
   type BoardPage,
   type BoardRecord,
   type FollowUp,
   type ProjectBinding,
   type ProjectHealth,
   type Proposal,
+  type ProposalSlip,
   type Question,
   type ResolvedBy,
   type ScheduleEvent,
   type StatusBoardAdapter,
+  type StatusLink,
   type StatusRow,
   type UnitProbeReason,
   type UnboundReason,
@@ -255,8 +258,27 @@ export function mapScheduleDay(wire: WireRecord): Mapped<ScheduleEvent[]> {
   // An unparseable document yields no events: a fabricated empty event would read as a real row.
   if (gap) return { value: [], gaps: [gap] };
   const source = objectOf(doc);
-  const rawEvents: unknown[] = Array.isArray(doc) ? doc : Array.isArray(source?.["events"]) ? (source["events"] as unknown[]) : source ? [source] : [];
+  // The store writes `events` as an id-keyed MAP (`e_2200_ISSUE-711` -> event). An array is the
+  // older shape and a bare document is a single flat event; both still map, so no record is lost
+  // when a board is only partly migrated. A map entry whose value is not an object becomes a gap.
+  const eventsField = source?.["events"];
   const gaps: BoardGap[] = [];
+  let rawEvents: unknown[];
+  if (Array.isArray(doc)) rawEvents = doc;
+  else if (Array.isArray(eventsField)) rawEvents = eventsField;
+  else if (eventsField && typeof eventsField === "object") {
+    const fromMap: Record<string, unknown>[] = [];
+    for (const [key, value] of Object.entries(eventsField as Record<string, unknown>)) {
+      const event = objectOf(value);
+      if (!event) {
+        gaps.push({ path: wire.path, field: `events.${key}`, value: typeof value === "object" ? JSON.stringify(value) : String(value) });
+        continue;
+      }
+      // The map key is the event id; an explicit `id` in the document wins.
+      fromMap.push({ id: key, ...event });
+    }
+    rawEvents = fromMap;
+  } else rawEvents = source ? [source] : [];
   const events: ScheduleEvent[] = [];
   rawEvents.forEach((raw, index) => {
     const event = objectOf(raw);
@@ -271,13 +293,19 @@ export function mapScheduleDay(wire: WireRecord): Mapped<ScheduleEvent[]> {
     } else if (!(SCHEDULE_EVENT_KINDS as readonly string[]).includes(kind)) {
       gaps.push({ path: wire.path, field: "kind", value: kind });
     }
-    flagUnusable(gaps, wire.path, event, { strings: ["id", "at", "end", "ref", "label", "status", "note", "noteSrc", "url", "createdBy"] });
+    // The store writes two of these in snake_case; both spellings are read, camelCase first.
+    const written = (camel: string, snake: string): unknown => event[camel] ?? event[snake];
+    const noteSrc = written("noteSrc", "note_src");
+    const createdBy = written("createdBy", "created_by");
+    flagUnusable(gaps, wire.path, event, { strings: ["id", "at", "end", "ref", "label", "title", "status", "note", "url"] });
     const assembled: ScheduleEvent = { id: text(event["id"]) ?? `${day}#${index}`, day };
     if (kind !== undefined) assembled.kind = kind;
-    for (const field of ["at", "end", "ref", "label", "status", "note", "noteSrc", "url", "createdBy"] as const) {
+    for (const field of ["at", "end", "ref", "label", "title", "status", "note", "url"] as const) {
       const value = text(event[field]);
       if (value) assembled[field] = value;
     }
+    if (text(noteSrc)) assembled.noteSrc = text(noteSrc)!;
+    if (text(createdBy)) assembled.createdBy = text(createdBy)!;
     events.push(assembled);
   });
   return { value: events, gaps };
@@ -363,19 +391,103 @@ export function mapAnswer(wire: WireRecord): Mapped<Answer> {
 }
 
 export function mapFollowUp(wire: WireRecord): Mapped<FollowUp> {
-  return mapDoc(wire, () => ({ ref: segment(wire.path) }), ["title", "plain", "status", "priority", "area", "owner", "when"], ["refs"]);
+  // `note` and `at` are written by the board for commitments that carry more than a due date.
+  return mapDoc(wire, () => ({ ref: segment(wire.path) }), ["title", "plain", "status", "priority", "area", "owner", "when", "note", "at"], ["refs"]);
 }
 
 export function mapStatusRow(wire: WireRecord): Mapped<StatusRow> {
-  return mapDoc(wire, () => ({ session: segment(wire.path) }), ["at", "state", "status", "note", "issue"]);
+  // The live `status/<session>` document is `{at, from, now, next, links}`; the older flat form is
+  // still mapped, so both shapes reach Overview without a translation layer in the component.
+  const mapped = mapDoc(wire, () => ({ session: segment(wire.path) }) as StatusRow, ["at", "from", "now", "next", "state", "status", "note", "issue"]);
+  const { doc } = normaliseDoc(wire.path, wire.doc);
+  const links = objectOf(doc)?.["links"];
+  if (links === undefined || links === null) return mapped;
+  if (!Array.isArray(links)) {
+    mapped.gaps.push({ path: wire.path, field: "links", value: typeof links === "object" ? JSON.stringify(links) : String(links) });
+    return mapped;
+  }
+  const value: StatusLink[] = [];
+  links.forEach((raw, index) => {
+    // A link is a `{label, url}` document; a bare string is the older shape and becomes its label.
+    const link = objectOf(raw);
+    if (!link) {
+      const label = text(raw);
+      if (label) value.push({ label });
+      else mapped.gaps.push({ path: wire.path, field: `links[${index}]`, value: typeof raw === "object" ? JSON.stringify(raw) : String(raw) });
+      return;
+    }
+    flagUnusable(mapped.gaps, wire.path, link, { strings: ["label", "url"] });
+    const label = text(link["label"]);
+    const url = text(link["url"]);
+    if (!label && !url) {
+      mapped.gaps.push({ path: wire.path, field: `links[${index}]`, value: JSON.stringify(link) });
+      return;
+    }
+    const assembled: StatusLink = { label: label ?? url! };
+    if (url) assembled.url = url;
+    value.push(assembled);
+  });
+  mapped.value.links = value;
+  return mapped;
 }
 
 export function mapProposal(wire: WireRecord): Mapped<Proposal> {
-  return mapDoc(wire, () => ({ id: segment(wire.path) }), ["at", "title", "status", "owner", "note"], ["refs"]);
+  // `proposals/<date>` carries `title/why/deadline/open/slips[]`; the older flat form still maps.
+  const mapped = mapDoc(wire, () => ({ id: segment(wire.path) }) as Proposal, ["at", "title", "status", "owner", "note", "why", "deadline"], ["refs", "open"]);
+  const { doc } = normaliseDoc(wire.path, wire.doc);
+  const slips = objectOf(doc)?.["slips"];
+  if (slips === undefined || slips === null) return mapped;
+  if (!Array.isArray(slips)) {
+    mapped.gaps.push({ path: wire.path, field: "slips", value: typeof slips === "object" ? JSON.stringify(slips) : String(slips) });
+    return mapped;
+  }
+  const value: ProposalSlip[] = [];
+  slips.forEach((raw, index) => {
+    const slip = objectOf(raw);
+    if (!slip) {
+      mapped.gaps.push({ path: wire.path, field: `slips[${index}]`, value: typeof raw === "object" ? JSON.stringify(raw) : String(raw) });
+      return;
+    }
+    flagUnusable(mapped.gaps, wire.path, slip, { strings: ["ref", "to", "why"] });
+    const assembled: ProposalSlip = {};
+    for (const field of ["ref", "to", "why"] as const) {
+      const found = text(slip[field]);
+      if (found) assembled[field] = found;
+    }
+    value.push(assembled);
+  });
+  mapped.value.slips = value;
+  return mapped;
 }
 
 export function mapBoardNext(wire: WireRecord): Mapped<BoardNext> {
-  return mapDoc(wire, () => ({}) as BoardNext, ["title", "at", "owner", "ref", "note"]);
+  // The live `board/next` document is `{rows: [{key,title,why,start,end,status}]}`; a flat document
+  // written before that shape still maps into the flat fields. Rows and flat fields can coexist.
+  const mapped = mapDoc(wire, () => ({}) as BoardNext, ["title", "at", "owner", "ref", "note"]);
+  const { doc } = normaliseDoc(wire.path, wire.doc);
+  const rows = objectOf(doc)?.["rows"];
+  if (rows === undefined || rows === null) return mapped;
+  if (!Array.isArray(rows)) {
+    mapped.gaps.push({ path: wire.path, field: "rows", value: typeof rows === "object" ? JSON.stringify(rows) : String(rows) });
+    return mapped;
+  }
+  const value: BoardNextRow[] = [];
+  rows.forEach((raw, index) => {
+    const row = objectOf(raw);
+    if (!row) {
+      mapped.gaps.push({ path: wire.path, field: `rows[${index}]`, value: typeof raw === "object" ? JSON.stringify(raw) : String(raw) });
+      return;
+    }
+    flagUnusable(mapped.gaps, wire.path, row, { strings: ["key", "title", "why", "start", "end", "status"] });
+    const assembled: BoardNextRow = { key: text(row["key"]) ?? `#${index}` };
+    for (const field of ["title", "why", "start", "end", "status"] as const) {
+      const found = text(row[field]);
+      if (found) assembled[field] = found;
+    }
+    value.push(assembled);
+  });
+  mapped.value.rows = value;
+  return mapped;
 }
 
 /** Assemble one bridge page of single-record documents into typed records plus their gaps. */
