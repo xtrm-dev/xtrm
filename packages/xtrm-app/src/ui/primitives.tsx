@@ -41,12 +41,14 @@ type IconButtonProps = Omit<ComponentProps<"button">, "children"> & {
   label: string;
   shortcut?: string;
   size?: "sm" | "md";
+  /** Glyph size override. A toolbar or 20px control passes `text` so the glyph matches its text. */
+  iconSize?: ComponentProps<typeof Icon>["size"];
   active?: boolean;
   tooltipSide?: "top" | "bottom" | "left" | "right";
 };
 
 /** Icon-only button with a required accessible label and tooltip. */
-export function IconButton({ icon, label, shortcut, size = "sm", active, tooltipSide, className, ...props }: IconButtonProps) {
+export function IconButton({ icon, label, shortcut, size = "sm", iconSize, active, tooltipSide, className, ...props }: IconButtonProps) {
   return (
     <Tip label={label} shortcut={shortcut} side={tooltipSide}>
       <button
@@ -60,7 +62,7 @@ export function IconButton({ icon, label, shortcut, size = "sm", active, tooltip
           className,
         )}
       >
-        <Icon name={icon} size={size === "sm" ? "sm" : "md"} />
+        <Icon name={icon} size={iconSize ?? (size === "sm" ? "sm" : "md")} />
       </button>
     </Tip>
   );

@@ -40,7 +40,10 @@ export function NavRailItem({
       aria-current={selected ? "page" : undefined}
       onActivate={onActivate}
       className={cx(
-        "h-7 pl-[var(--x-rail-gutter)] text-[13px] font-medium",
+        // `text-sm` is the token the parent row inherits (0.8125rem): the same class, not a copy of
+        // its current px value, so a root font size other than 16px cannot make the child larger
+        // than its parent (XTRM-897).
+        "h-7 pl-[var(--x-rail-gutter)] text-sm font-medium",
         // The marker sits at -left-px, so it covers the rail's own border on this row only.
         selected
           ? "bg-hover font-semibold text-ink before:absolute before:-left-px before:inset-y-1.5 before:w-[var(--x-rail-marker)] before:rounded-full before:bg-accent"
