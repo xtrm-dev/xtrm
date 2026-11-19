@@ -137,7 +137,9 @@ export function createFixtureSubstrate(): SubstrateAdapter {
       return null;
     },
     async listProjects() {
-      return [{ id: "prj_xtrm", prefix: "XTRM", name: "xtrm", gitRoots: ["/home/dev/xtrm"] }];
+      // market-data is a second bound checkout of the same project so a repository can show both the
+      // project surfaces and an issue page in one place (XTRM-820 test data).
+      return [{ id: "prj_xtrm", prefix: "XTRM", name: "xtrm", gitRoots: ["/home/dev/xtrm", "/home/dev/market-data"] }];
     },
     async listIssues() {
       return [...rows.values()].map((r) => r.summary);

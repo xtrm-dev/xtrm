@@ -18,14 +18,19 @@ export function ProjectShell({
   title,
   binding,
   health,
+  freshness: freshnessOverride,
   source,
   toolbar,
   children,
 }: {
   /** Accessible name of the section; the route's own surface name. */
   title: string;
-  binding: ProjectBinding | null;
-  health: ProjectHealth | null;
+  /** The section's binding badge; the header reads only `configured`. */
+  binding: Pick<ProjectBinding, "configured"> | null;
+  /** The board sync's health, when the section reads it: the Jira section has no sync of its own. */
+  health?: ProjectHealth | null;
+  /** Replaces the board-derived freshness for a section whose freshness is not a board sync. */
+  freshness?: string;
   source: DataSource;
   toolbar?: ReactNode;
   children: ReactNode;
@@ -47,7 +52,7 @@ export function ProjectShell({
           </span>
         )}
         <span className="shrink-0 text-[11px] text-ink-faint tabular" data-testid="project-freshness">
-          {freshness(health)}
+          {freshnessOverride ?? freshness(health ?? null)}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {toolbar}

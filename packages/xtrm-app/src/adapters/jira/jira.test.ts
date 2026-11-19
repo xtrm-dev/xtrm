@@ -204,7 +204,7 @@ describe("fixture jira adapter", () => {
     const links = await fixtureJira.links(FIXTURE_JIRA_REPO, ["MMD-551", "MMD-700"]);
     expect(links.bindingsAvailable).toBe(true);
     expect(links.bindingsReason).toBeNull();
-    expect(links.links.map((i) => i.issueRef)).toEqual(["XTRM-816", "XTRM-820"]);
+    expect(links.links.map((i) => i.issueRef)).toEqual(["XTRM-816", "XTRM-301"]);
   });
 });
 
