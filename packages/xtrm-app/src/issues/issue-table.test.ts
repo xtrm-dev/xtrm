@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IssueSummary } from "../adapters/index.tsx";
-import { buildTree, issueStatus, keyColumnRem, rollupActivity, type Sort } from "./issue-table.ts";
+import { INDENT_REM, buildTree, issueStatus, keyColumnRem, keyNames, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
 
 const issue = (ref: string, over: Partial<IssueSummary> = {}): IssueSummary => ({
   id: ref, ref, locator: ref, title: ref, kind: "task", lifecycle: "open", revision: 1, priority: 2, scrutiny: null,
@@ -65,7 +65,22 @@ describe("issue table", () => {
     expect(label({ readiness: "draft", contractComplete: true, attestation: "rejected" })).toBe("Rejected");
   });
 
-  it("widens the key column to the longest key so it never truncates", () => {
-    expect(keyColumnRem([issue("X-1", { locator: "XTRM-300.12.4", ref: "XTRM-1234" })])).toBeGreaterThan(keyColumnRem([issue("X-1")]));
+  it("sizes the key column from the primary locator alone, plus the deepest row's indent", () => {
+    const short = issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234" });
+    const long = issue("X-2", { locator: "XTRM-300.12.4.1", ref: "XTRM-1234" });
+    expect(keyColumnRem([long])).toBeGreaterThan(keyColumnRem([short]));
+    // The alias moves to the tooltip, so it must not widen the column (XTRM-898).
+    expect(keyColumnRem([issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234" })])).toBe(
+      keyColumnRem([issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234567890" })]),
+    );
+    // Each level widens the base column by one indent; the key cell gives that width back per row.
+    expect(keyColumnRem([short], 3) - keyColumnRem([short])).toBeCloseTo(3 * INDENT_REM, 5);
+  });
+
+  it("names the primary key and the tooltip that keeps the alias", () => {
+    const imported = issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234" });
+    expect(primaryKey(imported)).toBe("XTRM-300.12");
+    expect(keyNames(imported)).toBe("XTRM-300.12 / XTRM-1234");
+    expect(keyNames(issue("X-2"))).toBe("X-2");
   });
 });

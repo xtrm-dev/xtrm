@@ -53,34 +53,52 @@ describe("Issues list rows (XTRM-856)", () => {
     expect(widths.every((w) => w === "13")).toBe(true);
   });
 
-  it("indents in a fixed gutter, so key, chip and title share one column", async () => {
+  it("indents the leading cluster and gives the depth back to the key cell, so key, chip and title share one column", async () => {
     renderIssues();
     await firstRow();
     const rows = Array.from(document.querySelectorAll('[role="button"]')).filter((el) => /XTRM-\d/.test(el.textContent ?? ""));
-    const top = rows[0] as HTMLElement;
-    // The child row is XTRM-301 — a fixture issue whose parent is XTRM-300 — selected by its own
-    // reference through the row action label, not by the shape of the rendered locator.
-    const child = rows.find((el) => el.querySelector('button[aria-label="Copy XTRM-301"]')) as HTMLElement | undefined;
-    expect(child, "the fixture renders at least one child row").toBeTruthy();
+    const byRef = (ref: string) => rows.find((el) => el.querySelector(`button[aria-label="Copy ${ref}"]`)) as HTMLElement | undefined;
+    const top = byRef("XTRM-300");
+    const child = byRef("XTRM-301");
+    const grandchild = byRef("XTRM-303");
+    expect(top, "the fixture renders the root row").toBeTruthy();
+    expect(child, "the fixture renders a depth-1 row").toBeTruthy();
+    expect(grandchild, "the fixture renders a depth-3 row").toBeTruthy();
 
-    // jsdom has no layout, so the guard is the mechanism: one gutter width for the list, and the
-    // indent carried only by that gutter's padding. The pixel check lives in e2e/issue-rows.spec.ts.
-    for (const row of [top, child!]) {
-      const gutter = row.querySelector("span[style*='--indent-col']") as HTMLElement | null;
-      expect(gutter, "the leading gutter is a constant-width span").not.toBeNull();
-      expect(gutter!.style.width).toBe("calc(var(--indent-col) + 1.25rem)");
-      const titleCell = row.firstElementChild!.firstElementChild as HTMLElement;
-      expect(titleCell.style.paddingLeft, "no depth-dependent padding on the title cell").toBe("");
+    // jsdom has no layout, so the guard is the mechanism: no list-wide gutter; the leading cluster
+    // carries the row's depth and the key cell subtracts exactly that width, so the chip and title
+    // stay on one x. The pixel check lives in e2e/issue-rows.spec.ts.
+    for (const row of [top!, child!, grandchild!]) {
+      expect(row.querySelector("span[style*='--indent-col']"), "no list-wide indent gutter").toBeNull();
+      const leading = row.querySelector("[data-row-leading]") as HTMLElement | null;
+      const keyCell = row.querySelector("[data-key-cell]") as HTMLElement | null;
+      expect(leading, "the leading cluster is the row's own indent").not.toBeNull();
+      expect(keyCell, "the key cell absorbs the depth").not.toBeNull();
+      expect(leading!.style.width).toBe("calc(var(--row-indent) + 1.25rem)");
+      expect(leading!.style.paddingLeft).toBe("var(--row-indent)");
+      expect(keyCell!.style.width).toBe("calc(var(--key-col) - var(--row-indent))");
     }
-    const depthOf = (row: HTMLElement) => (row.querySelector("span[style*='--indent-col']") as HTMLElement).style.paddingLeft;
-    expect(depthOf(child!)).not.toBe(depthOf(top));
+    const depthOf = (row: HTMLElement) => (row.querySelector("[data-key-cell]")!.parentElement!.parentElement as HTMLElement).style.getPropertyValue("--row-indent");
+    expect(depthOf(top!)).toBe("0rem");
+    expect(depthOf(child!)).toBe("1.25rem");
+    expect(depthOf(grandchild!)).toBe("3.75rem");
+  });
+
+  it("shows the primary locator alone and keeps the alias in the tooltip (XTRM-898)", async () => {
+    renderIssues();
+    await firstRow();
+    // XTRM-303 is the fixture's deepest row: locator XTRM-300.12.4.1 under MMD-shaped data.
+    const deep = document.querySelector('button[aria-label="Copy XTRM-303"]')!.closest('[role="button"]') as HTMLElement;
+    const keyCell = deep.querySelector("[data-key-cell]") as HTMLElement;
+    expect(keyCell.textContent).toBe("XTRM-300.1.2.1");
+    expect(keyCell.getAttribute("title")).toBe("XTRM-300.1.2.1 / XTRM-303");
   });
 
   it("keeps the title flexible and the one action in the trailing slot", async () => {
     renderIssues();
     const { row, key } = await firstRow();
     const titleCell = row.firstElementChild!.firstElementChild as HTMLElement;
-    const title = titleCell.querySelector("span.truncate") as HTMLElement;
+    const title = titleCell.querySelector("span.flex-1.truncate") as HTMLElement;
     expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "truncate"]));
     // The action must not live inside the title cell: it would sit right after the truncated title.
     expect(within(titleCell).queryAllByRole("button", { name: `Copy ${key.textContent}` })).toHaveLength(0);
