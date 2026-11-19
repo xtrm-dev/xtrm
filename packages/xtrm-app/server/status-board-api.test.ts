@@ -686,6 +686,16 @@ describe.each(HOOKS)("status-board middleware (%s)", (hook) => {
     expect(calls).toBe(afterFirst);
   });
 
+  it("accepts the raised record bound and refuses one above it", async () => {
+    const middleware = mountHere(statusBoardApi({ configPath, fetchImpl: (async () => page([wire("answers/a-1")])) as unknown as typeof fetch }));
+    const over = await send(middleware, "GET", `/xtrm-api/status-board/list?repo=${repo}&prefix=answers&limit=1001`);
+    expect(over.status).toBe(400);
+    expect(over.body.error).toBe("limit must be 1..1000");
+    // The answers collection passed the old 200-record ceiling; 1000 is now a legal page size.
+    const answered = await send(middleware, "GET", `/xtrm-api/status-board/list?repo=${repo}&prefix=answers&limit=1000`);
+    expect(answered.status).toBe(200);
+  });
+
   it("stamps a cached read with the upstream fetch time, not the time it was served", async () => {
     // The read is served from the 60 s cache, so the second response must report
     // how old the data is — the entry's `at` — and not "now".

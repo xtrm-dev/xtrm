@@ -69,6 +69,15 @@ export function OverviewSurface() {
   );
   const counts = attentionCounts(items);
 
+  // The counts are only as complete as the reads behind them: a page that stopped at its bound,
+  // or a record the adapter could not read, makes the total a floor rather than the truth.
+  const lists = [questions, answers, workers, followUps, proposals];
+  const caveats: string[] = [];
+  const truncated = lists.filter((page) => page.data?.truncated === true).length;
+  if (truncated > 0) caveats.push(`${truncated} collection${truncated === 1 ? "" : "s"} stopped at the page limit, so the counts are a floor`);
+  const gapCount = lists.reduce((total, page) => total + (page.data?.gaps.length ?? 0), 0);
+  if (gapCount > 0) caveats.push(`${gapCount} record${gapCount === 1 ? "" : "s"} could not be read as declared`);
+
   return shell(
     <>
       <IntegrationState binding={binding.data} health={health.data ?? null} base={base} />
@@ -87,6 +96,11 @@ export function OverviewSurface() {
             ))}
           </span>
         </header>
+        {caveats.length > 0 && (
+          <p className="px-3 pt-1 text-[11px] text-ink-faint" data-testid="attention-caveat">
+            Incomplete read: {caveats.join("; ")}.
+          </p>
+        )}
         <AttentionList items={items} />
       </section>
     </>,

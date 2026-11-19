@@ -376,7 +376,14 @@ export function mapQuestionDocument(wire: WireRecord): Mapped<Question[]> {
       return;
     }
     flagUnusable(gaps, wire.path, row, { strings: QUESTION_FIELDS });
-    const question: Question = { id: text(row["id"]) ?? `${owner}#${index}`, owner: text(row["owner"]) ?? owner };
+    // The row id is the answer key (`answers/<row.id>`): a missing or non-string id can never be
+    // answered, so it is reported as a gap and the row is not given an invented name.
+    const id = text(row["id"]);
+    if (!id) {
+      gaps.push({ path: wire.path, field: "id", value: row["id"] === undefined ? "<absent>" : String(row["id"]) });
+      return;
+    }
+    const question: Question = { id, owner: text(row["owner"]) ?? owner };
     for (const field of QUESTION_FIELDS) {
       const found = text(row[field]);
       if (found !== undefined) question[field] = found;
@@ -542,7 +549,7 @@ export const STATUS_BOARD_BASE = "/xtrm-api/status-board";
 /** The bridge caches upstream for 60 s; the adapter keeps a shorter read window per record path. */
 export const RECORD_CACHE_MS = 30_000;
 /** The bridge serves at most 200 records per request and reports `truncated` rather than paging. */
-export const MAX_PAGE = 200;
+export const MAX_PAGE = 1000;
 /** At most this many record paths are cached; the oldest entry is dropped when the cap is reached. */
 export const RECORD_CACHE_MAX = 500;
 

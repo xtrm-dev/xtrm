@@ -53,17 +53,37 @@ describe("Project Overview", () => {
     );
     const attentionWorkers = workers.records.filter((worker) => blockedNames.has(worker.doc.name) || expiring.includes(worker));
 
-    expect(unanswered).toHaveLength(1);
-    expect(attentionWorkers).toHaveLength(2);
+    // The identity comes from the records; the asserted numbers are the fixture's own literals,
+    // so a change to the surface's matching rule cannot move the expectation with it.
+    expect(unanswered.map((question) => question.doc.id)).toEqual(["q-104-board-pressure"]);
+    expect(attentionWorkers.map((worker) => worker.doc.name).sort()).toEqual(["board-worker", "quant-reviewer"]);
 
     const total = await screen.findByTestId("attention-count");
-    expect(total.textContent).toBe(String(unanswered.length + attentionWorkers.length));
-    expect(screen.getByTestId("attention-count-question").textContent).toMatch(/^Question\s*1$/);
-    expect(screen.getByTestId("attention-count-blocked").textContent).toBe(`Blocked ${blocked.length}`);
-    expect(screen.getByTestId("attention-count-claim-expiring").textContent).toBe(`Claim expiring ${expiring.length}`);
+    expect(total.textContent).toBe("3");
+    expect(screen.getByTestId("attention-count-question").textContent).toBe("Question 1");
+    expect(screen.getByTestId("attention-count-blocked").textContent).toBe("Blocked 1");
+    expect(screen.getByTestId("attention-count-claim-expiring").textContent).toBe("Claim expiring 1");
     // No follow-up in the fixture carries a due date, and the only proposal is settled.
     expect(screen.queryByTestId("attention-count-follow-up-due")).toBeNull();
     expect(screen.queryByTestId("attention-count-proposal")).toBeNull();
+  });
+
+  it("names an incomplete read instead of counting a short page as the whole board", async () => {
+    const board = createStatusBoardFixtureAdapter();
+    const truncated: StatusBoardAdapter = {
+      ...board,
+      listAnswers: async (repository, opts) => {
+        const page = await board.listAnswers(repository, opts);
+        return { ...page, records: page.records.slice(0, 1), truncated: true, gaps: [{ path: "answers/odd", field: "qid", value: "<absent>" }] };
+      },
+    };
+    renderOverview({ ...fixtureAdapters, statusBoard: truncated });
+
+    await screen.findByTestId("attention-count");
+    const caveat = await screen.findByTestId("attention-caveat");
+    expect(caveat.textContent).toContain("Incomplete read");
+    expect(caveat.textContent).toContain("1 collection stopped at the page limit");
+    expect(caveat.textContent).toContain("1 record could not be read as declared");
   });
 
   it("renders only the unintegrated state for an unbound repository and reads no collection", async () => {

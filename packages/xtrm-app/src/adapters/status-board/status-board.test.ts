@@ -62,9 +62,10 @@ describe("statusBoard live adapter: page assembly", () => {
 
   it("surfaces the bridge's truncation instead of pretending the list is complete", async () => {
     const { fetchImpl, calls } = responder(() => okPage([wire("workers/a", { status: "idle" })], { truncated: true }));
-    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listWorkers(REPO, { limit: 999 });
+    // The bound is 1000 records: the answers collection passed the old 200-record ceiling.
+    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listWorkers(REPO, { limit: 5000 });
     expect(page.truncated).toBe(true);
-    expect(calls[0]).toContain("limit=200");
+    expect(calls[0]).toContain("limit=1000");
   });
 
   it("clamps a limit below the bridge minimum", async () => {
@@ -144,6 +145,17 @@ describe("statusBoard live adapter: page assembly", () => {
     expect(page.records.map((r) => r.doc.id)).toEqual(["q-2"]);
     expect(gapsFor(page.gaps, "rows").map((g) => g.value)).toEqual([JSON.stringify({ id: "q-1" })]);
     expect(gapsFor(page.gaps, "rows[1]").map((g) => g.value)).toEqual(["not a row"]);
+  });
+
+  it("reports a row without a usable id as a gap instead of inventing one", async () => {
+    const { fetchImpl } = responder(() =>
+      okPage([wire("questions/odd", { rows: [{ q: "no id at all" }, { id: 7, q: "numeric id" }, { id: "q-good", q: "fine" }] })]),
+    );
+    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listQuestions(REPO);
+    // The id is the answer key, so an unusable one cannot be answered: the row is a gap, not a
+    // synthetic `owner#index` id that no `answers/<qid>` record could ever match.
+    expect(page.records.map((record) => record.doc.id)).toEqual(["q-good"]);
+    expect(gapsFor(page.gaps, "id").map((gap) => gap.value)).toEqual(["<absent>", "7"]);
   });
 
   it("reports an unparseable document as a gap instead of an empty record", () => {
