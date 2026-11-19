@@ -139,7 +139,11 @@ export const primaryKey = (i: IssueSummary) => i.locator || i.ref;
 /** Both names, for the tooltip and the Inspector, so the list does not lose the alias it stopped showing. */
 export const keyNames = (i: IssueSummary) => (primaryKey(i) !== i.ref ? `${primaryKey(i)} / ${i.ref}` : primaryKey(i));
 
-/** The chevron slot and the kind/priority glyphs that sit between the disclosure and the key text, in rem: 20px slot + 13px + 16px glyphs + gaps + the key cell's trailing inset. */
+/**
+ * Width inside the key cell before and after the key text, in rem: the kind icon (13px), the
+ * priority glyph (16px), their two 4px gaps and the cell's trailing inset (4px) = 2.6rem. The
+ * disclosure slot is not here: the leading cluster owns it (XTRM-898).
+ */
 export const KEY_CELL_CHROME_REM = 2.6;
 
 /**

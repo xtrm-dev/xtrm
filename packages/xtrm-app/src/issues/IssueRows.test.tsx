@@ -87,7 +87,7 @@ describe("Issues list rows (XTRM-856)", () => {
   it("shows the primary locator alone and keeps the alias in the tooltip (XTRM-898)", async () => {
     renderIssues();
     await firstRow();
-    // XTRM-303 is the fixture's deepest row: locator XTRM-300.12.4.1 under MMD-shaped data.
+    // XTRM-303 is the fixture's deepest row: locator XTRM-300.1.2.1 under MMD-shaped data.
     const deep = document.querySelector('button[aria-label="Copy XTRM-303"]')!.closest('[role="button"]') as HTMLElement;
     const keyCell = deep.querySelector("[data-key-cell]") as HTMLElement;
     expect(keyCell.textContent).toBe("XTRM-300.1.2.1");

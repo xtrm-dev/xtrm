@@ -8,7 +8,6 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  */
 
 const REPO = "xtrm-dev/xtrm";
-const OUT = "docs/screenshots/issue-rows";
 
 /** The fixture's four-level MMD-shaped subtree (long locators, the operator's data shape). */
 const CHAIN = [
@@ -20,7 +19,10 @@ const CHAIN = [
 
 /** One indent level: 1.25rem at the 16px root. */
 const INDENT_PX = 20;
-/** Kind icon, priority glyph, their gaps and the key cell's trailing inset: `KEY_CELL_CHROME_REM` (2.6rem). */
+/**
+ * Kind icon, priority glyph, their gaps and the key cell's trailing inset: `KEY_CELL_CHROME_REM`
+ * (2.6rem). The 1.25rem disclosure slot is not part of it — the leading cluster owns that.
+ */
 const KEY_CELL_CHROME_PX = 2.6 * 16;
 
 async function openIssues(page: Page) {
@@ -51,7 +53,6 @@ test("the disclosure sits beside its key at each depth, and the chip and the tit
     await expect(row, `${ref} is rendered`).toBeVisible();
     const rowBox = await box(row);
     const leading = row.locator("[data-row-leading]").first();
-    const leadingBox = await box(leading);
     const chevron = await box(leading.locator(":scope > *").first());
     const keyCell = await box(row.locator("[data-key-cell]").first());
     const chip = await box(row.locator('[data-slot="badge"]').first());
@@ -64,8 +65,10 @@ test("the disclosure sits beside its key at each depth, and the chip and the tit
     // disclosure sits in a 20px slot, so the whole slot — button or spacer — starts there.
     expect(chevron.x - rowBox.x, `${ref} indents by its own depth`).toBeCloseTo(8 + depth * INDENT_PX, 0);
     expect(await leading.evaluate((el) => getComputedStyle(el).paddingLeft), `${ref} depth is a padding, not a gutter`).toBe(`${depth * INDENT_PX}px`);
-    // No list-wide gutter: the key cell starts right after the disclosure slot, never behind it.
-    const chevronToKey = keyCell.x - (leadingBox.x + leadingBox.width);
+    // No list-wide gutter: the key cell starts right after the disclosure itself, never behind it.
+    // Measured from the chevron, not from the leading span: the span ends where the slot ends, so a
+    // span-based guard would pass on the pre-fix layout too (there the chevron sat 107px left of it).
+    const chevronToKey = keyCell.x - (chevron.x + chevron.width);
     expect(chevronToKey, `${ref} keeps the key beside its disclosure`).toBeGreaterThanOrEqual(0);
     expect(chevronToKey, `${ref} keeps the key beside its disclosure`).toBeLessThanOrEqual(8);
 
@@ -131,10 +134,11 @@ test("the one row action sits at the row end, hidden at rest", async ({ page }) 
 });
 
 for (const theme of ["light", "dark"] as const) {
-  test(`the MMD-shaped tree renders in ${theme}`, async ({ page }) => {
+  test(`the MMD-shaped tree renders in ${theme}`, async ({ page }, testInfo) => {
     await page.addInitScript((t) => localStorage.setItem("xtrm.console.theme.v1", t), theme);
     await openIssues(page);
     await expect(rowFor(page, "XTRM-303")).toBeVisible();
-    await page.screenshot({ path: `${OUT}/xtrm-898-${theme}-deep-rows.png` });
+    // Into the run's --output dir, so a local run never rewrites the tracked evidence set.
+    await page.screenshot({ path: testInfo.outputPath(`xtrm-898-${theme}-deep-rows.png`) });
   });
 }
