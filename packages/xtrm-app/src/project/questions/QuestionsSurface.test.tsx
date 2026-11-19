@@ -1,14 +1,13 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { fixtureAdapters } from "../../adapters/index.tsx";
 import { FIXTURE_BOARD_REPO, createStatusBoardFixtureAdapter } from "../../adapters/status-board/fixture.ts";
-import type { StatusBoardAdapter } from "../../adapters/status-board/types.ts";
+import type { BoardRecord, Question, StatusBoardAdapter } from "../../adapters/status-board/types.ts";
 import { createAppRouter } from "../../app/router.tsx";
 
-function renderQuestions() {
-  const board = createStatusBoardFixtureAdapter();
+function renderBoard(board: StatusBoardAdapter) {
   const history = createMemoryHistory({ initialEntries: [`/rep/${FIXTURE_BOARD_REPO}/project/questions`] });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createAppRouter({ adapters: { ...fixtureAdapters, statusBoard: board }, history, queryClient });
@@ -16,8 +15,45 @@ function renderQuestions() {
   return board;
 }
 
+function renderQuestions() {
+  return renderBoard(createStatusBoardFixtureAdapter());
+}
+
+/** A synthetic board question, in the shape the document mapper hands a surface. */
+function question(path: string, doc: Omit<Question, "owner">): BoardRecord<Question> {
+  // `mapQuestionDocument` names the owner from the document's path segment; the surface groups by
+  // `doc.owner`, so a synthetic row carries the same value.
+  return { path, id: `test-${doc.id}`, createdAt: null, updatedAt: null, doc: { ...doc, owner: path.split("/")[1]! }, gaps: [] };
+}
+
+/** The fixture plus three unanswered questions of different ages, under three owners. */
+function olderBoard(): StatusBoardAdapter {
+  const base = createStatusBoardFixtureAdapter();
+  const at = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
+  const extra = [
+    question("questions/sre-ops", { id: "q-201-oldest", ref: "XTRM-801", q: "Is the oldest open question still open?", at: at(10) }),
+    question("questions/quant-lead", { id: "q-202-mid", ref: "XTRM-802", q: "Is the middle open question still open?", at: at(5) }),
+    question("questions/MMD-4417-engine-lead", { id: "q-203-new", ref: "XTRM-803", q: "Is the newest open question still open?", at: at(0.5) }),
+  ];
+  return {
+    ...base,
+    listQuestions: async (repository, opts) => {
+      const page = await base.listQuestions(repository, opts);
+      return { ...page, records: [...page.records, ...extra] };
+    },
+  };
+}
+
+function sections(): HTMLElement[] {
+  return screen.getAllByTestId("question-section");
+}
+
+function sectionRows(section: HTMLElement): string[] {
+  return Array.from(section.querySelectorAll("[data-question-id]")).map((row) => row.getAttribute("data-question-id") ?? "");
+}
+
 describe("Project Questions", () => {
-  it("renders every board question grouped by owner, with ref, text, recommendation, why and age", async () => {
+  it("leads with the unanswered questions, then the answered group collapsed below", async () => {
     renderQuestions();
     const region = await screen.findByRole("region", { name: "Questions" });
     expect(region.textContent).toContain(FIXTURE_BOARD_REPO);
@@ -26,22 +62,68 @@ describe("Project Questions", () => {
     // owner document with `rows: []` that contributes no group. Every number here is a literal.
     await waitFor(() => expect(screen.getByTestId("questions-count").textContent).toBe("3 questions · 2 answered"));
     expect(screen.getAllByTestId("question-row")).toHaveLength(3);
-    expect(screen.getAllByTestId("question-group").map((group) => group.getAttribute("data-owner"))).toEqual(["MMD-4417-engine-lead", "sre-ops"]);
 
-    const row = screen.getAllByTestId("question-row")[0]!;
-    expect(row.getAttribute("data-question-id")).toBe("q-104-surface-order");
-    expect(row.textContent).toContain("XTRM-817");
-    expect(row.textContent).toContain("Should the Project Overview ship before the Jira read path");
-    expect(row.textContent).toContain("Overview first; Jira in its own issue");
-    expect(row.textContent).toContain("the attention list is the operator's daily read");
-    // The age is relative to now; the fixture's first question is hours old, so it is not "—".
-    expect(screen.getAllByTestId("question-age")[0]!.textContent).toMatch(/ago|just now|\d{4}/);
-    // The longest-waiting question leads its group: 6h old, then 2h old, then the other owner.
+    // Unanswered first, open; the answered backlog below, closed by default and counted.
+    const [unanswered, answered] = sections() as [HTMLElement, HTMLDetailsElement];
+    expect(unanswered.getAttribute("data-section")).toBe("unanswered");
+    expect(answered.getAttribute("data-section")).toBe("answered");
+    expect(answered.open).toBe(false);
+    expect(unanswered.querySelector("[data-testid='question-section-count']")!.textContent).toBe("1");
+    expect(answered.querySelector("summary [data-testid='question-section-count']")!.textContent).toBe("2");
+
+    // Owner grouping stays inside each section: the same owner can appear in both.
+    expect(Array.from(unanswered.querySelectorAll("[data-testid='question-group']")).map((group) => group.getAttribute("data-owner"))).toEqual([
+      "MMD-4417-engine-lead",
+    ]);
+    expect(Array.from(answered.querySelectorAll("[data-testid='question-group']")).map((group) => group.getAttribute("data-owner"))).toEqual([
+      "MMD-4417-engine-lead",
+      "sre-ops",
+    ]);
+
+    // The unanswered row is the operator's work and reads first; inside a group the
+    // longest-waiting question leads.
     expect(screen.getAllByTestId("question-row").map((item) => item.getAttribute("data-question-id"))).toEqual([
-      "q-104-surface-order",
       "q-104-board-pressure",
+      "q-104-surface-order",
       "q-105-sync-health",
     ]);
+
+    const row = screen.getAllByTestId("question-row")[0]!;
+    expect(row.textContent).toContain("XTRM-820");
+    expect(row.textContent).toContain("Does the console show board pressure per repository");
+    expect(row.textContent).toContain("Per repository");
+    expect(row.textContent).toContain("each repository binds its own board");
+    // The age is relative to now; the fixture's first question is hours old, so it is not "—".
+    expect(screen.getAllByTestId("question-age")[0]!.textContent).toMatch(/ago|just now|\d{4}/);
+  });
+
+  it("orders the unanswered section oldest first across owners and opens the answered backlog on demand", async () => {
+    renderBoard(olderBoard());
+    await screen.findByRole("region", { name: "Questions" });
+    await waitFor(() => expect(screen.getByTestId("questions-count").textContent).toBe("6 questions · 2 answered"));
+
+    const [unanswered, answered] = sections() as [HTMLElement, HTMLDetailsElement];
+    // Oldest-first across owners: -10h (sre-ops), -5h (quant-lead), then the MMD group with its
+    // -2h and -30m rows. Alphabetical owner order would read MMD first; age order does not.
+    expect(Array.from(unanswered.querySelectorAll("[data-testid='question-group']")).map((group) => group.getAttribute("data-owner"))).toEqual([
+      "sre-ops",
+      "quant-lead",
+      "MMD-4417-engine-lead",
+    ]);
+    expect(sectionRows(unanswered)).toEqual(["q-201-oldest", "q-202-mid", "q-104-board-pressure", "q-203-new"]);
+    expect(unanswered.querySelector("[data-testid='question-section-count']")!.textContent).toBe("4");
+
+    // Answered stays closed by default, with its count; expanding it reveals its rows in the same
+    // oldest-first owner grouping.
+    expect(answered.open).toBe(false);
+    expect(answered.querySelector("summary [data-testid='question-section-count']")!.textContent).toBe("2");
+    expect(sectionRows(answered)).toEqual(["q-104-surface-order", "q-105-sync-health"]);
+    fireEvent.click(answered.querySelector("summary")!);
+    expect(answered.open).toBe(true);
+
+    // The sections together carry every row, and the toolbar counts are unchanged.
+    expect(screen.getAllByTestId("question-row")).toHaveLength(6);
+    expect(sectionRows(unanswered).length + sectionRows(answered).length).toBe(6);
   });
 
   it("states answered/unanswered from the answers/<qid> records, not from a guess", async () => {
@@ -74,10 +156,7 @@ describe("Project Questions", () => {
         return { ...page, records: page.records.slice(0, 1), truncated: true, gaps: [{ path: "questions/odd", field: "id", value: "<absent>" }] };
       },
     };
-    const history = createMemoryHistory({ initialEntries: [`/rep/${FIXTURE_BOARD_REPO}/project/questions`] });
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const router = createAppRouter({ adapters: { ...fixtureAdapters, statusBoard: truncated }, history, queryClient });
-    render(<RouterProvider router={router} />);
+    renderBoard(truncated);
 
     await screen.findByRole("region", { name: "Questions" });
     await waitFor(() => expect(screen.getByTestId("questions-caveat").textContent).toContain("Incomplete read"));
@@ -99,8 +178,11 @@ describe("Project Questions", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
 
-    // The read is the binding, the health and the two collections; no record write follows.
+    // The read is the binding, the health and the two collections; no record write follows. The
+    // answered disclosure is a native <details>, so opening it still writes nothing.
     const writes = vi.spyOn(board, "record");
+    const answered = sections()[1]!;
+    fireEvent.click(answered.querySelector("summary")!);
     await waitFor(() => expect(screen.getByTestId("questions-list")).toBeTruthy());
     expect(writes).not.toHaveBeenCalled();
     writes.mockRestore();

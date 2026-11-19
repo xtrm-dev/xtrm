@@ -3,15 +3,21 @@ import type { ReactNode } from "react";
 import { useAdapters } from "../../adapters/index.tsx";
 import type { Answer, BoardRecord, Question } from "../../adapters/status-board/types.ts";
 import { useShell } from "../../shell/context.tsx";
+import { Icon } from "../../ui/icon.tsx";
 import { ErrorState, LoadingState } from "../../ui/primitives.tsx";
 import { IntegrationState } from "../IntegrationState.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
 import { QuestionRow } from "./QuestionRow.tsx";
 
 /**
- * Project Questions (ADR-002 D2, XTRM-899): the board's open questions, grouped by the owner
+ * Project Questions (ADR-002 D2, XTRM-899, XTRM-913): the board's open questions, split into the
+ * ones that still need an answer and the ones that already have one, each grouped by the owner
  * whose `questions/<owner>` document carries them, each with its ref, text, recommendation, why,
  * age and whether an `answers/<qid>` record exists.
+ *
+ * The unanswered section leads: it is the operator's work, so it stays open. The answered section
+ * follows, collapsed by default with its count, so a board that is mostly answered does not push
+ * the open questions off the first screen. Both sections keep the owner grouping.
  *
  * Read-only for this tranche: answering stays on the status board until XTRM-821. The surface
  * therefore offers no control that writes, and the state line says where the answer goes.
@@ -28,20 +34,27 @@ function questionAt(question: Question): number {
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 }
 
+/** The owner document the board filed the question under, or the fallback the list states. */
+function ownerOf(question: Question): string {
+  return question.owner ?? question.by ?? "no owner";
+}
+
 /**
- * Group by the owner document the board filed the question under. Owners sort by name so the
- * list is stable between reads; inside a group the longest-waiting question comes first (the same
- * oldest-first reading the Overview attention list uses for unanswered questions).
+ * Group by the owner document the board filed the question under. Inside a group the
+ * longest-waiting question comes first (the same oldest-first reading the Overview attention list
+ * uses for unanswered questions); the groups themselves are ordered by their own oldest question,
+ * so a section reads oldest first while the owner grouping stays intact. A tie falls back to the
+ * owner name, which keeps the order stable between reads.
  */
 function groupQuestions(questions: ReadonlyArray<Question>): QuestionGroup[] {
   const buckets = new Map<string, Question[]>();
   for (const question of questions) {
-    const owner = question.owner ?? question.by ?? "no owner";
+    const owner = ownerOf(question);
     buckets.set(owner, [...(buckets.get(owner) ?? []), question]);
   }
   return [...buckets.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([owner, rows]) => ({ owner, rows: rows.sort((a, b) => questionAt(a) - questionAt(b) || a.id.localeCompare(b.id)) }));
+    .map(([owner, rows]) => ({ owner, rows: rows.sort((a, b) => questionAt(a) - questionAt(b) || a.id.localeCompare(b.id)) }))
+    .sort((a, b) => questionAt(a.rows[0]!) - questionAt(b.rows[0]!) || a.owner.localeCompare(b.owner));
 }
 
 /** The question ids the board has an `answers/<qid>` record for. */
@@ -49,6 +62,29 @@ function answeredQids(answers: ReadonlyArray<BoardRecord<Answer>>): Set<string> 
   const qids = new Set<string>();
   for (const answer of answers) if (answer.doc.qid) qids.add(answer.doc.qid);
   return qids;
+}
+
+/** One section's owner groups; the section supplies the split, the ordering and the state. */
+function QuestionGroups({ groups, answered }: { groups: ReadonlyArray<QuestionGroup>; answered: boolean }) {
+  return (
+    <>
+      {groups.map((group) => (
+        <section key={group.owner} aria-label={`Owner ${group.owner}`} data-testid="question-group" data-owner={group.owner}>
+          <h4 className="flex items-baseline gap-2 px-1.5 pt-2 pb-1 text-xs font-medium text-ink-muted">
+            <span className="truncate">{group.owner}</span>
+            <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-group-count">
+              {group.rows.length}
+            </span>
+          </h4>
+          <ul className="flex flex-col">
+            {group.rows.map((question) => (
+              <QuestionRow key={question.id} question={question} answered={answered} />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
+  );
 }
 
 export function QuestionsSurface() {
@@ -65,8 +101,12 @@ export function QuestionsSurface() {
 
   const rows = (questions.data?.records ?? []).map((record) => record.doc);
   const answered = answeredQids(answers.data?.records ?? []);
-  const groups = groupQuestions(rows);
-  const answeredCount = rows.filter((question) => answered.has(question.id)).length;
+  const unansweredRows = rows.filter((question) => !answered.has(question.id));
+  const answeredRows = rows.filter((question) => answered.has(question.id));
+  const unansweredGroups = groupQuestions(unansweredRows);
+  const answeredGroups = groupQuestions(answeredRows);
+  const answeredCount = answeredRows.length;
+  const ownerCount = new Set(rows.map(ownerOf)).size;
 
   // A bounded read and an unreadable record both make the list incomplete; the page says so
   // instead of presenting a short page as the whole board.
@@ -83,7 +123,7 @@ export function QuestionsSurface() {
       health={bound ? (health.data ?? null) : null}
       source={statusBoard.source}
       toolbar={
-        <span className="text-xs text-ink-faint" data-testid="questions-count" title={`${groups.length} owners carry an open question`}>
+        <span className="text-xs text-ink-faint" data-testid="questions-count" title={`${ownerCount} owners carry an open question`}>
           {rows.length} questions · {answeredCount} answered
         </span>
       }
@@ -108,22 +148,32 @@ export function QuestionsSurface() {
           Incomplete read: {caveats.join("; ")}.
         </p>
       )}
-      {groups.length === 0 && <p className="px-1.5 py-2 text-xs text-ink-faint">No open questions on this board.</p>}
-      {groups.map((group) => (
-        <section key={group.owner} aria-label={`Owner ${group.owner}`} data-testid="question-group" data-owner={group.owner}>
-          <h3 className="flex items-baseline gap-2 px-1.5 pt-2 pb-1 text-xs font-medium text-ink-muted">
-            <span className="truncate">{group.owner}</span>
-            <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-group-count">
-              {group.rows.length}
+      {rows.length === 0 && <p className="px-1.5 py-2 text-xs text-ink-faint">No open questions on this board.</p>}
+      {unansweredGroups.length > 0 && (
+        <section aria-label="Unanswered questions" data-testid="question-section" data-section="unanswered">
+          <h3 className="flex items-baseline gap-2 px-1.5 pt-2 pb-1 text-xs font-medium text-ink">
+            <span className="truncate">Unanswered</span>
+            <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-section-count">
+              {unansweredRows.length}
             </span>
           </h3>
-          <ul className="flex flex-col">
-            {group.rows.map((question) => (
-              <QuestionRow key={question.id} question={question} answered={answered.has(question.id)} />
-            ))}
-          </ul>
+          <QuestionGroups groups={unansweredGroups} answered={false} />
         </section>
-      ))}
+      )}
+      {answeredGroups.length > 0 && (
+        // Native disclosure: closed by default, so the answered backlog never pushes the open
+        // questions below the first screen; the summary names the count the reader would find.
+        <details data-testid="question-section" data-section="answered" className="group">
+          <summary className="flex cursor-pointer list-none items-baseline gap-2 px-1.5 pt-3 pb-1 text-xs font-medium text-ink-muted outline-none select-none hover:text-ink focus-visible:text-ink">
+            <Icon name="forward" size="xs" className="shrink-0 self-center text-ink-faint transition-transform group-open:rotate-90 motion-reduce:transition-none" />
+            <span className="truncate">Answered</span>
+            <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-section-count">
+              {answeredRows.length}
+            </span>
+          </summary>
+          <QuestionGroups groups={answeredGroups} answered={true} />
+        </details>
+      )}
     </div>,
   );
 }
