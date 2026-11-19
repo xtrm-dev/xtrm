@@ -126,4 +126,21 @@ describe("Issues list rows (XTRM-856)", () => {
     expect(wrapper.className).toContain("group-hover/row:opacity-100");
     expect(wrapper.className).toContain("group-focus-within/row:opacity-100");
   });
+  it("keeps header and rows on one column set when the list drops its low-value columns (XTRM-911)", async () => {
+    // jsdom has no layout, so the surface sizes itself from the viewport: a 900px surface drops the
+    // two rollups, and neither header nor row may keep a cell for them.
+    const viewport = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 900 });
+    renderIssues();
+    const { row } = await firstRow();
+    if (viewport) Object.defineProperty(window, "innerWidth", viewport);
+    const head = document.querySelector('[data-testid="issues-table-head"]') as HTMLElement;
+    const headers = Array.from(head.querySelectorAll('[role="columnheader"]')).map((h) => (h.textContent ?? "").toLowerCase());
+    const cells = Array.from(row.querySelectorAll("[data-column]")).map((c) => c.getAttribute("data-column") ?? "");
+    expect(cells).not.toContain("events");
+    expect(headers.some((h) => h.includes("events"))).toBe(false);
+    expect(cells.length + 1).toBe(headers.length);
+    for (const cell of cells) expect(headers.some((h) => h.replace(/[^a-z]/g, "") === cell)).toBe(true);
+  });
+
 });

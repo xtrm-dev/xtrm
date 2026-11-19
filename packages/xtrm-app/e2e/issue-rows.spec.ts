@@ -24,6 +24,10 @@ const INDENT_PX = 20;
  * (2.6rem). The 1.25rem disclosure slot is not part of it — the leading cluster owns that.
  */
 const KEY_CELL_CHROME_PX = 2.6 * 16;
+/** `KEY_COL_MAX_REM`: the key column's cap, so one long locator elsewhere cannot tax a visible row. */
+const KEY_COL_MAX_PX = 15.5 * 16;
+/** The fixture's longest primary locator: MMD-shaped, 28 characters, outside the rendered window. */
+const LONGEST_LOCATOR = "MMD-5244.2331.298.20.2.1.1.1";
 
 async function openIssues(page: Page) {
   await page.goto(`/rep/${REPO}/work/issues`);
@@ -84,20 +88,26 @@ test("the disclosure sits beside its key at each depth, and the chip and the tit
   }
 });
 
-test("the key column fits the longest primary locator plus the depth indent, and the title fills its cell", async ({ page }) => {
+test("the key column is sized from the longest primary locator, capped, and the title fills its cell", async ({ page }) => {
   const rows = await openIssues(page);
   const deepest = rowFor(page, "XTRM-303");
   await expect(deepest).toBeVisible();
   const deepestCell = await box(deepest.locator("[data-key-cell]").first());
   const longestKey = deepest.locator("[data-key-cell] span.truncate").first();
-  const longestText = await box(longestKey);
 
-  // The longest primary locator is not clipped: its text box fits the key cell.
+  // The deepest visible key is not clipped: its text run fits its cell.
   expect(await longestKey.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), "the deepest key is not truncated").toBe(true);
-  // Budget: the primary locator + the depth indent + the in-cell glyph chrome; the alias adds nothing.
-  expect(deepestCell.width, "the key column is the primary locator plus the glyph chrome").toBeLessThanOrEqual(longestText.width + KEY_CELL_CHROME_PX + 8);
-  const topCell = await box(rowFor(page, "XTRM-300").locator("[data-key-cell]").first());
-  expect(topCell.width, "the depth indent is inside the key column budget").toBeLessThanOrEqual(longestText.width + (CHAIN.length - 1) * INDENT_PX + KEY_CELL_CHROME_PX + 8);
+
+  // The column is the longest primary locator in the population (here the 28-character MMD locator,
+  // which no rendered row shows) plus the depth indent and the glyph chrome, capped: the alias adds
+  // nothing, and a deep locator cannot tax a visible row past `KEY_COL_MAX_REM`.
+  const depthPx = (CHAIN.length - 1) * INDENT_PX;
+  const keyCol = await page
+    .getByTestId("issues-table-head")
+    .evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue("--key-col")) * 16);
+  const wanted = Math.ceil(LONGEST_LOCATOR.length * 0.6 * 0.72 * 10) / 10 * 16 + depthPx + KEY_CELL_CHROME_PX;
+  expect(keyCol, "the key column is sized from the data").toBeCloseTo(Math.min(wanted, KEY_COL_MAX_PX), 0);
+  expect(deepestCell.width, "the key cell gives its depth back to the column").toBeCloseTo(keyCol - depthPx, 0);
 
   const row = rows.first();
   // getBoundingClientRect, not boundingBox: the latter reports the text run for a truncated flex item.
@@ -133,12 +143,50 @@ test("the one row action sits at the row end, hidden at rest", async ({ page }) 
   expect(await reveal.evaluate((el) => getComputedStyle(el).pointerEvents), "hover gives the action its clicks back").toBe("auto");
 });
 
+/**
+ * XTRM-911: on live MMD data at 1440px (list 1098px) the title was cut to ~15 characters because the
+ * key column reached 19.7rem (one 28-character locator elsewhere in the population) and the six
+ * numeric columns took 540px. Measured on the deployed console, 2026-11-19.
+ */
+test("at 1440 the title carries the spare width, and a 45-character title is not clipped", async ({ page }) => {
+  await openIssues(page);
+  const head = page.getByTestId("issues-table-head");
+  const childrenX = await head.getByRole("columnheader", { name: "Children" }).evaluate((el) => el.getBoundingClientRect().x);
+  const row = rowFor(page, "XTRM-303");
+  await expect(row).toBeVisible();
+  const titleCell = row.locator("[data-row-leading]").first().locator("..");
+  const cell = await titleCell.evaluate((el) => el.getBoundingClientRect());
+  expect(childrenX - cell.x, "the title column keeps at least 20rem at 1440px").toBeGreaterThanOrEqual(320);
+  expect(await titleCell.evaluate((el) => getComputedStyle(el).paddingLeft)).toBe("8px");
+
+  // The key column is bounded, so one long locator elsewhere cannot tax a visible row.
+  const keyCell = await box(rowFor(page, "XTRM-300").locator("[data-key-cell]").first());
+  expect(keyCell.width, "the key column stays under its cap").toBeLessThanOrEqual(15.5 * 16);
+
+  // The title keeps the freed width: the widest unclipped title must reach 45 characters.
+  const widest = await page.locator('[role="button"]').evaluateAll((rows) => {
+    let best = 0;
+    for (const r of rows) {
+      const run = r.querySelector("span.flex-1.truncate") as HTMLElement | null;
+      const text = run?.querySelector("span[title]")?.textContent ?? "";
+      if (run && run.scrollWidth <= run.clientWidth + 1) best = Math.max(best, text.length);
+    }
+    return best;
+  });
+  expect(widest, "a 45-character title fits the 1440px list").toBeGreaterThanOrEqual(45);
+
+  // Header and rows agree on the column set after a width-dependent drop.
+  const headers = await head.getByRole("columnheader").count();
+  const cells = await row.locator("[data-column]").count();
+  expect(cells, "every visible numeric column has its row cell").toBe(headers - 1);
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`the MMD-shaped tree renders in ${theme}`, async ({ page }, testInfo) => {
     await page.addInitScript((t) => localStorage.setItem("xtrm.console.theme.v1", t), theme);
     await openIssues(page);
     await expect(rowFor(page, "XTRM-303")).toBeVisible();
     // Into the run's --output dir, so a local run never rewrites the tracked evidence set.
-    await page.screenshot({ path: testInfo.outputPath(`xtrm-898-${theme}-deep-rows.png`) });
+    await page.screenshot({ path: testInfo.outputPath(`xtrm-911-${theme}-title-width.png`) });
   });
 }

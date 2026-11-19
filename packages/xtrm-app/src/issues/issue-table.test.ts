@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IssueSummary } from "../adapters/index.tsx";
-import { INDENT_REM, buildTree, issueStatus, keyColumnRem, keyNames, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
+import { INDENT_REM, KEY_COL_MAX_REM, buildTree, hiddenColumns, issueStatus, keyColumnRem, keyNames, listDensity, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
 
 const issue = (ref: string, over: Partial<IssueSummary> = {}): IssueSummary => ({
   id: ref, ref, locator: ref, title: ref, kind: "task", lifecycle: "open", revision: 1, priority: 2, scrutiny: null,
@@ -75,6 +75,23 @@ describe("issue table", () => {
     );
     // Each level widens the base column by one indent; the key cell gives that width back per row.
     expect(keyColumnRem([short], 3) - keyColumnRem([short])).toBeCloseTo(3 * INDENT_REM, 5);
+  });
+
+  it("caps the key column, so one deep locator cannot tax every visible row (XTRM-911)", () => {
+    const deep = issue("X-1", { locator: "MMD-5244.2331.298.20.2.1.1.1" });
+    expect(keyColumnRem([deep], 4)).toBe(KEY_COL_MAX_REM);
+    // Below the cap the column still follows the data, depth included.
+    const short = issue("X-2", { locator: "XTRM-300.1" });
+    expect(keyColumnRem([short], 1)).toBeLessThan(KEY_COL_MAX_REM);
+  });
+
+  it("drops the low-value numeric columns as the list narrows, header and rows together (XTRM-911)", () => {
+    expect(listDensity(1098)).toBe("wide");
+    expect([...hiddenColumns("wide")]).toEqual([]);
+    expect(listDensity(62 * 16 - 1)).toBe("medium");
+    expect([...hiddenColumns("medium")]).toEqual(["events", "pointers"]);
+    expect(listDensity(48 * 16 - 1)).toBe("compact");
+    expect([...hiddenColumns("compact")]).toEqual(["events", "pointers", "created", "updated"]);
   });
 
   it("names the primary key and the tooltip that keeps the alias", () => {
