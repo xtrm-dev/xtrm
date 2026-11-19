@@ -55,14 +55,18 @@ export function answeredQids(answers: ReadonlyArray<BoardRecord<Answer>>): Set<s
   return qids;
 }
 
-/** `questions/*` rows with no matching `answers/<qid>`. */
+/**
+ * `questions/*` rows with no matching `answers/<qid>`. The answer is keyed by the question's own id
+ * (`answers/<row.id>`, what the board writes); a row written before that key falls back to its ref,
+ * and a row with neither is unanswered rather than counted answered by a missing key.
+ */
 export function unansweredQuestions(
   questions: ReadonlyArray<BoardRecord<Question>>,
   answers: ReadonlyArray<BoardRecord<Answer>>,
 ): BoardRecord<Question>[] {
   const answered = answeredQids(answers);
   return questions.filter((question) => {
-    const qid = question.doc.ref;
+    const qid = question.doc.id || question.doc.ref;
     return !qid || !answered.has(qid);
   });
 }

@@ -30,7 +30,9 @@ const UPSTREAM = "https://here.now/api/v1";
 const CACHE_MS = 60_000;
 const UPSTREAM_PAGE = 100;
 const MAX_PAGES = 12;
-const MAX_RECORDS = 200;
+// A board's answers collection passes 200 records (151 on 2026-11-19 and growing), so the bound
+// stays generous but finite: 12 upstream pages of 100 cap a single read at 1 200 records.
+const MAX_RECORDS = 1000;
 const REPO_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 const COLLECTIONS = ["workers", "schedule", "questions", "answers", "followups", "archive", "lanes", "status", "board", "proposals"];
 const PATH_RE = new RegExp(`^(${COLLECTIONS.join("|")})/[A-Za-z0-9._-]{1,160}$`);
@@ -603,8 +605,8 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
     if (path === "/list") {
       const collection = (url.searchParams.get("prefix") ?? "").replace(/\/$/, "");
       if (!COLLECTIONS.includes(collection)) return json(res, 400, { ok: false, error: "unknown collection" });
-      const limit = Number(url.searchParams.get("limit") ?? 200);
-      if (!Number.isInteger(limit) || limit < 1 || limit > MAX_RECORDS) return json(res, 400, { ok: false, error: "limit must be 1..200" });
+      const limit = Number(url.searchParams.get("limit") ?? MAX_RECORDS);
+      if (!Number.isInteger(limit) || limit < 1 || limit > MAX_RECORDS) return json(res, 400, { ok: false, error: `limit must be 1..${MAX_RECORDS}` });
     } else if (path === "/record") {
       const recordPath = url.searchParams.get("path") ?? "";
       if (!allowedPath(recordPath)) return json(res, 400, { ok: false, error: "unsupported record path" });
@@ -619,7 +621,7 @@ export function statusBoardApi(opts: { configPath?: string; prefix?: string; fet
     try {
       if (path === "/list") {
         const collection = (url.searchParams.get("prefix") ?? "").replace(/\/$/, "");
-        const limit = Number(url.searchParams.get("limit") ?? 200);
+        const limit = Number(url.searchParams.get("limit") ?? MAX_RECORDS);
         const key = `list:${binding.site}:${collection}:${limit}`;
         const { value: result, at } = await cached(key, () => client.list(`${collection}/`, { limit }));
         return json(res, 200, { ok: true, ...result, cachedAt: new Date(at).toISOString() });

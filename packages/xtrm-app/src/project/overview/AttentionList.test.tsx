@@ -33,6 +33,14 @@ const emptyHealth: ProjectHealth = {
 };
 
 describe("attention counts", () => {
+  it("counts an answered question when `answers/<row.id>` names the question's own id", () => {
+    const judged = (id: string, ref: string): BoardRecord<Question> => record<Question>(`questions/owner`, { id, ref, q: `question ${ref}` });
+    const questions = [judged("q-104-surface-order", "MMD-4417"), judged("q-105-sync-health", "XTRM-811")];
+    // The live board keys answers by the question row id, never by the ticket ref.
+    const answers = [record<Answer>("answers/q-104-surface-order", { qid: "q-104-surface-order" })];
+    expect(unansweredQuestions(questions, answers).map((entry) => entry.doc.id)).toEqual(["q-105-sync-health"]);
+  });
+
   it("counts an answered question only when `answers/<qid>` names its ref", () => {
     const questions = [question("Q-1", iso(Date.now())), question("Q-2", iso(Date.now())), question("Q-3", iso(Date.now()))];
     const answers = [record<Answer>("answers/Q-1", { qid: "Q-1" }), record<Answer>("answers/Q-9", { qid: "Q-9" })];

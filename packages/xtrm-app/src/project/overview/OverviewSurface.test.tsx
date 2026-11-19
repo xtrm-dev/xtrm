@@ -39,7 +39,9 @@ describe("Project Overview", () => {
       board.listWorkers(FIXTURE_BOARD_REPO),
     ]);
     const answered = new Set(answers.records.map((answer) => answer.path.replace(/^answers\//, "")));
-    const unanswered = questions.records.filter((question) => !question.doc.ref || !answered.has(question.doc.ref));
+    // The board keys answers by the question row id (`answers/<row.id>`), which is what the
+    // surface matches on; a ref is only the legacy fallback.
+    const unanswered = questions.records.filter((question) => !answered.has(question.doc.id));
     const now = Date.now();
     const blocked = workers.records.filter((worker) => worker.doc.status === "blocked");
     const blockedNames = new Set(blocked.map((worker) => worker.doc.name));
@@ -51,20 +53,37 @@ describe("Project Overview", () => {
     );
     const attentionWorkers = workers.records.filter((worker) => blockedNames.has(worker.doc.name) || expiring.includes(worker));
 
-    // The board keys answers by question id (`answers/<qid>`), while this list still matches by the
-    // question's ref; every fixture question therefore reads as unanswered here (XTRM-877 owns the
-    // matcher). The Questions surface itself matches by id.
-    expect(unanswered).toHaveLength(3);
-    expect(attentionWorkers).toHaveLength(2);
+    // The identity comes from the records; the asserted numbers are the fixture's own literals,
+    // so a change to the surface's matching rule cannot move the expectation with it.
+    expect(unanswered.map((question) => question.doc.id)).toEqual(["q-104-board-pressure"]);
+    expect(attentionWorkers.map((worker) => worker.doc.name).sort()).toEqual(["board-worker", "quant-reviewer"]);
 
     const total = await screen.findByTestId("attention-count");
-    expect(total.textContent).toBe(String(unanswered.length + attentionWorkers.length));
-    expect(screen.getByTestId("attention-count-question").textContent).toMatch(/^Question\s*3$/);
-    expect(screen.getByTestId("attention-count-blocked").textContent).toBe(`Blocked ${blocked.length}`);
-    expect(screen.getByTestId("attention-count-claim-expiring").textContent).toBe(`Claim expiring ${expiring.length}`);
+    expect(total.textContent).toBe("3");
+    expect(screen.getByTestId("attention-count-question").textContent).toBe("Question 1");
+    expect(screen.getByTestId("attention-count-blocked").textContent).toBe("Blocked 1");
+    expect(screen.getByTestId("attention-count-claim-expiring").textContent).toBe("Claim expiring 1");
     // No follow-up in the fixture carries a due date, and the only proposal is settled.
     expect(screen.queryByTestId("attention-count-follow-up-due")).toBeNull();
     expect(screen.queryByTestId("attention-count-proposal")).toBeNull();
+  });
+
+  it("names an incomplete read instead of counting a short page as the whole board", async () => {
+    const board = createStatusBoardFixtureAdapter();
+    const truncated: StatusBoardAdapter = {
+      ...board,
+      listAnswers: async (repository, opts) => {
+        const page = await board.listAnswers(repository, opts);
+        return { ...page, records: page.records.slice(0, 1), truncated: true, gaps: [{ path: "answers/odd", field: "qid", value: "<absent>" }] };
+      },
+    };
+    renderOverview({ ...fixtureAdapters, statusBoard: truncated });
+
+    await screen.findByTestId("attention-count");
+    const caveat = await screen.findByTestId("attention-caveat");
+    expect(caveat.textContent).toContain("Incomplete read");
+    expect(caveat.textContent).toContain("1 collection stopped at the page limit");
+    expect(caveat.textContent).toContain("1 record could not be read as declared");
   });
 
   it("renders only the unintegrated state for an unbound repository and reads no collection", async () => {
@@ -111,18 +130,18 @@ describe("Project Overview", () => {
 
   it("links an attention row to the surface that owns the record", async () => {
     const router = renderOverview();
-    const row = await screen.findByRole("button", { name: /Is the board sync healthy\?/ });
+    const row = await screen.findByRole("button", { name: /Does the console show board pressure/ });
     fireEvent.click(row);
     await waitFor(() => expect(router.state.location.pathname).toBe(`/rep/${FIXTURE_BOARD_REPO}/project/questions`));
   });
 
   it("keeps the destination hint out of the row name and reveals it on hover", async () => {
     renderOverview();
-    const row = await screen.findByRole("button", { name: /Is the board sync healthy\?/ });
+    const row = await screen.findByRole("button", { name: /Does the console show board pressure/ });
     // The hint names the destination; a row's own detail may legitimately contain an arrow
     // (a question's recommendation renders as `→ <rec>`), so the assertion targets the hint.
     expect(screen.queryByRole("button", { name: /→ Questions/ })).toBeNull();
-    expect(row.getAttribute("title")).toContain("Is the board sync healthy?");
+    expect(row.getAttribute("title")).toContain("Does the console show board pressure");
     const hint = within(row).getByText("→ Questions");
     expect(hint.getAttribute("aria-hidden")).toBe("true");
     expect(hint.className).toContain("opacity-0");

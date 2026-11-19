@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adaptersFromEnv, fixtureAdapters } from "../index.tsx";
 import { FIXTURE_BOARD_REPO, createStatusBoardFixtureAdapter, fixtureStatusBoard } from "./fixture.ts";
-import { RECORD_CACHE_MS, createStatusBoardLiveAdapter, mapScheduleDay, normaliseDoc } from "./live.ts";
+import { RECORD_CACHE_MS, createStatusBoardLiveAdapter, mapBoardNext, mapFollowUp, mapProposal, mapScheduleDay, mapStatusRow, normaliseDoc } from "./live.ts";
 import { StatusBoardError, type BoardGap } from "./types.ts";
 
 // The bridge is the only reader of the board; these tests exercise the adapter boundary against
@@ -62,9 +62,10 @@ describe("statusBoard live adapter: page assembly", () => {
 
   it("surfaces the bridge's truncation instead of pretending the list is complete", async () => {
     const { fetchImpl, calls } = responder(() => okPage([wire("workers/a", { status: "idle" })], { truncated: true }));
-    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listWorkers(REPO, { limit: 999 });
+    // The bound is 1000 records: the answers collection passed the old 200-record ceiling.
+    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listWorkers(REPO, { limit: 5000 });
     expect(page.truncated).toBe(true);
-    expect(calls[0]).toContain("limit=200");
+    expect(calls[0]).toContain("limit=1000");
   });
 
   it("clamps a limit below the bridge minimum", async () => {
@@ -144,6 +145,17 @@ describe("statusBoard live adapter: page assembly", () => {
     expect(page.records.map((r) => r.doc.id)).toEqual(["q-2"]);
     expect(gapsFor(page.gaps, "rows").map((g) => g.value)).toEqual([JSON.stringify({ id: "q-1" })]);
     expect(gapsFor(page.gaps, "rows[1]").map((g) => g.value)).toEqual(["not a row"]);
+  });
+
+  it("reports a row without a usable id as a gap instead of inventing one", async () => {
+    const { fetchImpl } = responder(() =>
+      okPage([wire("questions/odd", { rows: [{ q: "no id at all" }, { id: 7, q: "numeric id" }, { id: "q-good", q: "fine" }] })]),
+    );
+    const page = await createStatusBoardLiveAdapter({ fetchImpl }).listQuestions(REPO);
+    // The id is the answer key, so an unusable one cannot be answered: the row is a gap, not a
+    // synthetic `owner#index` id that no `answers/<qid>` record could ever match.
+    expect(page.records.map((record) => record.doc.id)).toEqual(["q-good"]);
+    expect(gapsFor(page.gaps, "id").map((gap) => gap.value)).toEqual(["<absent>", "7"]);
   });
 
   it("reports an unparseable document as a gap instead of an empty record", () => {
@@ -294,6 +306,116 @@ describe("statusBoard live adapter: bounded record cache", () => {
   });
 });
 
+
+describe("statusBoard mappers: the shapes the deployed store writes", () => {
+  // Every document below is copied from a read-only sweep of mercury/market-data (XTRM-906). Each
+  // test fails against the previous mapper, which expected one flat document per record.
+  it("maps schedule/<day> `events` as the id-keyed map the store writes", () => {
+    const mapped = mapScheduleDay(
+      wire("schedule/2026-11-25", {
+        date: "2026-11-25",
+        events: {
+          "e_2200_ISSUE-711": {
+            at: "2026-11-25T22:00Z",
+            end: "2026-11-25T22:59Z",
+            ref: "ISSUE-711",
+            label: "MMD window: Gate-2 report",
+            status: "scheduled",
+            note: "22:00-22:59Z",
+            note_src: "22:40Z move",
+            kind: "window",
+            created_by: "sync-jira",
+            url: "https://mercuryintel.atlassian.net/browse/ISSUE-711",
+          },
+          "e_2300_ISSUE-712": { at: "2026-11-25T23:00Z", kind: "pr", title: "Rebuild day", status: "planned" },
+        },
+      }),
+    );
+    expect(mapped.value.map((event) => event.id)).toEqual(["e_2200_ISSUE-711", "e_2300_ISSUE-712"]);
+    expect(mapped.value[0]).toMatchObject({ day: "2026-11-25", ref: "ISSUE-711", kind: "window", noteSrc: "22:40Z move", createdBy: "sync-jira" });
+    // `title` stays its own field; a renderer falls back to it, the mapper never renames it.
+    expect(mapped.value[1]).toMatchObject({ title: "Rebuild day" });
+    expect(mapped.value[1]!.label).toBeUndefined();
+    expect(mapped.gaps).toEqual([]);
+  });
+
+  it("keeps a map entry that is not an object as a gap, and maps a flat event document", () => {
+    const broken = mapScheduleDay(wire("schedule/2026-11-26", { events: { e_1: "22:00" } }));
+    expect(broken.value).toEqual([]);
+    expect(broken.gaps).toEqual([{ path: "schedule/2026-11-26", field: "events.e_1", value: "22:00" }]);
+
+    // The pre-map shape (one event per document) still maps.
+    const flat = mapScheduleDay(wire("schedule/2026-11-27", { id: "evt-9", kind: "report", label: "Daily close-out" }));
+    expect(flat.value).toHaveLength(1);
+    expect(flat.value[0]).toMatchObject({ id: "evt-9", kind: "report", day: "2026-11-27" });
+  });
+
+  it("maps board/next `rows[]` with key, title, why, window and status", () => {
+    const mapped = mapBoardNext(
+      wire("board/next", {
+        rows: [
+          { key: "ISSUE-499", title: "Migrazione", start: "2026-10-29T15:37Z", end: "2026-10-29T16:22Z", why: "Riprogrammata.", status: "Waiting Production" },
+          { key: "ISSUE-419", title: "Passata a Waiting Production" },
+        ],
+      }),
+    );
+    expect(mapped.value.rows?.map((row) => row.key)).toEqual(["ISSUE-499", "ISSUE-419"]);
+    expect(mapped.value.rows?.[0]).toMatchObject({ start: "2026-10-29T15:37Z", end: "2026-10-29T16:22Z", why: "Riprogrammata.", status: "Waiting Production" });
+    expect(mapped.gaps).toEqual([]);
+
+    const flat = mapBoardNext(wire("board/next", { title: "Overview", ref: "XTRM-817" }));
+    expect(flat.value).toMatchObject({ title: "Overview", ref: "XTRM-817" });
+    expect(flat.value.rows).toBeUndefined();
+  });
+
+  it("maps status/<session> from/now/next/links, and keeps the flat form", () => {
+    // The live board writes each link as a `{label, url}` document; a bare string is the older shape.
+    const mapped = mapStatusRow(
+      wire("status/wed11-coord", {
+        from: "wed11-coord",
+        at: "2026-11-14T00:30Z",
+        now: "PRD e MAPPA",
+        next: "merge the map PR",
+        links: [{ label: "Risposta ISSUE-711", url: "https://mercuryintel.atlassian.net/browse/ISSUE-711" }, "ISSUE-906"],
+      }),
+    );
+    expect(mapped.value).toMatchObject({ session: "wed11-coord", from: "wed11-coord", now: "PRD e MAPPA", next: "merge the map PR" });
+    expect(mapped.value.links).toEqual([{ label: "Risposta ISSUE-711", url: "https://mercuryintel.atlassian.net/browse/ISSUE-711" }, { label: "ISSUE-906" }]);
+    expect(mapped.gaps).toEqual([]);
+
+    expect(mapStatusRow(wire("status/sre-ops", { state: "idle", status: "idle" })).value).toMatchObject({ state: "idle", status: "idle" });
+  });
+
+  it("maps proposals/<date> why/deadline/open/slips", () => {
+    const mapped = mapProposal(
+      wire("proposals/2026-10-29", {
+        title: "Piano del 29-10",
+        why: "Stato dei prossimi giorni.",
+        deadline: "Scadenza rigida: 2026-11-05.",
+        open: ["PR #940 e #1117 in attesa.", "ISSUE-564: nessuno slot."],
+        slips: [{ ref: "ISSUE-561", to: "2026-10-30 14:22Z", why: "apply fermato" }, { ref: "ISSUE-499", to: "2026-10-29 15:37Z" }],
+      }),
+    );
+    expect(mapped.value).toMatchObject({ why: "Stato dei prossimi giorni.", deadline: "Scadenza rigida: 2026-11-05." });
+    expect(mapped.value.open).toHaveLength(2);
+    expect(mapped.value.slips).toEqual([
+      { ref: "ISSUE-561", to: "2026-10-30 14:22Z", why: "apply fermato" },
+      { ref: "ISSUE-499", to: "2026-10-29 15:37Z" },
+    ]);
+    expect(mapped.gaps).toEqual([]);
+
+    const broken = mapProposal(wire("proposals/2026-10-30", { slips: ["ISSUE-561"] }));
+    expect(broken.value.slips).toEqual([]);
+    expect(broken.gaps).toEqual([{ path: "proposals/2026-10-30", field: "slips[0]", value: "ISSUE-561" }]);
+  });
+
+  it("keeps a follow-up's note and at, which the board writes for held commitments", () => {
+    const mapped = mapFollowUp(wire("followups/opencode-go-quota", { note: "weekly limit hit 2026-10-29T23:01Z", at: "2026-10-29T22:15Z", when: "next week" }));
+    expect(mapped.value).toMatchObject({ ref: "opencode-go-quota", note: "weekly limit hit 2026-10-29T23:01Z", at: "2026-10-29T22:15Z", when: "next week" });
+    expect(mapped.gaps).toEqual([]);
+  });
+});
+
 describe("statusBoard fixture adapter", () => {
   it("serves a realistic slice through the same mappers as the live adapter", async () => {
     const workers = await fixtureStatusBoard.listWorkers(FIXTURE_BOARD_REPO);
@@ -321,7 +443,10 @@ describe("statusBoard fixture adapter", () => {
     expect((await fixtureStatusBoard.listAnswers(FIXTURE_BOARD_REPO)).records).toHaveLength(3);
     expect((await fixtureStatusBoard.listStatus(FIXTURE_BOARD_REPO)).records).toHaveLength(2);
     expect((await fixtureStatusBoard.listProposals(FIXTURE_BOARD_REPO)).records).toHaveLength(1);
-    expect((await fixtureStatusBoard.boardNext(FIXTURE_BOARD_REPO))?.doc).toMatchObject({ ref: "XTRM-817" });
+    // board/next is the store's `rows[]` document, not one flat pointer.
+    const next = await fixtureStatusBoard.boardNext(FIXTURE_BOARD_REPO);
+    expect(next?.doc.rows?.map((row) => row.key)).toEqual(["XTRM-817", "XTRM-820", "XTRM-821"]);
+    expect(next?.doc.rows?.[1]).toMatchObject({ status: "Blocked", why: "waiting for the reference resolution" });
 
     const record = await fixtureStatusBoard.record(FIXTURE_BOARD_REPO, "workers/board-worker");
     expect(record?.doc).toMatchObject({ status: "working", ctxPct: 42 });

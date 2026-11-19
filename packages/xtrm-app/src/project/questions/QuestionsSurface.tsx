@@ -17,7 +17,7 @@ import { QuestionRow } from "./QuestionRow.tsx";
  * therefore offers no control that writes, and the state line says where the answer goes.
  */
 
-export interface QuestionGroup {
+interface QuestionGroup {
   owner: string;
   rows: Question[];
 }
@@ -33,7 +33,7 @@ function questionAt(question: Question): number {
  * list is stable between reads; inside a group the longest-waiting question comes first (the same
  * oldest-first reading the Overview attention list uses for unanswered questions).
  */
-export function groupQuestions(questions: ReadonlyArray<Question>): QuestionGroup[] {
+function groupQuestions(questions: ReadonlyArray<Question>): QuestionGroup[] {
   const buckets = new Map<string, Question[]>();
   for (const question of questions) {
     const owner = question.owner ?? question.by ?? "no owner";
@@ -45,7 +45,7 @@ export function groupQuestions(questions: ReadonlyArray<Question>): QuestionGrou
 }
 
 /** The question ids the board has an `answers/<qid>` record for. */
-export function answeredQids(answers: ReadonlyArray<BoardRecord<Answer>>): Set<string> {
+function answeredQids(answers: ReadonlyArray<BoardRecord<Answer>>): Set<string> {
   const qids = new Set<string>();
   for (const answer of answers) if (answer.doc.qid) qids.add(answer.doc.qid);
   return qids;
@@ -67,6 +67,14 @@ export function QuestionsSurface() {
   const answered = answeredQids(answers.data?.records ?? []);
   const groups = groupQuestions(rows);
   const answeredCount = rows.filter((question) => answered.has(question.id)).length;
+
+  // A bounded read and an unreadable record both make the list incomplete; the page says so
+  // instead of presenting a short page as the whole board.
+  const caveats: string[] = [];
+  if (questions.data?.truncated) caveats.push(`the questions page stopped at ${rows.length} records; more remain on the board`);
+  if (answers.data?.truncated) caveats.push("the answers page stopped at its limit, so some rows may read unanswered");
+  const gapCount = (questions.data?.gaps.length ?? 0) + (answers.data?.gaps.length ?? 0);
+  if (gapCount > 0) caveats.push(`${gapCount} record${gapCount === 1 ? "" : "s"} could not be read as declared`);
 
   const shell = (children: ReactNode) => (
     <ProjectShell
@@ -95,6 +103,11 @@ export function QuestionsSurface() {
       <p className="px-1.5 pt-2 text-xs text-ink-faint" data-testid="questions-read-only">
         Read-only. Answering stays on the status board until XTRM-821.
       </p>
+      {caveats.length > 0 && (
+        <p className="px-1.5 pt-1 text-xs text-ink-faint" data-testid="questions-caveat">
+          Incomplete read: {caveats.join("; ")}.
+        </p>
+      )}
       {groups.length === 0 && <p className="px-1.5 py-2 text-xs text-ink-faint">No open questions on this board.</p>}
       {groups.map((group) => (
         <section key={group.owner} aria-label={`Owner ${group.owner}`} data-testid="question-group" data-owner={group.owner}>

@@ -81,29 +81,49 @@ function documents(now: () => number): WireRecord[] {
   const today = dayKey(now, 0);
   const tomorrow = dayKey(now, 1);
   const yesterday = dayKey(now, -1);
+  // `schedule/<day>`: the store writes `events` as an id-keyed MAP, two fields in snake_case, and
+  // either `label` or `title` on an event. All of that is reproduced, so the fixture cannot pass
+  // against a shape the deployed board does not use.
   const schedule: WireRecord[] = [
     record(`schedule/${yesterday}`, {
       date: yesterday,
-      events: [
-        { id: "evt-1", at: iso(now, -DAY + 9 * 60 * MINUTE), kind: "window", label: "Deploy window", status: "done", ref: "XTRM-416", createdBy: "manager" },
-        { id: "evt-2", at: iso(now, -DAY + 14 * 60 * MINUTE), kind: "report", label: "Daily close-out", status: "done", createdBy: "lead" },
-      ],
+      events: {
+        "e_0900_XTRM-416": { at: iso(now, -DAY + 9 * 60 * MINUTE), kind: "window", label: "Deploy window", status: "done", ref: "XTRM-416", created_by: "manager" },
+        "e_1400_XTRM-417": { at: iso(now, -DAY + 14 * 60 * MINUTE), kind: "report", title: "Daily close-out", status: "done", created_by: "lead" },
+      },
+      updatedAt: iso(now, -DAY),
+      updatedBy: "sync",
     }),
     record(
       `schedule/${today}`,
       JSON.stringify({
         date: today,
-        events: [
-          { id: "evt-3", at: iso(now, -60 * MINUTE), kind: "handover", label: "Shift handover", status: "done", createdBy: "manager" },
-          { id: "evt-4", at: iso(now, 45 * MINUTE), end: iso(now, 75 * MINUTE), kind: "pr", label: "Project is a repository section", status: "ready", ref: "XTRM-816", url: "https://github.com/xtrm-dev/xtrm/pull/417", createdBy: "console-lead" },
-        ],
+        events: {
+          "e_0830_XTRM-816": { at: iso(now, -60 * MINUTE), kind: "handover", label: "Shift handover", status: "done", created_by: "manager" },
+          "e_0945_XTRM-816": {
+            at: iso(now, 45 * MINUTE),
+            end: iso(now, 75 * MINUTE),
+            kind: "pr",
+            label: "Project is a repository section",
+            status: "ready",
+            ref: "XTRM-816",
+            note: "45 minutes of review time, then the merge window",
+            note_src: "45 minutes of review time",
+            url: "https://github.com/xtrm-dev/xtrm/pull/417",
+            created_by: "console-lead",
+          },
+        },
+        updatedAt: iso(now, -2 * MINUTE),
+        updatedBy: "sync",
       }),
     ),
     record(`schedule/${tomorrow}`, {
       date: tomorrow,
-      events: [
-        { id: "evt-5", at: iso(now, DAY + 8 * 60 * MINUTE), kind: "incident", label: "Board sync review", status: "planned", createdBy: "sre-ops" },
-      ],
+      events: {
+        "e_0800_XTRM-811": { at: iso(now, DAY + 8 * 60 * MINUTE), kind: "incident", label: "Board sync review", status: "planned", created_by: "sre-ops" },
+      },
+      updatedAt: iso(now, -DAY),
+      updatedBy: "sync",
     }),
   ];
 
@@ -153,15 +173,42 @@ function documents(now: () => number): WireRecord[] {
   ];
   const followups = [
     record("followups/XTRM-820", { ref: "XTRM-820", title: "Jira chips on issue pages", plain: "show the linked Jira issue", status: "open", priority: "P2", area: "console", owner: "quant-reviewer", when: "after XTRM-815", refs: ["XTRM-815", "XTRM-317"] }),
-    record("followups/XTRM-821", { ref: "XTRM-821", title: "Answer writing", plain: "answer a board question from the app", status: "deferred", priority: "P3", area: "console", owner: "operator", refs: ["XTRM-820", "XTRM-816"] }),
+    record("followups/XTRM-821", { ref: "XTRM-821", title: "Answer writing", plain: "answer a board question from the app", status: "deferred", priority: "P3", area: "console", owner: "operator", refs: ["XTRM-820", "XTRM-816"], note: "held until the read-only tranche closes; answers still go through the board UI", at: iso(now, -90 * MINUTE) }),
   ];
+  // `status/<session>`: `{from, at, now, next, links}` — the long prose the operator reads.
   const status = [
-    record("status/board-worker", { state: "working", status: "working", issue: "XTRM-817", at: iso(now, -4 * MINUTE), note: "composing Overview" }),
-    record("status/sre-ops", { state: "idle", status: "idle", at: iso(now, -9 * MINUTE) }),
+    record("status/board-worker", {
+      from: "board-worker",
+      at: iso(now, -4 * MINUTE),
+      now: "Composing the Overview from the attention list; the question count is the only number still open.",
+      next: "Wire the proposal slips once the adapter reads the real proposals shape.",
+      links: [{ label: "Project Overview", url: "https://github.com/xtrm-dev/xtrm/issues" }, { label: "XTRM-817" }],
+    }),
+    record("status/sre-ops", { from: "sre-ops", at: iso(now, -9 * MINUTE), now: "Board sync green; drift checked at the last pass." }),
   ];
-  const board = [record("board/next", { title: "Project Overview lands on the fixture first", owner: "board-worker", ref: "XTRM-817", at: iso(now, -5 * MINUTE) })];
+  // `board/next`: one document whose `rows[]` carry the pointer, each with its own key and reason.
+  const board = [
+    record("board/next", {
+      rows: [
+        { key: "XTRM-817", title: "Project Overview lands on the fixture first", status: "Working", why: "the operator's daily read depends on it" },
+        { key: "XTRM-820", title: "Jira read path", status: "Blocked", why: "waiting for the reference resolution", start: iso(now, -5 * MINUTE) },
+        { key: "XTRM-821", title: "Answer writing", status: "Deferred", why: "after the read-only tranche" },
+      ],
+      updatedAt: iso(now, -5 * MINUTE),
+      updatedBy: "manager",
+    }),
+  ];
+  // `proposals/<date>`: title/why/deadline/open/slips, the store's own proposal shape.
   const proposals = [
-    record("proposals/2026-11-17", { at: iso(now, -3 * 60 * MINUTE), title: "Project is a repository section", status: "accepted", owner: "operator", refs: ["XTRM-816"], note: "ADR-002 D1" }),
+    record("proposals/2026-11-17", {
+      title: "Project is a repository section",
+      why: "one console for the board, the workers and the questions that wait on the operator",
+      deadline: "Scadenza rigida: 2026-11-21",
+      open: ["Should answering land before the Jira read path?", "Does the attention list show every repository?"],
+      slips: [{ ref: "XTRM-820", to: "2026-11-20", why: "the Jira client lands one tranche later" }],
+      updatedAt: iso(now, -3 * 60 * MINUTE),
+      updatedBy: "operator",
+    }),
   ];
 
   return [...workers, ...schedule, ...questions, ...answers, ...followups, ...status, ...board, ...proposals];

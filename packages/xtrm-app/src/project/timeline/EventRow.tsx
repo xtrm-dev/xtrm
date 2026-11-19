@@ -45,7 +45,8 @@ export function EventRow({ event, timeLabel, endLabel, past, repoBase }: EventRo
   const navigate = useNavigate();
   const detailsId = `event-detail-${event.id}`;
   const kind = event.kind ?? "unknown";
-  const label = event.label ?? event.id;
+  // The store writes `label` or `title` for an event; both are its own name for the row.
+  const label = event.label ?? event.title ?? event.id;
   const issueHref = event.ref && /^[A-Za-z][A-Za-z0-9]*-\d+(?:\.\d+)*$/.test(event.ref) ? `${repoBase}/work/issues/${event.ref}` : null;
   const action = event.url ?? issueHref;
 
@@ -96,7 +97,7 @@ export function EventRow({ event, timeLabel, endLabel, past, repoBase }: EventRo
           <dt className="text-ink-faint">ref</dt>
           <dd className="font-mono text-ink-muted">{event.ref ?? "—"}</dd>
           <dt className="text-ink-faint">label</dt>
-          <dd className="text-ink-muted">{event.label ?? "—"}</dd>
+          <dd className="text-ink-muted">{event.label ?? event.title ?? "—"}</dd>
           <dt className="text-ink-faint">note</dt>
           <dd className="text-ink-muted">
             {event.note ?? "—"}
