@@ -20,7 +20,7 @@ describe("Issues toolbar (XTRM-855)", () => {
     renderIssues();
     expect(await screen.findByRole("region", { name: "XTRM Issues" })).toBeTruthy();
     // The primary action appears once the write capability resolves; it keeps ink text.
-    const primary = await screen.findByRole("button", { name: "New issue" }, { timeout: 5000 });
+    const primary = await screen.findByRole("button", { name: "New issue" });
     expect(primary.className.split(/\s+/)).toContain("font-medium");
     // A ghost control may carry `hover:bg-hover`; the chip it replaced carried the `bg-pressed` fill.
     for (const label of ["Status", "Priority", "Type"]) {
@@ -34,7 +34,7 @@ describe("Issues toolbar (XTRM-855)", () => {
 
   it("counts the filter against the same population the facets leave visible", async () => {
     renderIssues();
-    await screen.findByRole("button", { name: "New issue" }, { timeout: 5000 });
+    await screen.findByRole("button", { name: "New issue" });
     fireEvent.click(screen.getByRole("button", { name: "Filter this list" }));
     fireEvent.change(screen.getByLabelText("Filter issues"), { target: { value: "XTRM-359" } });
     // Unfaceted, the population is every loaded issue.
