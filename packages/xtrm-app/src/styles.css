@@ -173,6 +173,9 @@
   --color-input: var(--x-control);
   --color-ring: var(--x-accent);
 
+  /* One step below --text-xs, for the timeline's `now` marker; it was a 10px literal (XTRM-907). */
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 0.875rem;
   --text-xs: 0.72rem;
   --text-xs--line-height: 1rem;
   --text-sm: 0.8125rem;

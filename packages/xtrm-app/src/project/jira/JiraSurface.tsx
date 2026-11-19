@@ -33,7 +33,7 @@ export function JiraSurface() {
       source={jira.source}
       toolbar={
         bound && binding.data?.project ? (
-          <span className="truncate font-mono text-[11px] text-ink-faint" data-testid="jira-binding">
+          <span className="truncate font-mono text-xs text-ink-faint" data-testid="jira-binding">
             {binding.data.project}
             {binding.data.site === null ? "" : ` · ${binding.data.site}`}
           </span>
@@ -70,7 +70,7 @@ export function JiraSurface() {
       <div className="border-b border-border-muted px-3 py-1.5">
         <div className={JIRA_GRID} role="row">
           {["Key", "Summary", "Status", "Assignee", "Sync", "Substrate"].map((label) => (
-            <span key={label} role="columnheader" className="text-[11px] text-ink-faint">
+            <span key={label} role="columnheader" className="text-xs text-ink-faint">
               {label}
             </span>
           ))}

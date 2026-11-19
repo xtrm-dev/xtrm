@@ -125,7 +125,7 @@ export function GithubIssuesSurface() {
                     type="button"
                     onClick={() => setSort(c.sort!)}
                     className={cx(
-                      "flex h-full w-full items-center overflow-hidden text-[11px] font-normal outline-none hover:text-ink focus-visible:bg-hover",
+                      "flex h-full w-full items-center overflow-hidden text-xs font-normal outline-none hover:text-ink focus-visible:bg-hover",
                       c.align === "right" && "justify-end",
                       sort === c.sort ? "text-ink" : "text-ink-faint",
                     )}
@@ -133,7 +133,7 @@ export function GithubIssuesSurface() {
                     {c.label}
                   </button>
                 ) : (
-                  <span className={cx("truncate text-[11px] font-normal text-ink-faint", c.align === "right" && "w-full text-right")}>{c.label}</span>
+                  <span className={cx("truncate text-xs font-normal text-ink-faint", c.align === "right" && "w-full text-right")}>{c.label}</span>
                 )}
               </div>
             ))}
@@ -155,7 +155,7 @@ export function GithubIssuesSurface() {
         <SourceBadge source={github.source} />
         <ToolbarTabs label="GitHub issue state" value={view} onChange={(id) => setView(id as IssueView)} tabs={VIEWS.map((v) => ({ id: v.id, label: v.label, count: counts[v.id] }))} />
         <ListFilter value={query} onChange={setQuery} placeholder="Filter GitHub issues" count={rows.length} total={issues.data?.length} />
-        <span className="ml-auto hidden truncate text-[11px] text-ink-faint xl:inline">GitHub tracker, not XTRM Issues</span>
+        <span className="ml-auto hidden truncate text-xs text-ink-faint xl:inline">GitHub tracker, not XTRM Issues</span>
         <OptionsMenu
           label="GitHub issue options"
           items={[

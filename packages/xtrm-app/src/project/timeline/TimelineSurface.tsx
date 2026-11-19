@@ -61,7 +61,7 @@ export function TimelineSurface() {
           <ToolbarButton icon="target" onClick={() => goto(today)} disabled={day === today}>
             Today
           </ToolbarButton>
-          <span className="ml-1 text-[11px] text-ink-faint" data-testid="timeline-timezone">
+          <span className="ml-1 text-xs text-ink-faint" data-testid="timeline-timezone">
             {timeZone}
           </span>
         </>

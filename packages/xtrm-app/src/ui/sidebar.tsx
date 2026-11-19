@@ -14,7 +14,7 @@ export function SidebarSection({ label, children, defaultOpen = true }: { label:
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="group/sec flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-ink-faint outline-none hover:text-ink-muted focus-visible:bg-hover"
+        className="group/sec flex h-7 items-center gap-1 rounded-md px-2 text-xs font-semibold text-ink-faint outline-none hover:text-ink-muted focus-visible:bg-hover"
       >
         {label}
         <Icon name="chevronDown" size="xs" className={cx("opacity-70 transition group-hover/sec:opacity-100 group-focus-visible/sec:opacity-100", !open && "-rotate-90")} />

@@ -91,7 +91,7 @@ function MetricDatasetChart({
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <h4 className="text-xs font-medium text-ink">{meta.label}</h4>
         <span className="text-xs text-ink-faint">{meta.description}</span>
-        {meta.direction && meta.direction !== "unspecified" && <span className="text-[11px] text-ink-faint">{meta.direction.replaceAll("_", " ")}</span>}
+        {meta.direction && meta.direction !== "unspecified" && <span className="text-xs text-ink-faint">{meta.direction.replaceAll("_", " ")}</span>}
       </div>
       <div className="flex flex-col gap-2">
         {measured.map((row) => {

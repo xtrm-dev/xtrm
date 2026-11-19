@@ -84,11 +84,11 @@ export function OverviewSurface() {
       <NowNext record={next.data ?? null} base={base} />
       <section aria-label="Attention" className="flex flex-col">
         <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border-muted px-3 py-1.5">
-          <h2 className="text-[11px] font-medium tracking-wide text-ink-faint uppercase">Attention</h2>
-          <span className="text-[11px] text-ink-faint tabular" data-testid="attention-count">
+          <h2 className="text-xs font-medium tracking-wide text-ink-faint uppercase">Attention</h2>
+          <span className="text-xs text-ink-faint tabular" data-testid="attention-count">
             {counts.total}
           </span>
-          <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-faint">
+          <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
             {REASON_ORDER.filter((reason) => counts[reason] > 0).map((reason) => (
               <span key={reason} data-testid={`attention-count-${reason.replaceAll(" ", "-").toLowerCase()}`}>
                 {reason} <span className="tabular">{counts[reason]}</span>
@@ -97,7 +97,7 @@ export function OverviewSurface() {
           </span>
         </header>
         {caveats.length > 0 && (
-          <p className="px-3 pt-1 text-[11px] text-ink-faint" data-testid="attention-caveat">
+          <p className="px-3 pt-1 text-xs text-ink-faint" data-testid="attention-caveat">
             Incomplete read: {caveats.join("; ")}.
           </p>
         )}
@@ -123,8 +123,8 @@ function NowNext({ record, base }: { record: BoardRecord<BoardNext> | null; base
   return (
     <section aria-label="Now and next" className="flex flex-col">
       <header className="flex items-center gap-2 border-b border-border-muted px-3 py-1.5">
-        <h2 className="text-[11px] font-medium tracking-wide text-ink-faint uppercase">Now / next</h2>
-        <span className="ml-auto text-[11px] text-ink-faint">from board/next</span>
+        <h2 className="text-xs font-medium tracking-wide text-ink-faint uppercase">Now / next</h2>
+        <span className="ml-auto text-xs text-ink-faint">from board/next</span>
       </header>
       {record && rows.length > 0 ? (
         <ul className="flex flex-col" data-testid="now-next-rows">

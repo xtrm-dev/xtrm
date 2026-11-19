@@ -8,7 +8,7 @@
 export function NowMarker() {
   return (
     <div role="separator" aria-label="now" data-testid="now-marker" className="flex items-center gap-2 px-3 py-1">
-      <span className="text-[10px] font-medium tracking-wide text-danger uppercase">now</span>
+      <span className="text-2xs font-medium tracking-wide text-danger uppercase">now</span>
       <span className="h-px flex-1 border-t border-danger" />
     </div>
   );

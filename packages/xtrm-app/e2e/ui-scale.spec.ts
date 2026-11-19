@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { join } from "node:path";
+import { expect, test } from "@playwright/test";
+import { capture, MAX_DOMINANT, MIN_COLOURS, profile } from "./scale-capture.ts";
 
 /**
  * XTRM-897: one scale for the console. The type tokens are rem (`body` takes `--text-sm` =
@@ -7,13 +9,23 @@ import { expect, test, type Page } from "@playwright/test";
  * 16px, where a hard-coded 13px child rendered 1.33x its 9.75px parent rows and a 16px filter glyph
  * sat beside 8.64px toolbar text.
  *
- * jsdom cannot resolve rem or lay out a box (`src/ui/scale.test.tsx` guards the classes), so the
- * measurement of computed font size and rendered glyph box lives here. The screenshots written at
- * the end are the evidence the lead compares with the operator's.
+ * XTRM-907: the section header was the last px font size (`text-[11px]`), which made it the largest
+ * text in the sidebar at the operator's root; the spec now measures it too.
+ *
+ * jsdom cannot resolve rem or lay out a box (`src/ui/scale.test.tsx`, `src/ui/units.test.ts` guard
+ * the classes and the literals), so the measurement of computed font size and rendered glyph box
+ * lives here.
+ *
+ * Screenshots go to the test's own output dir (e2e/.results, gitignored) so a routine run cannot
+ * dirty the tracked evidence. The committed set under docs/screenshots/ui-scale is produced on
+ * purpose: `SCALE_SHOTS_DIR=docs/screenshots/ui-scale SCALE_PHASE=after npx playwright test -g "scale screenshots"`.
  */
 
 const REPO = "xtrm-dev/xtrm";
-const OUT = "docs/screenshots/ui-scale";
+/** Export directory for the committed evidence; unset means the test's output dir. */
+const EXPORT_DIR = process.env.SCALE_SHOTS_DIR;
+/** `before` = the pre-XTRM-897 sources, `after` = the current tree. */
+const PHASE = process.env.SCALE_PHASE ?? "after";
 /** The operator's environment: a browser default font size of 12px, reproduced with a root override. */
 const OPERATOR_ROOT = "12px";
 
@@ -33,10 +45,14 @@ const METRICS = () => {
   const parent = rows.find((row) => row.textContent?.trim().startsWith("Project"))!;
   const child = rows.find((row) => row.textContent?.trim() === "Overview")!;
   const main = document.querySelector('[data-testid="primary-region"]') as HTMLElement;
+  const header = Array.from(sidebar.querySelectorAll<HTMLElement>("button[aria-expanded]")).find((el) =>
+    /^(Workspace|GitHub|System)$/.test((el.textContent ?? "").trim()),
+  );
   const button = (name: string) => main.querySelector(`button[aria-label="${name}"]`);
   const primary = Array.from(main.querySelectorAll<HTMLButtonElement>("button")).find((el) => el.textContent?.trim() === "New issue");
   return {
     root: getComputedStyle(document.documentElement).fontSize,
+    header: header ? type(header) : null,
     parent: {
       label: type(parent.querySelector("span.truncate")!),
       x: round(parent.querySelector("span.truncate")!.getBoundingClientRect().x),
@@ -86,6 +102,9 @@ for (const root of ["16px", OPERATOR_ROOT]) {
     expect(Number(metrics.child.label.weight)).toBeLessThan(Number(metrics.parent.label.weight));
     // The aligned label column survives the root size, so the two rows cannot drift apart.
     expect(Math.abs(metrics.child.x - metrics.parent.x)).toBeLessThanOrEqual(1);
+    // XTRM-907: the section header is a step below the row label, never the largest text here.
+    expect(metrics.header).not.toBeNull();
+    expect(metrics.header!.font).toBeLessThan(metrics.parent.label.font);
   });
 
   test(`the toolbar filter glyph uses the toolbar scale at a ${root} root`, async ({ page }) => {
@@ -107,6 +126,10 @@ for (const root of ["16px", OPERATOR_ROOT]) {
 for (const theme of ["dark", "light"] as const) {
   test(`scale screenshots (${theme})`, async ({ page }) => {
     test.setTimeout(90_000);
+    const output = test.info().outputPath();
+    const shot = (tag: string, surface: string) =>
+      EXPORT_DIR ? join(EXPORT_DIR, `${PHASE}-${theme}-${tag}-${surface}.png`) : join(output, `${theme}-${tag}-${surface}.png`);
+
     await page.addInitScript((value) => localStorage.setItem("xtrm.console.theme.v1", value), theme);
     for (const [root, tag] of [
       ["16px", "root16"],
@@ -114,15 +137,45 @@ for (const theme of ["dark", "light"] as const) {
     ] as const) {
       await openSidebar(page);
       await setRoot(page, root);
-      await page.getByTestId("context-sidebar").screenshot({ path: `${OUT}/after-${theme}-${tag}-sidebar.png` });
+      const sidebarShot = shot(tag, "sidebar");
+      await page.getByTestId("context-sidebar").screenshot({ path: sidebarShot });
+      await capture(page, sidebarShot);
 
       await openIssues(page);
       await setRoot(page, root);
       const box = (await page.getByTestId("primary-region").boundingBox())!;
+      const toolbarShot = shot(tag, "issues-toolbar");
       await page.screenshot({
-        path: `${OUT}/after-${theme}-${tag}-issues-toolbar.png`,
+        path: toolbarShot,
         clip: { x: box.x, y: box.y, width: Math.min(box.width, 1100), height: 96 },
       });
+      await capture(page, toolbarShot);
     }
   });
 }
+
+test.describe("the capture gate", () => {
+  test("rejects a blank capture", async ({ page }) => {
+    // The defect that reached review: a 264x900 region captured as one flat fill.
+    const path = join(test.info().outputPath(), "blank.png");
+    await page.setContent('<div style="width:264px;height:900px;background:#232323"></div>');
+    await page.locator("div").screenshot({ path });
+    await expect(capture(page, path)).rejects.toThrow();
+  });
+
+  test("reads a flat image as a single dominant colour", async ({ page }) => {
+    const dataUrl = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 264;
+      canvas.height = 900;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = "#232323";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    });
+    const { colours, dominant } = await profile(page, dataUrl);
+    expect(colours).toBe(1);
+    expect(colours).toBeLessThanOrEqual(MIN_COLOURS);
+    expect(dominant).toBeGreaterThanOrEqual(MAX_DOMINANT);
+  });
+});

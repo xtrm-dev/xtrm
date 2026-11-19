@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ICON_REM, Icon } from "./icon.tsx";
+import { GithubMark } from "./github-mark.tsx";
 import { NavRailItem } from "./nav-rail.tsx";
 import { IconButton } from "./primitives.tsx";
 import { SidebarRow } from "./sidebar.tsx";
@@ -27,6 +28,14 @@ const remOf = (className: string) => {
 };
 
 describe("the glyph ladder is a rem ladder", () => {
+  it("derives every step to a finite rem number", () => {
+    // `remOf` returns NaN for a class it cannot read; a silently NaN ladder would make every
+    // comparison below vacuous (toBeCloseTo(NaN) fails, but only once a class is rendered).
+    for (const [size, rem] of Object.entries(ICON_REM)) {
+      expect(Number.isFinite(rem), `${size} must resolve to a number`).toBe(true);
+      expect(rem, `${size} must be positive`).toBeGreaterThan(0);
+    }
+  });
   it("resolves every icon size to the px it has at a 16px root, in rem", () => {
     for (const [size, rem] of Object.entries(ICON_REM) as Array<[keyof typeof ICON_REM, number]>) {
       const { container } = render(<Icon name="pull" size={size} />);
@@ -79,6 +88,15 @@ describe("the new rows and controls use the existing tokens", () => {
     expect(sizeClass(named.getByRole("button", { name: "Filter" }).querySelector("svg")!)).toBe("size-[0.8125rem]");
     const fallback = render(<IconButton icon="filter" label="Default" />);
     expect(sizeClass(fallback.getByRole("button", { name: "Default" }).querySelector("svg")!)).toBe("size-4");
+  });
+
+  it("sizes the octocat mark from the same rem ladder", () => {
+    // The mark is a glyph: a px `size` number here stayed put while the text shrank (XTRM-907).
+    const { container } = render(<GithubMark size="xs" />);
+    const svg = container.querySelector("svg")!;
+    expect(sizeClass(svg)).toBe("size-[0.875rem]");
+    expect(Number(svg.getAttribute("width"))).toBe(14);
+    expect(Number(svg.getAttribute("height"))).toBe(14);
   });
 
   it("keeps the NavRail geometry in rem so the child label column cannot drift", () => {

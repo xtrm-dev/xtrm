@@ -147,7 +147,7 @@ export function IssuesSurface() {
                 <button
                   type="button"
                   onClick={() => setSort((s) => ({ key: c.key, desc: s.key === c.key ? !s.desc : defaultDesc(c.key) }))}
-                  className={cx("flex h-full w-full items-center gap-1 overflow-hidden px-2 text-[11px] font-normal outline-none hover:text-ink focus-visible:bg-hover", sort.key === c.key ? "text-ink" : "text-ink-faint", c.align === "right" && "justify-end")}
+                  className={cx("flex h-full w-full items-center gap-1 overflow-hidden px-2 text-xs font-normal outline-none hover:text-ink focus-visible:bg-hover", sort.key === c.key ? "text-ink" : "text-ink-faint", c.align === "right" && "justify-end")}
                 >
                   <span className={cx("flex w-3.5 shrink-0", c.align === "right" && "order-first")}>
                     {sort.key === c.key && <Icon name="chevronDown" size="xs" className={cx("transition-transform", !sort.desc && "rotate-180")} />}
