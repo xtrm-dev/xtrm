@@ -45,18 +45,24 @@ describe("Project Workers", () => {
     // The worker row carries the board status joined on the issue ref, and its issue chip.
     expect(rows[worker]!.textContent).toContain("working");
     expect(rows[worker]!.textContent).toContain("XTRM-817");
-    // The PR rides the trail of the issue it delivered.
-    expect(screen.getByTestId("workers-tree").textContent).toContain("#912");
+    // The PR rides the trail of the issue it delivered. pr-reviewer sits in the group the
+    // tree keeps collapsed on live data, so open it before reading that row.
+    fireEvent.click(await screen.findByTestId("workers-unknown-toggle"));
+    expect(await screen.findByTestId("workers-tree")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("workers-tree").textContent).toContain("#912"));
   });
 
   it("groups a worker with no dispatcher edge and a graph-less board worker under unknown dispatcher", async () => {
     const board = createStatusBoardFixtureAdapter();
     renderWorkers("", { ...fixtureAdapters, substrate, statusBoard: board });
     const unknown = await screen.findByRole("region", { name: "Unknown dispatcher" });
+    // The group starts collapsed, with its count, so a live graph's hundreds of rows stay unmounted.
+    expect(unknown.textContent).toContain("unknown dispatcher (2)");
+    expect(unknown.textContent).not.toContain("pr-reviewer");
+    fireEvent.click(screen.getByTestId("workers-unknown-toggle"));
     // pr-reviewer's binding predates the dispatcher write path; sre-ops has no binding at all.
     await waitFor(() => expect(unknown.textContent).toContain("pr-reviewer"));
     expect(unknown.textContent).toContain("sre-ops");
-    expect(unknown.textContent).toContain("unknown dispatcher");
   });
 
   it("counts the same rows the board reports, and the archived control changes the list by the archived count", async () => {

@@ -73,12 +73,31 @@ export function claimState(claimUntil: string | null | undefined, now: number): 
   return at - now <= CLAIM_SOON_MS ? "soon" : "ok";
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TMUX_WINDOW_RE = /^\$\d+$/;
+
+/**
+ * A name the operator recognises. A raw session UUID, a tmux window id (`$3`) and an
+ * `act:<hex>` activation label are machine identities, not names: a row that carries only
+ * one of them names the issue instead and keeps the identity in the tooltip (XTRM-912).
+ */
+export function isHumanName(value: string | null | undefined): boolean {
+  const name = value?.trim() ?? "";
+  if (name.length === 0) return false;
+  if (UUID_RE.test(name) || TMUX_WINDOW_RE.test(name)) return false;
+  return !name.startsWith("act:");
+}
+
 export interface TreeNode {
   /** Vertex id from the graph (`participant:<holder>`, `activation:<id>`, `session:<id>`). */
   id: string;
   kind: "participant" | "activation" | "session";
-  /** The name a reader recognises: the participant, else the activation id. */
+  /** The name a reader recognises: the participant, else the issue key, else the raw graph label. */
   name: string;
+  /** The graph label exactly as read (`01a1d9f5-…`, `$3`, `act:…`): the identity the tooltip keeps. */
+  rawLabel: string;
+  /** True when the graph carries no human name, so the row names the issue instead of a machine id. */
+  unnamed: boolean;
   roleWord: "lead" | "worker" | "activation" | "session";
   status: string | null;
   /** The issue the vertex works on (first `works_on`), and every issue it touches. */
@@ -196,6 +215,8 @@ export function buildWorkersTree(graph: ProjectDispatchGraph, workers: Worker[])
         id,
         kind: "participant",
         name: id,
+        rawLabel: id,
+        unnamed: true,
         roleWord: "worker",
         status: null,
         issueRef: null,
@@ -211,10 +232,13 @@ export function buildWorkersTree(graph: ProjectDispatchGraph, workers: Worker[])
     const refs = worksOn.get(id) ?? [];
     const primary = refs[0] ?? null;
     const board = primary ? (byIssue.get(primary)?.[0] ?? null) : null;
+    const human = isHumanName(node.participantId) ? node.participantId!.trim() : null;
     const tree: TreeNode = {
       id,
       kind,
-      name: node.participantId ?? node.label,
+      name: human ?? primary ?? node.label,
+      rawLabel: node.label,
+      unnamed: human === null,
       roleWord: "worker",
       status: board?.status ?? null,
       issueRef: primary,
