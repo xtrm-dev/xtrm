@@ -30,5 +30,12 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}", "server/**/*.test.ts"],
+    // XTRM-914: vitest's 5 s default is below the wall time these suites need on a loaded
+    // runner. A full `vitest run` on a host at ~150% CPU measured one test at 4914 ms and six
+    // above 4 s (slowest: GitHub Issues surface 4914 ms, Issues toolbar 4788 ms), so the gate
+    // failed at random and reviewers re-ran it. 20 s keeps 4x margin over the slowest measured
+    // test and still ends a hung test quickly; the tests that need more set their own value
+    // (pi-ai import scan 30 s). Assertions are unchanged.
+    testTimeout: 20_000,
   },
 });
