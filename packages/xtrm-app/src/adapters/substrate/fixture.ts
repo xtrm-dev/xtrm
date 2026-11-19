@@ -137,12 +137,10 @@ export function createFixtureSubstrate(): SubstrateAdapter {
       return null;
     },
     async listProjects() {
-      // Two bindings so the console's own repository section (the status-board fixture's
-      // mercury/market-data) resolves a project too, and the Workers tree has a graph to draw.
-      return [
-        { id: "prj_xtrm", prefix: "XTRM", name: "xtrm", gitRoots: ["/home/dev/xtrm"] },
-        { id: "prj_console", prefix: "XTRM", name: "market-data", gitRoots: ["/home/dev/market-data"] },
-      ];
+      // market-data is a second bound checkout of the same project so a repository can show both the
+      // project surfaces and an issue page in one place (XTRM-820 test data). One project per
+      // checkout: the Workers tree joins the board and the dispatch graph through this binding.
+      return [{ id: "prj_xtrm", prefix: "XTRM", name: "xtrm", gitRoots: ["/home/dev/xtrm", "/home/dev/market-data"] }];
     },
     async listIssues() {
       return [...rows.values()].map((r) => r.summary);

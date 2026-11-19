@@ -65,7 +65,10 @@ export function EventRow({ event, timeLabel, endLabel, past, repoBase }: EventRo
             <RowAction
               icon={event.url ? "external" : "issues"}
               label={event.url ? "Open the event URL" : `Open ${event.ref}`}
-              onAct={event.url ? () => window.open(event.url, "_blank", "noopener,noreferrer") : () => void navigate({ to: issueHref as never })}
+              onAct={() => {
+                if (event.url) window.open(event.url, "_blank", "noopener,noreferrer");
+                else void navigate({ to: issueHref as never });
+              }}
             />
           ) : undefined
         }

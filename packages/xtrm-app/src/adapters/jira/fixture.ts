@@ -7,6 +7,7 @@ import { JiraError, type JiraAdapter, type JiraBinding, type JiraIssue, type Jir
 
 /** The repository the fixture treats as Jira-integrated. */
 export const FIXTURE_JIRA_REPO = "mercury/market-data";
+
 export const FIXTURE_JIRA_PROJECT = "MMD";
 export const FIXTURE_JIRA_SITE = "https://example.atlassian.net";
 
@@ -35,13 +36,14 @@ const ISSUES: JiraIssue[] = [
     bindingsAvailable: true,
   },
   {
+    // Bound to an issue the substrate fixture carries, so an issue page renders the chip (XTRM-820).
     key: "MMD-700",
     summary: "Jira chips on issue pages",
     status: "Done",
     assignee: "Quant reviewer",
     url: `${FIXTURE_JIRA_SITE}/browse/MMD-700`,
     syncState: "pending",
-    issueRef: "XTRM-820",
+    issueRef: "XTRM-301",
     bindingsAvailable: true,
   },
 ];

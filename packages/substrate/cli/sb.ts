@@ -59,6 +59,7 @@ import { enrichExecutionContext } from "../src/domain/execution-context.ts";
 import type { JournalEntry, JournalKind, ResultPayload } from "../src/domain/journal.ts";
 import type { IssueKind, LifecycleState, ResolvedIssue } from "../src/domain/issue.ts";
 import type { OperationalState } from "../src/domain/readiness.ts";
+import { DEFAULT_SCRUTINY_POLICY_REF, scrutinyPolicyRefs } from "../src/domain/readiness.ts";
 
 export const SCHEMA_VERSION = "substrate-cli/v1";
 
@@ -574,6 +575,8 @@ SUBSTRATE_HOLDER  environment default for the acting name. Export it once per se
 --participant   who authored one journal entry or closure; overrides SUBSTRATE_HOLDER.
                 With neither, the entry records "(none recorded)" and the CLI warns.
 --attested-by   who attested readiness (sb issue attest); independent of the claim holder.
+--policy        scrutiny policy an attestation is made under (sb issue attest). Valid: default.
+                The set is defined by DEFAULT_SCRUTINY_POLICY_REF in src/domain/readiness.ts.
 --actor         closure actor label (sb issue close); defaults to sb-cli.
 
 - A claim says who owns the work; it does not narrate progress and is not readiness.
@@ -649,7 +652,13 @@ payload that close cites.`,
   "issue.validate": `usage: sb issue validate <ref>
 
 reports readiness state, structural validity, attestation currency, blockers.`,
-  "issue.attest": `usage: sb issue attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--project <id>] [--evidence-refs <a,b>] [--blocking-gaps <a,b>]`,
+  "issue.attest": `usage: sb issue attest <ref> --outcome <ready|reject> --policy <p> --attested-by <who> [--project <id>] [--evidence-refs <a,b>] [--blocking-gaps <a,b>]
+
+--policy <p>  the scrutiny policy the attestation is made under. Valid values: default.
+              The set is defined by DEFAULT_SCRUTINY_POLICY_REF in src/domain/readiness.ts
+              (SCRUTINY_POLICIES holds the registered refs). An unknown value is refused
+              with the valid values listed.
+example:      sb issue attest <ref> --outcome ready --policy default --attested-by <you>`,
   "issue.list": `usage: sb issue list [--project <id>]`,
   "issue.ready": `usage: sb issue ready [--project <id>]
 
@@ -2195,6 +2204,12 @@ function runIssue(
       const ref = needRef(rest);
       const outcome = flag(flags, "outcome") ?? (() => { throw new Error("--outcome <ready|reject> is required"); })();
       const policy = flag(flags, "policy") ?? (() => { throw new Error("--policy is required"); })();
+      const validPolicies = scrutinyPolicyRefs();
+      if (!validPolicies.includes(policy)) {
+        throw new Error(
+          `unknown --policy "${policy}"; valid values: ${validPolicies.join(", ")} (defined by DEFAULT_SCRUTINY_POLICY_REF in src/domain/readiness.ts; the default is "${DEFAULT_SCRUTINY_POLICY_REF}")`,
+        );
+      }
       const attestedBy = flag(flags, "attested-by") ?? (() => { throw new Error("--attested-by is required"); })();
       const list = (name: string): string[] | undefined => {
         const raw = flag(flags, name);

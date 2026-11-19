@@ -20,7 +20,25 @@ describe("context references", () => {
     const para = t.children![0]!.children!;
     expect(para.map((n) => n.type)).toEqual(["text", "link", "text", "link", "text"]);
     expect(para[1]!.url).toBe("xtrm-ref:issue:XTRM-3");
-    expect(para[3]!.url).toBe("xtrm-ref:issue:XTRM-252.13.1");
+    // A bare key is provider-unknown: the chip resolves Substrate first, then the bound Jira project.
+    expect(para[3]!.url).toBe("xtrm-ref:key:XTRM-252.13.1");
+  });
+
+  it("keeps a forced @jira: key out of the Substrate resolver", () => {
+    const t = run(tree([{ type: "text", value: "Shipped as @jira:MMD-551 and MMD-612." }]));
+    const para = t.children![0]!.children!;
+    expect(para.map((n) => n.type)).toEqual(["text", "link", "text", "link", "text"]);
+    expect(para[1]!.url).toBe("xtrm-ref:jira:MMD-551");
+    expect(para[3]!.url).toBe("xtrm-ref:key:MMD-612");
+    expect(parseReference("@jira:MMD-551")).toEqual({ kind: "jira", ref: "MMD-551" });
+  });
+
+  it("leaves a forced @jira: form outside the bridge's key shape as prose", () => {
+    // The bridge refuses a key outside `[A-Z][A-Z0-9_]*-N`, so no chip may promise it resolves.
+    const text = "@jira:notakey stays prose";
+    const out = run(tree([{ type: "text", value: text }]));
+    expect(out.children?.[0]?.children).toEqual([{ type: "text", value: text }]);
+    expect(parseReference("@jira:notakey")).toBeNull();
   });
 
   it("links bare #N and canonical owner/repo#N pull requests inside text", () => {

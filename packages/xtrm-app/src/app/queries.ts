@@ -257,6 +257,23 @@ export function projectForRepo(projects: SubstrateProject[] | undefined, repo: P
   );
 }
 
+// --- Project Jira (ADR-002 D3/D6): read-only links through the typed jira adapter -------------
+
+/** The repository's Jira binding: bound site and project, or why the repository is unbound. */
+export function useJiraBinding(repo: string) {
+  const { jira } = useAdapters();
+  return useQuery({ queryKey: ["jira", "binding", repo], queryFn: () => jira.binding(repo), staleTime: 60_000, retry: false });
+}
+
+/**
+ * One page of the repository's bound Jira project. `enabled` lets a chip ask only when it has a
+ * key the Substrate index did not resolve, so an issue page with no bare keys reads no Jira.
+ */
+export function useJiraIssues(repo: string, enabled = true) {
+  const { jira } = useAdapters();
+  return useQuery({ queryKey: ["jira", "issues", repo], queryFn: () => jira.search(repo), staleTime: 30_000, retry: false, enabled });
+}
+
 export function useIssues(projectId: string | null | undefined, refetchMs: number | false = false) {
   const { substrate } = useAdapters();
   return useQuery({

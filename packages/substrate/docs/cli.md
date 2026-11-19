@@ -204,9 +204,9 @@ The JSON envelope carries `projectId`, `since`, `limit`, `nodes`, `edges`,
 (the holder, the activation id, the session id, `XTRM-123`, `repo#7`). The
 executor of a binding is its activation, else its participant, else its
 session, because an `xt` launch records the session and leaves the holder to
-the claim. Edges name their
-`issueId`, their binding (`null` for a `delivers` edge) and the dispatcher
-session when the binding recorded one.
+the claim. The dispatcher is a vertex on the same terms: its participant, else
+its session. Edges name their `issueId`, their binding (`null` for a
+`delivers` edge) and the dispatcher session when the binding recorded one.
 
 Unknown stays unknown: a binding written before migration 017, or without
 `--dispatcher-participant`, yields a `dispatched_by` edge whose `from` is
@@ -214,6 +214,18 @@ Unknown stays unknown: a binding written before migration 017, or without
 human view prints `(no execution bindings in this project)` rather than an
 empty table, and `omitted N older binding(s): raise --limit or narrow --since`
 when the bound cut the answer.
+
+A `delivers` edge is drawn only for a live `created_from` link: a superseded
+link or a link that merely mentions the PR is not delivery evidence, and one PR
+linked from several evidence sources is drawn once, at the earliest link time.
+Two boundaries follow from what the read joins:
+
+- `--since` bounds dispatch activity, not delivery. A binding inside the
+  window keeps its Issue's live `created_from` links even when a link is older
+  than `--since`.
+- `matchedBindings` counts the bindings of the Issues that belong to the
+  project now, not the bindings made while the Issue lived elsewhere; a moved
+  Issue is counted, and labelled, under its current project.
 
 ## One-way Beads import
 

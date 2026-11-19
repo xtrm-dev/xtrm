@@ -807,6 +807,9 @@ export class ProvenanceService {
         bindingId: b.id,
         dispatcherSessionId: null,
       });
+      // The dispatcher is a vertex on the same terms as the executor: the
+      // participant when the binding records one, else its session. A session
+      // that only ever appeared as a scalar could not be drawn or followed.
       const dispatcher =
         b.dispatcher_participant_id !== null && b.dispatcher_participant_id !== ""
           ? addNode({
@@ -815,7 +818,14 @@ export class ProvenanceService {
               label: b.dispatcher_participant_id,
               participantId: b.dispatcher_participant_id,
             })
-          : null;
+          : b.dispatcher_session_id !== null && b.dispatcher_session_id !== ""
+            ? addNode({
+                id: `session:${b.dispatcher_session_id}`,
+                kind: "session",
+                label: b.dispatcher_session_id,
+                participantId: null,
+              })
+            : null;
       edges.push({
         kind: "dispatched_by",
         from: dispatcher,
