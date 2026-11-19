@@ -12,7 +12,7 @@ export function AuthorAvatar({ login, size = "md" }: { login: string; size?: "md
   if (isBotLogin(login)) {
     return (
       <span aria-hidden className={cx("flex shrink-0 items-center justify-center rounded-full bg-control text-ink-muted", BOX[size])}>
-        <GithubMark size={size === "sm" ? 12 : 14} />
+        <GithubMark size={size === "sm" ? "micro" : "xs"} />
       </span>
     );
   }

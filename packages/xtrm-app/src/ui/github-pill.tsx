@@ -8,7 +8,7 @@ const SIZE = {
   md: "h-8 gap-2 px-3 text-xs",
 } as const;
 
-const MARK = { sm: 12, md: 14 } as const;
+const MARK = { sm: "micro", md: "xs" } as const;
 
 /**
  * GitHub's own primary-button look, so "Open on GitHub" reads as an affordance rather than a link.

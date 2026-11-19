@@ -100,13 +100,15 @@ No new colour token and no new surface level. Four additions, all derived from e
 
 | addition | file | definition | why |
 |---|---|---|---|
-| Icon size `text` | `src/ui/icon.tsx` `SIZES` | `text: 0.8125rem`, the length of `--text-sm` (13px at the default 16px root) | Row and toolbar icons are 14px today (`xs`) beside 13px titles and 11.5px meta. Operator: "icons are larger than text". |
-| Icon size `micro` | `src/ui/icon.tsx` `SIZES` | `micro: 0.75rem` (12px at the default root; equals the `text-xs` cap height plus 0.5px) | Icons inside `Badge xs`, `PrKey` in dense cells, `LinkedRefs`. |
+| Icon size `text` | `src/ui/icon.tsx` `SIZE_CLASS` | `text: 0.8125rem`, the length of `--text-sm` (13px at the default 16px root); `ICON_REM` and `ICON_PX` derive from this one table | Row and toolbar icons are 14px today (`xs`) beside 13px titles and 11.5px meta. Operator: "icons are larger than text". |
+| Icon size `micro` | `src/ui/icon.tsx` `SIZE_CLASS` | `micro: 0.75rem` (12px at the default root; equals the `text-xs` cap height plus 0.5px) | Icons inside `Badge xs`, `PrKey` in dense cells, `LinkedRefs`. |
 | Stroke rule | `src/ui/icon.tsx` | `strokeWidth` defaults to `2` for sizes `micro` and `text`; `2.25` stays for `nav`, `sm`, `md`, `lg` | 2.25 at 13px closes the counters of `git-pull-request`. |
 | Badge tone `success` | `src/ui/badge.tsx` `TONE` | `success: "bg-success/12 text-success-ink"` (same pattern as `danger: "bg-danger/12 text-danger"`, with the ink token of §3.1 so the tint stays readable: 5.85:1 on white, 5.34:1 on the canvas) | GitHub-style Open chip. The only way to express it today is `active`, which is accent-soft and reads as "reference". |
 | PR state map | `src/ui/pr-key.tsx` (new) | `PR_STATES` (§4.4) | One table for the key colour, the chip tone, the glyph, the word and the tooltip, so list, inspector, chips and prose cannot drift. |
 
 **Unit rule (XTRM-897).** The type scale is rem: `body` takes `--text-sm` = `0.8125rem`. Every glyph size is therefore applied as a rem class (`size-[0.8125rem]`, `size-4`), with the px `size` attribute kept only as a no-CSS fallback, and every new component names the token (`text-sm`) instead of copying its current px value. A px literal beside rem text renders 1.33x too large at a 12px root: the operator's browser uses exactly that, and the sidebar sub-section labels came out larger than their parent rows (`e2e/ui-scale.spec.ts`).
+
+The rule covers every font and glyph size, not only the ones this programme added. The review of #450 (XTRM-907) found the sidebar section header still at `text-[11px]` — the largest text in the sidebar at a 12px root, now `text-xs`, the step below the row label — and the octocat mark taking a px number, now an `IconSize` on the same ladder. `src/ui/units.test.ts` enumerates `src/ui`, `src/shell` and `src/styles.css`, so a new px literal fails the gate instead of the operator's eye.
 
 `--x-success` in light is `#1b7f46`: 5.04:1 on `#ffffff` and 4.58:1 on `#f4f4f5`. R1 darkened it from `#1f8a4c`, which read 4.38:1 and 3.98:1, below the 4.5:1 text minimum at 11.5–13px; it is the `PrKey` open colour. Dark is unchanged (`#5ccb8a`, 9.0:1 on `#151515`).
 
@@ -124,6 +126,7 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
 
 - **File:** `src/ui/sidebar.tsx` (Existing; adds two exports, removes `indent`).
 - **Anatomy** (measured from `SidebarRow` today: `px-2`, icon 16, `gap-2.5`, label x = 8 + 16 + 10 = 34px):
+  - Section header (`SidebarSection`): `text-xs` (`0.72rem`), semibold, `text-ink-faint`, `h-7`. It is a step below the row label, never above it: a px literal here (`text-[11px]`) made it the largest text in the sidebar at a 12px root (XTRM-907).
   - Parent row: unchanged (`h-[30px]`, 16px `nav` icon, label 13px semibold, count or trailing chevron).
   - Rail: a `div` with `ml-[var(--x-rail-indent)] border-l border-border-muted`. The rail x equals the centre of the parent icon (8px padding + 8px half icon = 16px; the 1px border sits at 15–16px at the default root).
   - Child row: `h-7` (`1.75rem`), **no icon**, `pl-[var(--x-rail-gutter)]` so the label x equals the parent label's x: the aligned label column. Label `text-sm` (the parent row's own token, `0.8125rem`), weight 500, `text-ink-muted`; count right-aligned `text-xs text-ink-faint tabular`.

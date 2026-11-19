@@ -124,13 +124,13 @@ const registry = {
 
 export type IconName = keyof typeof registry;
 
-const SIZES = { micro: 12, text: 13, xs: 14, sm: 16, nav: 16, md: 18, lg: 20 } as const;
-
 /**
- * The same ladder in rem, applied as CSS. The `size` attribute is a fixed px fallback; the class is
- * what the browser uses, so a glyph keeps its relation to the text beside it when the root font size
- * is not 16px (XTRM-897: a 13px glyph beside 9.75px body text). Class values equal `SIZES` at a
- * 16px root and the unit test pins that equivalence.
+ * The glyph ladder in rem, applied as CSS: the one place a glyph size is written. The class strings
+ * stay literal because Tailwind scans source text; `ICON_REM` and `ICON_PX` both derive from this
+ * object, so the ladder cannot drift into hand-maintained copies (XTRM-907 review of XTRM-897).
+ *
+ * The class is what the browser applies, so a glyph keeps its relation to the text beside it when
+ * the root font size is not 16px (XTRM-897: a 13px glyph beside 9.75px body text).
  */
 const SIZE_CLASS = {
   micro: "size-[0.75rem]",
@@ -142,15 +142,37 @@ const SIZE_CLASS = {
   lg: "size-5",
 } as const;
 
-/** The rem size each icon size resolves to; the unit test compares it with `SIZES`. */
-export const ICON_REM = { micro: 0.75, text: 0.8125, xs: 0.875, sm: 1, nav: 1, md: 1.125, lg: 1.25 } as const;
+export type IconSize = keyof typeof SIZE_CLASS;
+
+/** `size-4` → 1rem, `size-[0.8125rem]` → 0.8125. */
+const remOf = (className: string) => {
+  const bracket = className.match(/^size-\[([\d.]+)rem\]$/);
+  if (bracket) return Number(bracket[1]);
+  const step = className.match(/^size-(\d+)$/);
+  return step ? Number(step[1]) * 0.25 : Number.NaN;
+};
+
+/** The rem size each icon size resolves to, derived from `SIZE_CLASS`. */
+export const ICON_REM = Object.fromEntries(
+  Object.entries(SIZE_CLASS).map(([size, className]) => [size, remOf(className)]),
+) as Record<IconSize, number>;
+
+/**
+ * The px a size has at a 16px root. Only the SVG `size` attribute uses it, as the no-CSS fallback.
+ */
+export const ICON_PX = Object.fromEntries(
+  Object.entries(ICON_REM).map(([size, rem]) => [size, Math.round(rem * 16)]),
+) as Record<IconSize, number>;
+
+/** The rem class of one ladder step, so a glyph outside Lucide (the octocat mark) reuses the ladder. */
+export const ICON_CLASS: Record<IconSize, string> = SIZE_CLASS;
 
 /**
  * Lucide ships 2; the sidebar and the tables read better at 2.25
  * (docs/mocks/sidebar-weight-connection-activity.html A1). At 12–13px the smaller weight closes the
  * counters of `git-pull-request` and its siblings (docs/design/console-ui-system.md §3.2).
  */
-const defaultStroke = (size: keyof typeof SIZES) => (size === "text" || size === "micro" ? 2 : 2.25);
+const defaultStroke = (size: IconSize) => (size === "text" || size === "micro" ? 2 : 2.25);
 
 export function Icon({
   name,
@@ -159,14 +181,14 @@ export function Icon({
   className,
 }: {
   name: IconName;
-  size?: keyof typeof SIZES;
+  size?: IconSize;
   strokeWidth?: number;
   className?: string;
 }) {
   const Comp = registry[name];
   return (
     <Comp
-      size={SIZES[size]}
+      size={ICON_PX[size]}
       strokeWidth={strokeWidth ?? defaultStroke(size)}
       className={className ? `${SIZE_CLASS[size]} ${className}` : SIZE_CLASS[size]}
       aria-hidden

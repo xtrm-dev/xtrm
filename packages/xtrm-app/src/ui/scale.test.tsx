@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ICON_REM, Icon } from "./icon.tsx";
+import { GithubMark } from "./github-mark.tsx";
 import { NavRailItem } from "./nav-rail.tsx";
 import { IconButton } from "./primitives.tsx";
 import { SidebarRow } from "./sidebar.tsx";
@@ -79,6 +80,15 @@ describe("the new rows and controls use the existing tokens", () => {
     expect(sizeClass(named.getByRole("button", { name: "Filter" }).querySelector("svg")!)).toBe("size-[0.8125rem]");
     const fallback = render(<IconButton icon="filter" label="Default" />);
     expect(sizeClass(fallback.getByRole("button", { name: "Default" }).querySelector("svg")!)).toBe("size-4");
+  });
+
+  it("sizes the octocat mark from the same rem ladder", () => {
+    // The mark is a glyph: a px `size` number here stayed put while the text shrank (XTRM-907).
+    const { container } = render(<GithubMark size="xs" />);
+    const svg = container.querySelector("svg")!;
+    expect(sizeClass(svg)).toBe("size-[0.875rem]");
+    expect(Number(svg.getAttribute("width"))).toBe(14);
+    expect(Number(svg.getAttribute("height"))).toBe(14);
   });
 
   it("keeps the NavRail geometry in rem so the child label column cannot drift", () => {

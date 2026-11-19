@@ -11,7 +11,7 @@ describe("SidebarSection", () => {
       </SidebarSection>,
     );
     const toggle = screen.getByRole("button", { name: "Workspace" });
-    expect(toggle.className).toContain("text-[11px]");
+    expect(toggle.className).toContain("text-xs");
     expect(toggle.className).toContain("font-semibold");
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     // Hover reveals nothing new: the chevron is part of the resting state.
