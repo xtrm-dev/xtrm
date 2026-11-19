@@ -130,10 +130,30 @@ export function buildTree(rows: IssueSummary[], rollups: Map<string, Rollup>, so
   return out;
 }
 
-const keyText = (i: IssueSummary) => (i.locator && i.locator !== i.ref ? `${i.locator} / ${i.ref}` : i.ref);
+/** One level of tree indentation, in rem; the row's leading cluster carries it (XTRM-898). */
+export const INDENT_REM = 1.25;
 
-/** Key column width in rem: fits the longest key in view, at Geist Mono's 0.6em advance and the 0.72rem xs size. */
-export function keyColumnRem(rows: IssueSummary[]) {
-  const longest = rows.reduce((n, i) => Math.max(n, keyText(i).length), 8);
-  return Math.ceil(longest * 0.6 * 0.72 * 10) / 10 + 1.5;
+/** The list shows the primary locator alone: the flat alias would widen every row for a rare difference. */
+export const primaryKey = (i: IssueSummary) => i.locator || i.ref;
+
+/** Both names, for the tooltip and the Inspector, so the list does not lose the alias it stopped showing. */
+export const keyNames = (i: IssueSummary) => (primaryKey(i) !== i.ref ? `${primaryKey(i)} / ${i.ref}` : primaryKey(i));
+
+/**
+ * Width inside the key cell before and after the key text, in rem: the kind icon (13px), the
+ * priority glyph (16px), their two 4px gaps and the cell's trailing inset (4px) = 2.6rem. The
+ * disclosure slot is not here: the leading cluster owns it (XTRM-898).
+ */
+export const KEY_CELL_CHROME_REM = 2.6;
+
+/**
+ * Key column width in rem: the longest primary key at the deepest row's indentation. The key cell
+ * gives the row its depth width back (see `IssueRow`), so the status chip and the title start at one
+ * x for every depth while the chevron sits at the row's own depth.
+ *
+ * Text is measured at Geist Mono's 0.6em advance and the 0.72rem xs size.
+ */
+export function keyColumnRem(rows: IssueSummary[], maxDepth = 0) {
+  const longest = rows.reduce((n, i) => Math.max(n, primaryKey(i).length), 8);
+  return Math.ceil(longest * 0.6 * 0.72 * 10) / 10 + INDENT_REM * Math.max(0, maxDepth) + KEY_CELL_CHROME_REM;
 }

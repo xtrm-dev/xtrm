@@ -27,9 +27,9 @@ describe("Console v2 shell", () => {
     expect(screen.queryByTestId("global-rail")).toBeNull();
     expect(screen.getByTestId("context-sidebar")).toBeTruthy();
     expect(screen.getByTestId("inspector-rail")).toBeTruthy();
-    // Hierarchical locator is the primary key; the flat ref follows dimmed.
-    expect(await screen.findByText("XTRM-300.1")).toBeTruthy();
-    expect(screen.getAllByText("/ XTRM-301").length).toBeGreaterThan(0);
+    // The list shows the hierarchical locator alone; the flat ref lives in the key cell's tooltip.
+    const key = await screen.findByText("XTRM-300.1");
+    expect(key.closest("[data-key-cell]")?.getAttribute("title")).toBe("XTRM-300.1 / XTRM-301");
   });
 
   it("groups destinations as Workspace, GitHub and System, with Project's repository sub-routes nested", async () => {

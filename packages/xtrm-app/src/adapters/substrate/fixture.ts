@@ -25,6 +25,18 @@ const TITLES: Array<[string, string, string]> = [
 const DAY = 86_400_000;
 const NOW = Date.parse("2026-09-16T17:00:00Z");
 
+/**
+ * A four-level subtree with long locators, the shape the operator sees on the MMD board (XTRM-898:
+ * `MMD-2331.298.20.2` under `MMD-2331.298.20`). The rest of the seed hangs its first seven rows
+ * under XTRM-300 so the list keeps a plain one-level family as well.
+ */
+const SHAPE: Record<string, { locator: string; parentRef: string | null; children?: [number, number] }> = {
+  "XTRM-300": { locator: "XTRM-300", parentRef: null, children: [5, 1] },
+  "XTRM-301": { locator: "XTRM-300.1", parentRef: "XTRM-300", children: [1, 0] },
+  "XTRM-302": { locator: "XTRM-300.1.2", parentRef: "XTRM-301", children: [1, 0] },
+  "XTRM-303": { locator: "XTRM-300.1.2.1", parentRef: "XTRM-302" },
+};
+
 interface Record_ {
   summary: IssueSummary;
   contract: Record<string, unknown>;
@@ -38,11 +50,12 @@ function seed(): Map<string, Record_> {
     const n = 300 + i;
     const ref = `XTRM-${n}`;
     const imported = i === 2;
+    const shape = SHAPE[ref] ?? (i > 0 && i < 8 ? { locator: `XTRM-300.${i}`, parentRef: "XTRM-300" } : { locator: ref, parentRef: null });
     rows.set(ref, {
       summary: {
         id: `iss_fixture-${n}`,
         ref,
-        locator: i > 0 && i < 8 ? `XTRM-300.${i}` : ref,
+        locator: shape.locator,
         title: i < TITLES.length ? title : `${title} (${Math.floor(i / TITLES.length) + 1})`,
         kind,
         lifecycle,
@@ -58,10 +71,10 @@ function seed(): Map<string, Record_> {
         attestation: lifecycle === "open" && i % 3 === 1 ? "current" : (["none", "stale", "rejected"] as const)[i % 3]!,
         contractComplete: i % 5 !== 0,
         dispatchable: lifecycle === "open" && i % 3 === 1 && i % 7 !== 0,
-        parentRef: i > 0 && i < 8 ? "XTRM-300" : null,
-        parentLocator: i > 0 && i < 8 ? "XTRM-300" : null,
-        childCount: i === 0 ? 7 : 0,
-        childrenDone: i === 0 ? 1 : 0,
+        parentRef: shape.parentRef,
+        parentLocator: shape.parentRef ? (SHAPE[shape.parentRef]?.locator ?? shape.parentRef) : null,
+        childCount: shape.children?.[0] ?? 0,
+        childrenDone: shape.children?.[1] ?? 0,
         blockedBy: i === 4 ? ["XTRM-305"] : [],
         readiness: lifecycle === "open" && i % 3 === 1 ? "ready" : "draft",
       },

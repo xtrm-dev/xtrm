@@ -12,7 +12,7 @@ import { ListFilter, ToolbarButton, ToolbarFilter } from "../ui/toolbar.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
-import { buildTree, defaultDesc, issueStatus, keyColumnRem, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
+import { INDENT_REM, buildTree, defaultDesc, issueStatus, keyColumnRem, keyNames, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
 import { PrKey } from "../ui/pr-key.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
@@ -105,11 +105,9 @@ export function IssuesSurface() {
       if (!next.delete(ref)) next.add(ref);
       return next;
     });
-  const keyCol = `${keyColumnRem(visible)}rem`;
-  // The indent gutter is one width for the whole list, sized for its deepest row, so a child row
-  // indents its chevron instead of pushing its key, chip and title sideways.
-  const indentCol = `${Math.max(0, ...tree.map((r) => r.depth)) * 1.25}rem`;
-  const tableVars = { "--key-col": keyCol, "--indent-col": indentCol } as CSSProperties;
+  const maxDepth = useMemo(() => Math.max(0, ...tree.map((r) => r.depth)), [tree]);
+  const keyCol = `${keyColumnRem(visible, maxDepth)}rem`;
+  const tableVars = { "--key-col": keyCol } as CSSProperties;
 
   let body;
   if (projects.isPending || (project && issues.isPending)) body = <LoadingState label="Loading issues" />;
@@ -247,32 +245,37 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
         }
       }}
     >
-      <div className="grid h-full w-full items-center overflow-hidden" style={{ ...GRID, ...vars }}>
+      <div className="grid h-full w-full items-center overflow-hidden" style={{ ...GRID, ...vars, "--row-indent": `${depth * INDENT_REM}rem` } as CSSProperties}>
         <div className={cx(CELL, "gap-1.5")}>
-          <span className="flex shrink-0 items-center" style={{ width: "calc(var(--indent-col) + 1.25rem)", paddingLeft: `${depth * 1.25}rem` }}>
-          {hasChildren ? (
-            <button
-              type="button"
-              aria-expanded={!collapsed}
-              aria-label={`${collapsed ? "Expand" : "Collapse"} ${issue.ref}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggle();
-              }}
-              className="flex size-5 shrink-0 items-center justify-center rounded text-ink-faint outline-none hover:bg-pressed hover:text-ink focus-visible:bg-pressed"
-            >
-              <Icon name="chevronDown" size="text" className={cx("transition-transform", collapsed && "-rotate-90")} />
-            </button>
-          ) : (
-            <span className="w-5 shrink-0" />
-          )}
+          {/* The row's own depth indents the leading cluster, so the chevron sits beside the key at
+              that depth instead of behind a list-wide gutter; the key cell gives the same width back,
+              so the status chip and the title keep one x for every row (XTRM-898). */}
+          <span data-row-leading className="flex shrink-0 items-center" style={{ width: "calc(var(--row-indent) + 1.25rem)", paddingLeft: "var(--row-indent)" }}>
+            {hasChildren ? (
+              <button
+                type="button"
+                aria-expanded={!collapsed}
+                aria-label={`${collapsed ? "Expand" : "Collapse"} ${issue.ref}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle();
+                }}
+                className="flex size-5 shrink-0 items-center justify-center rounded text-ink-faint outline-none hover:bg-pressed hover:text-ink focus-visible:bg-pressed"
+              >
+                <Icon name="chevronDown" size="text" className={cx("transition-transform", collapsed && "-rotate-90")} />
+              </button>
+            ) : (
+              <span className="w-5 shrink-0" />
+            )}
           </span>
-          <span title={issue.kind} className="flex shrink-0">
-            <Icon name={kindIcon(issue.kind)} size="text" className="text-ink-faint" />
-          </span>
-          <PriorityGlyph priority={issue.priority} />
-          <span className="shrink-0 overflow-hidden" style={{ width: "var(--key-col)" }} title={issue.locator ?? issue.ref}>
-            <IssueKey locator={issue.locator} humanRef={issue.ref} />
+          <span data-key-cell className="flex min-w-0 shrink-0 items-center gap-1 overflow-hidden" style={{ width: "calc(var(--key-col) - var(--row-indent))" }} title={keyNames(issue)}>
+            <span title={issue.kind} className="flex shrink-0">
+              <Icon name={kindIcon(issue.kind)} size="text" className="text-ink-faint" />
+            </span>
+            <PriorityGlyph priority={issue.priority} />
+            <span className="min-w-0 truncate">
+              <IssueKey locator={issue.locator} humanRef={issue.ref} showAlias={false} />
+            </span>
           </span>
           <Badge tone={status.tone} size="xs" title={status.hint} className="w-[4.25rem] justify-center">
             {status.label}
