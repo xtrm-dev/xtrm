@@ -81,7 +81,7 @@ export function EventRow({ event, timeLabel, endLabel, past, repoBase }: EventRo
         </span>
         <span className={past ? "min-w-0 flex-1 truncate text-ink-muted" : "min-w-0 flex-1 truncate text-ink"}>{label}</span>
         {event.ref && <span className="shrink-0 font-mono text-xs text-ink-muted">{event.ref}</span>}
-        {endLabel && <span className="shrink-0 text-[11px] text-ink-faint tabular">until {endLabel}</span>}
+        {endLabel && <span className="shrink-0 text-xs text-ink-faint tabular">until {endLabel}</span>}
         {event.status && (
           <Badge size="xs" tone={statusTone(event.status)} className="shrink-0">
             {event.status}
@@ -92,7 +92,7 @@ export function EventRow({ event, timeLabel, endLabel, past, repoBase }: EventRo
         <dl
           id={detailsId}
           data-testid={detailsId}
-          className="grid grid-cols-[3.5rem_1fr] gap-x-3 gap-y-0.5 border-l border-border-muted px-3 py-1.5 pl-6 text-[11px]"
+          className="grid grid-cols-[3.5rem_1fr] gap-x-3 gap-y-0.5 border-l border-border-muted px-3 py-1.5 pl-6 text-xs"
         >
           <dt className="text-ink-faint">ref</dt>
           <dd className="font-mono text-ink-muted">{event.ref ?? "—"}</dd>

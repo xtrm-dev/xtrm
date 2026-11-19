@@ -51,7 +51,7 @@ export function ProjectShell({
             {binding.configured ? "bound" : "unbound"}
           </span>
         )}
-        <span className="shrink-0 text-[11px] text-ink-faint tabular" data-testid="project-freshness">
+        <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="project-freshness">
           {freshnessOverride ?? freshness(health ?? null)}
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-2">

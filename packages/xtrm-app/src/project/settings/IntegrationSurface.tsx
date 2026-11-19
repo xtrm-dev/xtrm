@@ -82,7 +82,7 @@ function Fact({ label, value, mono, testId, unverified }: { label: string; value
   return (
     <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-baseline gap-3 py-1">
       <dt className="text-xs text-ink-faint">{label}</dt>
-      <dd className={`min-w-0 break-words text-xs ${mono ? "font-mono text-[11px]" : ""} ${unverified ? "text-ink-muted" : "text-ink"}`} data-testid={testId} data-unverified={unverified ? "true" : undefined}>
+      <dd className={`min-w-0 break-words text-xs ${mono ? "font-mono text-xs" : ""} ${unverified ? "text-ink-muted" : "text-ink"}`} data-testid={testId} data-unverified={unverified ? "true" : undefined}>
         {value ?? "not reported"}
       </dd>
     </div>
@@ -135,7 +135,7 @@ function BindingFacts({ binding }: { binding: ProjectBinding }) {
         mono
         testId="integration-key-file"
       />
-      <div className="px-0 pt-1 text-[11px] text-ink-faint" data-testid="integration-credential-note">
+      <div className="px-0 pt-1 text-xs text-ink-faint" data-testid="integration-credential-note">
         This page carries file paths and flags only. The bridge never returns a credential value.
       </div>
     </Group>
@@ -180,9 +180,9 @@ function GapFacts({ report }: { report: IntegrationGaps }) {
         <ul className="min-w-0 py-1" data-testid="integration-gap-list">
           {report.gaps.map((gap, index) => (
             <li key={`${gap.path}:${gap.field}:${index}`} className="grid grid-cols-[10rem_minmax(0,1fr)] items-baseline gap-3 py-1" data-testid="integration-gap">
-              <span className="font-mono text-[11px] break-words text-ink-faint">{gap.path}</span>
+              <span className="font-mono text-xs break-words text-ink-faint">{gap.path}</span>
               <span className="min-w-0 text-xs text-ink">
-                <span className="font-mono text-[11px]">{gap.field}</span> carried <span className="font-mono text-[11px] break-words">{gap.value}</span>
+                <span className="font-mono text-xs">{gap.field}</span> carried <span className="font-mono text-xs break-words">{gap.value}</span>
               </span>
             </li>
           ))}

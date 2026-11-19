@@ -13,7 +13,7 @@ export function DeferredSurface({ title, icon, reason }: { title: string; icon: 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={title}>
       <SurfaceToolbar>
-        <span className="text-[11px] text-ink-faint">{title}</span>
+        <span className="text-xs text-ink-faint">{title}</span>
         <span className="text-xs text-ink-faint">deferred</span>
       </SurfaceToolbar>
       <EmptyState icon={icon} title={`${title} is not part of this vertical`} className="flex-1">
@@ -39,7 +39,7 @@ export function RepositoriesSurface() {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Repositories">
       <SurfaceToolbar>
-        <span className="text-[11px] text-ink-faint tabular">{ordered.length}</span>
+        <span className="text-xs text-ink-faint tabular">{ordered.length}</span>
         <SourceBadge source={github.source} />
       </SurfaceToolbar>
       <GithubNotice />

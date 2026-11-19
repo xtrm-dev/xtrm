@@ -102,7 +102,7 @@ export function DayGroup({
     <section aria-label={formatDayHeading(day, today)} data-testid={`day-group-${day}`} className="flex flex-col">
       <header className="flex items-center gap-2 border-b border-border-muted bg-control px-3 py-1">
         <h2 className="font-mono text-xs tracking-wide text-ink-muted uppercase">{formatDayHeading(day, today)}</h2>
-        <span className="ml-auto text-[11px] text-ink-faint tabular" data-testid={`day-count-${day}`}>
+        <span className="ml-auto text-xs text-ink-faint tabular" data-testid={`day-count-${day}`}>
           {ordered.length}
         </span>
       </header>

@@ -91,7 +91,7 @@ Source: `src/styles.css` (`:root`, `:root[data-theme="dark"]`, `@theme inline`).
 | `--x-shadow-float`, `-panel` | `shadow-float`, `shadow-panel` | see file | see file | floating layers only | popover, Tip |
 | `--x-strip-*` | `*-strip*` | see file | see file | sidebar foot strip | unchanged |
 | `--radius-sm/md/lg` | `rounded-sm/md/lg` | 6 / 8 / 10 px | same | corners | rows `md`, chips `rounded` (4px via `Badge`) |
-| `--text-xs` / `-sm` / `-base` | `text-xs/sm/base` | 11.5 / 13 / 14 px | same | type scale | cells `xs`, titles `sm` |
+| `--text-2xs` / `-xs` / `-sm` / `-base` | `text-2xs/xs/sm/base` | 10 / 11.5 / 13 / 14 px | same | type scale | `text-2xs` only for the timeline `now` marker; cells `xs`, titles `sm` |
 | `--font-sans` / `--font-mono` | `font-sans/mono` | Figtree / Geist Mono | same | mono only for keys, SHAs, paths | `PrKey`, `IssueKey`, branches |
 
 ### 3.2 Tokens this system adds
@@ -108,7 +108,7 @@ No new colour token and no new surface level. Four additions, all derived from e
 
 **Unit rule (XTRM-897).** The type scale is rem: `body` takes `--text-sm` = `0.8125rem`. Every glyph size is therefore applied as a rem class (`size-[0.8125rem]`, `size-4`), with the px `size` attribute kept only as a no-CSS fallback, and every new component names the token (`text-sm`) instead of copying its current px value. A px literal beside rem text renders 1.33x too large at a 12px root: the operator's browser uses exactly that, and the sidebar sub-section labels came out larger than their parent rows (`e2e/ui-scale.spec.ts`).
 
-The rule covers every font and glyph size, not only the ones this programme added. The review of #450 (XTRM-907) found the sidebar section header still at `text-[11px]` — the largest text in the sidebar at a 12px root, now `text-xs`, the step below the row label — and the octocat mark taking a px number, now an `IconSize` on the same ladder. `src/ui/units.test.ts` enumerates `src/ui`, `src/shell` and `src/styles.css`, so a new px literal fails the gate instead of the operator's eye.
+The rule covers every font and glyph size, not only the ones this programme added. The review of #450 (XTRM-907) found the sidebar section header still at `text-[11px]` — the largest text in the sidebar at a 12px root, now `text-xs`, the step below the row label — and the octocat mark taking a px number, now an `IconSize` on the same ladder. The same sweep converted every remaining `text-[11px]` in `src/project`, `src/github`, `src/issues`, `src/settings` and `src/surfaces` to `text-xs`, gave the timeline `now` marker the one step below it (`--text-2xs`, `0.625rem`, where it had `text-[10px]`), and turned two `size-[11px]` dots into `size-[0.6875rem]`. `src/ui/units.test.ts` enumerates every source file under `src` (plus `src/styles.css`), checks the CSS and inline-style forms as well as the class forms, so a new px literal fails the gate instead of the operator's eye.
 
 `--x-success` in light is `#1b7f46`: 5.04:1 on `#ffffff` and 4.58:1 on `#f4f4f5`. R1 darkened it from `#1f8a4c`, which read 4.38:1 and 3.98:1, below the 4.5:1 text minimum at 11.5–13px; it is the `PrKey` open colour. Dark is unchanged (`#5ccb8a`, 9.0:1 on `#151515`).
 

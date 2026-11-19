@@ -1,6 +1,6 @@
-import { statSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { capture, MAX_DOMINANT, MIN_COLOURS, profile } from "./scale-capture.ts";
 
 /**
  * XTRM-897: one scale for the console. The type tokens are rem (`body` takes `--text-sm` =
@@ -129,8 +129,6 @@ for (const theme of ["dark", "light"] as const) {
     const output = test.info().outputPath();
     const shot = (tag: string, surface: string) =>
       EXPORT_DIR ? join(EXPORT_DIR, `${PHASE}-${theme}-${tag}-${surface}.png`) : join(output, `${theme}-${tag}-${surface}.png`);
-    /** An empty file is not evidence (XTRM-907: one committed capture was a 1.8 kB blank). */
-    const written = (path: string) => expect(statSync(path).size, path).toBeGreaterThan(1000);
 
     await page.addInitScript((value) => localStorage.setItem("xtrm.console.theme.v1", value), theme);
     for (const [root, tag] of [
@@ -141,7 +139,7 @@ for (const theme of ["dark", "light"] as const) {
       await setRoot(page, root);
       const sidebarShot = shot(tag, "sidebar");
       await page.getByTestId("context-sidebar").screenshot({ path: sidebarShot });
-      written(sidebarShot);
+      await capture(page, sidebarShot);
 
       await openIssues(page);
       await setRoot(page, root);
@@ -151,7 +149,33 @@ for (const theme of ["dark", "light"] as const) {
         path: toolbarShot,
         clip: { x: box.x, y: box.y, width: Math.min(box.width, 1100), height: 96 },
       });
-      written(toolbarShot);
+      await capture(page, toolbarShot);
     }
   });
 }
+
+test.describe("the capture gate", () => {
+  test("rejects a blank capture", async ({ page }) => {
+    // The defect that reached review: a 264x900 region captured as one flat fill.
+    const path = join(test.info().outputPath(), "blank.png");
+    await page.setContent('<div style="width:264px;height:900px;background:#232323"></div>');
+    await page.locator("div").screenshot({ path });
+    await expect(capture(page, path)).rejects.toThrow();
+  });
+
+  test("reads a flat image as a single dominant colour", async ({ page }) => {
+    const dataUrl = await page.evaluate(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 264;
+      canvas.height = 900;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = "#232323";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    });
+    const { colours, dominant } = await profile(page, dataUrl);
+    expect(colours).toBe(1);
+    expect(colours).toBeLessThanOrEqual(MIN_COLOURS);
+    expect(dominant).toBeGreaterThanOrEqual(MAX_DOMINANT);
+  });
+});

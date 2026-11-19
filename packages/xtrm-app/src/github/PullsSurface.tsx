@@ -170,7 +170,7 @@ export function PullsSurface() {
                       type="button"
                       onClick={() => setSort(c.sort!)}
                       className={cx(
-                        "flex h-full w-full items-center overflow-hidden text-[11px] font-normal outline-none hover:text-ink focus-visible:bg-hover",
+                        "flex h-full w-full items-center overflow-hidden text-xs font-normal outline-none hover:text-ink focus-visible:bg-hover",
                         c.align === "right" && "justify-end",
                         sort === c.sort ? "text-ink" : "text-ink-faint",
                       )}
@@ -178,7 +178,7 @@ export function PullsSurface() {
                       {c.label}
                     </button>
                   ) : (
-                    <span className={cx("truncate text-[11px] font-normal text-ink-faint", c.align === "right" && "w-full text-right")}>{c.label}</span>
+                    <span className={cx("truncate text-xs font-normal text-ink-faint", c.align === "right" && "w-full text-right")}>{c.label}</span>
                   )}
                 </div>
               ))}

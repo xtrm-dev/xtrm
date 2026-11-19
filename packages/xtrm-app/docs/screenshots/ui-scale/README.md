@@ -12,22 +12,42 @@ the sidebar and the sub-section labels (13px literal) are larger than their pare
 `after-*` the header is 8.64px, the rows and their children 9.75px.
 
 The spec writes to its own output directory (`e2e/.results`, gitignored), so a routine test run
-cannot dirty this evidence. Regenerate the committed set on purpose:
+cannot dirty this evidence. Regenerate the committed set on purpose.
+
+**After** — the current tree, in place:
 
 ```bash
 cd packages/xtrm-app
-
-# after: the current tree
 XTRM_APP_PORT=5318 SCALE_SHOTS_DIR=docs/screenshots/ui-scale SCALE_PHASE=after \
   npx playwright test e2e/ui-scale.spec.ts -g "scale screenshots"
-
-# before: the pre-XTRM-897 sources (stash your work first, restore with `git checkout HEAD -- src/`
-# and then `git stash pop`)
-git checkout cdb668b -- src/
-XTRM_APP_PORT=5318 SCALE_SHOTS_DIR=docs/screenshots/ui-scale SCALE_PHASE=before \
-  npx playwright test e2e/ui-scale.spec.ts -g "scale screenshots"
-git checkout HEAD -- src/
 ```
 
-Each capture is checked for size, so an empty file cannot be committed again (XTRM-907: one
-committed capture was a 1.8 kB blank).
+**Before** — the `cdb668b` sources, in a detached worktree so this tree is never touched. Two
+details matter:
+
+- the worktree must sit on the same filesystem as this checkout, because `node_modules` is
+  hard-linked (`cp -al`) rather than symlinked. A symlink puts the Geist font files outside Vite's
+  serving allow-list, the fonts fall back, and the captures no longer match the committed set.
+  `/tmp` is usually a different filesystem, so use a directory beside the repository.
+- `cdb668b` predates the spec, so copy the current spec into the worktree first.
+
+```bash
+cd packages/xtrm-app
+here=$(pwd)
+before=$HOME/.cache/xtrm-ui-scale-before
+git worktree add --detach "$before" cdb668b
+cp -al "$here/node_modules" "$before/packages/xtrm-app/node_modules"
+cp -f e2e/ui-scale.spec.ts e2e/scale-capture.ts "$before/packages/xtrm-app/e2e/"
+cd "$before/packages/xtrm-app"
+XTRM_APP_PORT=5319 SCALE_SHOTS_DIR=docs/screenshots/ui-scale SCALE_PHASE=before \
+  npx playwright test e2e/ui-scale.spec.ts -g "scale screenshots"
+for shot in docs/screenshots/ui-scale/before-*.png; do cp -f "$shot" "$here/docs/screenshots/ui-scale/${shot##*/}"; done
+cd "$here" && git worktree remove --force "$before"
+```
+
+This recipe reproduces the committed `before-*` set: at the 12px root and on the light toolbar the
+comparison is pixel-identical, on the other two it is within 8.3e-8 of the image area.
+
+Each capture must clear three checks before it is written into this directory (`e2e/scale-capture.ts`):
+more than 4 kB, more than 16 distinct colours, and no single colour covering more than 98% of the
+pixels. Size alone was too weak — the blank that reached review was 1797 bytes (XTRM-907).

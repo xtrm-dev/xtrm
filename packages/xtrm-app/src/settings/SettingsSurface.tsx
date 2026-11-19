@@ -43,7 +43,7 @@ export function SettingsSurface() {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Settings">
       <SurfaceToolbar>
-        <span className="text-[11px] text-ink-faint">GitHub</span>
+        <span className="text-xs text-ink-faint">GitHub</span>
         <SourceBadge source={githubAuth.source} />
       </SurfaceToolbar>
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">

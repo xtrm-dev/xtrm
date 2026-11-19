@@ -189,9 +189,9 @@ function QuestionSpecRow({ q }: { q: QuestionRef }) {
   return (
     <div className="flex flex-col gap-1 rounded-md border border-border-muted px-3 py-2">
       <div className="flex items-baseline gap-2">
-        <span className="rounded bg-hover px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-wide text-ink-muted">{primitiveName(type)}</span>
+        <span className="rounded bg-hover px-1.5 py-0.5 font-mono text-xs uppercase tracking-wide text-ink-muted">{primitiveName(type)}</span>
         <span className="font-mono text-xs text-ink">{q.id}</span>
-        <span className="text-[11px] text-ink-faint">{q.version}</span>
+        <span className="text-xs text-ink-faint">{q.version}</span>
       </div>
       {instructions && <p className="text-xs leading-snug text-ink-muted">{instructions}</p>}
       {criteria && (
@@ -204,7 +204,7 @@ function QuestionSpecRow({ q }: { q: QuestionRef }) {
           ))}
         </dl>
       )}
-      {options.length > 0 && <p className="font-mono text-[11px] text-ink-faint">{options.join(" | ")}</p>}
+      {options.length > 0 && <p className="font-mono text-xs text-ink-faint">{options.join(" | ")}</p>}
     </div>
   );
 }

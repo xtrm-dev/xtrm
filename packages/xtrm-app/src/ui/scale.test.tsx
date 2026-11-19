@@ -28,6 +28,14 @@ const remOf = (className: string) => {
 };
 
 describe("the glyph ladder is a rem ladder", () => {
+  it("derives every step to a finite rem number", () => {
+    // `remOf` returns NaN for a class it cannot read; a silently NaN ladder would make every
+    // comparison below vacuous (toBeCloseTo(NaN) fails, but only once a class is rendered).
+    for (const [size, rem] of Object.entries(ICON_REM)) {
+      expect(Number.isFinite(rem), `${size} must resolve to a number`).toBe(true);
+      expect(rem, `${size} must be positive`).toBeGreaterThan(0);
+    }
+  });
   it("resolves every icon size to the px it has at a 16px root, in rem", () => {
     for (const [size, rem] of Object.entries(ICON_REM) as Array<[keyof typeof ICON_REM, number]>) {
       const { container } = render(<Icon name="pull" size={size} />);

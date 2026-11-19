@@ -11,7 +11,7 @@ function ReleaseEntry({ release, latest }: { release: Release; latest: boolean }
   return (
     <li className="relative flex gap-4 pb-6 last:pb-0">
       <span aria-hidden className="absolute top-4 bottom-0 left-[5px] w-px bg-border-muted" />
-      <span className={`mt-1.5 size-[11px] shrink-0 rounded-full border ${latest ? "border-accent bg-accent" : "border-border-strong bg-surface"}`} />
+      <span className={`mt-1.5 size-[0.6875rem] shrink-0 rounded-full border ${latest ? "border-accent bg-accent" : "border-border-strong bg-surface"}`} />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
           <h3 className="text-sm font-semibold text-ink">{release.name}</h3>

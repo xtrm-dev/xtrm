@@ -207,7 +207,7 @@ export function ExperimentDetailSurface() {
                     <div key={spec.id} className="rounded-md border border-border-muted px-3 py-2">
                       <p className="text-sm text-ink">{spec.title}</p>
                       <p className="text-xs text-ink-faint">{spec.description}</p>
-                      <p className="mt-1 font-mono text-[11px] text-ink-faint">{spec.datasets.join(", ")}</p>
+                      <p className="mt-1 font-mono text-xs text-ink-faint">{spec.datasets.join(", ")}</p>
                     </div>
                   ))}
                 </div>
