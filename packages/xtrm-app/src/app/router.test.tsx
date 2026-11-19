@@ -76,10 +76,17 @@ describe("retired routes redirect", () => {
     expect(await screen.findByRole("region", { name: "Overview" })).toBeTruthy();
   });
 
-  it("a Project section renders its typed coming-state until its own issue lands", async () => {
+  it("a Project section renders its own surface once its issue lands, and a typed coming-state otherwise", async () => {
+    // Workers and Follow-ups are live surfaces now (XTRM-819).
     const { router } = renderAt("/rep/mercury/market-data/project/workers");
     expect(router.state.location.pathname).toBe("/rep/mercury/market-data/project/workers");
-    expect((await screen.findByRole("region", { name: "Workers" })).textContent).toContain("Project Workers arrive with XTRM-819");
+    expect(await screen.findByRole("region", { name: "Workers" })).toBeTruthy();
+    expect(await screen.findByTestId("workers-count")).toBeTruthy();
     expect(screen.queryByText(/Program/)).toBeNull();
+
+    // Questions stays a typed coming-state until its own issue lands.
+    const next = renderAt("/rep/mercury/market-data/project/questions");
+    expect(next.router.state.location.pathname).toBe("/rep/mercury/market-data/project/questions");
+    expect((await screen.findByRole("region", { name: "Questions" })).textContent).toContain("Project Questions arrive read-only with XTRM-817–XTRM-820");
   });
 });

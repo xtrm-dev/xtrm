@@ -152,6 +152,27 @@ export function readArgv(pathname: string, params: URLSearchParams): string[] | 
       return r ? ["issue", "resume", r] : null;
     case "/trace":
       return r ? ["provenance", "trace", r] : null;
+    case "/graph": {
+      // Project dispatch graph (XTRM-868, `sb provenance graph`): a bounded
+      // read of execution bindings, their dispatchers and their PR links.
+      // `since` is an epoch-millisecond lower bound; `limit` is the binding
+      // ceiling and defaults to the CLI's own default when omitted.
+      if (!prj) return null;
+      const argv = ["provenance", "graph", "--project", prj];
+      const rawSince = params.get("since");
+      if (rawSince !== null) {
+        const since = Number(rawSince);
+        if (!Number.isSafeInteger(since) || since < 0) return null;
+        argv.push("--since", String(since));
+      }
+      const rawGraphLimit = params.get("limit");
+      if (rawGraphLimit !== null) {
+        const graphLimit = Number(rawGraphLimit);
+        if (!Number.isInteger(graphLimit) || graphLimit < 1 || graphLimit > 1000) return null;
+        argv.push("--limit", String(graphLimit));
+      }
+      return argv;
+    }
     case "/journal-feed": {
       // Project-wide feed (substrate >= 0.3.3): one page per call, newest
       // first. `cursor` is opaque and goes back as `--before` (older) or

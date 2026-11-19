@@ -61,6 +61,18 @@ describe("substrate CLI bridge reads", () => {
     expect(readArgv("/journal-feed", q("project=prj_xtrm&since=cur123&kind=note,finding"))).toEqual([
       "journal", "feed", "--project", "prj_xtrm", "--limit", "50", "--kind", "note,finding", "--since", "cur123",
     ]);
+    // XTRM-819: the project dispatch graph (XTRM-868) is bounded and read-only.
+    expect(readArgv("/graph", q("project=prj_xtrm"))).toEqual(["provenance", "graph", "--project", "prj_xtrm"]);
+    expect(readArgv("/graph", q("project=prj_xtrm&since=1795000000000&limit=50"))).toEqual([
+      "provenance", "graph", "--project", "prj_xtrm", "--since", "1795000000000", "--limit", "50",
+    ]);
+    // No project, an unparseable bound and an out-of-range limit are refused here.
+    expect(readArgv("/graph", q(""))).toBeNull();
+    expect(readArgv("/graph", q("project=not-a-project"))).toBeNull();
+    expect(readArgv("/graph", q("project=prj_xtrm&since=yesterday"))).toBeNull();
+    expect(readArgv("/graph", q("project=prj_xtrm&since=-1"))).toBeNull();
+    expect(readArgv("/graph", q("project=prj_xtrm&limit=0"))).toBeNull();
+    expect(readArgv("/graph", q("project=prj_xtrm&limit=1001"))).toBeNull();
     // A missing project, an out-of-range page and an empty kind list are refused.
     expect(readArgv("/journal-feed", q("limit=20"))).toBeNull();
     expect(readArgv("/journal-feed", q("project=prj_xtrm&limit=0"))).toBeNull();

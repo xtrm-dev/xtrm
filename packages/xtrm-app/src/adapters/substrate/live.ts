@@ -14,6 +14,7 @@ import type {
   SubstrateProject,
 } from "../types.ts";
 import { parseContract } from "./contract.ts";
+import { parseDispatchGraph } from "./graph.ts";
 
 // Wire shapes of the `substrate-cli/v1` envelope (sb 0.2.0). Only the fields read here.
 interface Envelope<T> {
@@ -507,6 +508,14 @@ export const liveSubstrate: SubstrateAdapter = {
       `/journal-feed?project=${encodeURIComponent(projectId)}&limit=${page}${cursor}`,
     );
     return { entries: body.entries, nextCursor: body.nextCursor ?? null };
+  },
+  async dispatchGraph(projectId, opts) {
+    const params = new URLSearchParams({ project: projectId });
+    if (opts?.since !== undefined) params.set("since", String(opts.since));
+    if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+    // The wire shape is parsed, not trusted: a vertex whose kind the app does not
+    // know is dropped rather than rendered as an unnameable row.
+    return parseDispatchGraph(await read<unknown>(`/graph?${params.toString()}`));
   },
   async editIssue(projectId, ref, expectedRevision, edit) {
     await write("/edit", { project: projectId, ref, expectedRevision, ...edit });
