@@ -21,7 +21,7 @@ import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
-import { defaultConfigPath, loadPmConfig, normaliseRepo, resolveBinding, type BoardBinding } from "./status-board-api.ts";
+import { defaultConfigPath, loadPmConfig, normaliseRepo, resolveBinding, type BoardBinding, type PmConfig } from "./status-board-api.ts";
 import { resolveSbBin } from "./substrate-cli.ts";
 
 const PREFIX = "/xtrm-api/jira";
@@ -166,10 +166,16 @@ export function remoteScope(site: string, project: string): string | null {
 /**
  * The `Authorization` header for one request, read from the file the binding names. Supported
  * shapes: a ready `Bearer …`/`Basic …` value, a JSON object `{ email, token }` (Jira Cloud API
- * token -> Basic), `{ token }` (Bearer), or a plain token string (Bearer). Absent or unreadable
- * means "no credential", never a guess.
+ * token -> Basic), `{ token }` (Bearer), or a plain token string. A plain token is paired with
+ * `operatorEmail` as Jira Cloud's `Basic base64(email:token)`; without an email it stays Bearer,
+ * the shape a Jira Server/DC personal access token needs. Absent or unreadable means "no
+ * credential", never a guess.
  */
-export function readJiraAuth(path: string | null, read: (path: string) => string = (p) => readFileSync(p, "utf8")): { header: string } | null {
+export function readJiraAuth(
+  path: string | null,
+  read: (path: string) => string = (p) => readFileSync(p, "utf8"),
+  operatorEmail: string | null = null,
+): { header: string } | null {
   if (!path) return null;
   let raw: string;
   try {
@@ -179,6 +185,7 @@ export function readJiraAuth(path: string | null, read: (path: string) => string
   }
   if (raw.length === 0) return null;
   if (/^(Bearer|Basic)\s+\S+$/i.test(raw)) return { header: raw };
+  const pairedEmail = str(typeof operatorEmail === "string" ? operatorEmail.trim() : null, 320);
   try {
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -191,7 +198,20 @@ export function readJiraAuth(path: string | null, read: (path: string) => string
   } catch {
     // A plain token file is the normal shape; the whole value is the token.
   }
-  return { header: `Bearer ${raw}` };
+  return pairedEmail ? { header: `Basic ${Buffer.from(`${pairedEmail}:${raw}`).toString("base64")}` } : { header: `Bearer ${raw}` };
+}
+
+/**
+ * The email a plain Jira Cloud API token is paired with, from the project-management config the
+ * binding already reads: `projects.<name>.operator_email` overrides `defaults.operator_email`,
+ * exactly as the pack's `pm_config` merges a project entry over `defaults`. Null when the config
+ * names none, so the caller keeps the Bearer shape instead of pairing the token with an invented
+ * identity.
+ */
+export function operatorEmailOf(config: PmConfig | null, pmProject: string | null): string | null {
+  const projects = config?.projects ?? {};
+  const defaults = config?.defaults ?? {};
+  return str(projects[pmProject ?? ""]?.["operator_email"], 320) ?? str(defaults["operator_email"], 320);
 }
 
 /** Map a configured repository binding onto the Jira facts a caller may see. */
@@ -423,11 +443,14 @@ export function jiraApi(opts: JiraApiOptions = {}): Plugin {
 
   const bindingFor = (repository: string): JiraBinding => {
     const binding = resolveBinding(config, repository, { configPath });
-    const credential = readJiraAuth(binding.jira.tokenFile, readFile);
+    const credential = readJiraAuth(binding.jira.tokenFile, readFile, operatorEmailOf(config, binding.pmProject));
     return jiraBindingOf(binding, credential !== null);
   };
 
-  const authFor = (binding: JiraBinding): { header: string } | null => (binding.tokenFile ? readJiraAuth(binding.tokenFile, readFile) : null);
+  // The email is an identity, not a credential the caller may see: it reaches the header builder
+  // only, never `JiraBinding`, a response, or a log line.
+  const authFor = (binding: JiraBinding): { header: string } | null =>
+    binding.tokenFile ? readJiraAuth(binding.tokenFile, readFile, operatorEmailOf(config, binding.pmProject)) : null;
 
   /** GET one Jira URL with the per-request credential. Never logs or returns the header. */
   const upstream = async (url: URL, auth: { header: string }): Promise<{ status: number; body: unknown }> => {

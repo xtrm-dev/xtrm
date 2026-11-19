@@ -11,6 +11,7 @@ import {
   jiraApi,
   keyProject,
   keysJql,
+  operatorEmailOf,
   parseExternalBindings,
   parseIssueRow,
   parseKeys,
@@ -95,6 +96,8 @@ const noBindings = () => Promise.resolve({ status: 200, body: envelope([]) });
 function setup(
   overrides: {
     writeToken?: boolean;
+    operatorEmail?: string;
+    projectOperatorEmail?: string;
     runExternal?: (argv: string[]) => Promise<{ status: number; body: string }>;
     execSb?: SbExec;
     sbBin?: string;
@@ -108,9 +111,19 @@ function setup(
   writeFileSync(
     configPath,
     JSON.stringify({
-      defaults: { jira_site: "https://mtl.atlassian.net", jira_token_file: tokenFile },
+      defaults: {
+        jira_site: "https://mtl.atlassian.net",
+        jira_token_file: tokenFile,
+        ...(overrides.operatorEmail === undefined ? {} : { operator_email: overrides.operatorEmail }),
+      },
       projects: {
-        mercury: { repo_slug: REPO, repo_name: "market-data", sb_project_id: "prj_mmd", jira_project: "MMD" },
+        mercury: {
+          repo_slug: REPO,
+          repo_name: "market-data",
+          sb_project_id: "prj_mmd",
+          jira_project: "MMD",
+          ...(overrides.projectOperatorEmail === undefined ? {} : { operator_email: overrides.projectOperatorEmail }),
+        },
         // Bound for the board, never for Jira.
         boardonly: { repo_slug: "someone/board-only", sb_project_id: "prj_board" },
         // Bound for Jira with no Substrate Project: the join must never fall back to the ambient one.
@@ -174,6 +187,36 @@ describe("jira bridge: pure boundaries", () => {
     ).toBeNull();
   });
 
+  it("pairs a plain token with the configured operator email and leaves every other shape alone", () => {
+    const email = "bridge-agent@example.test";
+    const basic = readJiraAuth("/x", () => "plain-token-123", email);
+    expect(basic?.header.startsWith("Basic ")).toBe(true);
+    expect(Buffer.from(basic!.header.slice(6), "base64").toString()).toBe(`${email}:plain-token-123`);
+
+    // A file that names its own email keeps it: the config pairs only a plain token.
+    const fromFile = readJiraAuth("/x", () => JSON.stringify({ email: "file@example.test", token: "tok-123456" }), email);
+    expect(Buffer.from(fromFile!.header.slice(6), "base64").toString()).toBe("file@example.test:tok-123456");
+    // A `{ token }` object stays Bearer, and a ready header is never rewritten.
+    expect(readJiraAuth("/x", () => JSON.stringify({ token: "tok-123456" }), email)).toEqual({ header: "Bearer tok-123456" });
+    expect(readJiraAuth("/x", () => "Bearer abc12345", email)).toEqual({ header: "Bearer abc12345" });
+    expect(readJiraAuth("/x", () => "Basic Zm9vOmJhcg==", email)).toEqual({ header: "Basic Zm9vOmJhcg==" });
+    // No usable email keeps the Bearer shape the bridge had before the pairing existed.
+    expect(readJiraAuth("/x", () => "plain-token-123", "   ")).toEqual({ header: "Bearer plain-token-123" });
+    expect(readJiraAuth("/x", () => "plain-token-123", null)).toEqual({ header: "Bearer plain-token-123" });
+  });
+
+  it("resolves the operator email from defaults, with a project entry override", () => {
+    const config = {
+      defaults: { operator_email: "defaults@example.test" },
+      projects: { mercury: { operator_email: "project@example.test" }, plain: {} },
+    };
+    expect(operatorEmailOf(config, "mercury")).toBe("project@example.test");
+    expect(operatorEmailOf(config, "plain")).toBe("defaults@example.test");
+    expect(operatorEmailOf(config, null)).toBe("defaults@example.test");
+    expect(operatorEmailOf({ defaults: {}, projects: {} }, "mercury")).toBeNull();
+    expect(operatorEmailOf(null, "mercury")).toBeNull();
+  });
+
   it("parses the sb external-bindings envelope and refuses anything else", () => {
     const parsed = parseExternalBindings(envelope([{ issue: "XTRM-816", remoteKey: "MMD-551", syncState: "in_sync", url: "https://x/browse/MMD-551" }]));
     expect(parsed?.rows.get("MMD-551")).toEqual({ issueRef: "XTRM-816", syncState: "in_sync", url: "https://x/browse/MMD-551" });
@@ -218,6 +261,55 @@ describe.each(HOOKS)("jira middleware (%s)", (hook) => {
     expect(upstreamUrl.pathname).toBe("/rest/api/3/issue/MMD-551");
     expect(upstreamUrl.searchParams.get("fields")).toBe("summary,status,assignee");
     expect(headers[0]?.authorization).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it("pairs a plain token with defaults.operator_email as Jira Cloud Basic, and returns no identity", async () => {
+    const email = "bridge-agent@example.test";
+    const { fetchImpl, calls, headers } = responder(() => ({ status: 200, body: searchBody(["MMD-551"]) }));
+    const middleware = setup({ operatorEmail: email }).middleware(fetchImpl, hook);
+
+    const res = await send(middleware, "GET", searchUrl());
+    expect(res.status).toBe(200);
+    expect(res.body.issues.map((i: { key: string }) => i.key)).toEqual(["MMD-551"]);
+    const authorization = headers[0]?.authorization ?? "";
+    expect(authorization.startsWith("Basic ")).toBe(true);
+    expect(Buffer.from(authorization.slice(6), "base64").toString()).toBe(`${email}:${TOKEN}`);
+
+    // The email and the token stay server-side: not in the body, not in the /binding answer.
+    const binding = await send(middleware, "GET", `/xtrm-api/jira/binding?repo=${encodeURIComponent(REPO)}`);
+    expect(binding.status).toBe(200);
+    expect(binding.body.binding).toMatchObject({ configured: true, credentialPresent: true });
+    for (const body of [res.body, binding.body]) {
+      const text = JSON.stringify(body);
+      expect(text).not.toContain(email);
+      expect(text).not.toContain(TOKEN);
+      expect(text).not.toContain(authorization.slice(6));
+    }
+    expect(calls).toHaveLength(1);
+  });
+
+  it("a project entry's operator_email overrides defaults for that binding", async () => {
+    const { fetchImpl, headers } = responder(() => ({ status: 200, body: issueBody("MMD-551") }));
+    const middleware = setup({ operatorEmail: "defaults@example.test", projectOperatorEmail: "project@example.test" }).middleware(fetchImpl, hook);
+
+    const res = await send(middleware, "GET", issueUrl("MMD-551"));
+    expect(res.status).toBe(200);
+    const authorization = headers[0]?.authorization ?? "";
+    expect(Buffer.from(authorization.slice(6), "base64").toString()).toBe(`project@example.test:${TOKEN}`);
+    expect(JSON.stringify(res.body)).not.toContain("project@example.test");
+  });
+
+  it("keeps the email and token out of an upstream rejection", async () => {
+    const email = "bridge-agent@example.test";
+    const { fetchImpl } = responder(() => ({ status: 401, body: { errorMessages: ["secret upstream body"] } }));
+    const res = await send(setup({ operatorEmail: email }).middleware(fetchImpl, hook), "GET", issueUrl("MMD-551"));
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe("jira rejected the credential");
+    const text = JSON.stringify(res.body);
+    expect(text).not.toContain(email);
+    expect(text).not.toContain(TOKEN);
+    expect(text).not.toContain("secret upstream body");
   });
 
   it("refuses a malformed key with 400 before any upstream call", async () => {
