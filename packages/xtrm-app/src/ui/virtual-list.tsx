@@ -13,6 +13,7 @@ export function VirtualList<T>({
   widthClass = "max-w-5xl",
   flush,
   minWidth,
+  onWidth,
 }: {
   items: T[];
   rowHeight: number;
@@ -25,8 +26,13 @@ export function VirtualList<T>({
   flush?: boolean;
   /** Below this width the list scrolls sideways instead of squeezing its columns. */
   minWidth?: string;
+  /** Reports the content width after mount and on every resize, for column sets that depend on it. */
+  onWidth?: (width: number) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Read through a ref, so an inline callback cannot re-run the measuring effect on every render.
+  const onWidthRef = useRef(onWidth);
+  onWidthRef.current = onWidth;
   const headerRef = useRef<HTMLDivElement>(null);
   // A vertical scrollbar narrows the rows' box, so the header strip reserves the same gutter to
   // keep its columns over the rows'.
@@ -44,7 +50,10 @@ export function VirtualList<T>({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const measure = () => setGutter(el.offsetWidth - el.clientWidth);
+    const measure = () => {
+      setGutter(el.offsetWidth - el.clientWidth);
+      onWidthRef.current?.(el.clientWidth);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);

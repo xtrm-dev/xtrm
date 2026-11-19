@@ -12,7 +12,7 @@ import { ListFilter, ToolbarButton, ToolbarFilter } from "../ui/toolbar.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
-import { INDENT_REM, buildTree, defaultDesc, issueStatus, keyColumnRem, keyNames, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
+import { INDENT_REM, buildTree, defaultDesc, hiddenColumns, issueStatus, keyColumnRem, keyNames, listDensity, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
 import { PrKey } from "../ui/pr-key.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
@@ -40,19 +40,22 @@ const copy = async (text: string) => {
   }
 };
 
-/** Summary takes the spare width; the key column is sized from the data, see `keyColumnRem`. */
+/**
+ * Summary takes the spare width; the key column is sized from the data (`keyColumnRem`) and the
+ * numeric columns are as narrow as their own text: every rem here comes out of the title (XTRM-911).
+ */
 const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "right" }> = [
   { key: "title", label: "Title", width: "minmax(0,1fr)" },
-  { key: "children", label: "Children", width: "5rem", align: "right" },
-  { key: "events", label: "Events", width: "4.5rem", align: "right" },
-  { key: "pointers", label: "Pointers", width: "5.25rem", align: "right" },
-  { key: "pr", label: "PR", width: "6.5rem", align: "right" },
-  { key: "created", label: "Created", width: "5rem", align: "right" },
-  { key: "updated", label: "Updated", width: "5.5rem", align: "right" },
+  { key: "children", label: "Children", width: "4.5rem", align: "right" },
+  { key: "events", label: "Events", width: "3.5rem", align: "right" },
+  { key: "pointers", label: "Pointers", width: "3.75rem", align: "right" },
+  { key: "pr", label: "PR", width: "5.5rem", align: "right" },
+  { key: "created", label: "Created", width: "4rem", align: "right" },
+  { key: "updated", label: "Updated", width: "4rem", align: "right" },
 ];
 // The trailing slot is not a sortable column: it reserves the row-action width so the action can
 // never overlap a measured cell (design §4.3, "at the row end").
-const GRID = { gridTemplateColumns: [...COLUMNS.map((c) => c.width), "2rem"].join(" ") };
+const gridFor = (columns: typeof COLUMNS) => ({ gridTemplateColumns: [...columns.map((c) => c.width), "2rem"].join(" ") });
 const CELL_EDGE = "flex h-full min-w-0 items-center";
 const CELL = `${CELL_EDGE} px-2`;
 
@@ -73,6 +76,9 @@ export function IssuesSurface() {
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState(false);
+  // Measured by the list itself (the surface width, not the viewport): the drawer and the shell rail
+  // both take space the table cannot use.
+  const [listWidth, setListWidth] = useState(() => (typeof window === "undefined" ? 1024 : window.innerWidth));
 
   const openPage = (ref: string) => void navigate({ to: `/rep/${repo.owner}/${repo.name}/work/issues/${ref}` } as never);
 
@@ -107,6 +113,14 @@ export function IssuesSurface() {
     });
   const maxDepth = useMemo(() => Math.max(0, ...tree.map((r) => r.depth)), [tree]);
   const keyCol = `${keyColumnRem(visible, maxDepth)}rem`;
+  const columns = useMemo(() => {
+    // Before the first measurement (and in jsdom) fall back to the viewport, so the table never
+    // renders a column set it will immediately throw away.
+    const available = listWidth > 0 ? listWidth : typeof window === "undefined" ? 1024 : window.innerWidth;
+    const dropped = hiddenColumns(listDensity(available));
+    return COLUMNS.filter((c) => !dropped.has(c.key));
+  }, [listWidth]);
+  const grid = useMemo(() => gridFor(columns), [columns]);
   const tableVars = { "--key-col": keyCol } as CSSProperties;
 
   let body;
@@ -139,10 +153,11 @@ export function IssuesSurface() {
         rowHeight={32}
         flush
         minWidth="20rem"
+        onWidth={setListWidth}
         getKey={(r) => r.issue.id}
         header={
-          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 border-b border-border-subtle" style={{ ...tableVars, ...GRID }}>
-            {COLUMNS.map((c) => (
+          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 border-b border-border-subtle" style={{ ...tableVars, ...grid }}>
+            {columns.map((c) => (
               <div key={c.key} role="columnheader" aria-sort={sort.key === c.key ? (sort.desc ? "descending" : "ascending") : "none"} className={CELL_EDGE}>
                 <button
                   type="button"
@@ -163,6 +178,8 @@ export function IssuesSurface() {
           <IssueRow
             row={r}
             vars={tableVars}
+            grid={grid}
+            columns={columns}
             selected={inspected?.kind === "issue" && inspected.ref === r.issue.ref}
             onToggle={() => toggle(r.issue.ref)}
             onInspect={() => inspect({ kind: "issue", ref: r.issue.ref })}
@@ -222,10 +239,31 @@ export function IssuesSurface() {
 
 const NUMBER = "text-xs text-ink-muted tabular";
 
-function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: TreeRow; vars: CSSProperties; selected: boolean; onToggle: () => void; onInspect: () => void; onOpen: () => void }) {
+function IssueRow({
+  row,
+  vars,
+  grid,
+  columns,
+  selected,
+  onToggle,
+  onInspect,
+  onOpen,
+}: {
+  row: TreeRow;
+  vars: CSSProperties;
+  grid: CSSProperties;
+  columns: ReadonlyArray<{ key: string }>;
+  selected: boolean;
+  onToggle: () => void;
+  onInspect: () => void;
+  onOpen: () => void;
+}) {
   const { issue, depth, rollup, hasChildren, collapsed, detached } = row;
   const terminal = TERMINAL.has(issue.lifecycle);
   const status = issueStatus(issue);
+  // The numeric cells follow the visible columns in their declared order, so a column dropped from
+  // the header drops from the row too; the title cell and the trailing action slot always stay.
+  const numeric = columns.filter((c) => c.key !== "title").map((c) => c.key);
   return (
     <Row
       density="table"
@@ -245,7 +283,7 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
         }
       }}
     >
-      <div className="grid h-full w-full items-center overflow-hidden" style={{ ...GRID, ...vars, "--row-indent": `${depth * INDENT_REM}rem` } as CSSProperties}>
+      <div className="grid h-full w-full items-center overflow-hidden" style={{ ...grid, ...vars, "--row-indent": `${depth * INDENT_REM}rem` } as CSSProperties}>
         <div className={cx(CELL, "gap-1.5")}>
           {/* The row's own depth indents the leading cluster, so the chevron sits beside the key at
               that depth instead of behind a list-wide gutter; the key cell gives the same width back,
@@ -291,28 +329,33 @@ function IssueRow({ row, vars, selected, onToggle, onInspect, onOpen }: { row: T
             )}
           </span>
         </div>
-        <div className={cx(CELL, "justify-end")}>
-          {issue.childCount > 0 ? `${issue.childrenDone}/${issue.childCount}` : ""}
-        </div>
-        <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`${issue.eventCount} on this issue, ${rollup.events} with children`}>
-          {rollup.events || ""}
-        </div>
-        <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`${issue.pointerCount} on this issue, ${rollup.pointers} with children`}>
-          {rollup.pointers || ""}
-        </div>
-        <div className={cx(CELL, "justify-end")}>
-          {issue.primaryPr && (
-            <span title={issue.primaryPr.relation} className="flex min-w-0 items-center justify-end">
-              <PrKey number={issue.primaryPr.number} state={issue.primaryPr.state} quiet className="min-w-0" />
-            </span>
-          )}
-        </div>
-        <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")}>
-          {relativeTime(issue.createdAt)}
-        </div>
-        <div className={cx(CELL, "justify-end text-xs text-ink-muted tabular")} title={`Created ${relativeTime(issue.createdAt)} · Updated ${relativeTime(rollup.activityAt)}`}>
-          {relativeTime(rollup.activityAt)}
-        </div>
+        {numeric.map((key) => (
+          <div key={key} className={cx(CELL, "justify-end")} data-column={key}>
+            {key === "children" && issue.childCount > 0 ? `${issue.childrenDone}/${issue.childCount}` : null}
+            {key === "events" && (
+              <span className="text-xs text-ink-muted tabular" title={`${issue.eventCount} on this issue, ${rollup.events} with children`}>
+                {rollup.events || ""}
+              </span>
+            )}
+            {key === "pointers" && (
+              <span className="text-xs text-ink-muted tabular" title={`${issue.pointerCount} on this issue, ${rollup.pointers} with children`}>
+                {rollup.pointers || ""}
+              </span>
+            )}
+            {key === "pr" &&
+              issue.primaryPr && (
+                <span title={issue.primaryPr.relation} className="flex min-w-0 items-center justify-end">
+                  <PrKey number={issue.primaryPr.number} state={issue.primaryPr.state} quiet className="min-w-0" />
+                </span>
+              )}
+            {key === "created" && <span className="text-xs text-ink-muted tabular">{relativeTime(issue.createdAt)}</span>}
+            {key === "updated" && (
+              <span className="text-xs text-ink-muted tabular" title={`Created ${relativeTime(issue.createdAt)} · Updated ${relativeTime(rollup.activityAt)}`}>
+                {relativeTime(rollup.activityAt)}
+              </span>
+            )}
+          </div>
+        ))}
         <div className={cx(CELL_EDGE, "justify-end")} onClick={(e) => e.stopPropagation()}>
           {/* At rest the action is invisible and takes no pointer events, so the row keeps the click. */}
           <span className="pointer-events-none flex size-5 items-center justify-center opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100">

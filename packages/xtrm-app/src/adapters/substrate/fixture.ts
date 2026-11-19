@@ -35,6 +35,9 @@ const SHAPE: Record<string, { locator: string; parentRef: string | null; childre
   "XTRM-301": { locator: "XTRM-300.1", parentRef: "XTRM-300", children: [1, 0] },
   "XTRM-302": { locator: "XTRM-300.1.2", parentRef: "XTRM-301", children: [1, 0] },
   "XTRM-303": { locator: "XTRM-300.1.2.1", parentRef: "XTRM-302" },
+  // The live MMD board carries one 28-character locator far down its population; it is not in the
+  // rendered window, yet it used to size the key column for every row (XTRM-911).
+  "XTRM-350": { locator: "MMD-5244.2331.298.20.2.1.1.1", parentRef: null },
 };
 
 interface Record_ {

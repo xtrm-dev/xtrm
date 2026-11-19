@@ -153,7 +153,31 @@ export const KEY_CELL_CHROME_REM = 2.6;
  *
  * Text is measured at Geist Mono's 0.6em advance and the 0.72rem xs size.
  */
+/** The key column never grows past this: the summary is the row's reading content, the key is its address. */
+export const KEY_COL_MAX_REM = 15.5;
+
 export function keyColumnRem(rows: IssueSummary[], maxDepth = 0) {
   const longest = rows.reduce((n, i) => Math.max(n, primaryKey(i).length), 8);
-  return Math.ceil(longest * 0.6 * 0.72 * 10) / 10 + INDENT_REM * Math.max(0, maxDepth) + KEY_CELL_CHROME_REM;
+  const wanted = Math.ceil(longest * 0.6 * 0.72 * 10) / 10 + INDENT_REM * Math.max(0, maxDepth) + KEY_CELL_CHROME_REM;
+  // One deep locator hides elsewhere in the population would otherwise tax every visible row
+  // (19.7rem live against an 18-character visible key). The full name stays in the cell tooltip.
+  return Math.min(wanted, KEY_COL_MAX_REM);
 }
+
+/**
+ * How many numeric columns the list can afford at its measured width. The summary always wins the
+ * width argument: below `wide` the two rollups go, below `medium` the two timestamps follow, and the
+ * shipped `minWidth` keeps the rest scrolling sideways instead of squeezing the title to nothing.
+ */
+export type ListDensity = "wide" | "medium" | "compact";
+
+export const listDensity = (width: number): ListDensity => (width >= 62 * 16 ? "wide" : width >= 48 * 16 ? "medium" : "compact");
+
+const DROPPED: Record<ListDensity, ReadonlySet<SortKey>> = {
+  wide: new Set(),
+  medium: new Set<SortKey>(["events", "pointers"]),
+  compact: new Set<SortKey>(["events", "pointers", "created", "updated"]),
+};
+
+/** The column keys the list hides at this width, so header and rows stay in step. */
+export const hiddenColumns = (density: ListDensity) => DROPPED[density];
