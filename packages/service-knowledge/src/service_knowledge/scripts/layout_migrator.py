@@ -392,11 +392,13 @@ def migrate_pack(project_root: Path, pack: Path, repo_name: str) -> dict[str, An
             stale_refs |= unmapped
 
     # Relocate the registry under the umbrella with rewritten skill_paths. Line endings
-    # follow the registry that supplied the content: on a first migration the NEW path does
-    # not exist yet, so sniffing it would answer LF and silently convert a CRLF flat
-    # registry (XTRM-850).
+    # follow the file being written: when the umbrella registry already exists it is
+    # overwritten, so ITS convention must survive (taking the stale flat registry's endings
+    # would convert it — the reverse of the bug this fix closed). Only on a first migration,
+    # where the new path does not exist yet, is there nothing to sniff but the flat registry
+    # that supplies the content (XTRM-850).
     umbrella_dir.mkdir(parents=True, exist_ok=True)
-    newline_source = old_registry if old_registry.exists() else new_registry
+    newline_source = new_registry if new_registry.exists() else old_registry
     _write_text(
         new_registry,
         json.dumps(registry, indent=2) + "\n",

@@ -249,6 +249,37 @@ def test_registry_relocation_preserves_lf(tmp_path: Path) -> None:
     assert b"\r\n" not in raw
 
 
+def test_registry_overwrite_follows_the_umbrella_registry_when_both_exist(tmp_path: Path) -> None:
+    """Both registries present: the file being OVERWRITTEN supplies the convention, not the
+    stale flat copy. Sniffing the flat copy here converted the umbrella in both directions."""
+    project, pack = _pack(tmp_path)
+    old_path = _registry(pack, {"db": _service("db")})
+    new_path = _registry(pack / "service-skills", {"db": _service("db")})
+    # Mixed: umbrella CRLF, flat LF.
+    new_path.write_bytes(new_path.read_bytes().replace(b"\n", b"\r\n"))
+
+    migrate_pack(project, pack, "acme")
+
+    raw = new_path.read_bytes()
+    assert b"\r\n" in raw
+    assert b"\n" not in raw.replace(b"\r\n", b"")
+    assert not old_path.exists()
+
+
+def test_registry_overwrite_keeps_umbrella_lf_when_the_flat_copy_is_crlf(tmp_path: Path) -> None:
+    """The other direction: an LF umbrella must not inherit the flat CRLF convention."""
+    project, pack = _pack(tmp_path)
+    old_path = _registry(pack, {"db": _service("db")})
+    old_path.write_bytes(old_path.read_bytes().replace(b"\n", b"\r\n"))
+    new_path = _registry(pack / "service-skills", {"db": _service("db")})
+
+    migrate_pack(project, pack, "acme")
+
+    raw = new_path.read_bytes()
+    assert b"\r\n" not in raw
+    assert not old_path.exists()
+
+
 # --- equal trees are moved aside, never deleted -------------------------------
 def test_equal_tree_is_moved_aside_not_deleted(tmp_path: Path) -> None:
     project, pack = _pack(tmp_path)
