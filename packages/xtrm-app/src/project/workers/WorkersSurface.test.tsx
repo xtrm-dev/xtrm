@@ -8,6 +8,7 @@ import type { StatusBoardAdapter } from "../../adapters/status-board/types.ts";
 import { fixtureSubstrate } from "../../adapters/substrate/fixture.ts";
 import type { Adapters } from "../../adapters/index.tsx";
 import { createAppRouter } from "../../app/router.tsx";
+import { WORKERS_LAYOUT_GRAPH } from "./layout-fixture.ts";
 
 /** The fixture board repo resolves the fixture substrate's second binding (market-data). */
 const substrate = fixtureSubstrate;
@@ -84,6 +85,24 @@ describe("Project Workers", () => {
     const toggle = screen.getByRole("checkbox", { name: "Include archived workers" });
     fireEvent.click(toggle);
     await waitFor(() => expect(screen.getAllByTestId("worker-flat-row")).toHaveLength(source.records.length));
+  });
+
+  // XTRM-918: the console's board read covered a small window of the issues the graph names, so a
+  // session row on an issue outside that window had a key and no title. The title is read by ref.
+  it("names a session row whose issue the board list does not carry", async () => {
+    const outside = {
+      ...substrate,
+      dispatchGraph: async () => structuredClone(WORKERS_LAYOUT_GRAPH),
+      listIssues: async (projectId: string) => (await substrate.listIssues(projectId)).filter((i) => !["XTRM-302", "XTRM-303"].includes(i.ref)),
+    };
+    renderWorkers("", { ...fixtureAdapters, substrate: outside, statusBoard: createStatusBoardFixtureAdapter() });
+
+    const rows = await screen.findAllByTestId("worker-row");
+    const session = rows.find((row) => row.getAttribute("data-kind") === "session");
+    expect(session, "the graph's nameless session is a row").toBeTruthy();
+    // Its issue key stays, and the title arrives from the per-ref read once that resolves.
+    expect(session!.textContent).toContain("XTRM-302");
+    await waitFor(() => expect(session!.textContent).toContain("Contextual sidebar reopen rail (B1)"));
   });
 
   it("keeps the tree when the graph cannot be read, and says so", async () => {

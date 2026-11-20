@@ -64,12 +64,17 @@ function answeredQids(answers: ReadonlyArray<BoardRecord<Answer>>): Set<string> 
   return qids;
 }
 
-/** One section's owner groups; the section supplies the split, the ordering and the state. */
-function QuestionGroups({ groups, answered }: { groups: ReadonlyArray<QuestionGroup>; answered: boolean }) {
+/**
+ * One section's owner groups; the section supplies the split, the ordering and the state. The label
+ * names the section as well as the owner, because an owner can carry an unanswered and an answered
+ * question at once and two identically named regions leave a screen-reader reader unable to say which
+ * one the next control belongs to (XTRM-918).
+ */
+function QuestionGroups({ groups, answered, section }: { groups: ReadonlyArray<QuestionGroup>; answered: boolean; section: "Unanswered" | "Answered" }) {
   return (
     <>
       {groups.map((group) => (
-        <section key={group.owner} aria-label={`Owner ${group.owner}`} data-testid="question-group" data-owner={group.owner}>
+        <section key={group.owner} aria-label={`${section}, owner ${group.owner}`} data-testid="question-group" data-owner={group.owner}>
           <h4 className="flex items-baseline gap-2 px-1.5 pt-2 pb-1 text-xs font-medium text-ink-muted">
             <span className="truncate">{group.owner}</span>
             <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-group-count">
@@ -157,21 +162,21 @@ export function QuestionsSurface() {
               {unansweredRows.length}
             </span>
           </h3>
-          <QuestionGroups groups={unansweredGroups} answered={false} />
+          <QuestionGroups groups={unansweredGroups} answered={false} section="Unanswered" />
         </section>
       )}
       {answeredGroups.length > 0 && (
         // Native disclosure: closed by default, so the answered backlog never pushes the open
         // questions below the first screen; the summary names the count the reader would find.
         <details data-testid="question-section" data-section="answered" className="group">
-          <summary className="flex cursor-pointer list-none items-baseline gap-2 px-1.5 pt-3 pb-1 text-xs font-medium text-ink-muted outline-none select-none hover:text-ink focus-visible:text-ink">
+          <summary className="flex cursor-pointer list-none items-baseline gap-2 rounded-sm px-1.5 pt-3 pb-1 text-xs font-medium text-ink-muted outline-none select-none hover:text-ink focus-visible:text-ink focus-visible:ring-1 focus-visible:ring-accent/40">
             <Icon name="forward" size="xs" className="shrink-0 self-center text-ink-faint transition-transform group-open:rotate-90 motion-reduce:transition-none" />
             <span className="truncate">Answered</span>
             <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-section-count">
               {answeredRows.length}
             </span>
           </summary>
-          <QuestionGroups groups={answeredGroups} answered={true} />
+          <QuestionGroups groups={answeredGroups} answered={true} section="Answered" />
         </details>
       )}
     </div>,

@@ -82,7 +82,7 @@ function Fact({ label, value, mono, testId, unverified }: { label: string; value
   return (
     <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-baseline gap-3 py-1">
       <dt className="text-xs text-ink-faint">{label}</dt>
-      <dd className={`min-w-0 break-words text-xs ${mono ? "font-mono text-xs" : ""} ${unverified ? "text-ink-muted" : "text-ink"}`} data-testid={testId} data-unverified={unverified ? "true" : undefined}>
+      <dd className={`min-w-0 break-words text-xs ${mono ? "font-mono" : ""} ${unverified ? "text-ink-muted" : "text-ink"}`} data-testid={testId} data-unverified={unverified ? "true" : undefined}>
         {value ?? "not reported"}
       </dd>
     </div>

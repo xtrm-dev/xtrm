@@ -198,26 +198,34 @@ for (const width of [700, 640] as const) {
     test.use({ viewport: { width, height: 900 } });
 
     /**
-     * The key is the row's address: it keeps its natural width (`shrink-0`) and the title shrinks
-     * first. With the rail expanded a narrow list cannot hold key + chip + title, so the reading cell
-     * clips them instead of letting them paint over the numeric columns; with the rail collapsed
-     * there is room, and the deepest key must read whole.
+     * The key is the row's address: it keeps a readable width and the title shrinks first. With the
+     * rail expanded a narrow list cannot hold key + chip + title beside a numeric column, so the list
+     * gives the numerics up (XTRM-918) and the reading cell keeps key + chip whole inside its own box;
+     * with the rail collapsed there is room, and the deepest key must read whole.
      */
     test(`the deepest key stays whole and clear of its chip (${width}px)`, async ({ page }) => {
       await openIssues(page);
       const row = rowFor(page, "XTRM-303");
       await expect(row).toBeVisible();
 
-      // Expanded rail: the reading cell contains its content. Probe a numeric column over the row
-      // line: a badge or a key glyph painted there would answer instead of the column cell.
-      const childrenX = await page.getByTestId("issues-table-head").getByRole("columnheader", { name: "Children" }).evaluate((el) => el.getBoundingClientRect().x);
+      // Expanded rail: the reading cell contains its content inside the row's own box.
+      const head = page.getByTestId("issues-table-head");
+      const children = head.getByRole("columnheader", { name: "Children" });
       const rowBox = await box(row);
-      const hit = await page.evaluate(({ x, y }) => {
-        const el = document.elementFromPoint(x, y);
-        const cell = el?.closest("[data-column]");
-        return { column: cell?.getAttribute("data-column") ?? null, tag: el?.tagName ?? null, text: (el?.textContent ?? "").slice(0, 40) };
-      }, { x: childrenX + 20, y: rowBox.y + rowBox.height / 2 });
-      expect(hit.column, `${width}px: the reading line does not paint over the numeric columns`).not.toBeNull();
+      const reading = await box(row.locator("[data-key-cell]").first().locator(".."));
+      expect(reading.x + reading.width, `${width}px: the reading line keeps its box`).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+
+      // A numeric column exists only where the list can afford one (XTRM-918). Where it does, probe it
+      // over the row line: a badge or a key glyph painted there would answer instead of the column cell.
+      if ((await children.count()) > 0) {
+        const childrenX = await children.evaluate((el) => el.getBoundingClientRect().x);
+        const hit = await page.evaluate(({ x, y }) => {
+          const el = document.elementFromPoint(x, y);
+          const cell = el?.closest("[data-column]");
+          return { column: cell?.getAttribute("data-column") ?? null, tag: el?.tagName ?? null, text: (el?.textContent ?? "").slice(0, 40) };
+        }, { x: childrenX + 20, y: rowBox.y + rowBox.height / 2 });
+        expect(hit.column, `${width}px: the reading line does not paint over the numeric columns`).not.toBeNull();
+      }
 
       // Collapsed rail (the console's own control): key + chip + title fit, so nothing may clip.
       await page.getByRole("button", { name: /ollapse sidebar/ }).click();
@@ -228,7 +236,12 @@ for (const width of [700, 640] as const) {
       const chipBox = await box(row.locator('[data-slot="badge"]').first());
       expect(chipBox.x - keyBox.right, `${width}px: the chip does not sit on the key`).toBeGreaterThanOrEqual(0);
       expect(chipBox.x - keyBox.right, `${width}px: the chip stays beside the key`).toBeLessThanOrEqual(MAX_KEY_TO_CHIP_PX);
-      expect(chipBox.x + chipBox.width, `${width}px: the chip stays inside the reading column`).toBeLessThan(childrenX);
+      const collapsedReading = await box(row.locator("[data-key-cell]").first().locator(".."));
+      expect(chipBox.x + chipBox.width, `${width}px: the chip stays inside the reading column`).toBeLessThanOrEqual(collapsedReading.x + collapsedReading.width + 1);
+      if ((await children.count()) > 0) {
+        const childrenX = await children.evaluate((el) => el.getBoundingClientRect().x);
+        expect(chipBox.x + chipBox.width, `${width}px: the chip stays clear of the numeric columns`).toBeLessThan(childrenX);
+      }
 
       // The title gives up its width first, and never starts before the chip ends.
       const title = await rect(row.locator("span.flex-1.truncate").first());
@@ -237,6 +250,95 @@ for (const width of [700, 640] as const) {
     });
   });
 }
+
+/**
+ * XTRM-918: below `medium` the reading line cannot hold a long key, its chip and a title, and the row
+ * used to clip the key at the box edge (review of #454-#457). The key now gives up width with an
+ * ellipsis, so nothing inside the row paints outside it, and the row keeps its address, chip and title.
+ */
+for (const width of [560, 480, 400] as const) {
+  test.describe(`narrow list at ${width}px`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    test("the row truncates its key instead of clipping it (XTRM-918)", async ({ page }) => {
+      await openIssues(page);
+      const row = rowFor(page, "XTRM-303");
+      await expect(row).toBeVisible();
+      const rowBox = await box(row);
+
+      // A box is only clean when nothing paints past the row. Content a truncating ancestor holds is
+      // not a paint: the ellipsis is the truncation. A clip with no ellipsis (the old key column, the
+      // row cutting its own content) is not excused — that is the defect this test exists for.
+      const painted = await row.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const escaped = (b: DOMRect) => b.right > box.right + 1 || b.left < box.left - 1;
+        const truncates = (child: Element) => {
+          for (let a = child.parentElement; a && a !== el; a = a.parentElement) {
+            const r = a.getBoundingClientRect();
+            const style = getComputedStyle(a);
+            if (style.overflowX === "visible" || style.textOverflow !== "ellipsis") continue;
+            if (r.right <= box.right + 1 && r.left >= box.left - 1) return true;
+          }
+          return false;
+        };
+        return Array.from(el.querySelectorAll("*")).flatMap((child) => {
+          const b = child.getBoundingClientRect();
+          if (b.width === 0 || !escaped(b) || truncates(child)) return [];
+          const name = child.getAttribute("data-key-text") === null ? (child.getAttribute("data-testid") ?? child.tagName) : "key text";
+          return [`${name} paints ${Math.round(b.left)}..${Math.round(b.right)} outside ${Math.round(box.left)}..${Math.round(box.right)}`];
+        });
+      });
+      expect(painted, `${width}px: nothing inside the row paints outside it`).toEqual([]);
+
+      // The address truncates with an ellipsis instead of being cut at the box edge: the key gives up
+      // width, so the chip that follows it stays whole inside the reading line.
+      const key = row.locator("[data-key-text]").first();
+      expect(await key.evaluate((el) => getComputedStyle(el).textOverflow), `${width}px: the key truncates with an ellipsis`).toBe("ellipsis");
+      expect(await key.evaluate((el) => el.getBoundingClientRect().width), `${width}px: the key keeps a box`).toBeGreaterThan(0);
+      const keyBox = await rect(key);
+      const chipBox = await box(row.locator('[data-slot="badge"]').first());
+      expect(chipBox.x, `${width}px: the chip follows its key`).toBeGreaterThanOrEqual(keyBox.right - 1);
+      const reading = await box(row.locator("[data-key-cell]").first().locator(".."));
+      expect(chipBox.x + chipBox.width, `${width}px: the chip stays whole inside the reading line`).toBeLessThanOrEqual(reading.x + reading.width + 1);
+      expect(rowBox.height, `${width}px: the row stays one line`).toBeLessThanOrEqual(32);
+    });
+  });
+}
+
+/**
+ * XTRM-918: a sort pointed at a column the narrow list drops. A header can only state an order whose
+ * column is visible, and compact drops columns (XTRM-911), so the control that sets the order states it
+ * at every width. The operator can always read the order and clear it from the same control.
+ */
+test("a narrowed list states the order its rows are in (XTRM-918)", async ({ page }) => {
+  const refsOfTopRows = () =>
+    page
+      .getByRole("button", { name: /^Copy / })
+      .evaluateAll((els) => els.slice(0, 3).map((el) => (el.getAttribute("aria-label") ?? "").replace("Copy ", "")));
+
+  await openIssues(page);
+  const head = page.getByTestId("issues-table-head");
+  const order = page.getByRole("button", { name: /^Order by/ });
+  await expect(order, "the control states the default order").toHaveText("Order by: Updated");
+
+  await head.getByRole("button", { name: "Created" }).click();
+  await expect(head.getByRole("columnheader", { name: "Created" })).toHaveAttribute("aria-sort", "descending");
+  await expect(order, "the control follows the column the operator sorted").toHaveText("Order by: Created");
+  const before = await refsOfTopRows();
+
+  // Compact drops created, so no header states the order any more — the control still does, and the
+  // rows keep the order the operator chose.
+  await page.setViewportSize({ width: 620, height: 900 });
+  await expect(head.getByRole("columnheader", { name: "Created" })).toHaveCount(0);
+  await expect(order).toHaveText("Order by: Created");
+  expect(await head.locator('[aria-sort]:not([aria-sort="none"])').count(), "no dropped column pretends to carry the order").toBe(0);
+  expect(await refsOfTopRows(), "the rows keep the chosen order").toEqual(before);
+
+  // The control clears the order as well as setting it.
+  await order.click();
+  await page.getByRole("menuitem", { name: "Updated" }).click();
+  await expect(order).toHaveText("Order by: Updated");
+});
 
 for (const theme of ["light", "dark"] as const) {
   test(`the MMD-shaped tree renders in ${theme}`, async ({ page }, testInfo) => {

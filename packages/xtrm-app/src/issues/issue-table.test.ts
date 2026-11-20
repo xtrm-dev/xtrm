@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IssueSummary } from "../adapters/index.tsx";
-import { buildTree, hiddenColumns, issueStatus, keyNames, listDensity, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
+import { READING_MIN_PX, buildTree, issueStatus, keyNames, primaryKey, rollupActivity, visibleColumns, type Sort, type SortKey } from "./issue-table.ts";
 
 const issue = (ref: string, over: Partial<IssueSummary> = {}): IssueSummary => ({
   id: ref, ref, locator: ref, title: ref, kind: "task", lifecycle: "open", revision: 1, priority: 2, scrutiny: null,
@@ -65,13 +65,28 @@ describe("issue table", () => {
     expect(label({ readiness: "draft", contractComplete: true, attestation: "rejected" })).toBe("Rejected");
   });
 
-  it("drops the low-value numeric columns as the list narrows, header and rows together (XTRM-911)", () => {
-    expect(listDensity(1098)).toBe("wide");
-    expect([...hiddenColumns("wide")]).toEqual([]);
-    expect(listDensity(62 * 16 - 1)).toBe("medium");
-    expect([...hiddenColumns("medium")]).toEqual(["events", "pointers"]);
-    expect(listDensity(48 * 16 - 1)).toBe("compact");
-    expect([...hiddenColumns("compact")]).toEqual(["events", "pointers", "created", "updated"]);
+  it("gives up numeric columns until the reading line keeps its minimum (XTRM-911, XTRM-918)", () => {
+    const columns = [
+      { key: "title" as SortKey, width: "minmax(0,1fr)" },
+      { key: "children" as SortKey, width: "4.5rem" },
+      { key: "events" as SortKey, width: "3.5rem" },
+      { key: "pointers" as SortKey, width: "3.75rem" },
+      { key: "pr" as SortKey, width: "5.5rem" },
+      { key: "created" as SortKey, width: "4rem" },
+      { key: "updated" as SortKey, width: "4rem" },
+    ];
+    const keys = (width: number) => visibleColumns(columns, width).map((c) => c.key);
+
+    // Wide enough for every column: nothing goes, and the reading line keeps far more than its minimum.
+    expect(keys(1098)).toEqual(["title", "children", "events", "pointers", "pr", "created", "updated"]);
+    // The drops start only when the reading line would fall under its minimum, lowest value first.
+    const numerics = (4.5 + 3.5 + 3.75 + 5.5 + 4 + 4) * 16;
+    expect(keys(numerics + READING_MIN_PX)).toHaveLength(columns.length);
+    expect(keys(numerics + READING_MIN_PX - 1)).toEqual(["title", "children", "pointers", "pr", "created", "updated"]);
+    // At the list's own 20rem floor the reading line takes the whole width and no numeric survives.
+    expect(keys(20 * 16)).toEqual(["title"]);
+    expect(keys(READING_MIN_PX)).toEqual(["title"]);
+    expect(READING_MIN_PX).toBe(28 * 16);
   });
 
   it("names the address and the tooltip that keeps both names (XTRM-926)", () => {
