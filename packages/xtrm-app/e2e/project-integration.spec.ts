@@ -1,16 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
+import { shotPath } from "./shots.ts";
 
 // Review screenshots of the read-only Integration surface (XTRM-900), light and dark.
 // The status-board fixture binds mercury/market-data with a readable credential path, a fresh
 // sync and no gaps, so every binding field and every health fact render as verified values.
-const OUT = "docs/screenshots/project-integration";
+const SHOTS = "project-integration";
 
 async function theme(page: Page, value: "light" | "dark") {
   await page.addInitScript((t) => localStorage.setItem("xtrm.console.theme.v1", t), value);
 }
 
 for (const t of ["light", "dark"] as const) {
-  test(`project integration (${t})`, async ({ page }) => {
+  test(`project integration (${t})`, async ({ page }, testInfo) => {
     await theme(page, t);
 
     await page.goto("/rep/mercury/market-data/project/settings");
@@ -48,6 +49,6 @@ for (const t of ["light", "dark"] as const) {
     // The sidebar entry is a live destination now: no deferred marker on its nav item.
     await expect(page.locator('nav [role="button"]', { hasText: /^Integration$/ }).first()).not.toHaveAttribute("data-deferred", "true");
 
-    await page.screenshot({ path: `${OUT}/${t}-integration.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-integration.png`) });
   });
 }

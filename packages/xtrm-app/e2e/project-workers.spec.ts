@@ -1,25 +1,26 @@
 import { expect, test, type Page } from "@playwright/test";
+import { shotPath } from "./shots.ts";
 
 // Review screenshots of the Workers tree and the Follow-ups list (XTRM-819), light and dark.
 // The dispatch graph comes from the substrate fixture, the board records from the status-board
 // fixture: one chain (console-lead -> board-worker -> test-engineer), one worker whose binding
 // has no dispatcher, and one board worker the graph does not mention. The unknown-dispatcher
 // group starts collapsed (XTRM-912), so every assertion inside it opens the group first.
-const OUT = "docs/screenshots/project-workers";
+const SHOTS = "project-workers";
 
 async function theme(page: Page, value: "light" | "dark") {
   await page.addInitScript((t) => localStorage.setItem("xtrm.console.theme.v1", t), value);
 }
 
 for (const t of ["light", "dark"] as const) {
-  test(`project workers (${t})`, async ({ page }) => {
+  test(`project workers (${t})`, async ({ page }, testInfo) => {
     await theme(page, t);
 
     await page.goto("/rep/mercury/market-data/project/workers");
     await expect(page.getByRole("region", { name: "Workers" })).toBeVisible();
     await expect(page.getByTestId("workers-tree")).toBeVisible();
     await expect(page.getByTestId("graph-count")).toBeVisible();
-    await page.screenshot({ path: `${OUT}/${t}-tree.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-tree.png`) });
 
     // The unknown-dispatcher group is part of the tree, not a separate mode: collapsed by default,
     // counted in its header, and opened by the operator.
@@ -31,19 +32,19 @@ for (const t of ["light", "dark"] as const) {
     await expect(unknown.getByTestId("worker-row")).toHaveCount(0);
     await toggle.click();
     await expect(unknown.getByTestId("worker-orphan").first()).toBeVisible();
-    await unknown.screenshot({ path: `${OUT}/${t}-unknown-dispatcher.png` });
+    await unknown.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-unknown-dispatcher.png`) });
 
     const region = page.getByRole("region", { name: "Workers" });
     await region.getByRole("button", { name: "List", exact: true }).click();
     await expect(page.getByTestId("workers-list")).toBeVisible();
     await region.getByRole("checkbox", { name: "Include archived workers" }).check();
     await expect(page.getByTestId("workers-count")).toBeVisible();
-    await page.screenshot({ path: `${OUT}/${t}-list-including-archived.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-list-including-archived.png`) });
 
     await page.goto("/rep/mercury/market-data/project/followups");
     await expect(page.getByRole("region", { name: "Follow-ups", exact: true })).toBeVisible();
     await expect(page.getByTestId("followup-row").first()).toBeVisible();
-    await page.screenshot({ path: `${OUT}/${t}-followups.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-followups.png`) });
   });
 }
 
@@ -52,7 +53,7 @@ for (const t of ["light", "dark"] as const) {
  * a worker that delivered five PRs, sessions whose only graph name is a session UUID, and the
  * header's omitted-binding sentence. The probe page mounts the real app on the same fixture.
  */
-test("live-shaped rows never exceed their box, a five-PR trail collapses, and a nameless session names its issue", async ({ page }) => {
+test("live-shaped rows never exceed their box, a five-PR trail collapses, and a nameless session names its issue", async ({ page }, testInfo) => {
   await page.goto("/src/project/workers/layout-probe.html");
   await expect(page.getByTestId("workers-tree")).toBeVisible();
   await expect(page.getByTestId("graph-count")).toContainText("the graph read is capped, so 1289 bindings are not shown");
@@ -91,7 +92,7 @@ test("live-shaped rows never exceed their box, a five-PR trail collapses, and a 
   await overflow(1440);
   await page.setViewportSize({ width: 1280, height: 900 });
   await overflow(1280);
-  await page.screenshot({ path: `${OUT}/light-live-shape-1280.png` });
+  await page.screenshot({ path: shotPath(testInfo, SHOTS, "light-live-shape-1280.png") });
 
   // Opening the collapsed group must not reintroduce the overflow: its UUID sessions are rows too.
   const toggle = page.getByTestId("workers-unknown-toggle");
@@ -99,5 +100,5 @@ test("live-shaped rows never exceed their box, a five-PR trail collapses, and a 
   await toggle.click();
   await expect(page.getByTestId("workers-unknown")).toContainText("Inspector Drawer state machine and URL restore");
   await overflow(1280);
-  await page.screenshot({ path: `${OUT}/light-live-shape-unknown-open.png` });
+  await page.screenshot({ path: shotPath(testInfo, SHOTS, "light-live-shape-unknown-open.png") });
 });
