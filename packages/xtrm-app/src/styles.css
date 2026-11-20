@@ -50,6 +50,11 @@
   --x-rail-indent: calc(1rem - 1px); /* 15px at a 16px root: rail x = centre of the parent icon */
   --x-rail-gutter: 1.125rem; /* 18px at a 16px root: child text inset so the label x matches the parent's */
   --x-rail-marker: 2px; /* active marker width */
+  /* A child row's fill starts at the sidebar's own edge, not at the rail (XTRM-927): the row box is
+     pulled left by the rail x plus its hairline, and its text inset grows by the same length. Only the
+     fill widens to a top-level row's edges; the label column, the hairline and the marker do not move. */
+  --x-rail-pull: calc(var(--x-rail-indent) + 1px); /* 16px at a 16px root: rail x + the 1px hairline */
+  --x-rail-text: calc(var(--x-rail-pull) + var(--x-rail-gutter)); /* 34px: the aligned label column */
   --x-shadow-float: 0 10px 30px -12px rgb(15 15 20 / 0.22), 0 0 0 1px rgb(15 15 20 / 0.06);
   /* Panel elevation without a hairline: the inspector carries no border (no-borders policy), so the
      ring inside --x-shadow-float would outline it in a colour that is not its background. */

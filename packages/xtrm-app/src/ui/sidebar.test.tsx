@@ -116,8 +116,11 @@ describe("NavRail", () => {
     const overview = screen.getByText("Overview").closest("[role='button']") as HTMLElement;
     // No icon on a child row, and the label sits at the parent label's x (the aligned column).
     expect(overview.querySelector("svg")).toBeNull();
-    expect(overview.className).toContain("pl-[var(--x-rail-gutter)]");
+    expect(overview.className).toContain("pl-[var(--x-rail-text)]");
     expect(overview.className).toContain("text-ink-muted");
+    // XTRM-927: the row box starts at the sidebar's edge, not at the rail, so its fill spans the same
+    // edges as a top-level row; the label inset grows by the same length as the pull.
+    expect(overview.className).toContain("-ml-[var(--x-rail-pull)]");
 
     fireEvent.click(screen.getByText("Overview"));
     expect(onActivate).toHaveBeenCalledOnce();
@@ -131,8 +134,9 @@ describe("NavRail", () => {
       </NavRail>,
     );
     const overview = screen.getByText("Overview").closest("[role='button']") as HTMLElement;
-    // A 2px accent bar at -left-px covers the hairline on this row only.
-    expect(overview.className).toContain("before:-left-px");
+    // A 2px accent bar on the rail covers the hairline on this row only. It is positioned from the
+    // row's own left edge (the indent, since the box is pulled in), so widening the fill moved no marker.
+    expect(overview.className).toContain("before:left-[var(--x-rail-indent)]");
     expect(overview.className).toContain("before:w-[var(--x-rail-marker)]");
     expect(overview.className).toContain("before:bg-accent");
     expect(overview.className).toContain("bg-hover");
