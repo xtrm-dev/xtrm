@@ -53,7 +53,20 @@ test("the PR drawer renders pr-lens HTML: diagrams, both comments, bot mark and 
   const box = (await pill.boundingBox())!;
   expect(Math.round(box.height)).toBe(28);
   const background = await pill.evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(background).toBe("rgb(36, 41, 47)");
+  // The header pill is the ghost form (XTRM-861, `src/ui/github-pill.tsx`, `PullPanel.tsx`): a filled
+  // pill is a chip background in a header, so at rest it carries no fill, its control radius and muted
+  // ink.
+  expect(background).toBe("rgba(0, 0, 0, 0)");
+  // the app's control radius (`--radius-md`, 8px), not the solid pill's full round.
+  expect(await pill.evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).toBe("8px");
+  expect(await pill.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(95, 95, 104)");
+  // The wash is the affordance: the ghost form takes the hover token, never a solid GitHub fill.
+  // `transition-colors` animates it, so poll instead of reading the frame the hover lands on; Chromium
+  // serialises the 4.5% hover token through 8-bit alpha, which lands on 0.043.
+  await pill.hover();
+  await expect
+    .poll(() => pill.evaluate((el) => getComputedStyle(el).backgroundColor), { timeout: 2000 })
+    .toBe("rgba(15, 15, 20, 0.043)");
   // Nothing repeats the pill at the bottom.
   await expect(drawer.getByTestId("github-pill")).toHaveCount(1);
 });

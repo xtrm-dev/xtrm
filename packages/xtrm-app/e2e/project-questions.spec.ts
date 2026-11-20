@@ -1,16 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
+import { shotPath } from "./shots.ts";
 
 // Review screenshots of the read-only Questions surface (XTRM-899, XTRM-913), light and dark.
 // The status-board fixture carries two owner documents with question rows, one owner document
 // without an open question, and answers keyed by question id, so both answered states render.
-const OUT = "docs/screenshots/project-questions";
+const SHOTS = "project-questions";
 
 async function theme(page: Page, value: "light" | "dark") {
   await page.addInitScript((t) => localStorage.setItem("xtrm.console.theme.v1", t), value);
 }
 
 for (const t of ["light", "dark"] as const) {
-  test(`project questions (${t})`, async ({ page }) => {
+  test(`project questions (${t})`, async ({ page }, testInfo) => {
     await theme(page, t);
 
     await page.goto("/rep/mercury/market-data/project/questions");
@@ -48,7 +49,7 @@ for (const t of ["light", "dark"] as const) {
     // and the ref is a reference chip, never a second state chip.
     expect(await unanswered.getByTestId("question-row").first().locator("[class*='bg-success']").count()).toBe(0);
 
-    await page.screenshot({ path: `${OUT}/${t}-questions.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-questions.png`) });
 
     // The answered backlog opens on demand; the answered row's badge is its one coloured element.
     await answered.locator("summary").click();
@@ -56,6 +57,6 @@ for (const t of ["light", "dark"] as const) {
     await expect(answered.getByTestId("question-row")).toHaveCount(2);
     await expect(answered.getByTestId("question-row").first().getByTestId("question-state")).toHaveText("answered");
     expect(await answered.getByTestId("question-row").first().locator("[class*='bg-success']").count()).toBe(1);
-    await page.screenshot({ path: `${OUT}/${t}-questions-answered.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-questions-answered.png`) });
   });
 }

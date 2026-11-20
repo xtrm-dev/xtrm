@@ -43,3 +43,52 @@ jobs:
       # flag when that issue closes. The file still runs locally via `npm test`.
       - name: Tests
         run: npx vitest run --exclude "**/IssueProvenance.test.tsx"
+
+  # The layout guards in e2e/ measure real geometry, and jsdom computes no layout, so they run
+  # only here: the suite on Chromium against the fixture adapters, with no live network. A run
+  # writes its screenshots into the test output dir; CI never writes the committed set under
+  # docs/screenshots (XTRM-931).
+  e2e:
+    runs-on: ubuntu-latest
+    # The suite takes a few minutes on the fixtures; a slower run is a defect, not a waiting room.
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/xtrm-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/xtrm-app/package-lock.json
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      # The browser is a prebuilt download, not an npm package: cache it, keyed on the lock file
+      # that pins @playwright/test, so a dependency bump refetches the matching revision.
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('packages/xtrm-app/package-lock.json') }}
+
+      # --with-deps installs the system libraries on every run; the browser download is skipped
+      # when the cached revision matches.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        run: npx playwright test
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: xtrm-app-e2e
+          path: packages/xtrm-app/e2e/.results
+          retention-days: 7

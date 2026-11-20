@@ -1,9 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { shotPath } from "./shots.ts";
 
 // XTRM-616: session details (state apart from capabilities, one model format with the provider
 // apart), the header model label, and the open session kept visible outside the repository filter.
-// Review screenshots, light and dark, written to docs/screenshots/agent-half/.
-const OUT = "docs/screenshots/agent-half";
+// Review screenshots, light and dark, to the test output dir; XTRM_SCREENSHOTS_DIR=docs/screenshots
+// regenerates the committed set under agent-half/.
+const SHOTS = "agent-half";
 
 async function theme(page: Page, value: "light" | "dark") {
   await page.addInitScript((t) => localStorage.setItem("xtrm.console.theme.v1", t), value);
@@ -15,7 +17,7 @@ for (const size of [
   { width: 1440, height: 900 },
   { width: 1280, height: 720 },
 ]) {
-  test(`details show state, accepts and model apart and keep the list visible (${size.width}x${size.height})`, async ({ page }) => {
+  test(`details show state, accepts and model apart and keep the list visible (${size.width}x${size.height})`, async ({ page }, testInfo) => {
     await page.setViewportSize(size);
     await page.goto("/agent/pi-main");
     await expect(detail(page, "State")).toHaveText("working");
@@ -27,7 +29,7 @@ for (const size of [
     const list = page.getByRole("list", { name: "Sessions" });
     expect((await list.boundingBox())!.height).toBeGreaterThanOrEqual(140);
     await expect(page.getByTestId("session-row").first()).toBeVisible();
-    if (size.height === 720) await page.screenshot({ path: `${OUT}/session-details-1280x720.png` });
+    if (size.height === 720) await page.screenshot({ path: shotPath(testInfo, SHOTS, "session-details-1280x720.png") });
   });
 }
 
@@ -39,20 +41,20 @@ test("the open session outside the repository filter stays in the list", async (
 });
 
 for (const t of ["dark", "light"] as const) {
-  test(`details and filter screens (${t})`, async ({ page }) => {
+  test(`details and filter screens (${t})`, async ({ page }, testInfo) => {
     // Three navigations with screenshots; font loading is slow on a busy machine.
     test.slow();
     await theme(page, t);
     await page.goto("/agent/pi-main");
     await expect(page.getByTestId("session-details")).toBeVisible();
-    await page.screenshot({ path: `${OUT}/${t}-session-details.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-session-details.png`) });
 
     await page.goto("/agent/quant-reviewer");
     await expect(detail(page, "Provider")).toHaveText("openrouter");
-    await page.screenshot({ path: `${OUT}/${t}-session-details-provider.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-session-details-provider.png`) });
 
     await page.goto("/agent/scratch");
     await expect(page.locator('[data-group="Open · not in xtrm"]')).toBeVisible();
-    await page.screenshot({ path: `${OUT}/${t}-open-outside-filter.png` });
+    await page.screenshot({ path: shotPath(testInfo, SHOTS, `${t}-open-outside-filter.png`) });
   });
 }

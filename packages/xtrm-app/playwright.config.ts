@@ -13,6 +13,8 @@ export default defineConfig({
   testIgnore: ["real-host/**", "acceptance/**"],
   outputDir: "e2e/.results",
   fullyParallel: true,
+  // A committed `.only` would silently shrink the CI run to one spec (XTRM-931).
+  forbidOnly: !!process.env.CI,
   reporter: [["list"]],
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
