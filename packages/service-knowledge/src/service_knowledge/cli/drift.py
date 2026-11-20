@@ -196,7 +196,8 @@ def _cmd_drift(args: argparse.Namespace) -> int:
         # Fail closed: drift cannot be determined, so it is NOT reported clean and
         # any pending marker is kept for the operator.
         print(f"service-knowledge drift: cannot determine drift — {exc}", file=sys.stderr)
-        print("   Pending marker(s) kept. After verifying each listed service, record a ref with `drift_detector.py sync <service_id>`.", file=sys.stderr)
+        print("   Pending marker(s) kept. Run `service-knowledge drift migrate` to derive conservative refs (dry-run first), "
+              "or after verifying a service record one with `drift_detector.py sync <service_id>`.", file=sys.stderr)
         return 2
     if not drift:
         # No drift: clear any stale pending marker (a previous run may have left one).
@@ -221,6 +222,37 @@ def _cmd_drift(args: argparse.Namespace) -> int:
     print("   Reconcile with /updating-service-knowledge (the service-knowledge-sync specialist),")
     print("   which syncs the drifted SKILL.md and advances last_sync_ref.")
     return 1
+
+
+def _cmd_migrate(args: argparse.Namespace) -> int:
+    """Derive conservative last_sync_ref values for legacy registries (dry-run unless --apply)."""
+    root = common.resolve_consumer_root(args.path)
+    if not common.find_umbrella_packs(root):
+        print("service-knowledge drift migrate: no service registry found — nothing to migrate.")
+        return 0
+    scan_root = _project_root_for_scan(root)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from drift_detector import migrate_legacy_refs  # type: ignore[import-not-found]
+
+    results = migrate_legacy_refs(str(scan_root), apply=args.apply)
+    if not results:
+        print("service-knowledge drift migrate: nothing to migrate — every synced service already has a resolvable last_sync_ref.")
+        return 0
+    refused = [r for r in results if r["status"] != "derived"]
+    for r in results:
+        if r["status"] == "derived":
+            how = ", ".join(f"{name}={sha[:12]}" for name, sha in r["candidates"].items())
+            print(f"   {r['service_id']}: last_sync {r['last_sync']} -> last_sync_ref {r['ref'][:12]}  (older of: {how})")
+        else:
+            print(f"   {r['service_id']}: REFUSED — {r['reason']}")
+    if args.apply:
+        print(f"service-knowledge drift migrate: recorded {len(results) - len(refused)} derived ref(s)"
+              + (f"; {len(refused)} refused." if refused else "."))
+        print("   Derived refs are conservative estimates (flagged last_sync_ref_derived). Run `service-knowledge drift`,")
+        print("   then reconcile; a real sync replaces the derived ref.")
+    else:
+        print("service-knowledge drift migrate: dry run, nothing written. Re-run with --apply to record the derived refs.")
+    return 1 if refused else 0
 
 
 def _cmd_clear(args: argparse.Namespace) -> int:
@@ -262,6 +294,7 @@ def register(sub: argparse._SubParsersAction) -> None:
             "  service-knowledge drift                   # scan + write marker if drifted\n"
             "  service-knowledge drift --path ~/my/repo  # scan a specific repo\n"
             "  service-knowledge drift clear             # remove the pending marker(s)\n"
+            "  service-knowledge drift migrate [--apply] # legacy registry: derive last_sync_ref (dry-run default)\n"
             "\n"
             "Reconcile stays skill-driven: run /updating-service-knowledge (the\n"
             "service-knowledge-sync specialist), which syncs the drifted SKILL.md and\n"
@@ -272,11 +305,18 @@ def register(sub: argparse._SubParsersAction) -> None:
     )
     p.add_argument("--path", default=None, help="Consumer repo root (default: git toplevel of cwd).")
     p.add_argument(
-        "action", nargs="?", choices=["scan", "clear"], default="scan",
-        help="'scan' (default) detects drift and writes a marker; 'clear' removes it.",
+        "action", nargs="?", choices=["scan", "clear", "migrate"], default="scan",
+        help="'scan' (default) detects drift and writes a marker; 'clear' removes it; "
+             "'migrate' derives conservative last_sync_ref values for legacy registries.",
     )
+    p.add_argument("--apply", action="store_true", default=False,
+                   help="With 'migrate': write the derived refs (default is a dry run).")
 
 
 def run(args: argparse.Namespace) -> int:
     action = getattr(args, "action", "scan")
-    return _cmd_clear(args) if action == "clear" else _cmd_drift(args)
+    if action == "clear":
+        return _cmd_clear(args)
+    if action == "migrate":
+        return _cmd_migrate(args)
+    return _cmd_drift(args)

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -40,7 +41,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 try:
-    from drift_detector import scan_drift  # type: ignore[import-not-found]
+    from drift_detector import UnverifiableHistory, scan_drift  # type: ignore[import-not-found]
 except ImportError as exc:
     print(f"::error::ci-drift-check: cannot import drift_detector: {exc}", file=sys.stderr)
     raise SystemExit(2)
@@ -152,6 +153,28 @@ def _check_umbrellas(root: Path) -> list[str]:
     return problems
 
 
+def _report_unverifiable(exc: "UnverifiableHistory") -> None:
+    """List EVERY service whose sync history cannot be verified, one per line.
+
+    The message form can be truncated by log limits and ``::error::`` annotations are capped
+    (~10 per step), so ids go on plain lines and into the step summary, uncut."""
+    ids = list(exc.service_ids)
+    print(f"::error::ci-drift-check: cannot verify sync history for {len(ids)} service(s) (all listed below). "
+          "Run `service-knowledge drift migrate` (dry-run first) or record a ref with `drift_detector.py sync <service_id>`.",
+          file=sys.stderr)
+    for sid in ids:
+        print(f"  unverifiable: {sid}", file=sys.stderr)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        try:
+            with open(summary, "a", encoding="utf-8") as fh:
+                fh.write(f"### service-knowledge drift: sync history unverifiable for {len(ids)} service(s)\n\n"
+                         + "".join(f"- `{sid}`\n" for sid in ids)
+                         + "\nRun `service-knowledge drift migrate` (dry-run first).\n")
+        except OSError:
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="CI committed-drift gate (read-only, seconds-budgeted).")
     parser.add_argument("--path", default=None, help="Repo root (default: git toplevel of cwd).")
@@ -170,6 +193,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         drifted = scan_drift(str(root), use_gitnexus=False)
+    except UnverifiableHistory as exc:
+        _report_unverifiable(exc)
+        return 2
     except Exception as exc:
         print(f"::error::ci-drift-check: scan_drift raised {type(exc).__name__}: {str(exc)[:2000]}", file=sys.stderr)
         return 2

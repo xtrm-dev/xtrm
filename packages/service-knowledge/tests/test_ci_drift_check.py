@@ -398,3 +398,41 @@ def test_scan_cli_reports_unknown_history_without_a_traceback(tmp_path: Path, mo
     assert raised.value.code == 2
     err = capsys.readouterr().err
     assert "cannot determine drift" in err and "'db'" in err
+
+
+def test_real_reconcile_rewrites_the_skill_stamps_the_ref_and_clears_drift(tmp_path: Path, monkeypatch) -> None:
+    """Non-dry-run end to end: a valid SKILL (frontmatter, SEMANTIC block, contract headings) goes
+    through the real gate and atomic write; only the LLM call is faked."""
+    import reconcile as reconcile_mod  # type: ignore[import-not-found]
+
+    fixture = Path(__file__).resolve().parent.parent / "src/service_knowledge/scripts/verifier/tests/fixtures/alertmanager/current.md"
+    skill_text = fixture.read_text(encoding="utf-8").replace("source/**", "db/**").replace("alertmanager", "db").replace("Alertmanager", "DB")
+    skill_text = skill_text.replace("## Failure Modes", "<!-- SEMANTIC_START -->\nOperator note: never drop the replica first.\n<!-- SEMANTIC_END -->\n\n## Failure Modes")
+
+    repo, reg_path = _make_repo(tmp_path)
+    skill = repo / ".xtrm/skills/acme/service-knowledge/services/db/SKILL.md"
+    skill.write_text(skill_text, encoding="utf-8")
+    _git(["add", "-A"], repo)
+    _git(["commit", "-qm", "skill body"], repo)
+    data = json.loads(reg_path.read_text(encoding="utf-8"))
+    data["services"]["db"]["last_sync_ref"] = _head(repo)
+    reg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+    (repo / "db" / "schema.sql").write_text("CREATE TABLE t (id int, note text);\n", encoding="utf-8")
+    _git(["add", "-A"], repo)
+    _git(["commit", "-qm", "schema change"], repo)
+    assert [d["file_path"] for d in scan_drift(str(repo), use_gitnexus=False)] == ["db/schema.sql"]
+
+    updated = skill_text.replace("The entrypoint templates its config with sed at boot.",
+                                 "The entrypoint templates its config with sed at boot. Table `t` carries a `note` column.")
+    assert updated != skill_text
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(reconcile_mod, "call_nano_gpt", lambda prompt, key: reconcile_mod.LlmResult(content=updated, tokens=7))
+
+    result = reconcile_mod.reconcile(reconcile_mod.ReconcileOptions(False, None, "k", None))
+
+    assert result["failed"] == [], result
+    assert result["status"] == "success" and result["reconciled_count"] == 1
+    assert skill.read_text(encoding="utf-8") == updated  # the real gate accepted it and the write landed
+    assert json.loads(reg_path.read_text(encoding="utf-8"))["services"]["db"]["last_sync_ref"] == _head(repo)
+    assert scan_drift(str(repo), use_gitnexus=False) == []

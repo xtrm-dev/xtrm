@@ -9,9 +9,28 @@ All notable changes to the `service-knowledge` package.
   `last_sync_ref` — the pre-ref registry shape — no longer takes the mtime
   fallback. `scan_drift`, `ci_drift_check` and `service-knowledge drift` now
   refuse (exit non-zero, marker kept) with one error naming **every** such
-  service. Verify each service, then record a ref once:
-  `drift_detector.py sync <service_id>`. `reconcile` calls `scan_drift`
-  unguarded, so it refuses too until the refs are recorded.
+  service. `reconcile` calls `scan_drift` unguarded, so it refuses too until
+  the refs are recorded. Either run `service-knowledge drift migrate` (dry-run;
+  add `--apply`) or verify a service and run `drift_detector.py sync <service_id>`.
+
+### Added — `service-knowledge drift migrate`
+- Derives a conservative `last_sync_ref`, anchored on the parent of the oldest
+  commit that introduced that exact `last_sync` value into any registry file
+  (works for compact/re-formatted or re-added registries). A date-based
+  candidate (`git rev-list --before`) may only lower it, never raise it, so
+  the result is always an ancestor of the anchor. Refuses (per service, with a
+  reason) on a shallow clone, a future `last_sync`, a stamp no committed history
+  contains, or a root-commit stamp. Dry-run by default; `--apply` also writes
+  `last_sync_ref_derived: true`, which any real sync/reconcile stamp clears.
+  `scan_drift` itself stays fail-closed. Known limit: git cannot tell a main-line
+  commit dated before `last_sync` (stamp committed later) from one made during the
+  sync, so such a change is treated as verified; review the dry-run first.
+- `scan_drift` raises `UnverifiableHistory` (a `RuntimeError`) with `.service_ids`;
+  `ci_drift_check` prints one `unverifiable: <id>` line per service and a
+  `$GITHUB_STEP_SUMMARY` list, so a long list is never cut off by log limits.
+- Git hooks: `ls-tree` path lists are chunked (500/call) so a large deletion
+  cannot overflow the argv limit; the three hook copies are pinned identical.
+- `service-knowledge --version` also reports where the CLI and vaultctl were loaded from.
 
 ## [0.8.0] - 2026-10-19
 

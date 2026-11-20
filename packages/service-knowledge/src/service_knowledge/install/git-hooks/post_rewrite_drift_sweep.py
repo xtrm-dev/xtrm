@@ -171,15 +171,23 @@ def _diff_files(root: Path, old: str, new: str) -> list[str] | None:
     return [path for path in r.stdout.split("\0") if path]
 
 
+# Paths per `git ls-tree` call: a large deletion must not exceed the OS argv limit (E2BIG makes
+# _git return None, which degrades the sweep to a range-unknown marker).
+_LS_TREE_CHUNK = 500
+
+
 def _historical_files(root: Path, refs: list[str], paths: set[str]) -> set[str] | None:
     historical: set[str] = set()
+    ordered = sorted(paths)
     for ref in dict.fromkeys(refs):
-        result = _git(root, [
-            "--literal-pathspecs", "ls-tree", "-r", "--name-only", "-z", ref, "--", *sorted(paths),
-        ], timeout=10)
-        if result is None or result.returncode != 0:
-            return None
-        historical.update(path for path in result.stdout.split("\0") if path)
+        for start in range(0, len(ordered), _LS_TREE_CHUNK):
+            result = _git(root, [
+                "--literal-pathspecs", "ls-tree", "-r", "--name-only", "-z", ref, "--",
+                *ordered[start:start + _LS_TREE_CHUNK],
+            ], timeout=10)
+            if result is None or result.returncode != 0:
+                return None
+            historical.update(path for path in result.stdout.split("\0") if path)
     return historical
 
 
