@@ -68,8 +68,10 @@ def setup(root: Path) -> Path:
     scripts = root / ".xtrm" / "skills" / "default" / "service-knowledge" / "scripts"
     scripts.mkdir(parents=True)
     (root / ".xtrm" / "skills" / "default" / "service-registry.json").write_text(json.dumps(REGISTRY, indent=2))
+    # This list is a partial vendored install: every sibling module bootstrap.py imports
+    # must be here, or the fixture dies with ModuleNotFoundError instead of testing hooks.
     for name in ("hook_prefilter.sh", "skill_activator.py", "drift_detector.py",
-                 "bootstrap.py", "build_territory_index.py"):
+                 "bootstrap.py", "build_territory_index.py", "_textio.py"):
         shutil.copy2(SRC / name, scripts / name)
     (scripts / "hook_prefilter.sh").chmod(0o755)
     subprocess.run([sys.executable, str(scripts / "build_territory_index.py"), str(root)],
