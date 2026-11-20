@@ -12,10 +12,12 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 from service_knowledge import __version__
+from service_knowledge.scripts._textio import write_text as _write_text
 
 # --- consumer-side layout constants -------------------------------------------
 SKILLS_ROOT = Path(".xtrm") / "skills"
@@ -240,7 +242,14 @@ def find_umbrella_packs(root: Path) -> list[tuple[Path, Path]]:
 
 
 def _git_mv_or_rename(src: Path, dst: Path, root: Path) -> None:
-    """Prefer ``git mv`` (preserves history inside the consumer repo); fall back to rename."""
+    """Prefer ``git mv`` (preserves history inside the consumer repo); fall back to rename.
+
+    Refuses when ``dst`` already exists: ``git mv src dst`` on an existing directory
+    SILENTLY nests ``src`` inside it (``dst/src``), which mis-places the whole umbrella
+    one level too deep. Callers decide what an existing destination means.
+    """
+    if dst.exists() or dst.is_symlink():
+        raise FileExistsError(f"refusing to move {src} into the existing {dst}")
     try:
         subprocess.run(
             ["git", "mv", str(src), str(dst)],
@@ -274,7 +283,8 @@ def rewrite_registry_paths(registry_path: Path) -> bool:
     new_raw = json.dumps(new_data, indent=2) + "\n"
     if new_raw == raw:
         return False
-    registry_path.write_text(new_raw, encoding="utf-8")
+    # Line endings follow the existing registry (XTRM-850): a CRLF registry keeps CRLF.
+    _write_text(registry_path, new_raw)
     return True
 
 
@@ -296,6 +306,20 @@ def migrate_umbrellas(root: Path) -> list[str]:
     for pack, umb in find_umbrella_packs(root):
         if umb.name == LEGACY_UMBRELLA:
             new_umb = pack / NEW_UMBRELLA
+            if new_umb.exists() or new_umb.is_symlink():
+                # ``find_umbrella_packs`` only yields the legacy name when the new name has no
+                # registry, so this destination holds no migrated content of its own.
+                if new_umb.is_dir() and not new_umb.is_symlink() and not any(new_umb.iterdir()):
+                    new_umb.rmdir()  # empty leftover: nothing to lose, the move can proceed
+                else:
+                    print(
+                        f"WARNING: refusing to migrate {umb} -> {new_umb}: the destination "
+                        f"already exists and is not empty, so moving would nest the umbrella "
+                        f"inside it ({new_umb / umb.name}). Resolve the destination by hand "
+                        f"(it carries no service-registry.json), then re-run.",
+                        file=sys.stderr,
+                    )
+                    continue
             _git_mv_or_rename(umb, new_umb, root)
             touched.append((new_umb).relative_to(root).as_posix() + "/")
             umb = new_umb

@@ -25,6 +25,7 @@ from typing import Any
 
 # Sibling import (consolidated scripts/ dir).
 sys.path.insert(0, str(Path(__file__).parent))
+from _textio import write_text as _write_text  # type: ignore[import-not-found]  # noqa: E402
 from bootstrap import (  # type: ignore[import-not-found]
     RootResolutionError,
     get_pack_path,
@@ -223,8 +224,8 @@ def write_umbrella(umbrella_path: Path, registry: dict[str, Any], repo_name: str
     content = generate_umbrella(registry, repo_name, existing, index_state)
     if existing == content:
         return False
-    umbrella_path.parent.mkdir(parents=True, exist_ok=True)
-    umbrella_path.write_text(content, encoding="utf-8")
+    # Line endings follow the existing umbrella (XTRM-850): a CRLF consumer repo keeps CRLF.
+    _write_text(umbrella_path, content)
     return True
 
 

@@ -21,6 +21,15 @@ def run(args: argparse.Namespace) -> int:
         print(f"{common.GREEN}migrated:{common.NC} {root.name}")
         for t in sorted(set(touched)):
             print(f"  - {t}")
-    else:
-        print(f"{common.GREEN}○{common.NC} {root.name} already migrated (no service-skills umbrella)")
+        return 0
+    # A refused rename leaves the legacy umbrella in place and prints the reason to stderr;
+    # never report that as "already migrated" (XTRM-849).
+    pending = [umb for _pack, umb in common.find_umbrella_packs(root) if umb.name == common.LEGACY_UMBRELLA]
+    if pending:
+        print(
+            f"{common.YELLOW}○{common.NC} {root.name}: legacy umbrella left in place at "
+            f"{pending[0].relative_to(root).as_posix()}/ — see the warning above",
+        )
+        return 1
+    print(f"{common.GREEN}○{common.NC} {root.name} already migrated (no service-skills umbrella)")
     return 0

@@ -4,6 +4,48 @@ All notable changes to the `service-knowledge` package.
 
 ## [Unreleased]
 
+### Fixed — the layout migrator never loses data (XTRM-849)
+- **Behaviour change:** `layout_migrator.migrate_pack` now runs a READ-ONLY
+  preflight over the whole pack before any mutation. For every service it
+  compares the flat tree to the umbrella tree by relative path plus sha256
+  (previously only the two `SKILL.md` files, where two missing files compared
+  `None == None` and passed). Any differing or flat-only path refuses the pack
+  ONCE and lists every offending path of every service; nothing is written,
+  moved or regenerated before that verdict. `layout_migrator.py --preflight`
+  prints the same list and changes nothing.
+- An equal tree is **moved aside** to `<svc>.legacy-<UTC timestamp>` inside the
+  pack instead of being `rmtree`d, so a dedupe stays recoverable.
+- Two registries must agree on every top-level field and every service entry
+  (`skill_path` excluded — the migration rewrites it) or the pack is refused;
+  compatible registries merge **by service id**, umbrella copy winning
+  `skill_path`. Previously the umbrella copy silently overwrote the flat one.
+- `PACK.json` is **kept** and reported. Its retirement is not proof of
+  redundancy: nothing in-tree declares its schema, so the migrator cannot show
+  that every field it carries is reproduced by the registry. Removing it is now
+  a human decision.
+- `cli.common._git_mv_or_rename` refuses an existing destination instead of
+  letting `git mv` nest the umbrella inside it
+  (`service-knowledge/service-skills`, a pack with no registry where the
+  resolver looks). `migrate_umbrellas` removes a provably empty destination and
+  proceeds; a non-empty destination without a registry is refused with a
+  message and both trees are left untouched.
+
+### Fixed — line endings survive every write path (XTRM-850)
+- New `scripts/_textio.py`: `detect_newline`, `render_for`, `write_text` and
+  `atomic_write` sniff the existing target for `b"\r\n"` and write with the
+  matching convention. Reads stay text mode; only the write side is aware.
+- Every read-modify-write uses it: `reconcile.atomic_write` (and therefore
+  `gated_write` for `SKILL.md`, plus the YAML registry stamp),
+  `umbrella_generator.write_umbrella`, `skill_migrator.migrate_skill_file`,
+  `layout_migrator` (SKILL.md ref rewrite and registry relocation),
+  `bootstrap.save_registry` and `cli.common.rewrite_registry_paths`.
+  Previously a CRLF file was silently rewritten as LF.
+- `bootstrap.save_registry` now writes a trailing newline like every sibling
+  registry writer (it previously wrote none).
+- `bootstrap.py` and `skill_migrator.py` gained the explicit sibling
+  `sys.path.insert` the other scripts already had, so `_textio` imports work for
+  standalone runs, package-namespace imports and the vendored consumer copy.
+
 ### Changed — drift fails closed on unknown sync history (#334, #408)
 - **Migration:** a service with `last_sync` but no (or an unresolvable)
   `last_sync_ref` — the pre-ref registry shape — no longer takes the mtime
