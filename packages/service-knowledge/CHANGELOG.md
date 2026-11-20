@@ -48,7 +48,12 @@ All notable changes to the `service-knowledge` package.
 - `reconcile.build_prompt` now tells the model to keep text unaffected by the
   drift evidence byte-for-byte and return the complete file.
 - Behaviour note: reconcile candidates that rewrite existing prose lines now
-  verdict `PASS_WITH_ADVISORIES` instead of `PASS`.
+  verdict `PASS_WITH_ADVISORIES` instead of `PASS`. A repo with the canary
+  enabled stops auto-merging those reconciles (`canary/decision.py` returns
+  `verdict_not_pass:PASS_WITH_ADVISORIES`); they open a normal PR instead.
+- The reconcile result now names what the gate saw: each structural error or
+  warning is listed under `gates[].structural_issues` and appended to the
+  `failed[].error` text (e.g. `curated_text_removed_excessive: 80 of 109 ...`).
 
 ## [0.8.0] - 2026-10-19
 

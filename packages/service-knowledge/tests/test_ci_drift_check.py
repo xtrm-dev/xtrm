@@ -400,11 +400,8 @@ def test_scan_cli_reports_unknown_history_without_a_traceback(tmp_path: Path, mo
     assert "cannot determine drift" in err and "'db'" in err
 
 
-def test_real_reconcile_rewrites_the_skill_stamps_the_ref_and_clears_drift(tmp_path: Path, monkeypatch) -> None:
-    """Non-dry-run end to end: a valid SKILL (frontmatter, SEMANTIC block, contract headings) goes
-    through the real gate and atomic write; only the LLM call is faked."""
-    import reconcile as reconcile_mod  # type: ignore[import-not-found]
-
+def _drifted_skill_repo(tmp_path: Path):
+    """Repo whose `db` SKILL (frontmatter, SEMANTIC block, contract headings) is behind a source change."""
     fixture = Path(__file__).resolve().parent.parent / "src/service_knowledge/scripts/verifier/tests/fixtures/alertmanager/current.md"
     skill_text = fixture.read_text(encoding="utf-8").replace("source/**", "db/**").replace("alertmanager", "db").replace("Alertmanager", "DB")
     skill_text = skill_text.replace("## Failure Modes", "<!-- SEMANTIC_START -->\nOperator note: never drop the replica first.\n<!-- SEMANTIC_END -->\n\n## Failure Modes")
@@ -422,7 +419,14 @@ def test_real_reconcile_rewrites_the_skill_stamps_the_ref_and_clears_drift(tmp_p
     _git(["add", "-A"], repo)
     _git(["commit", "-qm", "schema change"], repo)
     assert [d["file_path"] for d in scan_drift(str(repo), use_gitnexus=False)] == ["db/schema.sql"]
+    return repo, reg_path, skill, skill_text
 
+
+def test_real_reconcile_rewrites_the_skill_stamps_the_ref_and_clears_drift(tmp_path: Path, monkeypatch) -> None:
+    """Non-dry-run end to end: a valid SKILL goes through the real gate and atomic write; only the LLM call is faked."""
+    import reconcile as reconcile_mod  # type: ignore[import-not-found]
+
+    repo, reg_path, skill, skill_text = _drifted_skill_repo(tmp_path)
     updated = skill_text.replace("The entrypoint templates its config with sed at boot.",
                                  "The entrypoint templates its config with sed at boot. Table `t` carries a `note` column.")
     assert updated != skill_text
@@ -436,3 +440,32 @@ def test_real_reconcile_rewrites_the_skill_stamps_the_ref_and_clears_drift(tmp_p
     assert skill.read_text(encoding="utf-8") == updated  # the real gate accepted it and the write landed
     assert json.loads(reg_path.read_text(encoding="utf-8"))["services"]["db"]["last_sync_ref"] == _head(repo)
     assert scan_drift(str(repo), use_gitnexus=False) == []
+
+
+def test_real_reconcile_reports_why_the_gate_refused_a_destructive_rewrite(tmp_path: Path, monkeypatch) -> None:
+    """The operator-visible reconcile result names the removed curated text, not only a count."""
+    import reconcile as reconcile_mod  # type: ignore[import-not-found]
+
+    repo, reg_path, skill, skill_text = _drifted_skill_repo(tmp_path)
+    kept, in_semantic, in_front = [], False, False
+    for i, line in enumerate(skill_text.splitlines()):
+        if line.strip() == "---":
+            in_front = not in_front if i == 0 or in_front else in_front
+            kept.append(line)
+            continue
+        in_semantic = in_semantic or "SEMANTIC_START" in line
+        if in_front or in_semantic or line.startswith("#") or not line.strip():
+            kept.append(line)
+        in_semantic = in_semantic and "SEMANTIC_END" not in line
+    destructive = "\n".join(kept) + "\n"
+    assert len(destructive) < len(skill_text) * 0.7
+    original = skill.read_bytes()
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(reconcile_mod, "call_nano_gpt", lambda prompt, key: reconcile_mod.LlmResult(content=destructive, tokens=7))
+
+    result = reconcile_mod.reconcile(reconcile_mod.ReconcileOptions(False, None, "k", None))
+
+    assert result["status"] == "partial" and skill.read_bytes() == original
+    assert "curated_text_removed_excessive" in result["failed"][0]["error"], result["failed"]
+    codes = " ".join(result["gates"][0]["structural_issues"])
+    assert "curated_text_removed_excessive" in codes, result["gates"]
