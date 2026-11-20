@@ -133,36 +133,11 @@ export function buildTree(rows: IssueSummary[], rollups: Map<string, Rollup>, so
 /** One level of tree indentation, in rem; the row's leading cluster carries it (XTRM-898). */
 export const INDENT_REM = 1.25;
 
-/** The list shows the primary locator alone: the flat alias would widen every row for a rare difference. */
+/** The issue's address as the list renders it: the hierarchical locator when Substrate has one. */
 export const primaryKey = (i: IssueSummary) => i.locator || i.ref;
 
-/** Both names, for the tooltip and the Inspector, so the list does not lose the alias it stopped showing. */
+/** Both names, for the key cell's tooltip: a narrow list truncates the inline key, not its address. */
 export const keyNames = (i: IssueSummary) => (primaryKey(i) !== i.ref ? `${primaryKey(i)} / ${i.ref}` : primaryKey(i));
-
-/**
- * Width inside the key cell before and after the key text, in rem: the kind icon (13px), the
- * priority glyph (16px), their two 4px gaps and the cell's trailing inset (4px) = 2.6rem. The
- * disclosure slot is not here: the leading cluster owns it (XTRM-898).
- */
-export const KEY_CELL_CHROME_REM = 2.6;
-
-/**
- * Key column width in rem: the longest primary key at the deepest row's indentation. The key cell
- * gives the row its depth width back (see `IssueRow`), so the status chip and the title start at one
- * x for every depth while the chevron sits at the row's own depth.
- *
- * Text is measured at Geist Mono's 0.6em advance and the 0.72rem xs size.
- */
-/** The key column never grows past this: the summary is the row's reading content, the key is its address. */
-export const KEY_COL_MAX_REM = 15.5;
-
-export function keyColumnRem(rows: IssueSummary[], maxDepth = 0) {
-  const longest = rows.reduce((n, i) => Math.max(n, primaryKey(i).length), 8);
-  const wanted = Math.ceil(longest * 0.6 * 0.72 * 10) / 10 + INDENT_REM * Math.max(0, maxDepth) + KEY_CELL_CHROME_REM;
-  // One deep locator hides elsewhere in the population would otherwise tax every visible row
-  // (19.7rem live against an 18-character visible key). The full name stays in the cell tooltip.
-  return Math.min(wanted, KEY_COL_MAX_REM);
-}
 
 /**
  * How many numeric columns the list can afford at its measured width. The summary always wins the

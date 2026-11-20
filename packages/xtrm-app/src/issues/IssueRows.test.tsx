@@ -17,28 +17,36 @@ function renderIssues() {
 
 const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
 
-/** The first rendered issue row, resolved from its key cell so the assertion does not depend on a title. */
+/** The first rendered issue row, resolved through its copy action, so no title or alias is assumed. */
 async function firstRow() {
   await screen.findByRole("region", { name: "XTRM Issues" });
-  const keys = await screen.findAllByText(/^XTRM-3\d\d$/, undefined, { timeout: 5000 });
-  const row = keys[0].closest('[role="button"]') as HTMLElement | null;
+  const copies = await screen.findAllByRole("button", { name: /^Copy XTRM-\d+$/ }, { timeout: 5000 });
+  const ref = copies[0]!.getAttribute("aria-label")!.replace("Copy ", "");
+  const row = copies[0]!.closest('[role="button"]') as HTMLElement | null;
   expect(row).not.toBeNull();
-  return { row: row!, key: keys[0] };
+  return { row: row!, ref };
 }
 
 describe("Issues list rows (XTRM-856)", () => {
   it("reads key, then status chip, then title, with text-size icons", async () => {
     renderIssues();
-    const { row, key } = await firstRow();
+    const { row } = await firstRow();
 
+    const key = row.querySelector("[data-key-text]") as HTMLElement | null;
+    expect(key).not.toBeNull();
     const chip = row.querySelector('[data-slot="badge"]') as HTMLElement | null;
     expect(chip).not.toBeNull();
     const title = row.querySelector("span.truncate > span[title]") as HTMLElement | null;
     expect(title).not.toBeNull();
 
     // The order is the contract: key, then the state carrier, then the title.
-    expect(key.compareDocumentPosition(chip!) & FOLLOWING).toBeTruthy();
+    expect(key!.compareDocumentPosition(chip!) & FOLLOWING).toBeTruthy();
     expect(chip!.compareDocumentPosition(title!) & FOLLOWING).toBeTruthy();
+
+    // One line, one gap: the key cell, the chip and the title are siblings under the same small gap.
+    const line = row.querySelector("[data-key-cell]")!.parentElement as HTMLElement;
+    expect(Array.from(line.children)).toEqual([row.querySelector("[data-row-leading]"), row.querySelector("[data-key-cell]"), chip, title!.parentElement]);
+    expect(line.className.split(/\s+/)).toContain("gap-1.5");
 
     // The chip stays the state carrier: a fixed column, an xs label, and the hint as its tooltip.
     const chipTokens = chip!.className.split(/\s+/);
@@ -53,7 +61,7 @@ describe("Issues list rows (XTRM-856)", () => {
     expect(widths.every((w) => w === "13")).toBe(true);
   });
 
-  it("indents the leading cluster and gives the depth back to the key cell, so key, chip and title share one column", async () => {
+  it("indents the leading cluster and lets the key, the chip and the title flow inline (XTRM-926)", async () => {
     renderIssues();
     await firstRow();
     const rows = Array.from(document.querySelectorAll('[role="button"]')).filter((el) => /XTRM-\d/.test(el.textContent ?? ""));
@@ -65,18 +73,20 @@ describe("Issues list rows (XTRM-856)", () => {
     expect(child, "the fixture renders a depth-1 row").toBeTruthy();
     expect(grandchild, "the fixture renders a depth-3 row").toBeTruthy();
 
-    // jsdom has no layout, so the guard is the mechanism: no list-wide gutter; the leading cluster
-    // carries the row's depth and the key cell subtracts exactly that width, so the chip and title
-    // stay on one x. The pixel check lives in e2e/issue-rows.spec.ts.
+    // jsdom has no layout, so the guard is the mechanism: no list-wide gutter and no computed key
+    // column — the key cell is only as wide as its own content, and the chip follows it. The pixel
+    // check lives in e2e/issue-rows.spec.ts.
     for (const row of [top!, child!, grandchild!]) {
       expect(row.querySelector("span[style*='--indent-col']"), "no list-wide indent gutter").toBeNull();
       const leading = row.querySelector("[data-row-leading]") as HTMLElement | null;
       const keyCell = row.querySelector("[data-key-cell]") as HTMLElement | null;
       expect(leading, "the leading cluster is the row's own indent").not.toBeNull();
-      expect(keyCell, "the key cell absorbs the depth").not.toBeNull();
+      expect(keyCell, "the key cell holds the row's key").not.toBeNull();
       expect(leading!.style.width).toBe("calc(var(--row-indent) + 1.25rem)");
       expect(leading!.style.paddingLeft).toBe("var(--row-indent)");
-      expect(keyCell!.style.width).toBe("calc(var(--key-col) - var(--row-indent))");
+      // No width is computed: neither an inline one nor a key-column variable on the line.
+      expect(keyCell!.style.width).toBe("");
+      expect(keyCell!.parentElement!.style.getPropertyValue("--key-col")).toBe("");
     }
     const depthOf = (row: HTMLElement) => (row.querySelector("[data-key-cell]")!.parentElement!.parentElement as HTMLElement).style.getPropertyValue("--row-indent");
     expect(depthOf(top!)).toBe("0rem");
@@ -84,40 +94,42 @@ describe("Issues list rows (XTRM-856)", () => {
     expect(depthOf(grandchild!)).toBe("3.75rem");
   });
 
-  it("shows the primary locator alone and keeps the alias in the tooltip (XTRM-898)", async () => {
+  it("shows the locator and the unique ref inline when they differ (XTRM-926)", async () => {
     renderIssues();
     await firstRow();
     // XTRM-303 is the fixture's deepest row: locator XTRM-300.1.2.1 under MMD-shaped data.
     const deep = document.querySelector('button[aria-label="Copy XTRM-303"]')!.closest('[role="button"]') as HTMLElement;
     const keyCell = deep.querySelector("[data-key-cell]") as HTMLElement;
-    expect(keyCell.textContent).toBe("XTRM-300.1.2.1");
+    expect(keyCell.textContent).toBe("XTRM-300.1.2.1 / XTRM-303");
+    expect(keyCell.querySelector("[data-key-text] .text-ink-faint")?.textContent).toBe(" / XTRM-303");
+    // The tooltip keeps the full address for a list narrow enough to truncate the key.
     expect(keyCell.getAttribute("title")).toBe("XTRM-300.1.2.1 / XTRM-303");
   });
 
   it("keeps the title flexible and the one action in the trailing slot", async () => {
     renderIssues();
-    const { row, key } = await firstRow();
+    const { row, ref } = await firstRow();
     const titleCell = row.firstElementChild!.firstElementChild as HTMLElement;
     const title = titleCell.querySelector("span.flex-1.truncate") as HTMLElement;
     expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "truncate"]));
     // The action must not live inside the title cell: it would sit right after the truncated title.
-    expect(within(titleCell).queryAllByRole("button", { name: `Copy ${key.textContent}` })).toHaveLength(0);
+    expect(within(titleCell).queryAllByRole("button", { name: `Copy ${ref}` })).toHaveLength(0);
 
     const grid = titleCell.parentElement as HTMLElement;
     const trailing = grid.lastElementChild as HTMLElement;
-    const copy = within(trailing).getByRole("button", { name: `Copy ${key.textContent}` });
+    const copy = within(trailing).getByRole("button", { name: `Copy ${ref}` });
     expect(copy).toBeTruthy();
     expect(trailing.className).toContain("justify-end");
   });
 
   it("carries one copy action at the row end and no expand action", async () => {
     renderIssues();
-    const { row, key } = await firstRow();
+    const { row, ref } = await firstRow();
 
     // The Inspector opens on click and the page on double-click, so the row has no `open` action.
     expect(within(row).queryAllByRole("button", { name: /^Open / })).toHaveLength(0);
 
-    const copy = within(row).getByRole("button", { name: `Copy ${key.textContent}` });
+    const copy = within(row).getByRole("button", { name: `Copy ${ref}` });
     expect(copy.className.split(/\s+/)).toContain("size-5");
     expect(copy.querySelector("svg")!.getAttribute("width")).toBe("13");
     // Revealed on hover and on keyboard focus, never at rest.
