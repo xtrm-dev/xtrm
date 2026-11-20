@@ -303,6 +303,15 @@ def test_moved_line_consumes_exactly_one_pool_entry():
     assert _plain_curated_issues(candidate, current) == []
 
 
+def test_duplicate_line_moved_once_still_reports_the_second_deletion():
+    filler = "\n".join(f"Filler {i}." for i in range(20))
+    current = f"Moved.\nA\nMoved.\n{filler}\n"
+    candidate = f"A\n{filler}\nMoved.\n"
+    (issue,) = _plain_curated_issues(candidate, current)
+    assert issue.code == "curated_text_removed"
+    assert issue.message.startswith("1 curated line(s)")
+
+
 # regression: reviewer finding 2 (same text inside a candidate SEMANTIC block is not "kept")
 def test_identical_text_inside_candidate_semantic_block_does_not_hide_deletion():
     filler = "\n".join(f"Filler {i}." for i in range(20))

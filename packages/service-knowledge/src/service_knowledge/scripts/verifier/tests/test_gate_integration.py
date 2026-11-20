@@ -336,3 +336,16 @@ def test_wholesale_curated_deletion_blocks_real_gated_write(service_dir):
         for i in result["manifest"]["structural_issues"]
     )
     assert skill.read_bytes() == original_bytes
+
+
+def test_reconcile_result_names_the_removed_curated_lines(service_dir):
+    # the operator-visible reconcile result carries the structural detail, not only a count
+    root, skill, current = _runners_with_prose(service_dir, 40)
+    candidate = current
+    for i in range(40):
+        candidate = candidate.replace(f"Runbook note {i}.\n\n", "")
+    gate_result = reconcile.gated_write(
+        skill, candidate, service_id="runners", territory=["source/**"], source_root=root, state_root=root
+    )
+    notes = reconcile._structural_notes(gate_result)
+    assert [n for n in notes if n.startswith("curated_text_removed_excessive: ")], notes
