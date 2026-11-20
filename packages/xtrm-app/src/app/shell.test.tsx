@@ -52,7 +52,9 @@ describe("Console v2 shell", () => {
     for (const label of ["Overview", "Timeline", "Integration"]) {
       const child = within(rail).getByText(label).closest("[role='button']") as HTMLElement;
       expect(child.querySelector("svg")).toBeNull();
-      expect(child.className).toContain("pl-[var(--x-rail-gutter)]");
+      expect(child.className).toContain("pl-[var(--x-rail-text)]");
+      // XTRM-927: the fill starts at the sidebar edge, the same left edge as a top-level row.
+      expect(child.className).toContain("-ml-[var(--x-rail-pull)]");
     }
     // No user-visible string says "Program" (ADR-002 D1).
     expect(within(sidebar).queryByText(/Program/)).toBeNull();
@@ -134,6 +136,25 @@ describe("Console v2 shell", () => {
     // The Overview row is the section root only, so it is not selected on a child route.
     expect(within(sidebar).getByRole("button", { name: "Timeline" }).getAttribute("aria-current")).toBe("page");
     expect(within(sidebar).getByRole("button", { name: "Overview" }).getAttribute("aria-current")).toBeNull();
+
+    // XTRM-927: the open rail shows the selected child, so the parent names no location.
+    const parent = within(sidebar).getByRole("button", { name: /^Project/ });
+    expect(parent.getAttribute("aria-current")).toBeNull();
+    expect(within(sidebar).getByRole("button", { name: "Collapse Project" }).getAttribute("aria-expanded")).toBe("true");
+
+    // Collapsed, the child row is hidden: the parent takes the selection so the location stays visible.
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Collapse Project" }));
+    await waitFor(() => expect(within(sidebar).queryByRole("button", { name: "Timeline" })).toBeNull());
+    expect(within(sidebar).getByRole("button", { name: /^Project/ }).getAttribute("aria-current")).toBe("true");
+    expect(within(sidebar).getByRole("button", { name: "Expand Project" }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps the Research parent unselected while its rail names the section", async () => {
+    renderAt("/research/runs");
+    const sidebar = await screen.findByTestId("context-sidebar");
+    const rail = await within(sidebar).findByRole("group", { name: "Research" });
+    expect(within(rail).getByRole("button", { name: /^Recent Runs/ }).getAttribute("aria-current")).toBe("page");
+    expect(within(sidebar).getByRole("button", { name: /^Research/ }).getAttribute("aria-current")).toBeNull();
   });
 
   it("lists Research sections on their own rail", async () => {
@@ -143,7 +164,8 @@ describe("Console v2 shell", () => {
     expect(rail.className).toContain("border-l");
     expect(rail.className).toContain("border-border-muted");
     const runs = within(rail).getByRole("button", { name: /^Recent Runs/ });
-    expect(runs.className).toContain("pl-[var(--x-rail-gutter)]");
+    expect(runs.className).toContain("pl-[var(--x-rail-text)]");
+    expect(runs.className).toContain("-ml-[var(--x-rail-pull)]");
     expect(runs.querySelector("svg")).toBeNull();
     // A section whose children expressions are all false must not render an empty rail (review finding 1).
     // Project is expanded by default, so it does have a rail even off-project: that is the existing state.

@@ -129,8 +129,8 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
   - Section header (`SidebarSection`): `text-xs` (`0.72rem`), semibold, `text-ink-faint`, `h-7`. It is a step below the row label, never above it: a px literal here (`text-[11px]`) made it the largest text in the sidebar at a 12px root (XTRM-907).
   - Parent row: unchanged (`h-[30px]`, 16px `nav` icon, label 13px semibold, count or trailing chevron).
   - Rail: a `div` with `ml-[var(--x-rail-indent)] border-l border-border-muted`. The rail x equals the centre of the parent icon (8px padding + 8px half icon = 16px; the 1px border sits at 15–16px at the default root).
-  - Child row: `h-7` (`1.75rem`), **no icon**, `pl-[var(--x-rail-gutter)]` so the label x equals the parent label's x: the aligned label column. Label `text-sm` (the parent row's own token, `0.8125rem`), weight 500, `text-ink-muted`; count right-aligned `text-xs text-ink-faint tabular`.
-  - Active child: `text-ink font-semibold bg-hover`, plus a 2px marker on the rail: `before:absolute before:-left-px before:inset-y-1.5 before:w-0.5 before:rounded-full before:bg-accent`. The marker replaces the hairline at that row; the hairline is continuous elsewhere.
+  - Child row: `h-7` (`1.75rem`), **no icon**, `-ml-[var(--x-rail-pull)] pl-[var(--x-rail-text)]`: the row box is pulled left by the rail x and its hairline, so its fill starts at the sidebar edge and spans the same left and right edges as a top-level row (XTRM-927), while the label x still equals the parent label's x: the aligned label column. Label `text-sm` (the parent row's own token, `0.8125rem`), weight 500, `text-ink-muted`; count right-aligned `text-xs text-ink-faint tabular`.
+  - Active child: `text-ink font-semibold bg-hover`, plus a 2px marker on the rail: `before:absolute before:left-[var(--x-rail-indent)] before:inset-y-1.5 before:w-0.5 before:rounded-full before:bg-accent`. The marker is positioned from the pulled-in row box, so its absolute x stays on the hairline (15–16px). The marker replaces the hairline at that row; the hairline is continuous elsewhere.
   - Hover and focus: `bg-hover` on the row only; the rail does not move.
   - Inactive child: `text-ink-muted` (5.75:1 on the light sidebar, 6.05:1 on the dark one).
   - Deferred destination, at both levels: the label keeps its full ink and the row carries `data-deferred`;
@@ -154,7 +154,7 @@ Replaces the `indent` prop of `SidebarRow` and the three hand-indented groups in
     <NavRailItem label="Overview" selected={pathname === href} onActivate={() => go(href)} />
   </SidebarRow>
   ```
-  Geometry is tokenised in `src/styles.css`: `--x-rail-indent: calc(1rem - 1px)` (rail x; 15px at the default root), `--x-rail-gutter: 1.125rem` (child text inset; 18px at the default root) and `--x-rail-marker: 2px` (active marker width). The two lengths are rem because the row padding, the nav icon and `h-7` are rem: a px inset would drop the label column at any other root. No colour token is added: the hairline is `--x-border-muted` and the marker `--x-accent` (Restraint rule 4).
+  Geometry is tokenised in `src/styles.css`: `--x-rail-indent: calc(1rem - 1px)` (rail x; 15px at the default root), `--x-rail-gutter: 1.125rem` (child text inset beyond the rail; 18px at the default root), `--x-rail-marker: 2px` (active marker width), `--x-rail-pull: calc(var(--x-rail-indent) + 1px)` (16px: the child row's left pull, rail x plus its hairline, so the fill reaches the sidebar edge) and `--x-rail-text: calc(var(--x-rail-pull) + var(--x-rail-gutter))` (34px: the child text inset measured from the pulled-in box). The two lengths are rem because the row padding, the nav icon and `h-7` are rem: a px inset would drop the label column at any other root. No colour token is added: the hairline is `--x-border-muted` and the marker `--x-accent` (Restraint rule 4).
 
 ### 4.2 Toolbar — ghost controls and the local list filter (item 2)
 

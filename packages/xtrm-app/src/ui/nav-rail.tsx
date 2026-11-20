@@ -6,6 +6,10 @@ import { Row, cx } from "./primitives.tsx";
  * centre of the parent row's icon, so a child label aligns with the parent label; children carry no
  * icons. The active child is marked on the rail with a 2px accent bar that replaces the hairline at
  * that row, and the marker is decorative: ink and weight also carry the state.
+ *
+ * A child row's box is pulled left by the rail x and its hairline, and its text inset grows by the
+ * same length (XTRM-927): the selected and hover fill spans the same left edge as a top-level row
+ * while the label column, the hairline and the marker stay where the rail puts them.
  */
 export function NavRail({ children, label }: { children: ReactNode; label: string }) {
   return (
@@ -43,10 +47,11 @@ export function NavRailItem({
         // `text-sm` is the token the parent row inherits (0.8125rem): the same class, not a copy of
         // its current px value, so a root font size other than 16px cannot make the child larger
         // than its parent (XTRM-897).
-        "h-7 pl-[var(--x-rail-gutter)] text-sm font-medium",
-        // The marker sits at -left-px, so it covers the rail's own border on this row only.
+        "-ml-[var(--x-rail-pull)] h-7 pl-[var(--x-rail-text)] text-sm font-medium",
+        // The marker sits on the rail (the indent, measured from the pulled-in box), so it covers the
+        // hairline on this row only.
         selected
-          ? "bg-hover font-semibold text-ink before:absolute before:-left-px before:inset-y-1.5 before:w-[var(--x-rail-marker)] before:rounded-full before:bg-accent"
+          ? "bg-hover font-semibold text-ink before:absolute before:left-[var(--x-rail-indent)] before:inset-y-1.5 before:w-[var(--x-rail-marker)] before:rounded-full before:bg-accent"
           : "text-ink-muted",
       )}
     >

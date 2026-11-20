@@ -107,5 +107,9 @@ describe("the new rows and controls use the existing tokens", () => {
     // At a 16px root the pair still resolves to the documented 15px / 18px.
     expect(token("x-rail-indent")).toBe("calc(1rem - 1px)");
     expect(token("x-rail-gutter")).toBe("1.125rem");
+    // XTRM-927: a child row is pulled left by the rail x plus its hairline (16px) and its text inset
+    // grows by that pull (34px), so the fill reaches the sidebar edge while the label column holds.
+    expect(token("x-rail-pull")).toBe("calc(var(--x-rail-indent) + 1px)");
+    expect(token("x-rail-text")).toBe("calc(var(--x-rail-pull) + var(--x-rail-gutter))");
   });
 });

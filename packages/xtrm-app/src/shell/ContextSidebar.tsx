@@ -177,14 +177,34 @@ function SourceFooter() {
   );
 }
 
+/**
+ * The Project rail row a pathname belongs to: the longest matching section route, so a child route
+ * (the timeline) belongs to its own row and not to Project root. Null when no section matches.
+ */
+function owningProjectSection(repo: { owner: string; name: string }, pathname: string) {
+  let owner: (typeof PROJECT_SECTIONS)[number] | null = null;
+  for (const section of PROJECT_SECTIONS) {
+    const href = repoHref(repo, section.repoPath);
+    if (pathname !== href && !pathname.startsWith(`${href}/`)) continue;
+    if (owner == null || section.repoPath.length > owner.repoPath.length) owner = section;
+  }
+  return owner;
+}
+
+/** The Research rail row a pathname names; Research sections are exact routes with nothing nested below. */
+function owningResearchSection(pathname: string) {
+  return RESEARCH_SECTIONS.find((section) => pathname === section.path) ?? null;
+}
+
 /** Project's own rows: its repository-scoped sub-routes (ADR-002 D2), on the rail under the Project row. */
 function ProjectRows({ pathname }: { pathname: string }) {
   const { repo } = useShell();
   const go = useGo();
+  const owner = owningProjectSection(repo, pathname);
   return PROJECT_SECTIONS.map((section) => {
     const href = repoHref(repo, section.repoPath);
-    // The root section is not selected by its own children; every other section is.
-    const selected = pathname === href || (section.repoPath !== "/project" && pathname.startsWith(`${href}/`));
+    // One row only: the pathname belongs to the longest matching section.
+    const selected = owner?.id === section.id;
     return <NavRailItem key={section.id} label={section.label} selected={selected} deferred={!!section.deferred} onActivate={() => go(href)} />;
   });
 }
@@ -228,12 +248,18 @@ function WorkSidebar({ pathname }: { pathname: string }) {
             {section.items.map((item) => {
               const href = destinationHref(repo, item);
               const nested = item.id === "project";
+              // The rail renders only while its row is open (Project) and the half is active (Research).
+              const railOpen = nested ? projectOpen : item.id === "research" && active === "research";
+              // While the rail shows, its selected child names the location and the parent does not;
+              // collapsed, the parent takes the selection so the location stays visible.
+              const childActive = nested ? owningProjectSection(repo, pathname) !== null : item.id === "research" && owningResearchSection(pathname) !== null;
+              const atSection = href != null && (pathname === href || pathname.startsWith(`${href}/`));
               return (
                 <SidebarRow
                   key={item.id}
                   icon={item.icon}
                   label={item.label}
-                  selected={href != null && (pathname === href || pathname.startsWith(`${href}/`))}
+                  selected={atSection && !(railOpen && childActive)}
                   deferred={!!item.deferred}
                   count={item.id === "issues" ? (openCount ?? null) : null}
                   expanded={nested ? projectOpen : undefined}
