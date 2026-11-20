@@ -12,7 +12,16 @@ All notable changes to the `service-knowledge` package.
   `None == None` and passed). Any differing or flat-only path refuses the pack
   ONCE and lists every offending path of every service; nothing is written,
   moved or regenerated before that verdict. `layout_migrator.py --preflight`
-  prints the same list and changes nothing.
+  runs the SAME registry resolution (both registries, merged, compared) and the
+  same tree comparison, so the dry run cannot answer `ok` where the real run
+  refuses, and it prints every offending path without changing a byte.
+  Stated limits of that proof: it compares relative paths and file content —
+  file mode, empty directories and the *resolution* of a symlink target are not
+  part of the digest, so a mode or empty-dir difference alone does not block a
+  dedupe. Nothing is lost when it happens, because the flat tree is moved aside
+  whole (modes and empty directories included).
+- A malformed registry is now a clean `MigrationRefused` naming the file, not an
+  uncaught `JSONDecodeError` traceback (still before any mutation).
 - An equal tree is **moved aside** to `<svc>.legacy-<UTC timestamp>` inside the
   pack instead of being `rmtree`d, so a dedupe stays recoverable.
 - Two registries must agree on every top-level field and every service entry
@@ -28,7 +37,10 @@ All notable changes to the `service-knowledge` package.
   (`service-knowledge/service-skills`, a pack with no registry where the
   resolver looks). `migrate_umbrellas` removes a provably empty destination and
   proceeds; a non-empty destination without a registry is refused with a
-  message and both trees are left untouched.
+  message and both trees are left untouched. `service-knowledge migrate` exits
+  1 and names every refused destination when ANY pack is left in the old
+  layout — it no longer prints "already migrated" or a bare "migrated" line
+  that hides a refusal.
 
 ### Fixed — line endings survive every write path (XTRM-850)
 - New `scripts/_textio.py`: `detect_newline`, `render_for`, `write_text` and
@@ -39,7 +51,17 @@ All notable changes to the `service-knowledge` package.
   `umbrella_generator.write_umbrella`, `skill_migrator.migrate_skill_file`,
   `layout_migrator` (SKILL.md ref rewrite and registry relocation),
   `bootstrap.save_registry` and `cli.common.rewrite_registry_paths`.
-  Previously a CRLF file was silently rewritten as LF.
+  Previously a CRLF file was silently rewritten as LF. A registry RELOCATION
+  sniffs the file it was read from, not the not-yet-existing target, so a CRLF
+  flat registry stays CRLF under the umbrella.
+- `detect_newline` selects CRLF when the target contains any CRLF pair, not by
+  majority: a file with one CRLF line was written by a CRLF writer, and
+  re-emitting it as LF would rewrite every line. Lone `\r` cannot be preserved
+  (the unchanged text-mode read folds it), and that limit is now stated in the
+  helper.
+- Not yet converted (outside this issue's enumerated list, follow-up):
+  `cli.common` still rewrites `.claude/settings.json` and `.gitignore` through
+  a text-mode read-modify-write, so those two files normalise CRLF to LF.
 - `bootstrap.save_registry` now writes a trailing newline like every sibling
   registry writer (it previously wrote none).
 - `bootstrap.py` and `skill_migrator.py` gained the explicit sibling

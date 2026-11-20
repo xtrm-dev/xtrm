@@ -18,7 +18,15 @@ all-skipped, no mutation) and SAFE over the WHOLE pack, not just SKILL.md:
 1. PREFLIGHT, READ-ONLY. Before any mutation, every service's flat tree is compared to
    its umbrella tree by relative path plus sha256, and two registries (when both exist)
    are compared field by field. ANY difference, or any flat-only path, refuses the whole
-   pack ONCE and lists every offending path of every service. Nothing is touched.
+   pack ONCE and lists every offending path of every service. Nothing is touched. The
+   same resolution runs in ``--preflight`` and in the real migration, so the dry run can
+   never report ``ok`` where the real run refuses.
+   STATED LIMITS of the redundancy proof: it compares relative paths and file CONTENT
+   only. File mode, empty directories, and the *resolution* of a symlink target are not
+   part of the digest, so a mode or empty-dir difference, or a relative link that
+   resolves differently in the two layouts, does not by itself block a dedupe. Nothing is
+   lost when that happens: step 2 keeps the whole flat tree, modes and empty directories
+   included.
 2. EQUAL TREES ARE MOVED ASIDE, never deleted: the flat directory is renamed to
    ``<svc>.legacy-<UTC timestamp>`` inside the pack, so a later re-run or a human can
    still recover it.
@@ -197,10 +205,34 @@ def _registry_view(registry: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
 def _load_registry(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        # Unreadable JSON is a refusal, not a traceback: nothing has been mutated yet.
+        raise MigrationRefused([f"registry: {path} is not readable JSON ({exc})"]) from exc
     if not isinstance(data, dict):
         raise MigrationRefused([f"registry: {path} is not a JSON object"])
     return data
+
+
+def _registry_paths(pack: Path) -> tuple[Path, Path]:
+    """The flat (``old``) and umbrella (``new``) registry paths for ``pack``."""
+    return pack / "service-registry.json", pack / "service-skills" / "service-registry.json"
+
+
+def _resolve_registry(pack: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    """Resolve the registry the migration will act on, plus any registry-level problems.
+
+    THE single source of truth for both ``--preflight`` and ``migrate_pack``: two
+    registries merge by service id only when they agree on everything but ``skill_path``.
+    Returns ``(None, [])`` when the pack carries no registry at all.
+    """
+    old_registry, new_registry = _registry_paths(pack)
+    old_reg = _load_registry(old_registry)
+    new_reg = _load_registry(new_registry)
+    if old_reg is not None and new_reg is not None:
+        return _merge_registries(old_reg, new_reg), _registry_problems(old_registry, old_reg, new_registry, new_reg)
+    return (new_reg if new_reg is not None else old_reg), []
 
 
 def _registry_problems(old_path: Path, old_reg: dict[str, Any], new_path: Path, new_reg: dict[str, Any]) -> list[str]:
@@ -235,20 +267,18 @@ def _merge_registries(old_reg: dict[str, Any], new_reg: dict[str, Any]) -> dict[
 def preflight_pack(pack: Path, services: dict[str, Any] | None = None) -> list[str]:
     """Return every problem that makes migrating ``pack`` lossy. Read-only, mutates nothing.
 
-    Pass ``services`` to restrict the check (defaults to the pack's registry). An empty list
-    means the migration is provably lossless with respect to the flat layout.
+    With ``services=None`` this resolves the registry exactly as ``migrate_pack`` does
+    (both registries, merged, registry problems included), so the dry run and the real run
+    reach the same verdict. An empty list means the migration is provably lossless with
+    respect to the flat layout.
     """
-    if services is None:
-        old_registry = pack / "service-registry.json"
-        new_registry = pack / "service-skills" / "service-registry.json"
-        for candidate in (new_registry, old_registry):
-            if candidate.exists():
-                registry = _load_registry(candidate) or {}
-                services = registry.get("services") if isinstance(registry.get("services"), dict) else {}
-                break
-    services = services or {}
-
     problems: list[str] = []
+    if services is None:
+        registry, registry_problems = _resolve_registry(pack)
+        problems.extend(registry_problems)
+        raw_services = (registry or {}).get("services")
+        services = raw_services if isinstance(raw_services, dict) else {}
+
     for service_id in services:
         old_dir = pack / service_id
         new_dir = pack / "service-skills" / "services" / service_id
@@ -282,22 +312,12 @@ def migrate_pack(project_root: Path, pack: Path, repo_name: str) -> dict[str, An
     """
     umbrella_dir = pack / "service-skills"
     services_dir = umbrella_dir / "services"
-    old_registry = pack / "service-registry.json"
-    new_registry = umbrella_dir / "service-registry.json"
+    old_registry, new_registry = _registry_paths(pack)
 
     # Resolve the registry WITHOUT touching either file: two registries merge by service id
     # only when they agree on everything else.
-    old_reg = _load_registry(old_registry)
-    new_reg = _load_registry(new_registry)
-    problems: list[str] = []
-    if old_reg is not None and new_reg is not None:
-        problems.extend(_registry_problems(old_registry, old_reg, new_registry, new_reg))
-        registry: dict[str, Any] = _merge_registries(old_reg, new_reg)
-    elif new_reg is not None:
-        registry = new_reg
-    elif old_reg is not None:
-        registry = old_reg
-    else:
+    registry, problems = _resolve_registry(pack)
+    if registry is None:
         return {"pack": pack.name, "status": "no-registry", "services": {}}
     services: dict[str, Any] = registry.get("services") if isinstance(registry.get("services"), dict) else {}
     registry["services"] = services
@@ -372,9 +392,16 @@ def migrate_pack(project_root: Path, pack: Path, repo_name: str) -> dict[str, An
             stale_refs |= unmapped
 
     # Relocate the registry under the umbrella with rewritten skill_paths. Line endings
-    # follow whichever registry already existed (XTRM-850).
+    # follow the registry that supplied the content: on a first migration the NEW path does
+    # not exist yet, so sniffing it would answer LF and silently convert a CRLF flat
+    # registry (XTRM-850).
     umbrella_dir.mkdir(parents=True, exist_ok=True)
-    _write_text(new_registry, json.dumps(registry, indent=2) + "\n")
+    newline_source = old_registry if old_registry.exists() else new_registry
+    _write_text(
+        new_registry,
+        json.dumps(registry, indent=2) + "\n",
+        newline_source=newline_source,
+    )
     if old_registry.exists() and old_registry.resolve() != new_registry.resolve():
         old_registry.unlink()
 
@@ -440,7 +467,11 @@ def main() -> None:
         sys.exit(1)
 
     if preflight_only:
-        problems = preflight_pack(pack)
+        try:
+            problems = preflight_pack(pack)
+        except MigrationRefused as e:
+            print(f"refused: {e}", file=sys.stderr)
+            sys.exit(2)
         if problems:
             print(f"refused: {len(problems)} problem(s); nothing would be changed:", file=sys.stderr)
             for problem in problems:

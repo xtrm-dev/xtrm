@@ -158,6 +158,97 @@ def test_preflight_pack_is_read_only(tmp_path: Path) -> None:
     assert _snapshot(pack) == before
 
 
+# --- dry run and real run must reach the same verdict (F1) --------------------
+def test_preflight_reports_divergent_registries(tmp_path: Path) -> None:
+    """``--preflight`` used to read ONE registry and answer ok where the run refuses."""
+    project, pack = _pack(tmp_path)
+    _registry(pack, {"db": _service("db")})
+    _registry(pack / "service-skills", {"db": _service("db", description="other")})
+    _write(pack / "db" / "SKILL.md", SKILL_BODY)
+
+    problems = preflight_pack(pack)
+
+    assert any("registry" in p and "'db'" in p for p in problems), problems
+    with pytest.raises(MigrationRefused):
+        migrate_pack(project, pack, "acme")
+
+
+def test_preflight_sees_a_service_listed_only_in_the_flat_registry(tmp_path: Path) -> None:
+    """The dry run checked only the winning registry, so a flat-only service could hide."""
+    project, pack = _pack(tmp_path)
+    _registry(pack, {"cache": _service("cache")})
+    _registry(pack / "service-skills", {"db": _service("db")})
+    _write(pack / "cache" / "SKILL.md", SKILL_BODY)
+    _write(pack / "cache" / "scripts" / "probe.sh", "#!/bin/sh\n")
+    _write(pack / "service-skills" / "services" / "cache" / "SKILL.md", SKILL_BODY)
+
+    problems = preflight_pack(pack)
+
+    assert any("cache" in p and "probe.sh" in p for p in problems), problems
+    with pytest.raises(MigrationRefused):
+        migrate_pack(project, pack, "acme")
+
+
+def test_cli_preflight_reports_registry_problems(tmp_path: Path, monkeypatch, capsys) -> None:
+    project, pack = _pack(tmp_path)
+    _registry(pack, {"db": _service("db")})
+    _registry(pack / "service-skills", {"db": _service("db", description="other")})
+    _write(pack / "db" / "SKILL.md", SKILL_BODY)
+    before = _snapshot(pack)
+
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.delenv("XTRM_PACK", raising=False)
+    monkeypatch.setattr(sys, "argv", ["layout_migrator.py", "--preflight"])
+
+    with pytest.raises(SystemExit) as excinfo:
+        layout_migrator.main()
+
+    assert excinfo.value.code == 2
+    assert "registry" in capsys.readouterr().err
+    assert _snapshot(pack) == before
+
+
+# --- malformed registry is a refusal, not a traceback (F6) --------------------
+def test_malformed_registry_refuses_cleanly(tmp_path: Path) -> None:
+    project, pack = _pack(tmp_path)
+    _write(pack / "service-registry.json", "{not json\n")
+    before = _snapshot(pack)
+
+    with pytest.raises(MigrationRefused) as excinfo:
+        migrate_pack(project, pack, "acme")
+    assert "not readable JSON" in str(excinfo.value)
+    with pytest.raises(MigrationRefused):
+        preflight_pack(pack)
+    assert _snapshot(pack) == before
+
+
+# --- XTRM-850: the registry RELOCATION keeps the source line endings (F2) -----
+def test_registry_relocation_preserves_crlf(tmp_path: Path) -> None:
+    """The new registry path does not exist yet, so sniffing it always answered LF."""
+    project, pack = _pack(tmp_path)
+    path = _registry(pack, {"db": _service("db")})
+    path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+    _write(pack / "db" / "SKILL.md", SKILL_BODY)
+
+    migrate_pack(project, pack, "acme")
+
+    relocated = pack / "service-skills" / "service-registry.json"
+    raw = relocated.read_bytes()
+    assert b"\r\n" in raw
+    assert b"\n" not in raw.replace(b"\r\n", b"")
+
+
+def test_registry_relocation_preserves_lf(tmp_path: Path) -> None:
+    project, pack = _pack(tmp_path)
+    _registry(pack, {"db": _service("db")})
+    _write(pack / "db" / "SKILL.md", SKILL_BODY)
+
+    migrate_pack(project, pack, "acme")
+
+    raw = (pack / "service-skills" / "service-registry.json").read_bytes()
+    assert b"\r\n" not in raw
+
+
 # --- equal trees are moved aside, never deleted -------------------------------
 def test_equal_tree_is_moved_aside_not_deleted(tmp_path: Path) -> None:
     project, pack = _pack(tmp_path)

@@ -297,10 +297,14 @@ def _run_vendored_script(root: Path, pack_name: str, script: str, args: list[str
     )
 
 
-def migrate_umbrellas(root: Path) -> list[str]:
+def migrate_umbrellas(root: Path, *, refused: list[str] | None = None) -> list[str]:
     """One-time hard break: rename each pack's ``service-skills`` umbrella to
     ``service-knowledge``, rewrite registry path refs, regenerate the umbrella with the
-    new ``<repo>-service-knowledge`` name. Idempotent. Returns touched relative paths."""
+    new ``<repo>-service-knowledge`` name. Idempotent. Returns touched relative paths.
+
+    ``refused``, when passed, collects every destination the rename refused, so a caller
+    can report a partial migration as a failure instead of "nothing to do" (XTRM-849).
+    """
     touched: list[str] = []
     name = repo_name(root)
     for pack, umb in find_umbrella_packs(root):
@@ -319,6 +323,8 @@ def migrate_umbrellas(root: Path) -> list[str]:
                         f"(it carries no service-registry.json), then re-run.",
                         file=sys.stderr,
                     )
+                    if refused is not None:
+                        refused.append(str(new_umb))
                     continue
             _git_mv_or_rename(umb, new_umb, root)
             touched.append((new_umb).relative_to(root).as_posix() + "/")

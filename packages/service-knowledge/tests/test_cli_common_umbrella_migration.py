@@ -112,6 +112,30 @@ def test_find_umbrella_packs_prefers_the_new_name(tmp_path: Path) -> None:
     assert [(p.name, u.name) for p, u in found] == [("acme", "service-knowledge")]
 
 
+def test_migrate_command_reports_a_partial_migration_as_failure(tmp_path: Path, capsys) -> None:
+    """A migrated pack must not mask a refused one in the same repo (F7)."""
+    import argparse
+
+    repo, pack_a = _repo(tmp_path, name="acme")
+    pack_b = repo / ".xtrm" / "skills" / "beta"
+    legacy_b = pack_b / "service-skills"
+    legacy_b.mkdir(parents=True)
+    (legacy_b / "service-registry.json").write_text(
+        json.dumps({"version": "1.0", "services": {}}, indent=2) + "\n", encoding="utf-8"
+    )
+    (pack_b / "service-knowledge" / "stray").mkdir(parents=True)
+    (pack_b / "service-knowledge" / "stray" / "file.md").write_text("keep\n", encoding="utf-8")
+
+    code = migrate_cmd.run(argparse.Namespace(path=str(repo)))
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "migrated:" in captured.out  # acme moved
+    assert "refused:" in captured.out  # beta did not
+    assert (pack_a / "service-knowledge" / "service-registry.json").exists()
+    assert legacy_b.exists()
+
+
 def test_migrate_command_does_not_report_a_refused_rename_as_already_migrated(
     tmp_path: Path, capsys
 ) -> None:
