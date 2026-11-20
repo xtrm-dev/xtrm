@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IssueSummary } from "../adapters/index.tsx";
-import { INDENT_REM, KEY_COL_MAX_REM, buildTree, hiddenColumns, issueStatus, keyColumnRem, keyNames, listDensity, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
+import { buildTree, hiddenColumns, issueStatus, keyNames, listDensity, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
 
 const issue = (ref: string, over: Partial<IssueSummary> = {}): IssueSummary => ({
   id: ref, ref, locator: ref, title: ref, kind: "task", lifecycle: "open", revision: 1, priority: 2, scrutiny: null,
@@ -65,26 +65,6 @@ describe("issue table", () => {
     expect(label({ readiness: "draft", contractComplete: true, attestation: "rejected" })).toBe("Rejected");
   });
 
-  it("sizes the key column from the primary locator alone, plus the deepest row's indent", () => {
-    const short = issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234" });
-    const long = issue("X-2", { locator: "XTRM-300.12.4.1", ref: "XTRM-1234" });
-    expect(keyColumnRem([long])).toBeGreaterThan(keyColumnRem([short]));
-    // The alias moves to the tooltip, so it must not widen the column (XTRM-898).
-    expect(keyColumnRem([issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234" })])).toBe(
-      keyColumnRem([issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234567890" })]),
-    );
-    // Each level widens the base column by one indent; the key cell gives that width back per row.
-    expect(keyColumnRem([short], 3) - keyColumnRem([short])).toBeCloseTo(3 * INDENT_REM, 5);
-  });
-
-  it("caps the key column, so one deep locator cannot tax every visible row (XTRM-911)", () => {
-    const deep = issue("X-1", { locator: "MMD-5244.2331.298.20.2.1.1.1" });
-    expect(keyColumnRem([deep], 4)).toBe(KEY_COL_MAX_REM);
-    // Below the cap the column still follows the data, depth included.
-    const short = issue("X-2", { locator: "XTRM-300.1" });
-    expect(keyColumnRem([short], 1)).toBeLessThan(KEY_COL_MAX_REM);
-  });
-
   it("drops the low-value numeric columns as the list narrows, header and rows together (XTRM-911)", () => {
     expect(listDensity(1098)).toBe("wide");
     expect([...hiddenColumns("wide")]).toEqual([]);
@@ -94,7 +74,7 @@ describe("issue table", () => {
     expect([...hiddenColumns("compact")]).toEqual(["events", "pointers", "created", "updated"]);
   });
 
-  it("names the primary key and the tooltip that keeps the alias", () => {
+  it("names the address and the tooltip that keeps both names (XTRM-926)", () => {
     const imported = issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234" });
     expect(primaryKey(imported)).toBe("XTRM-300.12");
     expect(keyNames(imported)).toBe("XTRM-300.12 / XTRM-1234");

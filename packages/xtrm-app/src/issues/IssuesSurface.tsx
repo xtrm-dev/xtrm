@@ -12,7 +12,7 @@ import { ListFilter, ToolbarButton, ToolbarFilter } from "../ui/toolbar.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
-import { INDENT_REM, buildTree, defaultDesc, hiddenColumns, issueStatus, keyColumnRem, keyNames, listDensity, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
+import { INDENT_REM, buildTree, defaultDesc, hiddenColumns, issueStatus, keyNames, listDensity, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
 import { PrKey } from "../ui/pr-key.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
@@ -41,8 +41,8 @@ const copy = async (text: string) => {
 };
 
 /**
- * Summary takes the spare width; the key column is sized from the data (`keyColumnRem`) and the
- * numeric columns are as narrow as their own text: every rem here comes out of the title (XTRM-911).
+ * The first column holds the whole reading line — key, status, title — so it takes the spare width;
+ * the numeric columns are as narrow as their own text (XTRM-911, XTRM-926).
  */
 const COLUMNS: Array<{ key: SortKey; label: string; width: string; align?: "right" }> = [
   { key: "title", label: "Title", width: "minmax(0,1fr)" },
@@ -111,8 +111,6 @@ export function IssuesSurface() {
       if (!next.delete(ref)) next.add(ref);
       return next;
     });
-  const maxDepth = useMemo(() => Math.max(0, ...tree.map((r) => r.depth)), [tree]);
-  const keyCol = `${keyColumnRem(visible, maxDepth)}rem`;
   const columns = useMemo(() => {
     // Before the first measurement (and in jsdom) fall back to the viewport, so the table never
     // renders a column set it will immediately throw away.
@@ -121,7 +119,6 @@ export function IssuesSurface() {
     return COLUMNS.filter((c) => !dropped.has(c.key));
   }, [listWidth]);
   const grid = useMemo(() => gridFor(columns), [columns]);
-  const tableVars = { "--key-col": keyCol } as CSSProperties;
 
   let body;
   if (projects.isPending || (project && issues.isPending)) body = <LoadingState label="Loading issues" />;
@@ -156,7 +153,7 @@ export function IssuesSurface() {
         onWidth={setListWidth}
         getKey={(r) => r.issue.id}
         header={
-          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 border-b border-border-subtle" style={{ ...tableVars, ...grid }}>
+          <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 border-b border-border-subtle" style={grid}>
             {columns.map((c) => (
               <div key={c.key} role="columnheader" aria-sort={sort.key === c.key ? (sort.desc ? "descending" : "ascending") : "none"} className={CELL_EDGE}>
                 <button
@@ -177,7 +174,6 @@ export function IssuesSurface() {
         renderRow={(r) => (
           <IssueRow
             row={r}
-            vars={tableVars}
             grid={grid}
             columns={columns}
             selected={inspected?.kind === "issue" && inspected.ref === r.issue.ref}
@@ -241,7 +237,6 @@ const NUMBER = "text-xs text-ink-muted tabular";
 
 function IssueRow({
   row,
-  vars,
   grid,
   columns,
   selected,
@@ -250,7 +245,6 @@ function IssueRow({
   onOpen,
 }: {
   row: TreeRow;
-  vars: CSSProperties;
   grid: CSSProperties;
   columns: ReadonlyArray<{ key: string }>;
   selected: boolean;
@@ -283,11 +277,10 @@ function IssueRow({
         }
       }}
     >
-      <div className="grid h-full w-full items-center overflow-hidden" style={{ ...grid, ...vars, "--row-indent": `${depth * INDENT_REM}rem` } as CSSProperties}>
+      <div className="grid h-full w-full items-center overflow-hidden" style={{ ...grid, "--row-indent": `${depth * INDENT_REM}rem` } as CSSProperties}>
         <div className={cx(CELL, "gap-1.5")}>
           {/* The row's own depth indents the leading cluster, so the chevron sits beside the key at
-              that depth instead of behind a list-wide gutter; the key cell gives the same width back,
-              so the status chip and the title keep one x for every row (XTRM-898). */}
+              that depth instead of behind a list-wide gutter (XTRM-898). */}
           <span data-row-leading className="flex shrink-0 items-center" style={{ width: "calc(var(--row-indent) + 1.25rem)", paddingLeft: "var(--row-indent)" }}>
             {hasChildren ? (
               <button
@@ -306,13 +299,16 @@ function IssueRow({
               <span className="w-5 shrink-0" />
             )}
           </span>
-          <span data-key-cell className="flex min-w-0 shrink-0 items-center gap-1 overflow-hidden" style={{ width: "calc(var(--key-col) - var(--row-indent))" }} title={keyNames(issue)}>
+          {/* Key, status and title flow inline: the key is as wide as its own text (the locator, then
+              the unique ref when it differs), so no column width is computed for it (XTRM-926). The
+              key keeps the address in its tooltip when a narrow list truncates it. */}
+          <span data-key-cell className="flex min-w-0 items-center gap-1" title={keyNames(issue)}>
             <span title={issue.kind} className="flex shrink-0">
               <Icon name={kindIcon(issue.kind)} size="text" className="text-ink-faint" />
             </span>
             <PriorityGlyph priority={issue.priority} />
-            <span className="min-w-0 truncate">
-              <IssueKey locator={issue.locator} humanRef={issue.ref} showAlias={false} />
+            <span data-key-text className="min-w-0 truncate">
+              <IssueKey locator={issue.locator} humanRef={issue.ref} />
             </span>
           </span>
           <Badge tone={status.tone} size="xs" title={status.hint} className="w-[4.25rem] justify-center">
