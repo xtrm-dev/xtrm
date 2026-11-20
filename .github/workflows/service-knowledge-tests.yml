@@ -86,8 +86,10 @@ jobs:
       - name: Install service-knowledge (editable, console script on PATH)
         run: python3 -m pip install -e packages/service-knowledge
 
-      - name: Python tests (MCP surface, plugin packaging, parity)
-        run: python3 -m pytest packages/service-knowledge/src -q
+      # `tests/` holds the drift, hook, migrator and reconcile suites; before this it ran nowhere in
+      # CI. #424 made it independent of the editable install, so it is gated here as well.
+      - name: Python tests (MCP surface, plugin packaging, parity, drift, hooks, reconcile)
+        run: python3 -m pytest packages/service-knowledge/src packages/service-knowledge/tests -q
 
       - name: Extension dependency check
         working-directory: packages/service-knowledge-ext
