@@ -93,6 +93,7 @@ def build_prompt(drift: dict[str, Any], current_skill: str, source_evidence: str
         [
             "You reconcile service skill documentation with implementation drift.",
             "Return only the complete updated SKILL.md content. No markdown fences. No commentary.",
+            "Keep all text not affected by the drift evidence byte-for-byte, and return the complete file, not an excerpt.",
             f"Service: {drift.get('service_id', 'unknown')} ({drift.get('service_name', 'unknown')})",
             f"Drifted source file: {drift.get('file_path', 'unknown')}",
             f"Drift evidence: {json.dumps(citations, sort_keys=True)}",
@@ -318,6 +319,12 @@ def gated_write(
             pass
 
 
+def _structural_notes(gate_result: dict[str, Any]) -> list[str]:
+    """``code: message`` for each structural error/warning, so the operator sees what the gate saw."""
+    issues = (gate_result.get("manifest") or {}).get("structural_issues") or []
+    return [f"{i['code']}: {i['message']}" for i in issues if i.get("severity") in ("error", "warning")]
+
+
 def _canary_evaluate(manifest, decision, *, state_root):  # type: ignore[no-untyped-def]
     """Return ``(auto_merge, reason, state_snapshot)`` for a gated write.
 
@@ -503,12 +510,16 @@ def reconcile(options: ReconcileOptions) -> dict[str, Any]:
                 dry_run=options.dry_run,
                 state_root=project_root,
             )
-            result.setdefault("gates", []).append({
+            notes = _structural_notes(gate_result)
+            gate_entry = {
                 "file_path": drift.get("file_path"),
                 "service_id": drift.get("service_id"),
                 "verdict": gate_result["verdict"],
                 "written": gate_result["written"],
-            })
+            }
+            if notes:
+                gate_entry["structural_issues"] = notes
+            result.setdefault("gates", []).append(gate_entry)
             if options.dry_run:
                 result["reconciled_count"] += 1
                 continue
@@ -517,6 +528,8 @@ def reconcile(options: ReconcileOptions) -> dict[str, Any]:
             else:
                 result["status"] = "partial"
                 reasons = "; ".join(gate_result["gate"]["reasons"]) or "no reason recorded"
+                if notes:
+                    reasons = f"{reasons} [{' | '.join(notes)}]"
                 result["failed"].append({
                     "file_path": drift.get("file_path"),
                     "error": f"gate={gate_result['verdict']}: {reasons}",
