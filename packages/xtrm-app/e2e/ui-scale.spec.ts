@@ -44,6 +44,11 @@ const METRICS = () => {
   const rows = Array.from(sidebar.querySelectorAll<HTMLElement>('[role="button"]'));
   const parent = rows.find((row) => row.textContent?.trim().startsWith("Project"))!;
   const child = rows.find((row) => row.textContent?.trim() === "Overview")!;
+  // The rail's weight ladder needs both ends: the selected child carries the state, and an
+  // unselected sibling of it must stay under the parent row. The sibling is taken from the same
+  // rail group rather than by label, so a renamed destination does not quietly drop the check.
+  const rail = child.parentElement!;
+  const sibling = Array.from(rail.querySelectorAll<HTMLElement>('[role="button"]')).find((row) => row !== child)!;
   const main = document.querySelector('[data-testid="primary-region"]') as HTMLElement;
   const header = Array.from(sidebar.querySelectorAll<HTMLElement>("button[aria-expanded]")).find((el) =>
     /^(Workspace|GitHub|System)$/.test((el.textContent ?? "").trim()),
@@ -60,6 +65,9 @@ const METRICS = () => {
     child: {
       label: type(child.querySelector("span.truncate")!),
       x: round(child.querySelector("span.truncate")!.getBoundingClientRect().x),
+    },
+    sibling: {
+      label: type(sibling.querySelector("span.truncate")!),
     },
     filterGlyph: glyph(button("Filter this list")?.querySelector("svg")),
     existingToolbarGlyph: glyph(primary?.querySelector("svg")),
@@ -98,8 +106,14 @@ for (const root of ["16px", OPERATOR_ROOT]) {
     expect(metrics.child.label.font).toBeLessThanOrEqual(metrics.parent.label.font);
     expect(metrics.child.label.font).toBe(metrics.parent.label.font);
     expect(metrics.child.label.lineHeight).toBe(metrics.parent.label.lineHeight);
-    // The child is a sub-destination: same size, lighter weight, never the parent's semibold.
-    expect(Number(metrics.child.label.weight)).toBeLessThan(Number(metrics.parent.label.weight));
+    // The child is a sub-destination: same size as the parent row, in both states.
+    expect(Number(metrics.sibling.label.font)).toBe(metrics.parent.label.font);
+    expect(Number(metrics.sibling.label.lineHeight)).toBe(metrics.parent.label.lineHeight);
+    // The rail's weight ladder (XTRM-927): an unselected child stays lighter than the row that owns
+    // it, and the selected child carries that row's semibold so the state reads without colour.
+    expect(Number(metrics.parent.label.weight)).toBe(600);
+    expect(Number(metrics.sibling.label.weight)).toBeLessThan(Number(metrics.parent.label.weight));
+    expect(Number(metrics.child.label.weight)).toBe(600);
     // The aligned label column survives the root size, so the two rows cannot drift apart.
     expect(Math.abs(metrics.child.x - metrics.parent.x)).toBeLessThanOrEqual(1);
     // XTRM-907: the section header is a step below the row label, never the largest text here.
