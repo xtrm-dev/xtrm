@@ -26,6 +26,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Sibling import (consolidated scripts/ dir). Standalone runs get the same directory on
+# sys.path[0] for free; package-namespace imports (service_knowledge.scripts.bootstrap)
+# do not, so insert it explicitly like every other script in this directory.
+sys.path.insert(0, str(Path(__file__).parent))
+from _textio import write_text  # type: ignore[import-not-found]  # noqa: E402
+
 SERVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-_]{0,63}$")
 SKILLS_ROOT_SUFFIX = Path(".xtrm") / "skills"
 RESERVED_PACK_NAMES = {"default", "optional", "user", "active", "local-legacy"}
@@ -253,11 +259,15 @@ def load_registry(project_root: str | None = None) -> dict[str, Any]:
 
 
 def save_registry(data: dict[str, Any], project_root: str | None = None) -> None:
+    """Persist the registry as indented JSON with a trailing newline.
+
+    The trailing newline matches every sibling writer (``layout_migrator``, the CLI's
+    registry rewriters); a file that already used CRLF keeps CRLF (XTRM-850).
+    """
     registry_path = get_registry_path(project_root)
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(registry_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        write_text(registry_path, json.dumps(data, indent=2) + "\n")
     except OSError as e:
         raise RegistryError(f"Cannot write registry: {e}") from e
 

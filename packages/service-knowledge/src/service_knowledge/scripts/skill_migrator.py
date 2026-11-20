@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+# Sibling import (consolidated scripts/ dir).
+sys.path.insert(0, str(Path(__file__).parent))
+from _textio import write_text as _write_text  # type: ignore[import-not-found]  # noqa: E402
+
 CONTRACT_PATH = Path(__file__).resolve().parents[1] / "contracts" / "service_skill_contract.json"
 SEMANTIC_START = "<!-- SEMANTIC_START -->"
 SEMANTIC_END = "<!-- SEMANTIC_END -->"
@@ -75,7 +79,8 @@ def migrate_skill_file(skill_path: Path) -> bool:
     content = skill_path.read_text(encoding="utf-8")
     migrated, changed = migrate_skill_markdown(content)
     if changed:
-        skill_path.write_text(migrated, encoding="utf-8")
+        # Line endings follow the existing file (XTRM-850): no silent CRLF -> LF rewrite.
+        _write_text(skill_path, migrated)
     return changed
 
 

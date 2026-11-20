@@ -18,6 +18,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).parent))
+from _textio import atomic_write as _atomic_write  # type: ignore[import-not-found]  # noqa: E402
 from bootstrap import get_project_root, load_registry, save_registry  # type: ignore[import-not-found]  # noqa: E402
 from drift_detector import scan_drift  # type: ignore[import-not-found]  # noqa: E402
 
@@ -161,11 +162,13 @@ def call_nano_gpt(prompt: str, api_key: str) -> LlmResult:
 
 
 def atomic_write(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
-        handle.write(content)
-        temp_path = Path(handle.name)
-    os.replace(temp_path, path)
+    """Atomically replace ``path`` with ``content``.
+
+    Delegates to :mod:`_textio` so a CRLF target keeps CRLF (XTRM-850): the caller reads
+    in text mode (CRLF arrives as LF), so writing with the target's own convention is the
+    only way a read-modify-write does not silently rewrite line endings.
+    """
+    _atomic_write(path, content)
 
 
 def gate_telemetry_path(state_root: Path) -> Path:
