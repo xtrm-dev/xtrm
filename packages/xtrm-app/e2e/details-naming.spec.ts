@@ -1,9 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { shots } from "./shots.ts";
 
 // XTRM-616: session details (state apart from capabilities, one model format with the provider
 // apart), the header model label, and the open session kept visible outside the repository filter.
-// Review screenshots, light and dark, written to docs/screenshots/agent-half/.
-const OUT = "docs/screenshots/agent-half";
+// Review screenshots, light and dark: into the run's own output dir by default, to the tracked
+// docs/screenshots/agent-half only with AGENT_HALF_SHOTS_DIR (e2e/shots.ts).
+const shot = shots("AGENT_HALF_SHOTS_DIR");
 
 async function theme(page: Page, value: "light" | "dark") {
   await page.addInitScript((t) => localStorage.setItem("xtrm.console.theme.v1", t), value);
@@ -27,7 +29,7 @@ for (const size of [
     const list = page.getByRole("list", { name: "Sessions" });
     expect((await list.boundingBox())!.height).toBeGreaterThanOrEqual(140);
     await expect(page.getByTestId("session-row").first()).toBeVisible();
-    if (size.height === 720) await page.screenshot({ path: `${OUT}/session-details-1280x720.png` });
+    if (size.height === 720) await page.screenshot({ path: shot(`session-details-1280x720.png`) });
   });
 }
 
@@ -45,14 +47,14 @@ for (const t of ["dark", "light"] as const) {
     await theme(page, t);
     await page.goto("/agent/pi-main");
     await expect(page.getByTestId("session-details")).toBeVisible();
-    await page.screenshot({ path: `${OUT}/${t}-session-details.png` });
+    await page.screenshot({ path: shot(`${t}-session-details.png`) });
 
     await page.goto("/agent/quant-reviewer");
     await expect(detail(page, "Provider")).toHaveText("openrouter");
-    await page.screenshot({ path: `${OUT}/${t}-session-details-provider.png` });
+    await page.screenshot({ path: shot(`${t}-session-details-provider.png`) });
 
     await page.goto("/agent/scratch");
     await expect(page.locator('[data-group="Open · not in xtrm"]')).toBeVisible();
-    await page.screenshot({ path: `${OUT}/${t}-open-outside-filter.png` });
+    await page.screenshot({ path: shot(`${t}-open-outside-filter.png`) });
   });
 }

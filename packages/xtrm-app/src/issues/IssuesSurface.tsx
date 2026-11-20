@@ -12,7 +12,7 @@ import { ListFilter, ToolbarButton, ToolbarFilter } from "../ui/toolbar.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
-import { INDENT_REM, buildTree, defaultDesc, hiddenColumns, issueStatus, keyNames, listDensity, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
+import { INDENT_REM, buildTree, defaultDesc, issueStatus, keyNames, rollupActivity, visibleColumns, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
 import { PrKey } from "../ui/pr-key.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
@@ -70,7 +70,7 @@ export function IssuesSurface() {
   const [view, setView] = useState<View>("all");
   const [layout, setLayout] = useState<"list" | "board">("list");
   const [filter, setFilter] = useState("");
-  const [sort, setSort] = useState<Sort>({ key: "updated", desc: true });
+  const [sortBy, setSortBy] = useState<Sort>({ key: "updated", desc: true });
   const [priorityFilter, setPriorityFilter] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
@@ -104,7 +104,6 @@ export function IssuesSurface() {
 
   const rollups = useMemo(() => rollupActivity(issues.data ?? []), [issues.data]);
   const visible = useMemo(() => (query ? population.filter(matchesQuery) : population), [population, query]);
-  const tree = useMemo(() => buildTree(visible, rollups, sort, collapsed), [visible, rollups, sort, collapsed]);
   const toggle = (ref: string) =>
     setCollapsed((c) => {
       const next = new Set(c);
@@ -115,10 +114,10 @@ export function IssuesSurface() {
     // Before the first measurement (and in jsdom) fall back to the viewport, so the table never
     // renders a column set it will immediately throw away.
     const available = listWidth > 0 ? listWidth : typeof window === "undefined" ? 1024 : window.innerWidth;
-    const dropped = hiddenColumns(listDensity(available));
-    return COLUMNS.filter((c) => !dropped.has(c.key));
+    return visibleColumns(COLUMNS, available);
   }, [listWidth]);
   const grid = useMemo(() => gridFor(columns), [columns]);
+  const tree = useMemo(() => buildTree(visible, rollups, sortBy, collapsed), [visible, rollups, sortBy, collapsed]);
 
   let body;
   if (projects.isPending || (project && issues.isPending)) body = <LoadingState label="Loading issues" />;
@@ -155,14 +154,14 @@ export function IssuesSurface() {
         header={
           <div role="row" data-testid="issues-table-head" className="grid h-8 shrink-0 border-b border-border-subtle" style={grid}>
             {columns.map((c) => (
-              <div key={c.key} role="columnheader" aria-sort={sort.key === c.key ? (sort.desc ? "descending" : "ascending") : "none"} className={CELL_EDGE}>
+              <div key={c.key} role="columnheader" aria-sort={sortBy.key === c.key ? (sortBy.desc ? "descending" : "ascending") : "none"} className={CELL_EDGE}>
                 <button
                   type="button"
-                  onClick={() => setSort((s) => ({ key: c.key, desc: s.key === c.key ? !s.desc : defaultDesc(c.key) }))}
-                  className={cx("flex h-full w-full items-center gap-1 overflow-hidden px-2 text-xs font-normal outline-none hover:text-ink focus-visible:bg-hover", sort.key === c.key ? "text-ink" : "text-ink-faint", c.align === "right" && "justify-end")}
+                  onClick={() => setSortBy((s) => ({ key: c.key, desc: s.key === c.key ? !s.desc : defaultDesc(c.key) }))}
+                  className={cx("flex h-full w-full items-center gap-1 overflow-hidden px-2 text-xs font-normal outline-none hover:text-ink focus-visible:bg-hover", sortBy.key === c.key ? "text-ink" : "text-ink-faint", c.align === "right" && "justify-end")}
                 >
                   <span className={cx("flex w-3.5 shrink-0", c.align === "right" && "order-first")}>
-                    {sort.key === c.key && <Icon name="chevronDown" size="xs" className={cx("transition-transform", !sort.desc && "rotate-180")} />}
+                    {sortBy.key === c.key && <Icon name="chevronDown" size="xs" className={cx("transition-transform", !sortBy.desc && "rotate-180")} />}
                   </span>
                   {c.label}
                 </button>
@@ -203,12 +202,15 @@ export function IssuesSurface() {
         />
         <ToolbarFilter label="Type" value={typeFilter} options={["task", "bug", "feature", "epic", "chore", "decision"].map((t) => ({ label: t }))} onChange={setTypeFilter} />
         <OptionsMenu
-          label="Order by"
-          trigger={<ToolbarButton>Order by</ToolbarButton>}
+          label={`Order by: ${ORDER_LABEL[sortBy.key]}`}
+          // The header states the order only while the column carrying it is visible, and a narrow
+          // list drops columns. The control that sets the order states it always, so a dropped column
+          // never leaves rows in an order no control accounts for (XTRM-918).
+          trigger={<ToolbarButton>{`Order by: ${ORDER_LABEL[sortBy.key]}`}</ToolbarButton>}
           items={[
-            { label: "Updated", onSelect: () => setSort({ key: "updated", desc: true }) },
-            { label: "Priority", onSelect: () => setSort({ key: "priority", desc: false }) },
-            { label: "Key", onSelect: () => setSort({ key: "key", desc: false }) },
+            { label: "Updated", onSelect: () => setSortBy({ key: "updated", desc: true }) },
+            { label: "Priority", onSelect: () => setSortBy({ key: "priority", desc: false }) },
+            { label: "Key", onSelect: () => setSortBy({ key: "key", desc: false }) },
           ]}
         />
         <ListFilter value={filter} onChange={setFilter} placeholder="Filter issues" count={visible.length} total={population.length} />
@@ -232,6 +234,9 @@ export function IssuesSurface() {
     </section>
   );
 }
+
+/** One name per order, shown by the control that sets it. */
+const ORDER_LABEL: Record<SortKey, string> = { title: "Title", children: "Children", events: "Events", pointers: "Pointers", pr: "PR", created: "Created", updated: "Updated", key: "Key", priority: "Priority" };
 
 const NUMBER = "text-xs text-ink-muted tabular";
 
@@ -304,10 +309,11 @@ function IssueRow({
           </span>
           {/* Key, status and title flow inline: the key is as wide as its own text (the locator, then
               the unique ref when it differs), so no column width is computed for it (XTRM-926). The
-              key is the row's address and keeps its natural width (`shrink-0`) while the title shrinks
-              first; `overflow-hidden` keeps a narrow list's glyph from painting over the status chip.
-              The tooltip carries the full address when the cell is clipped. */}
-          <span data-key-cell className="flex shrink-0 items-center gap-1 overflow-hidden" title={keyNames(issue)}>
+              key keeps its natural width while the title shrinks first, but below `medium` the reading
+              line cannot hold both: the key then truncates to its longest word with an ellipsis instead
+              of the row clipping it at the box edge, and the tooltip carries the full address
+              (XTRM-918). */}
+          <span data-key-cell className="flex min-w-0 shrink items-center gap-1 overflow-hidden" title={keyNames(issue)}>
             <span title={issue.kind} className="flex shrink-0">
               <Icon name={kindIcon(issue.kind)} size="text" className="text-ink-faint" />
             </span>

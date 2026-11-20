@@ -80,6 +80,14 @@ describe("Project Questions", () => {
       "sre-ops",
     ]);
 
+    // XTRM-918: one owner in both sections means two groups with the same owner, so the region name
+    // carries the section as well — two identically named regions cannot be told apart.
+    const labels = [unanswered, answered].flatMap((section) =>
+      Array.from(section.querySelectorAll("[data-testid='question-group']")).map((group) => group.getAttribute("aria-label")),
+    );
+    expect(labels).toEqual(["Unanswered, owner MMD-4417-engine-lead", "Answered, owner MMD-4417-engine-lead", "Answered, owner sre-ops"]);
+    expect(new Set(labels).size).toBe(labels.length);
+
     // The unanswered row is the operator's work and reads first; inside a group the
     // longest-waiting question leads.
     expect(screen.getAllByTestId("question-row").map((item) => item.getAttribute("data-question-id"))).toEqual([

@@ -139,10 +139,10 @@ describe("Issues list rows (XTRM-856)", () => {
     expect(wrapper.className).toContain("group-focus-within/row:opacity-100");
   });
   it("keeps header and rows on one column set when the list drops its low-value columns (XTRM-911)", async () => {
-    // jsdom has no layout, so the surface sizes itself from the viewport: a 900px surface drops the
-    // two rollups, and neither header nor row may keep a cell for them.
+    // jsdom has no layout, so the surface sizes itself from the viewport: a 600px surface gives up its
+    // lowest-value numeric column, and neither header nor row may keep a cell for it.
     const viewport = Object.getOwnPropertyDescriptor(window, "innerWidth");
-    Object.defineProperty(window, "innerWidth", { configurable: true, value: 900 });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 600 });
     renderIssues();
     const { row } = await firstRow();
     if (viewport) Object.defineProperty(window, "innerWidth", viewport);

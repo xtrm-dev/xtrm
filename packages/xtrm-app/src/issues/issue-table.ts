@@ -140,19 +140,28 @@ export const primaryKey = (i: IssueSummary) => i.locator || i.ref;
 export const keyNames = (i: IssueSummary) => (primaryKey(i) !== i.ref ? `${primaryKey(i)} / ${i.ref}` : primaryKey(i));
 
 /**
- * How many numeric columns the list can afford at its measured width. The summary always wins the
- * width argument: below `wide` the two rollups go, below `medium` the two timestamps follow, and the
- * shipped `minWidth` keeps the rest scrolling sideways instead of squeezing the title to nothing.
+ * The width the reading line keeps before the list gives up a numeric column: a deep leading cluster,
+ * the address whole, a status chip and a readable title (XTRM-918). The numeric columns are the
+ * summary's guests, so they go before it does.
  */
-export type ListDensity = "wide" | "medium" | "compact";
+export const READING_MIN_PX = 28 * 16;
 
-export const listDensity = (width: number): ListDensity => (width >= 62 * 16 ? "wide" : width >= 48 * 16 ? "medium" : "compact");
+/** The numeric columns in the order the list gives them up, lowest value first. */
+const DROP_ORDER: ReadonlyArray<SortKey> = ["events", "pointers", "created", "updated", "pr", "children"];
 
-const DROPPED: Record<ListDensity, ReadonlySet<SortKey>> = {
-  wide: new Set(),
-  medium: new Set<SortKey>(["events", "pointers"]),
-  compact: new Set<SortKey>(["events", "pointers", "created", "updated"]),
-};
-
-/** The column keys the list hides at this width, so header and rows stay in step. */
-export const hiddenColumns = (density: ListDensity) => DROPPED[density];
+/**
+ * The columns a list of this width shows. The reading line wins the width argument (XTRM-911, XTRM-926):
+ * the list gives up numeric columns, lowest value first, until the reading line keeps its minimum, so a
+ * narrow list never squeezes the address and its chip out of the row. Header and rows read one set.
+ */
+export function visibleColumns<T extends { key: SortKey; width: string }>(columns: ReadonlyArray<T>, width: number): T[] {
+  const px = (w: string) => (/^[\d.]+rem$/.test(w) ? Number.parseFloat(w) * 16 : Number.NaN);
+  const numeric = columns.filter((c) => Number.isFinite(px(c.width)));
+  const dropped = new Set<SortKey>();
+  const kept = () => numeric.filter((c) => !dropped.has(c.key)).reduce((sum, c) => sum + px(c.width), 0);
+  for (const key of DROP_ORDER) {
+    if (width - kept() >= READING_MIN_PX) break;
+    dropped.add(key);
+  }
+  return columns.filter((c) => !dropped.has(c.key));
+}
