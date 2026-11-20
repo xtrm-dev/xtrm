@@ -278,7 +278,10 @@ function IssueRow({
       }}
     >
       <div className="grid h-full w-full items-center overflow-hidden" style={{ ...grid, "--row-indent": `${depth * INDENT_REM}rem` } as CSSProperties}>
-        <div className={cx(CELL, "gap-1.5")}>
+        {/* The reading line clips its own content: at a width where the key and the chip cannot fit
+            (a narrow list, the rail still expanded) the cell contains them instead of painting the
+            key or the badge over the numeric columns (XTRM-926). */}
+        <div className={cx(CELL, "gap-1.5 overflow-hidden")}>
           {/* The row's own depth indents the leading cluster, so the chevron sits beside the key at
               that depth instead of behind a list-wide gutter (XTRM-898). */}
           <span data-row-leading className="flex shrink-0 items-center" style={{ width: "calc(var(--row-indent) + 1.25rem)", paddingLeft: "var(--row-indent)" }}>
@@ -301,8 +304,10 @@ function IssueRow({
           </span>
           {/* Key, status and title flow inline: the key is as wide as its own text (the locator, then
               the unique ref when it differs), so no column width is computed for it (XTRM-926). The
-              key keeps the address in its tooltip when a narrow list truncates it. */}
-          <span data-key-cell className="flex min-w-0 items-center gap-1" title={keyNames(issue)}>
+              key is the row's address and keeps its natural width (`shrink-0`) while the title shrinks
+              first; `overflow-hidden` keeps a narrow list's glyph from painting over the status chip.
+              The tooltip carries the full address when the cell is clipped. */}
+          <span data-key-cell className="flex shrink-0 items-center gap-1 overflow-hidden" title={keyNames(issue)}>
             <span title={issue.kind} className="flex shrink-0">
               <Icon name={kindIcon(issue.kind)} size="text" className="text-ink-faint" />
             </span>

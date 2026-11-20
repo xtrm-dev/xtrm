@@ -124,6 +124,18 @@ test("the title takes the remaining width and truncates", async ({ page }) => {
   expect(childrenX - title.right, "the title fills its cell up to the next column").toBeLessThan(12);
   expect(title.width, "the title keeps a readable width").toBeGreaterThan(180);
 
+  // XTRM-911's guard, restored: the widest unclipped title must reach 45 characters at 1440.
+  const widest = await page.locator('[role="button"]').evaluateAll((rows) => {
+    let best = 0;
+    for (const r of rows) {
+      const run = r.querySelector("span.flex-1.truncate") as HTMLElement | null;
+      const text = run?.querySelector("span[title]")?.textContent ?? "";
+      if (run && run.scrollWidth <= run.clientWidth + 1) best = Math.max(best, text.length);
+    }
+    return best;
+  });
+  expect(widest, "a 45-character title fits the 1440px list").toBeGreaterThanOrEqual(45);
+
   // The key stays inside the reading column and is not clipped at this width.
   const key = await rect(row.locator("[data-key-text]").first());
   expect(key.right, "the key ends before its chip").toBeLessThan(title.x);
@@ -180,6 +192,51 @@ test("negative control: the old key-column row fails the inline assertion", asyn
   await expect(row.locator("[data-key-text] .text-ink-faint"), "the old row hid the unique ref").toHaveCount(0);
   expect(await keyToChipGap(row), "the old column pushes the chip off its key").toBeGreaterThan(MAX_KEY_TO_CHIP_PX);
 });
+
+for (const width of [700, 640] as const) {
+  test.describe(`at ${width}px`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    /**
+     * The key is the row's address: it keeps its natural width (`shrink-0`) and the title shrinks
+     * first. With the rail expanded a narrow list cannot hold key + chip + title, so the reading cell
+     * clips them instead of letting them paint over the numeric columns; with the rail collapsed
+     * there is room, and the deepest key must read whole.
+     */
+    test(`the deepest key stays whole and clear of its chip (${width}px)`, async ({ page }) => {
+      await openIssues(page);
+      const row = rowFor(page, "XTRM-303");
+      await expect(row).toBeVisible();
+
+      // Expanded rail: the reading cell contains its content. Probe a numeric column over the row
+      // line: a badge or a key glyph painted there would answer instead of the column cell.
+      const childrenX = await page.getByTestId("issues-table-head").getByRole("columnheader", { name: "Children" }).evaluate((el) => el.getBoundingClientRect().x);
+      const rowBox = await box(row);
+      const hit = await page.evaluate(({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        const cell = el?.closest("[data-column]");
+        return { column: cell?.getAttribute("data-column") ?? null, tag: el?.tagName ?? null, text: (el?.textContent ?? "").slice(0, 40) };
+      }, { x: childrenX + 20, y: rowBox.y + rowBox.height / 2 });
+      expect(hit.column, `${width}px: the reading line does not paint over the numeric columns`).not.toBeNull();
+
+      // Collapsed rail (the console's own control): key + chip + title fit, so nothing may clip.
+      await page.getByRole("button", { name: /ollapse sidebar/ }).click();
+      await expect(row).toBeVisible();
+      const key = row.locator("[data-key-text]").first();
+      expect(await key.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `${width}px: the deepest key is not clipped`).toBe(true);
+      const keyBox = await rect(key);
+      const chipBox = await box(row.locator('[data-slot="badge"]').first());
+      expect(chipBox.x - keyBox.right, `${width}px: the chip does not sit on the key`).toBeGreaterThanOrEqual(0);
+      expect(chipBox.x - keyBox.right, `${width}px: the chip stays beside the key`).toBeLessThanOrEqual(MAX_KEY_TO_CHIP_PX);
+      expect(chipBox.x + chipBox.width, `${width}px: the chip stays inside the reading column`).toBeLessThan(childrenX);
+
+      // The title gives up its width first, and never starts before the chip ends.
+      const title = await rect(row.locator("span.flex-1.truncate").first());
+      expect(title.x, `${width}px: the title starts after the chip`).toBeGreaterThanOrEqual(chipBox.x + chipBox.width);
+      expect(await row.evaluate((el) => getComputedStyle(el).getPropertyValue("--key-col")), `${width}px: no key column`).toBe("");
+    });
+  });
+}
 
 for (const theme of ["light", "dark"] as const) {
   test(`the MMD-shaped tree renders in ${theme}`, async ({ page }, testInfo) => {
