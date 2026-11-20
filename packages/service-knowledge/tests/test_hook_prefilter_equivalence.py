@@ -120,7 +120,7 @@ def build_fixture(root: Path, registry: dict) -> Path:
         json.dumps(registry, indent=2), encoding="utf-8"
     )
     for name in ("hook_prefilter.sh", "skill_activator.py", "drift_detector.py",
-                 "bootstrap.py", "build_territory_index.py"):
+                 "bootstrap.py", "build_territory_index.py", "_textio.py"):
         shutil.copy2(SRC / name, pack / "scripts" / name)
     (pack / "scripts" / "hook_prefilter.sh").chmod(0o755)
     subprocess.run(["git", "init", "-q", str(root)], check=False, capture_output=True)
