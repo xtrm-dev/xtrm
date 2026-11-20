@@ -128,7 +128,12 @@ def build_fixture(root: Path, registry: dict) -> Path:
 
 
 def run(cmd, cwd, payload: bytes, root: Path):
-    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
+    # The hook runs as a child with cwd=<fixture>, so PYTHONPATH must be absolute: a relative
+    # entry (pytest invoked with PYTHONPATH=src) no longer resolves there and the hook silently
+    # degrades to "retrieval unavailable" (empty stdout), which this suite reads as a failure.
+    from service_knowledge.testing import cli_env
+
+    env = {**cli_env(), "CLAUDE_PROJECT_DIR": str(root)}
     return subprocess.run(cmd, cwd=str(cwd), input=payload, capture_output=True, env=env)
 
 

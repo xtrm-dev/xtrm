@@ -1,2 +1,0 @@
-[console_scripts]
-service-knowledge = service_knowledge.cli:main
