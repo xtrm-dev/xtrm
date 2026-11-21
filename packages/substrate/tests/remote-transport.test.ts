@@ -11,7 +11,6 @@ import { MAX_DOCUMENT_BYTES, forwardCli, hookSession } from "../src/remote/execu
 import { HOOK_BUDGET_MS, resolveIssueRef } from "../hooks/remote.ts";
 import { remoteSetup } from "../src/remote/setup.ts";
 import { mappingKey, selectRemote } from "../src/remote/config.ts";
-import { DEFAULT_TIMEOUT_MS } from "../src/remote/ssh.ts";
 import { localRepositoryKey, normalizeRemote } from "../src/domain/repository.ts";
 import { renderRemoteStatus } from "../src/remote/render.ts";
 import { runCli } from "../cli/sb.ts";
@@ -1384,6 +1383,13 @@ describe("closure review", () => {
     assert.deepEqual(markers, ["@@sb-remote-file f3"]);
   });
 
+  // XTRM-963: the budget is a wall clock, so a test that opens a session with
+  // `Date.now() + 80` and then does any work is racing the host, not the rule.
+  // Under full-suite parallelism the 80 ms had usually elapsed before the first
+  // assertion read it, which made this test fail on a loaded box and pass alone.
+  // Freeze the clock instead: every assertion below then measures what the code
+  // computes from the remaining budget, and the expiry branch is exercised by
+  // advancing the frozen clock deliberately rather than by losing a race.
   it("bounds every transport call by the remaining budget, and by a requested timeout", () => {
     const seen: Array<number | undefined> = [];
     const transport: RemoteTransport = {
@@ -1397,37 +1403,55 @@ describe("closure review", () => {
     writeClientConfig(configPath, "/usr/bin/sb", {});
     const env = { ...process.env, SUBSTRATE_REMOTE_CONFIG: configPath, SUBSTRATE_REMOTE: "ssh:fake" };
 
-    const budgeted = openRemoteSession({ transport, env, deadlineMs: Date.now() + 80 });
-    assert.ok(budgeted);
-    runRemote(budgeted, ["issue", "list"], {});
-    assert.equal(typeof seen.at(-1), "number", "a call without a timeout would hang until the ssh default");
-    assert.ok(seen.at(-1)! > 0 && seen.at(-1)! <= 200, `the remaining budget clipped the call (got ${seen.at(-1)})`);
+    const realNow = Date.now;
+    let now = realNow();
+    Date.now = () => now;
+    try {
+      const budgeted = openRemoteSession({ transport, env, deadlineMs: now + 80 });
+      assert.ok(budgeted);
+      runRemote(budgeted, ["issue", "list"], {});
+      assert.equal(typeof seen.at(-1), "number", "a call without a timeout would hang until the ssh default");
+      assert.equal(seen.at(-1), 80, "the remaining budget is handed over whole, not clipped to a guess");
 
-    runRemote(budgeted, ["issue", "list"], { timeoutMs: 60_000 });
-    assert.ok((seen.at(-1) ?? 0) <= 200, `a requested timeout never exceeds the budget (got ${seen.at(-1)})`);
+      runRemote(budgeted, ["issue", "list"], { timeoutMs: 60_000 });
+      assert.equal(seen.at(-1), 80, "a requested timeout never exceeds the budget");
 
-    const unbudgeted = openRemoteSession({ transport, env });
-    assert.ok(unbudgeted);
-    runRemote(unbudgeted, ["issue", "list"], { timeoutMs: 5_000 });
-    assert.equal(seen.at(-1), 5_000, "a requested timeout is honoured below the default");
+      const unbudgeted = openRemoteSession({ transport, env });
+      assert.ok(unbudgeted);
+      runRemote(unbudgeted, ["issue", "list"], { timeoutMs: 5_000 });
+      assert.equal(seen.at(-1), 5_000, "a requested timeout is honoured below the default");
 
-    // A request shorter than the remaining budget is the only case that proves
-    // the two are combined, not replaced: 5 s must beat a 60 s deadline
-    // (final review; without Math.min the transport would get 60 s).
-    const roomy = openRemoteSession({ transport, env, deadlineMs: Date.now() + 60_000 });
-    assert.ok(roomy);
-    runRemote(roomy, ["issue", "list"], { timeoutMs: 5_000 });
-    assert.equal(seen.at(-1), 5_000, `a requested timeout below the budget wins (got ${seen.at(-1)})`);
+      // A request shorter than the remaining budget is the only case that proves
+      // the two are combined, not replaced: 5 s must beat a 60 s deadline
+      // (final review; without Math.min the transport would get 60 s).
+      const roomy = openRemoteSession({ transport, env, deadlineMs: now + 60_000 });
+      assert.ok(roomy);
+      runRemote(roomy, ["issue", "list"], { timeoutMs: 5_000 });
+      assert.equal(seen.at(-1), 5_000, `a requested timeout below the budget wins (got ${seen.at(-1)})`);
 
-    // --project keeps the call from stopping at mapping resolution, so the
-    // assertion is about the timeout the transport received.
-    forwardCli(["issue", "list", "--project", "prj_x"], { env, transport, deadlineMs: Date.now() + 80 });
-    assert.ok((seen.at(-1) ?? 0) > 0 && (seen.at(-1) ?? 0) <= 200, `forwardCli passes the budget on (got ${seen.at(-1)})`);
+      // --project keeps the call from stopping at mapping resolution, so the
+      // assertion is about the timeout the transport received.
+      forwardCli(["issue", "list", "--project", "prj_x"], { env, transport, deadlineMs: now + 80 });
+      assert.equal(seen.at(-1), 80, "forwardCli passes the budget on");
 
-    const hook = hookSession(env, { transport, deadlineMs: Date.now() + 80 });
-    assert.ok(hook);
-    runRemote(hook, ["issue", "list"], {});
-    assert.ok((seen.at(-1) ?? DEFAULT_TIMEOUT_MS) <= 200, `hookSession passes the budget on (got ${seen.at(-1)})`);
+      const hook = hookSession(env, { transport, deadlineMs: now + 80 });
+      assert.ok(hook);
+      runRemote(hook, ["issue", "list"], {});
+      assert.equal(seen.at(-1), 80, "hookSession passes the budget on");
+
+      // The expiry branch, deterministically: an elapsed budget must refuse the
+      // command before it is sent, so the transport never sees a call.
+      const callsBeforeExpiry = seen.length;
+      now = (budgeted.deadlineMs ?? now) + 1;
+      assert.throws(
+        () => runRemote(budgeted, ["issue", "list"], {}),
+        /budget expired before the command could be sent/,
+        "an elapsed budget must refuse rather than run with a negative timeout",
+      );
+      assert.equal(seen.length, callsBeforeExpiry, "a refused call must not reach the transport");
+    } finally {
+      Date.now = realNow;
+    }
   });
 
   it("refuses a document reached through a symlinked directory or a symlinked HOME", () => {
