@@ -64,6 +64,8 @@ function labelGeometry() {
       // A truncated chip reports more text than it shows; that is the ellipsis engaging.
       truncated: el.scrollWidth > el.clientWidth,
       shrink: getComputedStyle(el).flexShrink,
+      // Which class produced that shrink: the primitive's own opt-in, or something else.
+      fromPrimitive: el.classList.contains("shrink") && !el.classList.contains("shrink-0"),
     })),
   };
 }
@@ -87,6 +89,10 @@ for (const theme of ["light", "dark"] as const) {
         // `shrink` at 0 would mean something else is absorbing the overflow, and this assertion names
         // which state the guard distinguishes rather than trusting the number alone.
         expect(chip.shrink, `${where}: ${chip.text} can shrink`).toBe("1");
+        // Names the mechanism, not the cell: a chip that shrinks while the primitive still emits
+        // `shrink-0` is being rescued by something else (an inline style), which is the mask this
+        // issue exists to remove.
+        expect(chip.fromPrimitive, `${where}: ${chip.text} shrinks because the primitive offers it`).toBe(true);
         expect(chip.right, `${where}: ${chip.text} stays inside its cell`).toBeLessThanOrEqual(geometry.cellRight);
       }
       // Truncation is what keeps the text honest: the chip shows an ellipsis instead of painting over
