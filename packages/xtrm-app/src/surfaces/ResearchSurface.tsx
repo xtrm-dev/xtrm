@@ -658,7 +658,7 @@ export function RunComparisonSurface() {
             <div role="columnheader" className={COMPARISON_CELL}>Metric</div>
             <div role="columnheader" className={COMPARISON_CELL}>{baselineId} (baseline)</div>
             {candidateIds.map((c) => (
-              <div key={c} role="columnheader" className={COMPARISON_CELL} style={{ gridColumn: "span 2" }}>
+              <div key={c} role="columnheader" aria-colspan={2} className={COMPARISON_CELL} style={{ gridColumn: "span 2" }}>
                 {c}
               </div>
             ))}

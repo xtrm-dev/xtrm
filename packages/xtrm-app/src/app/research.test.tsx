@@ -467,6 +467,20 @@ describe("A metric renders value, interval and method together, whichever half i
     expect(within(seOnly).getByText("se=0.25")).toBeTruthy();
     expect(within(seOnly).getByText("n=4")).toBeTruthy();
   });
+
+  it("declares as many header columns as a body row has cells", async () => {
+    renderAt("/research/compare?baseline=run-a&candidate=run-b");
+    const table = await screen.findByRole("table");
+    const [header, firstBodyRow] = within(table).getAllByRole("row");
+    // A candidate header spans two columns (its value and its delta) through CSS grid. A grid
+    // span is invisible to assistive technology, so the span must also be declared as
+    // aria-colspan: without it the header row claims a column the body never has.
+    const declared = within(header!)
+      .getAllByRole("columnheader")
+      .reduce((total, cell) => total + Number(cell.getAttribute("aria-colspan") ?? 1), 0);
+    expect(declared).toBe(firstBodyRow!.children.length);
+    expect(screen.getByRole("columnheader", { name: "run-b" }).getAttribute("aria-colspan")).toBe("2");
+  });
 });
 
 describe("Usage with some fields null and some present under one null_reason", () => {
