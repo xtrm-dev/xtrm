@@ -90,7 +90,7 @@ export function GlobalSearch() {
   }, [commandMode, workspace, layout, repo, repoIssues.data, allIssues, repos.data, palette.query, shell, dispatch, go]);
 
   const scopeToggle = !commandMode && (
-    <div role="radiogroup" aria-label="Search scope" className="flex shrink-0 items-center rounded-md border border-border-muted p-0.5 text-xs">
+    <div role="radiogroup" aria-label="Search scope" className="flex shrink-0 items-center rounded-md bg-control p-0.5 text-xs">
       {(["repository", "workspace"] as const).map((scope) => (
         <button
           key={scope}
@@ -98,7 +98,12 @@ export function GlobalSearch() {
           role="radio"
           aria-checked={palette.scope === scope}
           onClick={() => setPalette({ scope })}
-          className={cx("rounded-sm px-2 py-0.5 outline-none", palette.scope === scope ? "bg-hover text-ink" : "text-ink-faint hover:text-ink-muted")}
+          className={cx(
+            "max-w-24 truncate rounded px-2 py-0.5 outline-none focus-visible:ring-1 focus-visible:ring-accent/40",
+            palette.scope === scope
+              ? "bg-surface text-ink shadow-[0_0_0_1px_var(--x-border-muted)]"
+              : "text-ink-faint hover:text-ink-muted",
+          )}
         >
           {scope === "repository" ? repo.name : "Workspace"}
         </button>

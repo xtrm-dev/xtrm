@@ -12,10 +12,11 @@ import { useCanWrite } from "../issues/actions.ts";
 import { IssueView } from "../issues/IssueView.tsx";
 import { Drawer, Fields, InspectorSection } from "../ui/drawer.tsx";
 import { GithubPill } from "../ui/github-pill.tsx";
-import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { ContentPanel, EmptyState, ErrorState, IconButton, LoadingState, Row, ago } from "../ui/primitives.tsx";
 import { MetricFields, UsageFields } from "../surfaces/research-format.tsx";
+import { DetailTitle } from "./detail-title.tsx";
+import { ToolbarButton } from "../ui/toolbar.tsx";
 import { useShell } from "./context.tsx";
 import { formatRef, type DrawerRef } from "./layout.ts";
 
@@ -29,15 +30,6 @@ function splitResearchRef(ref: string): [string, string] {
 const copy = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
 
 const label = (s: string) => s.replace(/_/g, " ");
-
-function Title({ eyebrow, children }: { eyebrow: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
-      <div className="flex items-center gap-2 text-xs text-ink-faint">{eyebrow}</div>
-      <h2 className="text-base leading-snug font-medium text-pretty text-ink">{children}</h2>
-    </div>
-  );
-}
 
 // --- issue ------------------------------------------------------------------
 
@@ -80,7 +72,7 @@ function ActivityPanel({ refValue, follow }: { refValue: string; follow: boolean
   if (!e) return <EmptyState icon="activity" title="Event is outside the loaded window" />;
   return (
     <>
-      <Title
+      <DetailTitle
         eyebrow={
           <>
             <span>{e.rawType.replace(/Event$/, "")}</span>
@@ -95,7 +87,7 @@ function ActivityPanel({ refValue, follow }: { refValue: string; follow: boolean
         }
       >
         {eventTitle(e)}
-      </Title>
+      </DetailTitle>
       <InspectorSection title="Event">
         <Fields
           rows={[
@@ -147,7 +139,7 @@ function RunProvenancePanel({ runId }: { runId: string }) {
   const accounting = readAccounting(manifest.accounting);
   return (
     <>
-      <Title eyebrow={<span className="font-mono">{runId}</span>}>Run provenance</Title>
+      <DetailTitle eyebrow={<span className="font-mono">{runId}</span>}>Run provenance</DetailTitle>
       <InspectorSection title="Versions">
         <Fields
           rows={[
@@ -164,16 +156,17 @@ function RunProvenancePanel({ runId }: { runId: string }) {
           <p className="text-sm text-ink-faint">Accounting provenance unavailable — the manifest carries no readable accounting block.</p>
         )}
       </InspectorSection>
-      <button
-        type="button"
-        onClick={() => {
-          void navigate({ to: `/research/runs/${runId}` } as never);
-          dispatch({ type: "drawer/close" });
-        }}
-        className="mx-5 mb-4 flex h-8 w-fit items-center gap-1.5 rounded-md border border-border-muted px-2.5 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink"
-      >
-        <Icon name="open" size="xs" /> Open run analysis
-      </button>
+      <div className="px-5 pb-4">
+        <ToolbarButton
+          icon="open"
+          onClick={() => {
+            void navigate({ to: `/research/runs/${runId}` } as never);
+            dispatch({ type: "drawer/close" });
+          }}
+        >
+          Open run analysis
+        </ToolbarButton>
+      </div>
     </>
   );
 }
@@ -186,7 +179,7 @@ function MetricPanel({ runId, metricKey }: { runId: string; metricKey: string })
   if (!metric) return <EmptyState icon="observability" title={`${metricKey} is not reported for ${runId}`} />;
   return (
     <>
-      <Title eyebrow={<span className="font-mono">{runId}</span>}>{metricKey}</Title>
+      <DetailTitle eyebrow={<span className="font-mono">{runId}</span>}>{metricKey}</DetailTitle>
       <InspectorSection title="Metric">
         <MetricFields metric={metric} />
       </InspectorSection>
@@ -222,7 +215,7 @@ function SamplePanel({ runId, sampleId }: { runId: string; sampleId: string }) {
   const events = (telemetry.data?.events ?? []).filter((e) => e.sampleId === sampleId);
   return (
     <>
-      <Title eyebrow={<span className="font-mono">{runId}</span>}>{sampleId}</Title>
+      <DetailTitle eyebrow={<span className="font-mono">{runId}</span>}>{sampleId}</DetailTitle>
       <InspectorSection title="Sample record">
         <Fields
           rows={[
@@ -265,7 +258,7 @@ function AnnotationPanel({ runId, index }: { runId: string; index: number }) {
   if (!annotation) return <EmptyState icon="observability" title="Annotation is outside the loaded log" />;
   return (
     <>
-      <Title eyebrow={<span className="font-mono">{runId}</span>}>{String(annotation.kind ?? "Annotation")}</Title>
+      <DetailTitle eyebrow={<span className="font-mono">{runId}</span>}>{String(annotation.kind ?? "Annotation")}</DetailTitle>
       <InspectorSection title="Annotation">
         <Fields
           rows={[
@@ -358,25 +351,21 @@ export function InspectorDrawer({ variant }: { variant: "overlay" | "column" | "
       </span>
       <div className="ml-auto flex items-center gap-0.5">
         {canAttach && (
-          <button
-            type="button"
-            onClick={() => agentStore.attach({ kind: inspected.kind as RefKind, ref: inspected.ref })}
-            className="mr-1 flex h-7 items-center gap-1.5 rounded-md border border-border-muted px-2 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:border-border-strong"
-          >
+          <ToolbarButton className="mr-1" onClick={() => agentStore.attach({ kind: inspected.kind as RefKind, ref: inspected.ref })}>
             <span className="font-mono leading-none">@</span> Attach to composer
-          </button>
+          </ToolbarButton>
         )}
         {inspected?.kind === "issue" && (
-          <button
-            type="button"
+          <ToolbarButton
+            icon="open"
+            className="mr-1"
             onClick={() => {
               void navigate({ to: `/rep/${repo.owner}/${repo.name}/work/issues/${inspected.ref}` } as never);
               dispatch({ type: "drawer/close" });
             }}
-            className="mr-1 flex h-7 items-center gap-1.5 rounded-md border border-border-muted px-2 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:border-border-strong"
           >
-            <Icon name="open" size="xs" /> Open
-          </button>
+            Open
+          </ToolbarButton>
         )}
         <IconButton icon="live" label={follow ? "Following live updates" : "Follow live updates"} active={follow} aria-pressed={follow} onClick={() => dispatch({ type: "drawer/followLive" })} />
         {state !== "MAXIMIZED" && (
