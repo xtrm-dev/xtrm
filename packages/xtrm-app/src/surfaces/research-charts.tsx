@@ -1,6 +1,7 @@
 import { useResearchChartData } from "../app/queries.ts";
 import type { ChartDataRow } from "../adapters/research/types.ts";
 import { ErrorState, LoadingState } from "../ui/primitives.tsx";
+import { SectionHeader } from "../ui/section.tsx";
 
 export interface ChartSpec {
   id: string;
@@ -133,11 +134,11 @@ export function ResearchCharts({
   if (specs.length === 0 || runIds.length === 0) return null;
 
   return (
-    <section aria-label="Charts">
-      <h2 className="mb-2 text-xs font-medium text-ink-faint">Charts</h2>
-      <div className="grid gap-3 xl:grid-cols-2">
+    <section aria-label="Charts" className="flex flex-col">
+      <SectionHeader title="Charts" level={3} className="mb-2" />
+      <div className="grid gap-3 px-3 xl:grid-cols-2">
         {specs.map((spec) => (
-          <article key={spec.id} className="rounded-md border border-border-muted bg-surface px-3 py-3" aria-label={spec.title}>
+          <article key={spec.id} className="flex min-w-0 flex-col" aria-label={spec.title}>
             <h3 className="text-sm font-medium text-ink">{spec.title}</h3>
             <p className="mt-0.5 text-xs text-ink-faint">{spec.description}</p>
             <div className="mt-3 flex flex-col gap-4">

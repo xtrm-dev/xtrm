@@ -7,7 +7,9 @@
 // what it means; provenance stays below (see ResearchSurface).
 import { useResearchQuestionSpec } from "../app/queries.ts";
 import { MetricFields } from "./research-format.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Row } from "../ui/primitives.tsx";
+import { SectionHeader } from "../ui/section.tsx";
 import {
   directionGlyph,
   directionPhrase,
@@ -22,13 +24,19 @@ import type { QuestionRef } from "../adapters/research/semantics.ts";
 import type { Metric } from "../adapters/research/types.ts";
 import { readVersionRef } from "../adapters/research/manifest.ts";
 
-function Section({ title, children, hint }: { title: string; hint?: string; children: React.ReactNode }) {
+/** One run-page block: the shared section header over prose that starts at the page gutter. The
+ * `aria-label` stays on the wrapper because these blocks are addressed as regions ("Result",
+ * "Method"), and a heading alone does not name a region. */
+function SemanticSection({ title, children, hint }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section aria-label={title}>
-      <h2 className="mb-2 flex items-baseline gap-2 text-xs font-medium text-ink-faint">
-        {title}
-        {hint && <span className="font-normal text-ink-faint/70">{hint}</span>}
-      </h2>
+    <section aria-label={title} className="flex flex-col px-3">
+      <SectionHeader
+        title={title}
+        level={3}
+        inset="none"
+        className="mb-2"
+        aside={hint ? <span className="text-xs text-ink-faint">{hint}</span> : undefined}
+      />
       <div className="text-sm">{children}</div>
     </section>
   );
@@ -36,7 +44,7 @@ function Section({ title, children, hint }: { title: string; hint?: string; chil
 
 function Bullets({ items, tone = "ink-muted" }: { items: string[]; tone?: string }) {
   return (
-    <ul className="ml-4 list-disc space-y-1">
+    <ul className="ml-5 list-disc space-y-1">
       {items.map((item, i) => (
         <li key={i} className={`text-${tone === "ink-muted" ? "ink-muted" : "ink"} leading-snug`}>
           {item}
@@ -58,7 +66,7 @@ export function ResearchQuestionSection({
 }) {
   if (!experiment?.researchQuestion && !experiment?.hypothesis && !intent.purpose && !intent.rationale) return null;
   return (
-    <Section title="Why this run" hint={runId}>
+    <SemanticSection title="Why this run" hint={runId}>
       <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1.5">
         {experiment?.researchQuestion && (
           <>
@@ -100,7 +108,7 @@ export function ResearchQuestionSection({
           </>
         )}
       </dl>
-    </Section>
+    </SemanticSection>
   );
 }
 
@@ -110,7 +118,7 @@ export function DecisionCriteriaSection({ experiment }: { experiment: Experiment
   const { primaryOutcomes, successCriteria, falsificationCriteria, nonClaims } = experiment;
   if (!primaryOutcomes && !successCriteria && !falsificationCriteria && !nonClaims) return null;
   return (
-    <Section title="What would count">
+    <SemanticSection title="What would count">
       <div className="flex flex-col gap-1.5">
         {primaryOutcomes && (
           <p className="text-ink-muted">
@@ -137,7 +145,7 @@ export function DecisionCriteriaSection({ experiment }: { experiment: Experiment
           </div>
         )}
       </div>
-    </Section>
+    </SemanticSection>
   );
 }
 
@@ -145,7 +153,7 @@ export function DecisionCriteriaSection({ experiment }: { experiment: Experiment
 export function ResultSummarySection({ summary }: { summary: ResultSummaryAnnotation | null }) {
   if (!summary) return null;
   return (
-    <Section title="Result" hint={summary.evidenceStatus ? `evidence: ${summary.evidenceStatus}` : undefined}>
+    <SemanticSection title="Result" hint={summary.evidenceStatus ? `evidence: ${summary.evidenceStatus}` : undefined}>
       <p className="mb-2 leading-snug text-ink">{summary.plainLanguage}</p>
       <div className="flex flex-col gap-1.5">
         {summary.supportedClaims.length > 0 && (
@@ -173,7 +181,7 @@ export function ResultSummarySection({ summary }: { summary: ResultSummaryAnnota
           </p>
         )}
       </div>
-    </Section>
+    </SemanticSection>
   );
 }
 
@@ -187,9 +195,9 @@ function QuestionSpecRow({ q }: { q: QuestionRef }) {
   const criteria = readCriteriaEntries(def.criteria);
   const options = Array.isArray(def.options) ? (def.options.filter((o) => typeof o === "string") as string[]) : [];
   return (
-    <div className="flex flex-col gap-1 rounded-md border border-border-muted px-3 py-2">
+    <div className="flex flex-col gap-1 py-1.5">
       <div className="flex items-baseline gap-2">
-        <span className="rounded bg-hover px-1.5 py-0.5 font-mono text-xs uppercase tracking-wide text-ink-muted">{primitiveName(type)}</span>
+        <Badge size="xs" mono>{primitiveName(type)}</Badge>
         <span className="font-mono text-xs text-ink">{q.id}</span>
         <span className="text-xs text-ink-faint">{q.version}</span>
       </div>
@@ -229,7 +237,7 @@ export function MethodSection({
     .map((q) => ({ id: String(q.id ?? ""), version: String(q.version ?? "") }))
     .filter((q) => q.id && q.version);
   return (
-    <Section title="Method">
+    <SemanticSection title="Method">
       <dl className="mb-2 grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1.5">
         <dt className="text-ink-faint">Dataset</dt>
         <dd className="text-ink">{dataset ? `${dataset.id}@${dataset.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
@@ -247,14 +255,14 @@ export function MethodSection({
       {refs.length > 0 && (
         <>
           <p className="mb-1.5 text-xs text-ink-faint">System One questions ({refs.length})</p>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col divide-y divide-border-muted">
             {refs.map((q) => (
               <QuestionSpecRow key={`${q.id}@${q.version}`} q={q} />
             ))}
           </div>
         </>
       )}
-    </Section>
+    </SemanticSection>
   );
 }
 
