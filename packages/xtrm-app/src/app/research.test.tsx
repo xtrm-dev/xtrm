@@ -524,6 +524,22 @@ describe("Experiment-defined comparison charts", () => {
     expect(within(charts).getByRole("article", { name: "Accuracy by run" })).toBeTruthy();
     expect((await within(charts).findByLabelText("accuracy chart")).textContent).toContain("not reported");
   });
+
+  it("keeps one heading in the charts region and names every chart on its own article", async () => {
+    renderAt("/research/compare?baseline=run-a&candidate=run-b");
+    const charts = await screen.findByRole("region", { name: "Charts" });
+    // A chart is a card, not a heading: one heading names the group, and each chart is identified
+    // by its article's accessible name. Asserted as a sequence, because a per-level presence check
+    // still passes after someone flattens the group heading into the charts themselves.
+    const headings = within(charts).getAllByRole("heading");
+    expect(headings).toHaveLength(1);
+    expect(headings[0]!.textContent).toBe("Charts");
+    const articles = within(charts).getAllByRole("article");
+    expect(articles.length).toBeGreaterThan(0);
+    for (const article of articles) {
+      expect((article.getAttribute("aria-label") ?? "").trim().length).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("Comparison with nothing in common", () => {

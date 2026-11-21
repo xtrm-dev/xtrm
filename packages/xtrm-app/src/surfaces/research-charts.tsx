@@ -139,7 +139,7 @@ export function ResearchCharts({
       <div className="grid gap-3 px-3 xl:grid-cols-2">
         {specs.map((spec) => (
           <article key={spec.id} className="flex min-w-0 flex-col" aria-label={spec.title}>
-            <SectionHeader title={spec.title} level={4} inset="none" />
+            <p className="text-sm font-medium text-ink">{spec.title}</p>
             <p className="mt-0.5 text-xs text-ink-faint">{spec.description}</p>
             <div className="mt-3 flex flex-col gap-4">
               {spec.datasets.map((dataset) => (
