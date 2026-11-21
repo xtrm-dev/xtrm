@@ -13,9 +13,10 @@ import type { ActivityRow, ActivitySource } from "../activity/types.ts";
 const SOURCE_LABEL: Record<ActivitySource, string> = { substrate: "substrate", github: "github", git: "git", jira: "jira" };
 const SOURCE_TONE: Record<ActivitySource, BadgeTone> = { substrate: "accent", github: "neutral", git: "muted", jira: "muted" };
 
+/** The badge's own size and weight carry the chip; it sets no case or tracking of its own. */
 function SourceChip({ source }: { source: ActivitySource }) {
   return (
-    <Badge tone={SOURCE_TONE[source]} size="xs" className="uppercase tracking-wide">
+    <Badge tone={SOURCE_TONE[source]} size="xs">
       {SOURCE_LABEL[source]}
     </Badge>
   );
@@ -64,36 +65,35 @@ function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: bool
         : null;
   return (
     <li className="border-b border-border-subtle last:border-0">
-      <Row className="min-h-11 items-start py-2" onActivate={onToggle} aria-expanded={open}>
-        <Icon name={open ? "open" : "forward"} size="xs" className="mt-1 shrink-0 text-ink-faint" />
+      {/* One 32px primary line; the refs ride it as plain chips and everything longer opens below. */}
+      <Row onActivate={onToggle} aria-expanded={open}>
+        <Icon name={open ? "open" : "forward"} size="xs" className="shrink-0 text-ink-faint" />
         <SourceChip source={row.source} />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 leading-tight">
-          <span className="min-w-0 truncate text-ink">
-            {row.actor !== null && <span className="text-ink-muted">{row.actor} </span>}
-            <span className="text-ink-muted">{row.verb} </span>
-            <span className="font-medium">{row.object}</span>
+        <span className="min-w-0 flex-1 truncate text-ink">
+          {row.actor !== null && <span className="text-ink-muted">{row.actor} </span>}
+          <span className="text-ink-muted">{row.verb} </span>
+          <span className="font-medium">{row.object}</span>
+        </span>
+        {row.refs.length > 0 && (
+          <span className="flex max-w-[16rem] min-w-0 shrink-0 items-center gap-1 overflow-hidden" data-testid="activity-refs">
+            {row.refs.map((r) =>
+              r.kind === "issue" || r.kind === "pr" || r.kind === "gh-issue" ? (
+                // The console's own chip: same reference vocabulary as prose and the drawer.
+                <ReferenceChip key={`${r.kind}:${r.ref}`} reference={{ kind: r.kind, ref: r.ref }} />
+              ) : (
+                <span key={`${r.kind}:${r.ref}`} className="truncate font-mono text-xs text-ink-faint">
+                  {r.ref}
+                </span>
+              ),
+            )}
           </span>
-          {row.refs.length > 0 && (
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              {row.refs.map((r) =>
-                r.kind === "issue" || r.kind === "pr" || r.kind === "gh-issue" ? (
-                  // The console's own chip: same reference vocabulary as prose and the drawer.
-                  <ReferenceChip key={`${r.kind}:${r.ref}`} reference={{ kind: r.kind, ref: r.ref }} />
-                ) : (
-                  <span key={`${r.kind}:${r.ref}`} className="font-mono text-xs text-ink-faint">
-                    {r.ref}
-                  </span>
-                ),
-              )}
-            </div>
-          )}
-        </div>
+        )}
         <span className="w-10 shrink-0 text-right text-xs text-ink-faint tabular">{relativeTime(row.at)}</span>
       </Row>
       {open && (
         <div className="flex flex-col gap-2 px-6 pb-3">
           {row.meta.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.68rem] text-ink-faint">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-2xs text-ink-faint">
               {row.meta.map(([k, v], i) => (
                 <span key={k}>
                   {i > 0 && <span aria-hidden> · </span>}
@@ -103,7 +103,7 @@ function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: bool
             </div>
           )}
           {row.body !== null && (
-            <p className="max-h-64 overflow-auto border-l border-border-muted pl-2 text-xs whitespace-pre-wrap text-ink-muted">{row.body}</p>
+            <p className="thin-scrollbar max-h-64 overflow-auto border-l border-border-muted pl-2 text-xs whitespace-pre-wrap text-ink-muted">{row.body}</p>
           )}
           <div className="flex items-center gap-1.5">
             {openable !== null && (
@@ -115,7 +115,7 @@ function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: bool
             <button type="button" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)} onClick={() => void navigator.clipboard?.writeText(row.refs[0]?.ref ?? row.id)}>
               <Icon name="copy" size="xs" /> Copy ref
             </button>
-            <span className="ml-auto font-mono text-[0.68rem] text-ink-faint">{row.kind}</span>
+            <span className="ml-auto font-mono text-2xs text-ink-faint">{row.kind}</span>
           </div>
         </div>
       )}
@@ -153,7 +153,7 @@ export function ActivitySurface() {
           Refresh
         </ToolbarButton>
       </SurfaceToolbar>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-auto">
         {olderFailures.map((s) => (
           <div key={`older-${s.source}`} className="border-b border-border-subtle px-3 py-2">
             <ErrorState title={`older ${s.source} activity could not be loaded`} error={s.olderError} />

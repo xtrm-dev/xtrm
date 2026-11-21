@@ -1,10 +1,23 @@
+import type { CSSProperties } from "react";
 import { Icon } from "../../ui/icon.tsx";
 import { Badge } from "../../ui/badge.tsx";
 import { Row, cx } from "../../ui/primitives.tsx";
 import type { Worker } from "../../adapters/status-board/types.ts";
+import { INDENT_REM } from "../../issues/issue-table.ts";
 import { ReferenceChip } from "../../refs/references.tsx";
 import { PrTrail } from "./PrTrail.tsx";
 import { claimState, statusTone, type TreeNode } from "./model.ts";
+
+/**
+ * The trailing column template shared by the list header, the tree rows and the flat
+ * board rows (the Follow-ups grid pattern): state chip, issue, PR trail, context, claim.
+ * Fixed tracks are what let the header labels sit over the values they name.
+ */
+export const WORKER_COLUMNS = "grid shrink-0 grid-cols-[6.5rem_7rem_3.5rem_2.5rem_6rem] items-center gap-2";
+
+/** The shared disclosure step for a row or a toggle (XTRM-934): a 0.875rem mark in a size-5 box. */
+/** One disclosure idiom, one string: the tree and the unknown-dispatcher toggle share it. */
+export const CHEVRON = "transition-transform";
 
 /**
  * One Workers-tree row (console-ui-system §6 node anatomy):
@@ -49,12 +62,14 @@ export function WorkerRow({
         density="list"
         data-testid="worker-row"
         data-kind={node.kind}
-        className="items-center gap-2"
+        className="items-center"
+        aria-expanded={hasChildren ? open : undefined}
+        style={{ "--row-indent": `${depth * INDENT_REM}rem` } as CSSProperties}
         onActivate={hasChildren ? () => onToggle(node.id) : undefined}
       >
-        <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" style={{ paddingLeft: depth * 14 }}>
-          <span className="w-3 shrink-0 text-ink-faint" aria-hidden>
-            {hasChildren ? (open ? "▾" : "▸") : ""}
+        <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" style={{ paddingLeft: "var(--row-indent)" }}>
+          <span className="flex size-5 shrink-0 items-center justify-center text-ink-faint" aria-hidden>
+            {hasChildren && <Icon name="chevronDown" size="text" className={cx(CHEVRON, !open && "-rotate-90")} />}
           </span>
           <Icon name={node.kind === "activation" ? "specialists" : "agent"} size="text" className="shrink-0 text-ink-faint" />
           {namedByIssue ? (
@@ -72,35 +87,37 @@ export function WorkerRow({
           <span className="shrink-0 text-ink-faint">{node.roleWord}</span>
         </span>
 
-        <span className="ml-auto flex min-w-0 shrink items-center gap-2 overflow-hidden">
-          {status !== null ? (
-            <span className="shrink-0">
+        <span className={cx(WORKER_COLUMNS, "ml-auto")}>
+          <span className="min-w-0 overflow-hidden">
+            {status !== null ? (
               <Badge tone={statusTone(status)} size="xs" title={`worker status: ${status}`}>
                 {status}
               </Badge>
-            </span>
-          ) : (
-            <span className="shrink-0 text-ink-faint" title="no board record for this vertex">
-              —
-            </span>
-          )}
+            ) : (
+              <span className="text-ink-faint" title="no board record for this vertex">
+                —
+              </span>
+            )}
+          </span>
 
-          {namedByIssue ? null : node.issueRef ? (
-            <span className="min-w-0">
+          <span className="min-w-0 overflow-hidden">
+            {namedByIssue ? null : node.issueRef ? (
               <ReferenceChip reference={{ kind: "issue", ref: node.issueRef }} showAlias={false} />
-            </span>
-          ) : (
-            <span className="shrink-0 text-ink-faint">no issue</span>
-          )}
+            ) : (
+              <span className="text-ink-faint">no issue</span>
+            )}
+          </span>
 
-          <PrTrail prs={node.prs} />
+          <span className="min-w-0 overflow-hidden">
+            <PrTrail prs={node.prs} />
+          </span>
 
-          <span className="w-10 shrink-0 text-right text-ink-faint tabular-nums">{node.ctxPct === null ? "—" : `${node.ctxPct}%`}</span>
+          <span className="text-right text-ink-faint tabular-nums">{node.ctxPct === null ? "—" : `${node.ctxPct}%`}</span>
 
           <span
             data-testid="worker-claim"
             className={cx(
-              "w-24 shrink-0 truncate text-right text-ink-faint",
+              "min-w-0 truncate text-right text-ink-faint",
               claim === "soon" && "font-medium text-ink",
               claim === "expired" && "text-danger",
             )}
@@ -125,36 +142,38 @@ export function WorkerRow({
 export function BoardWorkerRow({ worker, now, testid }: { worker: Worker; now: number; testid: string }) {
   const claim = claimState(worker.claimUntil, now);
   return (
-    <Row density="list" data-testid={testid} className="items-center gap-2">
-      <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden pl-3.5">
-        <span className="w-3 shrink-0" aria-hidden />
+    <Row density="list" data-testid={testid} className="items-center" style={{ "--row-indent": "0rem" } as CSSProperties}>
+      <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" style={{ paddingLeft: "var(--row-indent)" }}>
+        <span className="size-5 shrink-0" aria-hidden />
         <Icon name={worker.kind === "specialist" ? "specialists" : "agent"} size="text" className="shrink-0 text-ink-faint" />
         <span className="min-w-0 truncate text-ink">{worker.name}</span>
         <span className="shrink-0 text-ink-faint">{worker.kind ?? "worker"}</span>
         {worker.milestone && <span className="min-w-0 truncate text-xs text-ink-faint">{worker.milestone}</span>}
       </span>
-      <span className="ml-auto flex min-w-0 shrink items-center gap-2 overflow-hidden">
-        {worker.status ? (
-          <span className="shrink-0">
+      <span className={cx(WORKER_COLUMNS, "ml-auto")}>
+        <span className="min-w-0 overflow-hidden">
+          {worker.status ? (
             <Badge tone={statusTone(worker.status)} size="xs" title={`worker status: ${worker.status}`}>
               {worker.status}
             </Badge>
-          </span>
-        ) : (
-          <span className="shrink-0 text-ink-faint">unknown state</span>
-        )}
-        {worker.issue ? (
-          <span className="min-w-0">
+          ) : (
+            <span className="text-ink-faint">unknown state</span>
+          )}
+        </span>
+        <span className="min-w-0 overflow-hidden">
+          {worker.issue ? (
             <ReferenceChip reference={{ kind: "issue", ref: worker.issue }} showAlias={false} />
-          </span>
-        ) : (
-          <span className="shrink-0 text-ink-faint">no issue</span>
-        )}
-        <span className="w-10 shrink-0 text-right text-ink-faint tabular-nums">{typeof worker.ctxPct === "number" ? `${worker.ctxPct}%` : "—"}</span>
+          ) : (
+            <span className="text-ink-faint">no issue</span>
+          )}
+        </span>
+        {/* A board row has no graph trail; the empty cell keeps ctx and claim under their headings. */}
+        <span className="min-w-0" aria-hidden />
+        <span className="text-right text-ink-faint tabular-nums">{typeof worker.ctxPct === "number" ? `${worker.ctxPct}%` : "—"}</span>
         <span
           data-testid="worker-claim"
           className={cx(
-            "w-24 shrink-0 truncate text-right text-ink-faint",
+            "min-w-0 truncate text-right text-ink-faint",
             claim === "soon" && "font-medium text-ink",
             claim === "expired" && "text-danger",
           )}

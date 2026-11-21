@@ -51,7 +51,7 @@ export function RepositoriesSurface() {
         <VirtualList
           label="Repositories"
           items={ordered}
-          rowHeight={36}
+          rowHeight={32}
           getKey={(x) => x.repo.fullName}
           renderRow={({ repo, stats: s }) => (
             <Row onActivate={() => go(repoHref(repo, "/work/issues"))}>
