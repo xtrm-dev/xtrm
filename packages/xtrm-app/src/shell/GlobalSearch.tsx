@@ -99,8 +99,10 @@ export function GlobalSearch() {
           aria-checked={palette.scope === scope}
           onClick={() => setPalette({ scope })}
           className={cx(
-            "max-w-24 truncate rounded-sm px-2 py-0.5 outline-none focus-visible:ring-1 focus-visible:ring-accent/40",
-            palette.scope === scope ? "bg-surface text-ink" : "text-ink-faint hover:text-ink-muted",
+            "max-w-24 truncate rounded px-2 py-0.5 outline-none focus-visible:ring-1 focus-visible:ring-accent/40",
+            palette.scope === scope
+              ? "bg-surface text-ink shadow-[0_0_0_1px_var(--x-border-muted)]"
+              : "text-ink-faint hover:text-ink-muted",
           )}
         >
           {scope === "repository" ? repo.name : "Workspace"}
