@@ -624,11 +624,14 @@ function delta(candidate: number | undefined, baseline: number | undefined): str
 /** The comparison table is the console's table, not a `<table>`: a grid row template with a header
  * row at `px-2` (Issues, Pull requests). One metric column, one baseline column, then a value and a
  * delta column per candidate — the cell order the delta and the tests both read. */
-// Every cell in the comparison grid shares this class, so the clipping below is decided once for
-// the whole table rather than cell by cell: `min-w-0` lets the track shrink and `overflow-hidden`
-// stops a long value from widening the grid it sits in (XTRM-950). The value inside still needs
-// `truncate`, which is a text property and cannot live here.
-const COMPARISON_CELL = "flex min-w-0 items-center overflow-hidden px-2 py-1";
+// Every cell in the comparison grid shares this class: `min-w-0` lets the track shrink so a long
+// value ellipsises instead of widening the grid. The clipping itself is decided by the ROW, because
+// the row is what has a fixed height — a cell that wraps inside `h-8` paints over the next row even
+// if its own box is clipped (XTRM-950).
+const COMPARISON_CELL = "flex min-w-0 items-center px-2 py-1";
+/** The row's half of the same rule: the grid is a fixed `h-8` header plus `min-h-8` metric rows, so
+ * anything taller than the row has to be clipped by the row, not by one column of it. */
+const COMPARISON_ROW = "grid items-center overflow-hidden border-b border-border-subtle";
 
 function comparisonColumns(candidateCount: number): string {
   const columns = ["minmax(6rem, 1fr)", "minmax(0, 1.6fr)"];
@@ -669,7 +672,7 @@ export function RunComparisonSurface() {
     body = (
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto pb-4">
         <div role="table" aria-label="Metric comparison" className="flex flex-col">
-          <div role="row" className="grid h-8 items-center border-b border-border-subtle text-xs text-ink-faint" style={{ gridTemplateColumns: grid }}>
+          <div role="row" className={cx(COMPARISON_ROW, "h-8 text-xs text-ink-faint")} style={{ gridTemplateColumns: grid }}>
             <div role="columnheader" className={COMPARISON_CELL}>Metric</div>
             <div role="columnheader" className={COMPARISON_CELL}>
               <span className="min-w-0 truncate" title={baselineId}>
@@ -688,7 +691,7 @@ export function RunComparisonSurface() {
             ))}
           </div>
           {metricKeys.map((key) => (
-            <div key={key} role="row" className="grid min-h-8 items-center border-b border-border-subtle" style={{ gridTemplateColumns: grid }}>
+            <div key={key} role="row" className={cx(COMPARISON_ROW, "min-h-8")} style={{ gridTemplateColumns: grid }}>
               <div role="cell" className={cx(COMPARISON_CELL, "font-mono text-xs text-ink-faint")}>{key}</div>
               <div role="cell" className={COMPARISON_CELL}>
                 <MetricCellView metric={baseline?.metrics[key]} />

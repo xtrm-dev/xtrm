@@ -514,8 +514,12 @@ describe("A metric renders value, interval and method together, whichever half i
     // measured in a browser by e2e/research-label-column.spec.ts.
     expect(span.className, "the value itself must ellipsise").toContain("truncate");
     expect(span.className, "wrapping is the defect this guards: `whitespace-normal` undoes truncate").not.toContain("whitespace-normal");
-    expect(header.className, "the cell stops a long value widening the track it sits in").toContain("overflow-hidden");
-    expect(header.className).toContain("min-w-0");
+    expect(header.className, "the cell lets its track shrink rather than widen the grid").toContain("min-w-0");
+    // The clipping belongs to the ROW: the row is what has a fixed height, and a cell that wraps
+    // inside it paints over the next row even when its own box is clipped (XTRM-950).
+    const row = screen.getByRole("columnheader", { name: "Metric" }).parentElement!;
+    expect(row.className, "the fixed-height row clips what a cell would wrap").toContain("overflow-hidden");
+    expect(row.className).toContain("h-8");
 
     // The baseline header sits in the same fixed row under the same class, so it has to carry the
     // same clipping. Fixing one cell of two is how this defect survived its first review.
@@ -523,7 +527,7 @@ describe("A metric renders value, interval and method together, whichever half i
     const baselineSpan = baselineHeader.querySelector("span")!;
     expect(baselineSpan.className).toContain("truncate");
     expect(baselineSpan.getAttribute("title"), "the whole id stays reachable").toBe("run-a");
-    expect(baselineHeader.className).toContain("overflow-hidden");
+    expect(baselineHeader.className).toContain("min-w-0");
   });
 });
 
@@ -546,8 +550,8 @@ describe("A long baseline id clips like a long candidate id", () => {
     expect(span.textContent).toBe(`${LONG} (baseline)`);
     expect(span.getAttribute("title")).toBe(LONG);
     expect(span.className).toContain("truncate");
-    expect(header.className).toContain("overflow-hidden");
     expect(header.className).toContain("min-w-0");
+    expect(header.parentElement!.className).toContain("overflow-hidden");
   });
 });
 
