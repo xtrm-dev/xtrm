@@ -29,14 +29,18 @@ export function splitFrontmatter(raw: string): { fields: Array<[string, string]>
   return { fields, body: raw.slice(m[0].length) };
 }
 
-function DocumentBody({ content, empty }: { content: string | null | undefined; empty: string }) {
+/**
+ * The frontmatter row is metadata read beside a 13px body, so it keeps the `xs` step (11.52px at the
+ * default root) rather than the `Fields` body default. Decided on XTRM-937 and applied here (XTRM-956).
+ */
+export function DocumentBody({ content, empty }: { content: string | null | undefined; empty: string }) {
   if (content === undefined) return <LoadingState label="Loading document" />;
   if (!content?.trim()) return <EmptyState icon="file" title={empty} />;
   const { fields, body } = splitFrontmatter(content);
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-6 py-5">
       {fields.length > 0 && (
-        <Fields rows={fields.map(([k, v]) => [k, v || <span key={k} className="text-ink-faint">—</span>])} />
+        <Fields size="xs" rows={fields.map(([k, v]) => [k, v || <span key={k} className="text-ink-faint">—</span>])} />
       )}
       <Markdown>{body}</Markdown>
     </div>
