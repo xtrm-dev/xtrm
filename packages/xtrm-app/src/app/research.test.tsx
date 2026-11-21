@@ -806,4 +806,33 @@ describe("Research page outlines", () => {
       "a list surface's name lives in the toolbar and its outline is the column headers: IssuesSurface.tsx and PullsSurface.tsx each emit zero headings, so /research/runs gains a page title only by amending XTRM-954 rule (10)",
     ).toHaveLength(0);
   });
+
+  // XTRM-965. /research/experiments reaches its outline through a data-dependent branch: the page's
+  // only heading is the unreadable-run section's title, rendered while at least one run's manifest
+  // cannot be read. Pinning one state leaves the other a silent consequence of the fixture, so both
+  // are asserted — and they disagree on purpose. The clean state is reached through the adapter, as
+  // every other state in this file is, never by touching the rendering or stubbing fetch.
+  const cleanRuns = async (): Promise<RunListRow[]> => (await fixtureResearch.listRuns()).filter((row) => !isInvalidManifestRow(row));
+
+  it("renders the unreadable-run heading when a run's manifest cannot be read", async () => {
+    renderAt("/research/experiments");
+    await screen.findByText("dup-detect-baseline");
+    // The fixture carries run-c with an unreadable manifest, so this is the state it describes.
+    expect(
+      screen.queryAllByRole("heading").map((h) => `${Number(h.tagName.slice(1))} ${h.textContent}`),
+      "a run whose manifest cannot be read keeps a heading on the experiments page, at level 2",
+    ).toEqual(["2 Unreadable run — no resolvable experiment"]);
+  });
+
+  it("leaves the same route heading-free on clean data", async () => {
+    renderWithResearch("/research/experiments", { listRuns: cleanRuns });
+    await screen.findByText("dup-detect-baseline");
+    // The literal is 0, not "only the error heading": the other state is asserted above, and an
+    // agreement between two routes can be satisfied by a page that is uniformly wrong. The precedent
+    // is named so the next person knows what to amend rather than what to add.
+    expect(
+      screen.queryAllByRole("heading").map((h) => h.textContent),
+      "a list surface's name lives in the toolbar and its outline is the column headers: IssuesSurface.tsx and PullsSurface.tsx each emit zero headings, so /research/experiments gains a page title only by amending XTRM-954 rule (10) — and the unreadable-run heading is not a page title, it is a data-dependent error section (XTRM-965)",
+    ).toHaveLength(0);
+  });
 });
