@@ -12,6 +12,7 @@ import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
 import { canonicalPullReference } from "../src/domain/pull-request.ts";
+import { GATE_CODES, LinkGateService } from "../src/service/link-gate-service.ts";
 import { runCli } from "../cli/sb.ts";
 
 function world() {
@@ -27,7 +28,8 @@ function world() {
   const journal = new JournalService(ctx.db, ctx.svc);
   const prov = new ProvenanceService(ctx.db, ctx.svc, journal);
   const links = new PullRequestService(ctx.db, ctx.svc, prov);
-  return { ...ctx, issue, prov, links };
+  const gate = new LinkGateService(ctx.db, ctx.svc, { state: () => null, defaultBranch: () => "main" });
+  return { ...ctx, issue, prov, links, gate };
 }
 
 function dispatchWithClaim(w: ReturnType<typeof world>, holder = "w") {
@@ -303,25 +305,33 @@ describe("pull-request writers", () => {
   // XTRM-953: the merge queue's commits name their issue in the subject suffix,
   // so a trailer-only reader attached nothing at all. A suffix is weaker
   // evidence than a trailer, and the weakness is recorded rather than hidden.
-  it("T2 reads a subject suffix as a mention, with the missing-receipt finding named", () => {
+  it("a subject suffix names the issue and cannot attest a delivery", () => {
     // The fixture project is prj_xtrm, so the suffix must name that prefix.
     const message = `feat(console): one section header (${w.issue.humanRef}) (#466)`;
     const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "9".repeat(40), message }] });
     assert.deepEqual(result, { created: 0, mentioned: 1, findings: 1 });
     const view = w.links.listForIssue(w.issue.id)[0]!;
     assert.deepEqual(view.sources, ["trailer"]);
-    // The row is stored even though a mention's view does not list it: the gate
-    // counts issue_pr_commits rows directly, so this is what makes T2 qualify.
+    assert.equal(view.relation, "mentioned");
+    // No commit row, and the gate is the reason it would not help: `evaluate`
+    // filters `created_from` links and asks for `trailer` plus commits > 0, and
+    // a mention reaches neither half. Measured, so the comment in the service
+    // does not have to be believed (XTRM-953).
     const rows = w.db.prepare("SELECT sha FROM issue_pr_commits WHERE issue_id = ?").all(w.issue.id) as Array<{ sha: string }>;
-    assert.deepEqual(rows.map((r) => r.sha), ["9".repeat(40)]);
+    assert.deepEqual(rows, []);
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "manual" }).codes, [GATE_CODES.mentioned]);
     assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["subject_receipt_missing"]);
   });
 
-  it("a subject suffix that names another issue attaches nothing", () => {
-    const message = "feat(console): one section header (XTRM-999) (#466)"; // another issue, also prj_xtrm
+  it("a subject suffix naming a sibling issue is reported once, and attaches nothing", () => {
+    const sibling = w.svc.createIssue({ projectId: "prj_xtrm", title: "sibling", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    const message = `feat(console): one section header (${sibling.humanRef}) (#466)`;
     const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "8".repeat(40), message }] });
-    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 0 });
+    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 1 });
     assert.equal(w.links.listForIssue(w.issue.id).length, 0);
+    // A real sibling ref is a fact this issue's reader cannot otherwise see; an
+    // unknown ref is a typo and stays silent, which the next case pins.
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["commit_claimed_elsewhere"]);
   });
 
   it("a subject suffix that resolves to nothing is skipped silently", () => {
@@ -598,12 +608,12 @@ describe("pull-request writers", () => {
       ]);
       assert.equal(res.code, 0, res.stderr);
       const data = (JSON.parse(res.stdout) as { data: { created: number; mentioned: number } }).data;
-      // No receipt, so the honest outcome is a mention - but a mention with a
-      // commit row, which is what makes the link gate treat the PR as T2.
+      // No receipt, so the honest outcome is a mention, not a delivery, and no
+      // commit row: see the gate assertion in "a subject suffix names the issue
+      // and cannot attest a delivery" for why a row would not buy T2 anyway.
       assert.deepEqual(data, { created: 0, mentioned: 1, findings: 1 });
-      const rows = w.db.prepare("SELECT sha, trailer_revision FROM issue_pr_commits").all() as Array<{ sha: string; trailer_revision: number | null }>;
-      assert.equal(rows.length, 1);
-      assert.equal(rows[0]!.trailer_revision, null);
+      const rows = w.db.prepare("SELECT sha FROM issue_pr_commits").all() as Array<{ sha: string }>;
+      assert.deepEqual(rows, []);
     } finally {
       process.chdir(saved);
       rmSync(repo, { recursive: true, force: true });

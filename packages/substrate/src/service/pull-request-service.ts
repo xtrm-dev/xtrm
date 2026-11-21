@@ -301,22 +301,33 @@ export class PullRequestService {
           try {
             suffixId = issues.resolveRef(suffixed[0]!).id;
           } catch {
-            // Silent, unlike the trailer path: a suffix is a naming convention,
-            // not a declaration of intent, so an unknown or foreign ref there is
-            // not a link finding. Recording one per commit that mentions another
-            // board's issue would bury the findings that do mean something.
+            // Silent, unlike the trailer path: an unresolvable ref in a subject
+            // is a typo, and a typo in a commit that will not be edited is not
+            // evidence of anything about this issue. The distinguishable case -
+            // a real sibling ref that names a different issue - is reported
+            // below, because it is a fact this issue's reader cannot see.
             continue;
           }
-          if (suffixId !== input.issueId) continue;
-          // A subject ref carries no receipt, so it can name the issue but
-          // cannot attest a delivery: the link is a mention, as a receipt-less
-          // trailer already is. The commit row is still written, because the
-          // link gate counts `issue_pr_commits` rows for T2 and a mention view
-          // does not list them.
-          if (this.insertCommit(input.issueId, input.repository, input.number, commit.sha, null)) {
-            this.mentionFromTrailer(input, now, commit.sha);
-            mentioned += 1;
+          if (suffixId !== input.issueId) {
+            // Another Issue is named, and that IS worth one finding: an unknown
+            // ref is a typo nobody can act on, but a commit naming a sibling
+            // issue of this Project is evidence this issue's reader cannot
+            // otherwise see. The trailer path reports the same case.
+            if (issues.getIssue(suffixId).projectId === issues.getIssue(input.issueId).projectId) {
+              finding("commit_claimed_elsewhere", commit.sha, `subject names ${suffixed[0]}, not this issue`);
+            }
+            continue;
           }
+          // A subject ref carries no receipt, so it can name the issue but not
+          // attest a delivery: the link is a mention, as a receipt-less trailer
+          // already is. No commit row is written, and that is not an omission:
+          // `LinkGateService.evaluate` filters `created_from` links and asks for
+          // `sources.includes("trailer") && commits > 0`, so a `mentioned` row
+          // never reaches the filter with any commit count. Measured, not
+          // reasoned - a subject-only link reports `gate_mentioned_only` with
+          // and without the row (XTRM-953).
+          this.mentionFromTrailer(input, now, commit.sha);
+          mentioned += 1;
           finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
           continue;
         }
