@@ -4,6 +4,8 @@ import type { BoardGap, ProjectBinding, ProjectHealth, StatusBoardAdapter, UnitP
 import { useAdapters } from "../../adapters/index.tsx";
 import { useShell } from "../../shell/context.tsx";
 import { ErrorState, LoadingState, ago } from "../../ui/primitives.tsx";
+import { Fields } from "../../ui/drawer.tsx";
+import { SectionHeader } from "../../ui/section.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
 
 /**
@@ -78,22 +80,31 @@ export async function readIntegrationGaps(board: StatusBoardAdapter, repository:
   return report;
 }
 
-function Fact({ label, value, mono, testId, unverified }: { label: string; value: string | null; mono?: boolean; testId?: string; unverified?: boolean }) {
-  return (
-    <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-baseline gap-3 py-1">
-      <dt className="text-xs text-ink-faint">{label}</dt>
-      <dd className={`min-w-0 break-words text-xs ${mono ? "font-mono text-xs" : ""} ${unverified ? "text-ink-muted" : "text-ink"}`} data-testid={testId} data-unverified={unverified ? "true" : undefined}>
-        {value ?? "not reported"}
-      </dd>
-    </div>
-  );
+/** One fact in a `Fields` grid. The value keeps the shared `dd` ink unless the fact is unverified. */
+type FieldRow = [string, ReactNode];
+
+function fact(label: string, value: string | null, options: { mono?: boolean; testId?: string; unverified?: boolean } = {}): FieldRow {
+  const { mono, testId, unverified } = options;
+  return [
+    label,
+    <span
+      className={`min-w-0 break-words ${mono ? "font-mono" : ""} ${unverified ? "text-ink-muted" : "text-ink"}`}
+      data-testid={testId}
+      data-unverified={unverified ? "true" : undefined}
+    >
+      {value ?? "not reported"}
+    </span>,
+  ];
 }
 
-function Group({ title, children, testId }: { title: string; children: ReactNode; testId: string }) {
+function Group({ title, rows, children, testId }: { title: string; rows?: FieldRow[]; children?: ReactNode; testId: string }) {
   return (
-    <section aria-label={title} data-testid={testId} className="px-1.5">
-      <h3 className="border-b border-border py-1 text-xs font-medium text-ink-muted">{title}</h3>
-      <dl className="py-1">{children}</dl>
+    <section aria-label={title} data-testid={testId} className="flex min-w-0 flex-col">
+      <SectionHeader title={title} inset="list" level={3} className="border-b border-border-muted" />
+      <div className="px-3 py-1">
+        {rows ? <Fields rows={rows} labelWidth="10rem" size="xs" /> : null}
+        {children}
+      </div>
     </section>
   );
 }
@@ -107,35 +118,41 @@ function tri(value: boolean | null, reason: UnitProbeReason | null, yes: string,
 function BindingFacts({ binding }: { binding: ProjectBinding }) {
   if (!binding.configured) {
     return (
-      <Group title="Binding" testId="integration-binding">
-        <Fact label="Repository" value={binding.repository} mono testId="integration-repository" />
-        <Fact label="State" value={`not integrated — ${binding.reason ? UNBOUND_REASON[binding.reason] : "the bridge reported no reason"}`} testId="integration-binding-state" />
-        <Fact label="Resolved by" value={RESOLVED_BY[binding.resolvedBy]} testId="integration-resolved-by" />
-      </Group>
+      <Group
+        title="Binding"
+        testId="integration-binding"
+        rows={[
+          fact("Repository", binding.repository, { mono: true, testId: "integration-repository" }),
+          fact("State", `not integrated — ${binding.reason ? UNBOUND_REASON[binding.reason] : "the bridge reported no reason"}`, { testId: "integration-binding-state" }),
+          fact("Resolved by", RESOLVED_BY[binding.resolvedBy], { testId: "integration-resolved-by" }),
+        ]}
+      />
     );
   }
   return (
-    <Group title="Binding" testId="integration-binding">
-      <Fact label="Repository" value={binding.repository} mono testId="integration-repository" />
-      <Fact label="Resolved by" value={RESOLVED_BY[binding.resolvedBy]} testId="integration-resolved-by" />
-      <Fact label="PM project" value={binding.pmProject} testId="integration-pm-project" />
-      <Fact label="Substrate project" value={binding.substrateProject} testId="integration-substrate-project" />
-      <Fact label="Status-board site" value={binding.statusBoard?.site ?? null} mono testId="integration-board-site" />
-      <Fact label="Board state dir" value={binding.statusBoard?.stateDir ?? null} mono testId="integration-state-dir" />
-      <Fact label="Board timezone" value={binding.statusBoard?.timezone ?? null} testId="integration-timezone" />
-      <Fact label="Jira site" value={binding.jira?.site ?? null} mono testId="integration-jira-site" />
-      <Fact label="Jira project" value={binding.jira?.project ?? null} testId="integration-jira-project" />
-      <Fact
-        label="Credential file"
-        value={
+    <Group
+      title="Binding"
+      testId="integration-binding"
+      rows={[
+        fact("Repository", binding.repository, { mono: true, testId: "integration-repository" }),
+        fact("Resolved by", RESOLVED_BY[binding.resolvedBy], { testId: "integration-resolved-by" }),
+        fact("PM project", binding.pmProject, { testId: "integration-pm-project" }),
+        fact("Substrate project", binding.substrateProject, { testId: "integration-substrate-project" }),
+        fact("Status-board site", binding.statusBoard?.site ?? null, { mono: true, testId: "integration-board-site" }),
+        fact("Board state dir", binding.statusBoard?.stateDir ?? null, { mono: true, testId: "integration-state-dir" }),
+        fact("Board timezone", binding.statusBoard?.timezone ?? null, { testId: "integration-timezone" }),
+        fact("Jira site", binding.jira?.site ?? null, { mono: true, testId: "integration-jira-site" }),
+        fact("Jira project", binding.jira?.project ?? null, { testId: "integration-jira-project" }),
+        fact(
+          "Credential file",
           binding.statusBoard?.keyFile
             ? `${binding.statusBoard.keyFile} — ${binding.statusBoard.keyPresent ? "readable" : "not readable"}`
-            : null
-        }
-        mono
-        testId="integration-key-file"
-      />
-      <div className="px-0 pt-1 text-xs text-ink-faint" data-testid="integration-credential-note">
+            : null,
+          { mono: true, testId: "integration-key-file" },
+        ),
+      ]}
+    >
+      <div className="pt-1 text-xs text-ink-faint" data-testid="integration-credential-note">
         This page carries file paths and flags only. The bridge never returns a credential value.
       </div>
     </Group>
@@ -148,52 +165,71 @@ function HealthFacts({ health }: { health: ProjectHealth }) {
   const run = tri(health.runInProgress, health.runInProgressReason, "a sync is running", "no sync is running");
   const fresh = tri(health.stale, null, "stale", "fresh");
   return (
-    <Group title="Sync health" testId="integration-health">
-      <Fact
-        label="Last successful sync"
-        value={health.lastSyncOkAt ? `${ago(health.lastSyncOkAt)} · ${health.lastSyncOkAt}` : null}
-        testId="health-last-sync"
-      />
-      <Fact label="Drift" value={health.driftCount === null ? "unverified — the bridge reported no drift count" : `${health.driftCount} record${health.driftCount === 1 ? "" : "s"}`} unverified={health.driftCount === null} testId="health-drift" />
-      <Fact label={`Sync unit${health.timerUnit ? ` (${health.timerUnit})` : ""}`} value={unit.value} unverified={unit.unverified} testId="health-unit" />
-      <Fact label="Schedule" value={schedule.value} unverified={schedule.unverified} testId="health-schedule" />
-      <Fact label="Run" value={run.value} unverified={run.unverified} testId="health-run" />
-      <Fact label="Freshness" value={fresh.value} unverified={fresh.unverified} testId="health-freshness" />
-      <Fact label="Checked" value={`${ago(health.checkedAt)} · ${health.checkedAt}`} testId="health-checked" />
-    </Group>
+    <Group
+      title="Sync health"
+      testId="integration-health"
+      rows={[
+        fact("Last successful sync", health.lastSyncOkAt ? `${ago(health.lastSyncOkAt)} · ${health.lastSyncOkAt}` : null, { testId: "health-last-sync" }),
+        fact(
+          "Drift",
+          health.driftCount === null ? "unverified — the bridge reported no drift count" : `${health.driftCount} record${health.driftCount === 1 ? "" : "s"}`,
+          { unverified: health.driftCount === null, testId: "health-drift" },
+        ),
+        fact(`Sync unit${health.timerUnit ? ` (${health.timerUnit})` : ""}`, unit.value, { unverified: unit.unverified, testId: "health-unit" }),
+        fact("Schedule", schedule.value, { unverified: schedule.unverified, testId: "health-schedule" }),
+        fact("Run", run.value, { unverified: run.unverified, testId: "health-run" }),
+        fact("Freshness", fresh.value, { unverified: fresh.unverified, testId: "health-freshness" }),
+        fact("Checked", `${ago(health.checkedAt)} · ${health.checkedAt}`, { testId: "health-checked" }),
+      ]}
+    />
   );
 }
 
 function GapFacts({ report }: { report: IntegrationGaps }) {
   const clean = report.gaps.length === 0 && report.failed.length === 0;
   return (
-    <Group title="Contract gaps" testId="integration-gaps">
-      <Fact
-        label="Scanned"
-        value={`${report.scanned} record${report.scanned === 1 ? "" : "s"} across ${INTEGRATION_COLLECTIONS.length} collections`}
-        testId="integration-gap-scan"
-      />
-      {clean ? (
-        <Fact label="Gaps" value="none — every record the adapters read matched a declared shape" testId="integration-gap-none" />
-      ) : null}
+    <Group
+      title="Contract gaps"
+      testId="integration-gaps"
+      rows={[
+        fact("Scanned", `${report.scanned} record${report.scanned === 1 ? "" : "s"} across ${INTEGRATION_COLLECTIONS.length} collections`, { testId: "integration-gap-scan" }),
+        ...(clean ? [fact("Gaps", "none — every record the adapters read matched a declared shape", { testId: "integration-gap-none" })] : []),
+      ]}
+    >
       {report.gaps.length > 0 ? (
         <ul className="min-w-0 py-1" data-testid="integration-gap-list">
           {report.gaps.map((gap, index) => (
-            <li key={`${gap.path}:${gap.field}:${index}`} className="grid grid-cols-[10rem_minmax(0,1fr)] items-baseline gap-3 py-1" data-testid="integration-gap">
-              <span className="font-mono text-xs break-words text-ink-faint">{gap.path}</span>
-              <span className="min-w-0 text-xs text-ink">
-                <span className="font-mono text-xs">{gap.field}</span> carried <span className="font-mono text-xs break-words">{gap.value}</span>
-              </span>
+            <li key={`${gap.path}:${gap.field}:${index}`} data-testid="integration-gap">
+              <Fields
+                labelWidth="10rem"
+                size="xs"
+                rows={[
+                  [
+                    <span key="path" className="break-words font-mono">
+                      {gap.path}
+                    </span>,
+                    <span key="value" className="min-w-0">
+                      <span className="font-mono">{gap.field}</span> carried <span className="break-words font-mono">{gap.value}</span>
+                    </span>,
+                  ],
+                ]}
+              />
             </li>
           ))}
         </ul>
       ) : null}
-      {report.truncated.length > 0 ? (
-        <Fact label="Truncated" value={`the bridge stopped at its page budget for ${report.truncated.join(", ")}`} unverified testId="integration-gap-truncated" />
+      {report.truncated.length > 0 || report.failed.length > 0 ? (
+        <Fields
+          labelWidth="10rem"
+          size="xs"
+          rows={[
+            ...(report.truncated.length > 0
+              ? [fact("Truncated", `the bridge stopped at its page budget for ${report.truncated.join(", ")}`, { unverified: true, testId: "integration-gap-truncated" })]
+              : []),
+            ...report.failed.map((failure) => fact(failure.collection, `could not be read — ${failure.reason}`, { unverified: true, testId: `integration-gap-failed-${failure.collection}` })),
+          ]}
+        />
       ) : null}
-      {report.failed.map((failure) => (
-        <Fact key={failure.collection} label={failure.collection} value={`could not be read — ${failure.reason}`} unverified testId={`integration-gap-failed-${failure.collection}`} />
-      ))}
     </Group>
   );
 }

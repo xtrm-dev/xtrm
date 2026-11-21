@@ -1,4 +1,5 @@
 import type { ScheduleEvent } from "../../adapters/status-board/types.ts";
+import { SectionHeader } from "../../ui/section.tsx";
 import { EventRow } from "./EventRow.tsx";
 import { NowMarker } from "./NowMarker.tsx";
 
@@ -100,12 +101,12 @@ export function DayGroup({
 
   return (
     <section aria-label={formatDayHeading(day, today)} data-testid={`day-group-${day}`} className="flex flex-col">
-      <header className="flex items-center gap-2 border-b border-border-muted bg-control px-3 py-1">
-        <h2 className="font-mono text-xs tracking-wide text-ink-muted uppercase">{formatDayHeading(day, today)}</h2>
-        <span className="ml-auto text-xs text-ink-faint tabular" data-testid={`day-count-${day}`}>
-          {ordered.length}
-        </span>
-      </header>
+      <SectionHeader
+        title={formatDayHeading(day, today)}
+        count={<span data-testid={`day-count-${day}`}>{ordered.length}</span>}
+        mono
+        className="border-b border-border-muted bg-control"
+      />
       <ul className="flex flex-col py-1">
         {ordered.map((event, index) => (
           <FragmentRow key={event.id} event={event} index={index} markerIndex={markerIndex} now={now} timeZone={timeZone} repoBase={repoBase} />

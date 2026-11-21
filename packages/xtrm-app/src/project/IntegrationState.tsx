@@ -51,7 +51,7 @@ export function IntegrationState({ binding, health, base }: { binding: ProjectBi
     : `Records stop updating until the unit runs again; ${lastSync}.`;
 
   return (
-    <div data-testid="integration-stale" role="status" className="flex items-start gap-2 border-b border-danger/40 bg-danger/5 px-3 py-2">
+    <div data-testid="integration-stale" role="status" className="flex items-start gap-2 border-b border-border-muted px-3 py-2">
       <Icon name="alert" size="text" className="mt-px shrink-0 text-danger" />
       <div className="min-w-0 flex-1 text-xs">
         <p className="flex items-center gap-2 text-ink">
