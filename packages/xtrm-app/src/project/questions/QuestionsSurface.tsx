@@ -141,7 +141,7 @@ export function QuestionsSurface() {
 
   return shell(
     <div data-testid="questions-list">
-      <p className="px-1.5 pt-2 text-xs text-ink-faint" data-testid="questions-read-only">
+      <p className="px-3 pt-2 text-xs text-ink-faint" data-testid="questions-read-only">
         Read-only. Answering stays on the status board until XTRM-821.
       </p>
       {caveats.length > 0 && (

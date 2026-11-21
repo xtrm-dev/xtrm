@@ -22,9 +22,8 @@ export function QuestionRow({ question, answered }: { question: Question; answer
       data-testid="question-row"
       data-question-id={question.id}
       data-question-state={answered ? "answered" : "unanswered"}
-      className="h-auto items-start py-1.5"
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-px">
         <div className="flex min-w-0 items-baseline gap-2">
           {question.ref ? (
             <span className="shrink-0">
@@ -33,11 +32,11 @@ export function QuestionRow({ question, answered }: { question: Question; answer
           ) : (
             <span className="shrink-0 text-xs text-ink-faint">no ref</span>
           )}
-          <span className="min-w-0 truncate text-sm text-ink" title={question.q ?? undefined} data-testid="question-text">
+          <span className="min-w-0 truncate text-sm leading-tight text-ink" title={question.q ?? undefined} data-testid="question-text">
             {question.q ?? <span className="text-ink-faint">The board recorded no question text.</span>}
           </span>
         </div>
-        <div className="flex min-w-0 gap-3 text-xs">
+        <div className="flex min-w-0 gap-3 text-2xs leading-none">
           <span className="flex min-w-0 flex-1 items-baseline gap-1" data-testid="question-rec">
             <span className="shrink-0 text-ink-faint">rec</span>
             <span className={question.rec ? "truncate text-ink-muted" : "truncate text-ink-faint"} title={question.rec ?? undefined}>

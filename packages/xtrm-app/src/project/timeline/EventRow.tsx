@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { ScheduleEvent } from "../../adapters/status-board/types.ts";
 import { Badge } from "../../ui/badge.tsx";
 import { Icon, type IconName } from "../../ui/icon.tsx";
+import { Fields } from "../../ui/drawer.tsx";
 import { Row } from "../../ui/primitives.tsx";
 import { RowAction } from "../../ui/row-action.tsx";
 
@@ -89,33 +90,36 @@ export function EventRow({ event, timeLabel, endLabel, past, repoBase }: EventRo
         )}
       </Row>
       {open && (
-        <dl
-          id={detailsId}
-          data-testid={detailsId}
-          className="grid grid-cols-[3.5rem_1fr] gap-x-3 gap-y-0.5 border-l border-border-muted px-3 py-1.5 pl-5 text-xs"
-        >
-          <dt className="text-ink-faint">ref</dt>
-          <dd className="font-mono text-ink-muted">{event.ref ?? "—"}</dd>
-          <dt className="text-ink-faint">label</dt>
-          <dd className="text-ink-muted">{event.label ?? event.title ?? "—"}</dd>
-          <dt className="text-ink-faint">note</dt>
-          <dd className="text-ink-muted">
-            {event.note ?? "—"}
-            {event.noteSrc && <span className="text-ink-faint"> (source: {event.noteSrc})</span>}
-          </dd>
-          <dt className="text-ink-faint">url</dt>
-          <dd className="truncate font-mono text-ink-muted">
-            {event.url ? (
-              <a href={event.url} target="_blank" rel="noreferrer noopener" className="hover:text-accent-ink">
-                {event.url}
-              </a>
-            ) : (
-              "—"
-            )}
-          </dd>
-          <dt className="text-ink-faint">by</dt>
-          <dd className="text-ink-muted">{event.createdBy ?? "—"}</dd>
-        </dl>
+        <div id={detailsId} data-testid={detailsId} className="min-w-0 border-l border-border-muted px-3 py-1.5 pl-5">
+          <Fields
+            labelWidth="3.5rem"
+            size="xs"
+            rows={[
+              ["ref", <span key="ref" className="font-mono text-ink-muted">{event.ref ?? "—"}</span>],
+              ["label", <span key="label" className="text-ink-muted">{event.label ?? event.title ?? "—"}</span>],
+              [
+                "note",
+                <span key="note" className="text-ink-muted">
+                  {event.note ?? "—"}
+                  {event.noteSrc && <span className="text-ink-faint"> (source: {event.noteSrc})</span>}
+                </span>,
+              ],
+              [
+                "url",
+                <span key="url" className="block truncate font-mono text-ink-muted">
+                  {event.url ? (
+                    <a href={event.url} target="_blank" rel="noreferrer noopener" className="hover:text-accent-ink">
+                      {event.url}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </span>,
+              ],
+              ["by", <span key="by" className="text-ink-muted">{event.createdBy ?? "—"}</span>],
+            ]}
+          />
+        </div>
       )}
     </li>
   );

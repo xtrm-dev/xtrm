@@ -27,7 +27,7 @@ export function Fields({
   labelWidth = "7.5rem",
   size = "sm",
 }: {
-  rows: Array<[string, ReactNode]>;
+  rows: Array<[ReactNode, ReactNode]>;
   /** rem length of the label column; timeline rows use 3.5rem, the drawer 7.5rem. */
   labelWidth?: string;
   /** Value step: `sm` is body copy, `xs` is dense metadata (timeline, integration facts). */
@@ -38,8 +38,8 @@ export function Fields({
       className={cx("grid gap-x-3 gap-y-1.5", size === "xs" ? "text-xs" : "text-sm")}
       style={{ gridTemplateColumns: `${labelWidth} 1fr` }}
     >
-      {rows.map(([k, v]) => (
-        <div key={k} className="contents">
+      {rows.map(([k, v], index) => (
+        <div key={index} className="contents">
           <dt className="text-ink-faint">{k}</dt>
           <dd className="min-w-0 break-words text-ink">{v}</dd>
         </div>
