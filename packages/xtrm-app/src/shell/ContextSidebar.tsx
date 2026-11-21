@@ -7,7 +7,6 @@ import { useAgentStore } from "../agent/workspace.tsx";
 import { AGENT_MODE, MODES, PROJECT_SECTIONS, REPO_SECTIONS, RESEARCH_SECTIONS, destinationHref, halfForPath, modeForPath, repoHref, type Half } from "../app/destinations.ts";
 import { isInvalidManifestRow } from "../adapters/research/types.ts";
 import { projectForRepo, useConnection, useIssues, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
-import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
 import { NavRailItem, SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
@@ -43,7 +42,7 @@ function RepositorySelector() {
         aria-label={`Repository: ${repo.fullName}`}
         className="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
       >
-        <span className="text-[0.65rem] font-medium tracking-wide text-ink-faint uppercase">Repository</span>
+        <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Repository</span>
         <span className="flex w-full min-w-0 items-center gap-1.5">
           <span className="truncate text-sm font-medium text-ink">{repo.name}</span>
           <span className="truncate text-xs text-ink-faint">{repo.owner}</span>
@@ -129,20 +128,20 @@ function SourceFooter() {
         {/* Inset from the panel edges, one compact line: it is a status strip, not a header. */}
         <Popover.Trigger
           aria-label="Data sources"
-          className="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-xs text-strip-ink shadow-[0_3px_6px_rgb(15_15_20/0.2),0_14px_30px_-6px_rgb(15_15_20/0.34)] outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
+          className="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-xs text-strip-ink shadow-float outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
         >
           <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
           <span className="truncate">{live === items.length ? "All sources live" : `${live} of ${items.length} live`}</span>
-          {remote?.latencyMs != null && <span className="ml-auto shrink-0 tabular-nums">{remote.latencyMs} ms</span>}
+          {remote?.latencyMs != null && <span className="ml-auto shrink-0 tabular">{remote.latencyMs} ms</span>}
           {/* It opens upward, so the resting chevron points up and flips down when the panel is open. */}
           <Icon name={open ? "chevronDown" : "chevronUp"} size="xs" className={cx("shrink-0", remote?.latencyMs != null ? "ml-1" : "ml-auto")} />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner side="top" align="start" sideOffset={6} className="z-50">
-            <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-lg bg-strip p-1.5 text-xs text-strip-ink shadow-[0_24px_56px_-16px_rgb(15_15_20/0.62),0_6px_16px_-4px_rgb(15_15_20/0.28)] outline-none">
+            <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-lg bg-strip p-1.5 text-xs text-strip-ink shadow-float outline-none">
               <div className="flex items-baseline gap-2 px-1.5 pt-0.5 pb-1">
                 <span className="text-xs text-strip-ink-faint">Data sources</span>
-                <span className="ml-auto text-[0.68rem] tabular-nums text-strip-ink-faint">
+                <span className="ml-auto text-xs tabular text-strip-ink-faint">
                   {live}/{items.length} live
                 </span>
               </div>
@@ -150,21 +149,21 @@ function SourceFooter() {
                 <div className="flex h-7 items-center gap-2 rounded-md px-1.5 text-strip-ink-strong" data-testid="board-connection" title={remote ? `${remote.host ?? "ssh"} · ${remote.latencyMs ?? "?"} ms` : undefined}>
                   <StatusDot tone={tone} label={conn.ok ? "board reachable" : "board unreachable"} />
                   <span className="truncate">Board</span>
-                  <Badge className="ml-auto" tone={conn.ok ? "inverse" : "danger"} size="xs">
+                  <span className={cx("ml-auto", conn.ok ? "text-strip-ink-faint" : "text-danger")}>
                     {conn.ok ? (remote ? `server · ${remote.latencyMs ?? "–"} ms` : "local db") : "offline"}
-                  </Badge>
+                  </span>
                 </div>
               )}
               {items.map(([label, source]) => (
                 <div key={label} className="flex h-7 items-center gap-2 rounded-md px-1.5 text-strip-ink-strong">
                   <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
                   <span className="truncate">{label}</span>
-                  <Badge className="ml-auto" tone="inverse" size="xs">
+                  <span className="ml-auto text-strip-ink-faint" data-testid="source-state">
                     {source}
-                  </Badge>
+                  </span>
                 </div>
               ))}
-              <div className="mt-1 border-t border-strip-rule px-1.5 pt-1.5 pb-0.5 text-[0.68rem] text-strip-ink-faint" data-testid="board-transport">
+              <div className="mt-1 border-t border-strip-rule px-1.5 pt-1.5 pb-0.5 text-xs text-strip-ink-faint" data-testid="board-transport">
                 {state === "remote" ? "ssh" : state === "local" ? "local db" : state === "offline" ? "unreachable" : "unknown"}
                 {remote?.host ? ` · ${remote.host}` : ""}
                 {conn?.serverVersion ? ` · sb ${conn.serverVersion}` : ""}
@@ -315,7 +314,7 @@ function HalfSwitch() {
               aria-label={h.label}
               onClick={() => switchTo(h.id)}
               className={cx(
-                "flex h-6 min-w-0 flex-1 items-center justify-center rounded-[4px] text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
+                "flex h-6 min-w-0 flex-1 items-center justify-center rounded-sm text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
                 on ? "bg-control text-ink" : "text-ink-faint hover:text-ink-muted",
               )}
             >
