@@ -160,5 +160,9 @@ Python package in the xtrm repo. The core bundle no longer ships it
 `@jaggerxtrm/pi-extensions`. Install/enroll:
 
 ```bash
-pi install npm:@jaggerxtrm/pi-service-knowledge   # or a local source path pre-merge
+pi install npm:@jaggerxtrm/pi-service-knowledge   # or add this folder to ~/.pi/agent/settings.json "packages"
 ```
+
+The extension calls the `service-knowledge` CLI (>= 0.9.0), which must be on `PATH`. The full
+install sequence for a machine (CLI, Claude plugin, pi extension, per-repo registry, update and
+troubleshooting) is in [`../service-knowledge/README.md`](../service-knowledge/README.md#install).

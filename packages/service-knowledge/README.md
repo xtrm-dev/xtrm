@@ -13,44 +13,163 @@ Independent CLI. Own versioning, release cadence, and CHANGELOG. **Not** routed 
 
 ## Install
 
-The easiest path (Debian/Ubuntu/macOS; installs pipx if you pass `--system-pipx`):
+service-knowledge installs **by clone**; there is no PyPI package. A complete install has four
+parts, and each machine needs the first one before the others work:
+
+| # | Part | What it gives | Needed for |
+|---|---|---|---|
+| 1 | CLI + `vaultctl` | the `service-knowledge` command | everything else |
+| 2 | Claude Code plugin | 5 read-only MCP tools in Claude Code | Claude Code sessions |
+| 3 | pi extension | the same 5 tools in pi sessions | pi sessions |
+| 4 | Per-repo registry | the knowledge a repo exposes | any tool returning results |
+
+Parts 2 and 3 carry no Python code. Both call the CLI from part 1, so install the CLI first.
+
+### Prerequisites
+
+| Tool | Version | Why |
+|---|---|---|
+| `git` | any | clones, drift detection |
+| `python3` | **>= 3.11** (`vaultctl` requires 3.11; this package requires 3.10) | CLI runtime |
+| `pipx` **or** `uv` | any | isolated, editable install; `install.sh` uses pipx and falls back to uv |
+| `node` | >= 18 | plugin launcher (`launch.mjs`); pi |
+| network | GitHub | both repos below are public, no credentials needed |
+
+Drift detection works from git history. `service-knowledge drift migrate` refuses a shallow
+clone, so run `git fetch --unshallow` in a consumer repo that was cloned with `--depth`.
+
+### 1. CLI and `vaultctl` (every machine)
 
 ```bash
-git clone https://github.com/xtrm-dev/xtrm ~/dev/xtrm     # or wherever
+git clone https://github.com/xtrm-dev/xtrm ~/dev/xtrm
 cd ~/dev/xtrm/packages/service-knowledge
-./install.sh                     # or ./install.sh --system-pipx
+./install.sh                     # add --system-pipx to apt-install pipx (needs sudo)
 ```
 
-The script:
-1. Ensures `pipx` is available (or apt-installs it with `--system-pipx`).
-2. Auto-clones `vaultctl` (the only cross-package dep) into a sibling of
-   the `xtrm` checkout (default: `~/dev/vaultctl`) if it isn't already
-   present. Override the location with `VAULTCTL_DIR=/your/path`.
-3. `pipx install --editable` this package.
-4. Injects the vaultctl checkout into the same venv, editable.
-5. Runs `pipx ensurepath` so `~/.local/bin` lands on `$PATH` for future shells.
+`install.sh`:
+1. Selects the installer: `pipx`, else `uv tool`, else stops (or apt-installs pipx with `--system-pipx`).
+2. Clones `vaultctl` (the only cross-package dependency, `https://github.com/Jaggerxtrm/vaultctl`)
+   next to the xtrm checkout (default `~/dev/vaultctl`) unless it is already there.
+   Override with `VAULTCTL_DIR=/path` or `VAULTCTL_REPO=<url>`.
+3. Installs this package **editable** and injects `vaultctl` editable into the same environment.
+4. Runs `pipx ensurepath` so `~/.local/bin` is on `PATH` in new shells.
 
-The install is **by clone** (editable); there is no PyPI package. To update, `git pull`
-in both checkouts (`~/dev/xtrm` and `~/dev/vaultctl`); the installed CLI follows them with no
-reinstall (re-run `install.sh` only when packaging changes, e.g. a new dependency).
-`service-knowledge --version` prints the package version plus where the CLI and `vaultctl`
-were loaded from, which is the first thing to check on a second machine.
-
-Manual install if you already run pipx everywhere:
+Verify (open a new shell first if `~/.local/bin` was just added):
 
 ```bash
-pipx install --editable /path/to/vaultctl
+service-knowledge --version
+# service-knowledge 0.9.0  (<xtrm>/packages/service-knowledge/src/service_knowledge)
+# vaultctl 0.1.0  (<vaultctl>/src/vaultctl)
+```
+
+Both lines must show. A missing `vaultctl` line or an import error means step 2 or 3 of
+`install.sh` did not complete; re-run `./install.sh`. The first `x.y.z` is the package version
+and must be **>= 0.9.0** for the plugin and the pi extension.
+
+Manual install, if you already run pipx everywhere:
+
+```bash
 pipx install --editable /path/to/xtrm/packages/service-knowledge
 pipx inject --editable service-knowledge /path/to/vaultctl
 ```
 
-Verify:
+### 2. Claude Code plugin
+
+Requires part 1 (`service-knowledge >= 0.9.0` on `PATH`) and `node`.
 
 ```bash
-service-knowledge --version
+claude plugin marketplace add xtrm-dev/specialists     # registers the marketplace named "xtrm"
+claude plugin install service-knowledge@xtrm
+claude plugin list | grep -A2 service-knowledge        # expect: enabled
 ```
 
----
+If the `xtrm` marketplace is already registered, run `claude plugin marketplace update xtrm`
+instead of `add`. In a Claude Code session, the server `service-knowledge` should show as
+connected with five tools (`knowledge_search`, `knowledge_get`, `knowledge_evidence_for_files`,
+`knowledge_status`, `knowledge_drift`). Restart the session after installing.
+
+The plugin launcher finds the CLI through `PATH` and exits with `cli-too-old` (status 78) when
+the CLI is older than 0.9.0. See [`plugin/service-knowledge/README.md`](plugin/service-knowledge/README.md).
+
+### 3. pi extension
+
+Requires part 1 and `pi`. The package is `@jaggerxtrm/pi-service-knowledge` (1.1.0 or later;
+source in [`../service-knowledge-ext`](../service-knowledge-ext)). Use **one** of two sources.
+
+**A. From the clone (follows `git pull`, no publish step).** Add the folder to
+`~/.pi/agent/settings.json` under `"packages"`:
+
+```json
+"/home/you/dev/xtrm/packages/service-knowledge-ext"
+```
+
+**B. From npm (pinned release).**
+
+```bash
+pi install npm:@jaggerxtrm/pi-service-knowledge
+```
+
+Do not list the extension twice. Then verify:
+
+```bash
+pi list | grep service-knowledge
+```
+
+The extension is **self-gating**: in a repo without a registry (part 4) it registers no tools at
+all. That is expected, not a failure. With a registry it registers the five tools above and a
+`/service-knowledge:status` command. Start a new pi session after changing settings.
+
+### 4. Per-repo registry (each repo that should expose knowledge)
+
+The tools return results only for repos that carry a registry at
+`.xtrm/skills/<pack>/service-knowledge/service-registry.json`:
+
+```bash
+cd <your-service-hosting-repo>
+service-knowledge install        # vendors machinery, wires hooks, builds the index
+service-knowledge status         # install state, package vs consumer version
+```
+
+Repos still on a legacy layout (`.claude/service-registry.json`, flat registries) need
+`service-knowledge migrate` first. A registry that has `last_sync` but no `last_sync_ref` is
+fail-closed in drift checks; preview the repair with `service-knowledge drift migrate`, then add
+`--apply`.
+
+### Check the whole chain
+
+Run this on each machine, from a repo that has a registry:
+
+```bash
+service-knowledge --version                    # CLI >= 0.9.0 plus the vaultctl line
+service-knowledge status                       # registry present, index current
+claude plugin list | grep service-knowledge    # Claude Code: enabled
+pi list | grep service-knowledge               # pi: listed
+```
+
+### Update
+
+Both checkouts are editable installs, so a `git pull` updates the CLI with no reinstall:
+
+```bash
+git -C ~/dev/xtrm pull --ff-only
+git -C ~/dev/vaultctl pull --ff-only
+```
+
+Re-run `./install.sh` only when packaging changes (a new dependency). After the CLI, update the
+plugin (`claude plugin marketplace update xtrm`) and, for source B, the pi package
+(`pi update`). Update the CLI **before** the plugin or extension. In each consumer repo,
+`service-knowledge update` pulls the vendored machinery to the current package version.
+
+### Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `service-knowledge: command not found` | `~/.local/bin` is not on `PATH`. Open a new shell, or run `pipx ensurepath`. |
+| Works in a terminal, but not from a plugin or pi on a remote host | The shell is non-interactive and does not load `nvm` or your `PATH`. Put `node`, `pi` and `~/.local/bin` on `PATH` in a file that non-interactive shells read, or run through `bash -ic`. |
+| Plugin exits `cli-too-old` | CLI older than 0.9.0. `git pull` in the xtrm checkout and check `service-knowledge --version`. |
+| pi shows no tools | The repo has no registry (self-gating), or settings list the package twice or at the wrong path. Check part 4, then `pi list`. |
+| `drift migrate` refuses with "shallow" | `git fetch --unshallow` in the consumer repo. |
+| `git status` shows modified `*.egg-info` after install | You are on an old checkout. Current `main` ignores them; `git pull`. |
 
 ## Per-repo bootstrap
 
