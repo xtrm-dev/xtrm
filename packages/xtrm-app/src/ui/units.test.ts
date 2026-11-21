@@ -135,7 +135,7 @@ const RULES: Array<{ id: string; pattern: RegExp; why: string }> = [
   // a unit is not px.
   {
     id: "px-spacing",
-    pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left|Inline|Block|InlineStart|InlineEnd|BlockStart|BlockEnd)?:\s*(?:[1-9]\d*(?:\.\d+)?|0?\.\d+)(?![\d.])(?!\s*(?:rem|px|em|%))/g,
+    pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left|Inline|Block|InlineStart|InlineEnd|BlockStart|BlockEnd)?:\s*-?(?:[1-9]\d*(?:\.\d+)?|0?\.\d+)(?![\d.])(?!\s*(?:rem|px|em|%))/g,
     why: "unitless spacing value in px: derive it from INDENT_REM (src/issues/issue-table.ts) or use a spacing step",
   },
   {
@@ -232,20 +232,24 @@ const walk = (dir: string): string[] =>
 
 const lineOf = (source: string, index: number) => source.slice(0, index).split("\n").length;
 
-/** Declaration blocks of a stylesheet, skipping the ones that only nest other blocks. */
+/**
+ * Declaration blocks of a stylesheet. At-rules (`@layer`, `@media`) are skipped because their bodies
+ * hold no declarations of their own; a **style rule** is kept even when it nests another rule, since
+ * `.a { overflow-x: auto; .b { … } }` declares as well as nests and used to be dropped whole.
+ */
 const cssBlocks = (source: string): Array<{ selector: string; body: string; offset: number }> => {
   const blocks: Array<{ selector: string; body: string; offset: number }> = [];
-  const open: Array<{ selector: string; bodyStart: number; nested: boolean }> = [];
+  const open: Array<{ selector: string; bodyStart: number }> = [];
   let boundary = 0;
   for (let i = 0; i < source.length; i += 1) {
     if (source[i] === "{") {
-      open.push({ selector: source.slice(boundary, i).trim(), bodyStart: i + 1, nested: false });
+      open.push({ selector: source.slice(boundary, i).trim(), bodyStart: i + 1 });
       boundary = i + 1;
     } else if (source[i] === "}") {
       const block = open.pop();
-      if (block && !block.nested) blocks.push({ selector: block.selector, body: source.slice(block.bodyStart, i), offset: block.bodyStart });
-      const parent = open[open.length - 1];
-      if (parent) parent.nested = true;
+      if (block && !block.selector.startsWith("@")) {
+        blocks.push({ selector: block.selector, body: source.slice(block.bodyStart, i), offset: block.bodyStart });
+      }
       boundary = i + 1;
     }
   }
@@ -321,6 +325,15 @@ const parkDrift = (file: string, found: Offence[]): string[] => {
 describe("the console has no px font size or glyph size outside the ladder", () => {
   it("finds none in any in-scope source file under src", () => {
     const files = walk(ROOT);
+    // A floor over the whole tree cannot see one directory quietly leaving the walk: measured, `src`
+    // holds 134 files and `src/github` contributes 11, so dropping that directory still cleared a
+    // `> 120` floor. Each in-scope directory therefore has to contribute, named when it does not.
+    const missing = readdirSync(ROOT, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(ROOT, entry.name))
+      .filter((dir) => inScope(join(dir, "x")))
+      .filter((dir) => !files.some((file) => file.startsWith(dir + "/")));
+    expect(missing, "every in-scope directory must contribute a file to the walk").toEqual([]);
     // A guard over an empty file list would pass by accident.
     expect(files.length).toBeGreaterThan(120);
     expect(files, "the stylesheet must be in the walk").toContain(join("src", "styles.css"));
@@ -381,6 +394,8 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       'const h2 = { paddingTop: "6px" };',
       'const h3 = { padding: "0 8px" };',
       'const k = "gap-[2px]";',
+      "const m = { marginTop: -8 };",
+      "const n = { paddingInline: -4 };",
       "const h4 = { marginLeft: depth * 14 };",
       "const i = { paddingLeft: depth * 16 };",
       "const j = { paddingLeft: depth * 16, };",
@@ -438,8 +453,34 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     }
     // A CSS scroll container without a treatment is caught, a treated one is spared, and a block that
     // only nests other blocks is not mistaken for a declaration block.
-    const css = [".bare {", "  overflow-x: auto;", "}", ".treated {", "  overflow-y: auto;", "  scrollbar-width: thin;", "}", "@layer utilities {", "  .wrap {", "    display: flex;", "  }", "}"].join("\n");
-    expect(cssBlocks(css).filter((block) => CSS_SCROLL.test(block.body) && !CSS_TREATMENT.test(block.body)).map((block) => block.selector)).toEqual([".bare"]);
+    const css = [
+      ".bare {",
+      "  overflow-x: auto;",
+      "}",
+      ".treated {",
+      "  overflow-y: auto;",
+      "  scrollbar-width: thin;",
+      "}",
+      ".nesting {",
+      "  overflow-x: auto;",
+      "  .child {",
+      "    color: red;",
+      "  }",
+      "}",
+      "@layer utilities {",
+      "  .wrap {",
+      "    display: flex;",
+      "  }",
+      "}",
+    ].join("\n");
+    // A rule that declares and also nests is a container: it used to be dropped whole because the
+    // parent was flagged the moment its child closed.
+    expect(
+      cssBlocks(css)
+        .filter((block) => CSS_SCROLL.test(block.body) && !CSS_TREATMENT.test(block.body))
+        .map((block) => block.selector),
+      "a container that nests another rule must still be scanned",
+    ).toEqual([".bare", ".nesting"]);
     expect(cssBlocks(css).map((block) => block.selector)).not.toContain("@layer utilities");
   });
 
