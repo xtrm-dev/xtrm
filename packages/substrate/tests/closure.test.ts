@@ -495,10 +495,11 @@ describe("XTRM-959 close consults open blockers", () => {
     assert.equal(svc.getIssue(dependent.id).lifecycleState, "done");
   });
 
-  it("refuses a one-word override and says the flag needs a sentence", () => {
+  it("refuses an override that is not a sentence, and names the floor", () => {
     const { svc, closures } = scratch();
-    const { dependent } = blockedPair(svc);
-    for (const bad of ["", "   ", "ok"]) {
+    const { blocker, dependent } = blockedPair(svc);
+    // "" / "   " / one word / the blocker's own ref pasted / the flag's own name.
+    for (const bad of ["", "   ", "ok", blocker.locator, "--force-close-with-open-blocker"]) {
       assert.throws(
         () =>
           closures.closeIssue(dependent.id, {
@@ -507,7 +508,7 @@ describe("XTRM-959 close consults open blockers", () => {
             actor: "tester",
             blockerOverrideReason: bad,
           }),
-        /needs a sentence saying why|still open/,
+        /needs at least two words saying why|still open/,
       );
     }
     assert.equal(svc.getIssue(dependent.id).lifecycleState, "open");

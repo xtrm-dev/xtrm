@@ -480,9 +480,13 @@ export class ClosureService {
     // a word that only satisfies a parser) becomes a habit within a week, and a
     // habit is exactly what makes an override unreadable to the next person.
     const words = reason.split(/\s+/).filter((w) => w.length > 0);
-    if (words.length < 2 || reason.length < 12) {
+    const lowered = reason.toLowerCase();
+    // Pasting the ref or the flag name satisfies a word count without saying
+    // anything, which is the habit the floor exists to prevent.
+    const namesOnly = refs.some((ref) => ref.toLowerCase() === lowered) || lowered.startsWith("--") || lowered.includes("force-close-with-open-blocker");
+    if (words.length < 2 || reason.length < 12 || namesOnly) {
       throw new Error(
-        `refusing to close ${issue.locator}: --force-close-with-open-blocker needs a sentence saying why ` +
+        `refusing to close ${issue.locator}: --force-close-with-open-blocker needs at least two words saying why ` +
           `${refs.join(", ")} no longer binds, not "${reason}". Nothing was closed.`,
       );
     }
