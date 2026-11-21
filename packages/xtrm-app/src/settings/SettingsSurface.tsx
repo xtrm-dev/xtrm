@@ -59,7 +59,7 @@ export function SettingsSurface() {
         <SourceBadge source={githubAuth.source} />
       </SurfaceToolbar>
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+        <div className="mx-auto flex w-full max-w-3xl flex-col">
           <SettingsSection title="Connection">
             <div className="flex flex-wrap items-center gap-2">
               <StatusDot tone={status.state === "signed_in" ? "done" : status.state === "error" ? "danger" : status.state === "pending" ? "active" : "neutral"} label={`GitHub ${status.state.replace("_", " ")}`} />
