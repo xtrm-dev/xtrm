@@ -46,6 +46,14 @@ export function ExperimentListSurface() {
   const runCounts = useMemo(() => runCountsByExperiment(runs.data), [runs.data]);
   // `invalid_manifest` rows have no resolvable experiment id, but a broken run must stay
   // visible rather than being filtered out of the view.
+  //
+  // Heading outline (XTRM-954). This route's level-2 entry is the error section's title: "Unreadable
+  // run — no resolvable experiment" is rendered only under `unknown.length > 0` below, so on a clean
+  // data render the route is heading-free under the same rule as /research/runs — a list surface
+  // carries its name in the toolbar and its outline is the column headers. The pinned expectation for
+  // this route in src/app/research.test.tsx is fixture-coupled to the unreadable-run state, which is
+  // why that line is load-bearing: deleting it after a fixture cleanup is a decision, not a cleanup.
+  // Pinning the clean-data outline as well needs an adapter change, filed separately.
   const unknown = useMemo(() => (runs.data ?? []).filter(isInvalidManifestRow), [runs.data]);
   const openExperiment = (id: string) => void navigate({ to: experimentHref(id) } as never);
 
