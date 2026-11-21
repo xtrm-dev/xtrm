@@ -126,6 +126,7 @@ test("the workers tree indent resolves its rem expression at the operator's root
           return {
             authored: getComputedStyle(row).getPropertyValue("--row-indent").trim(),
             padding: lead ? parseFloat(getComputedStyle(lead).paddingLeft) : Number.NaN,
+            expanded: row.getAttribute("aria-expanded"),
           };
         }),
       };
@@ -156,6 +157,26 @@ test("the workers tree indent resolves its rem expression at the operator's root
   for (const step of steps) {
     expect(Math.abs(step / 1.25 - Math.round(step / 1.25)), `${step}rem is a multiple of one level`).toBeLessThan(1e-9);
   }
+
+  // The level a row carries, not just the step it is built from. A row indented one level too
+  // deep is still a valid multiple of 1.25rem and still scales, so the assertions above pass it
+  // (XTRM-936 review, third injection). Two things anchor the level itself: the tree's first row
+  // is its root and carries no indent, and an expanded row's next sibling is exactly one step
+  // deeper while a collapsed row's next sibling cannot be deeper than the row itself.
+  const levels = at16.rows.map((row) => parseFloat(row.authored));
+  expect(levels[0], "the tree's first row is a root row").toBe(0);
+  let expandedParents = 0;
+  at16.rows.forEach((row, i) => {
+    const next = levels[i + 1];
+    if (next === undefined || row.expanded === null) return;
+    if (row.expanded === "true") {
+      expect(next - levels[i]!, `the row below expanded row ${i} is exactly one level deeper`).toBeCloseTo(1.25, 6);
+      expandedParents += 1;
+    } else {
+      expect(next, `the row below collapsed row ${i} is not inside it`).toBeLessThanOrEqual(levels[i]!);
+    }
+  });
+  expect(expandedParents, "an expanded parent whose child row is measured").toBeGreaterThanOrEqual(1);
 
   for (const row of at16.rows) {
     expect(row.authored, "the indent is authored in rem").toMatch(/^\d+(\.\d+)?rem$/);
