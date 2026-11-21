@@ -54,8 +54,13 @@ export function useIssueTitles(refs: ReadonlyArray<string>, projectId: string | 
       const found = new Map<string, string>();
       for (let i = 0; i < refs.length; i += TITLE_READ_BATCH) {
         const batch = refs.slice(i, i + TITLE_READ_BATCH);
-        const titles = await Promise.all(batch.map(async (ref) => (await substrate.getIssue(ref, projectId!, { withBoard: false })).title));
-        batch.forEach((ref, index) => found.set(ref, titles[index]!));
+        // Per ref, not per batch: `Promise.all` rejects the whole query on one failure and the hook
+        // falls back to `NONE`, which throws away the titles of up to seven refs that did resolve.
+        // The fallback would then be per page while the guard reads as per row.
+        const titles = await Promise.allSettled(batch.map(async (ref) => (await substrate.getIssue(ref, projectId!, { withBoard: false })).title));
+        titles.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value) found.set(batch[index]!, result.value);
+        });
       }
       return found;
     },

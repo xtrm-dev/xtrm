@@ -109,6 +109,51 @@ describe("Project Workers", () => {
     await waitFor(() => expect(session!.textContent).toContain("Contextual sidebar reopen rail (B1)"));
   });
 
+  // Two reviewer findings on the same read, both about asking for titles.
+  it("keeps the titles of the refs that resolved when one in the batch fails", async () => {
+    // Measured before this: `Promise.all` rejected the whole query on one failure, the hook returned
+    // the shared empty map, and the key of a ref that DID resolve stayed a key. The visible fallback
+    // was per page while the comment promised per row.
+    const reads: string[] = [];
+    const flaky = {
+      ...substrate,
+      dispatchGraph: async () => structuredClone(WORKERS_LAYOUT_GRAPH),
+      listIssues: async (projectId: string) => (await substrate.listIssues(projectId)).filter((i) => !["XTRM-302", "XTRM-303"].includes(i.ref)),
+      getIssue: async (ref: string, ...rest: Parameters<typeof substrate.getIssue>[]) => {
+        reads.push(ref);
+        if (ref === "XTRM-303") throw new Error("one ref answers nothing");
+        return substrate.getIssue(ref, ...rest);
+      },
+    };
+    renderWorkers("", { ...fixtureAdapters, substrate: flaky, statusBoard: createStatusBoardFixtureAdapter() });
+
+    const rows = await screen.findAllByTestId("worker-row");
+    const session = rows.find((row) => row.getAttribute("data-kind") === "session");
+    expect(session!.textContent).toContain("XTRM-302");
+    // The sibling that failed must not take this one's title with it.
+    await waitFor(() => expect(session!.textContent).toContain("Contextual sidebar reopen rail (B1)"));
+    expect(reads).toContain("XTRM-303");
+  });
+
+  it("reads no titles for the list view, which prints none", async () => {
+    // Measured before this: the same two refs were read on `?view=list` while `workers-tree` was not
+    // in the document at all, so a bounded read was charged every load for rows that print no title.
+    const reads: string[] = [];
+    const counted = {
+      ...substrate,
+      dispatchGraph: async () => structuredClone(WORKERS_LAYOUT_GRAPH),
+      listIssues: async (projectId: string) => (await substrate.listIssues(projectId)).filter((i) => !["XTRM-302", "XTRM-303"].includes(i.ref)),
+      getIssue: async (ref: string, ...rest: Parameters<typeof substrate.getIssue>[]) => {
+        reads.push(ref);
+        return substrate.getIssue(ref, ...rest);
+      },
+    };
+    renderWorkers("?view=list", { ...fixtureAdapters, substrate: counted, statusBoard: createStatusBoardFixtureAdapter() });
+    await screen.findByTestId("workers-list");
+    expect(screen.queryByTestId("workers-tree")).toBeNull();
+    expect(reads, "the list view prints no borrowed title").toHaveLength(0);
+  });
+
   it("keeps the tree when the graph cannot be read, and says so", async () => {
     const failing = {
       ...substrate,

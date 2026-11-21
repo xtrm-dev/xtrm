@@ -66,7 +66,11 @@ export function WorkersSurface() {
   // the console's own board read, and on live data it covered far fewer issues than the graph names,
   // so a title the index does not carry is read by ref, bounded to the rows that print one (XTRM-918).
   const issues = useIssueIndex();
-  const wanted = useMemo(() => missingTitleRefs(model, issues), [model, issues]);
+  // The list view prints no borrowed title at all, so asking for one there spends reads on nothing:
+  // measured, the same two refs are read on `?view=list` while `workers-tree` is not even mounted.
+  // The collapsed unknown-dispatcher group stays included because the operator opens it and it is
+  // where the nameless rows concentrate.
+  const wanted = useMemo(() => (view === "tree" ? missingTitleRefs(model, issues) : []), [view, model, issues]);
   const titles = useIssueTitles(wanted, projectId);
   const titleOf = useCallback((ref: string) => issues.get(ref)?.title ?? titles.get(ref) ?? null, [issues, titles]);
 
