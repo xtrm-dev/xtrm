@@ -59,6 +59,7 @@ const DEBT: Record<string, { allowed: number; owner: string }> = {
   [join("src", "surfaces", "ActivitySurface.tsx")]: { allowed: 4, owner: "XTRM-936" },
   [join("src", "project", "workers", "WorkerRow.tsx")]: { allowed: 1, owner: "XTRM-936" },
   [join("src", "settings", "SettingsSurface.tsx")]: { allowed: 1, owner: "XTRM-937" },
+  [join("src", "issues", "meta.tsx")]: { allowed: 1, owner: "XTRM-943" },
 };
 
 /** Every rem value the type scale actually defines (styles.css §typography). */
@@ -80,6 +81,10 @@ const RULES = [
   { pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left)?:\s*(?:[1-9]\d*(?:\.\d+)?|0?\.\d+)(?![\d.])(?!\s*(?:rem|px|em|%))/g, why: "unitless spacing value in px: derive it from INDENT_REM (src/issues/issue-table.ts) or use a spacing step" },
   { pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left)?:\s*[\w.]+\s*\*\s*\d+(?:\.\d+)?/g, why: "numeric spacing multiplier: use INDENT_REM so the step follows root" },
   { pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left)?:\s*["'`][^"'`]*\d*\.?\d+px["'`]?/g, why: "quoted px spacing: name a spacing step or derive it from INDENT_REM" },
+  // A style prop is not the only place a number hides: an arbitrary Tailwind spacing class carries
+  // the same px value with no reader able to see the scale, and `gap-[2px]` sits in the issue board
+  // today. Spacing classes name a scale step; only an arbitrary px is refused.
+  { pattern: /\b(?:p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|space-x|space-y)-\[\d*\.?\d+px\]/g, why: "arbitrary px spacing class: use a scale step (2, 4, 6 cells) or a token" },
   // The stylesheet takes units, so its shorthand is only a problem when the unit IS px.
   { pattern: /\b(?:padding|margin)(?:-top|-right|-bottom|-left)?:\s*[^;{}\n"'`]*\d*\.?\d+px/g, why: "px spacing in CSS: use a token or a rem value" },
   // The stylesheet and an inline style are the two forms a className cannot reach around.
@@ -164,6 +169,7 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "const h = { paddingLeft: 16 };",
       'const h2 = { paddingTop: "6px" };',
       'const h3 = { padding: "0 8px" };',
+      'const k = "gap-[2px]";',
       "const h4 = { marginLeft: depth * 14 };",
       "const i = { paddingLeft: depth * 16 };",
       "const j = { paddingLeft: depth * 16, };",
@@ -194,6 +200,7 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "paddingLeft: depth * 16",
       'paddingTop: "6px"',
       'padding: "0 8px"',
+      "gap-[2px]", 
       "font-size: 11px",
       'fontSize: "11px"',
     ]);
