@@ -80,14 +80,6 @@ const PARKS: Record<string, Park> = {
       { rule: "offscale-rem-font", match: "text-[0.68rem]" },
     ],
   },
-  [join("src", "shell", "ContextSidebar.tsx")]: {
-    owner: "XTRM-939",
-    offences: [
-      { rule: "offscale-rem-font", match: "text-[0.65rem]" },
-      { rule: "offscale-rem-font", match: "text-[0.68rem]" },
-      { rule: "offscale-rem-font", match: "text-[0.68rem]" },
-    ],
-  },
   [join("src", "issues", "meta.tsx")]: { owner: "XTRM-943", offences: [{ rule: "arbitrary-px-spacing", match: "gap-[2px]" }] },
 };
 

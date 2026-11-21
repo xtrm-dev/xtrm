@@ -4,6 +4,7 @@ import { useAdapters, type IssueSummary, type Lifecycle } from "../adapters/inde
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { cx, relativeTime } from "../ui/primitives.tsx";
+import { SectionHeader } from "../ui/section.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
 
@@ -73,7 +74,7 @@ export function IssueBoard({
           {error}
         </p>
       )}
-      <div className="thin-scrollbar flex min-h-0 flex-1 gap-3 overflow-x-auto px-8 pb-4" data-testid="issue-board">
+      <div className="thin-scrollbar flex min-h-0 flex-1 overflow-x-auto px-8 pb-4" data-testid="issue-board">
         {BOARD_COLUMNS.map((column) => {
           const cards = issues.filter(column.match);
           const shown = cards.slice(0, COLUMN_LIMIT);
@@ -95,17 +96,26 @@ export function IssueBoard({
                 if (target && dragging && column.drop) void move(dragging, column.drop);
               }}
               className={cx(
-                "flex w-72 shrink-0 flex-col rounded-lg border bg-deep/40 transition-colors",
-                over === column.id ? "border-accent/60 bg-accent-soft/40" : "border-border-muted",
+                // A column is a lane, not a card: one hairline between lanes. The drop affordance is
+                // that hairline turning accent plus a faint fill, because a lane has no ring to paint.
+                "flex w-72 shrink-0 flex-col border-l border-border-muted pl-3 transition-colors first:border-l-0 first:pl-0",
+                over === column.id ? "border-l-accent/60 bg-accent-soft/40" : "",
                 dragging && !target && "opacity-60",
               )}
             >
-              <header className="flex h-9 shrink-0 items-center gap-2 px-3" title={column.hint}>
-                <span className="text-xs font-medium tracking-wide text-ink-muted uppercase">{column.label}</span>
-                <span className="text-xs text-ink-faint tabular">{cards.length}</span>
-                {column.hint && <span className="ml-auto text-xs text-ink-faint">auto</span>}
-              </header>
-              <ol className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-2 pb-2">
+              {/* `inset="none"` inside a box of the card's own gutter, so the lane heading starts on
+               * the same x as the card titles below it (both 24px from the hairline). */}
+              <div className="flex h-8 shrink-0 items-center px-3">
+                <SectionHeader
+                  title={column.label}
+                  count={cards.length}
+                  level={3}
+                  inset="none"
+                  // `auto` is the only word the hint explains, so the tip rides on the word itself.
+                  aside={column.hint && <span className="text-xs text-ink-faint" title={column.hint}>auto</span>}
+                />
+              </div>
+              <ol className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pb-2">
                 {shown.map((issue) => (
                   <li key={issue.id}>
                     <BoardCard
@@ -182,8 +192,11 @@ function BoardCard({
         }
       }}
       className={cx(
-        "group/card flex flex-col gap-1.5 rounded-md border bg-surface px-2.5 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-        selected ? "border-accent/60" : "border-border-muted hover:border-border",
+        // The console's one card dialect, byte for byte: `IssueProvenance.tsx`'s local `Card`
+        // (`rounded-md border border-border-muted px-3 py-2.5`) and `IssueView.tsx`'s `PreviewBlock`.
+        // A third copy is the duplication, not the board's frame.
+        "group/card flex flex-col gap-2 rounded-md border border-border-muted px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+        selected ? "border-accent/60" : "hover:border-border",
         canWrite && "cursor-grab active:cursor-grabbing",
         pending && "opacity-50",
       )}

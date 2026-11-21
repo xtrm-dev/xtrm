@@ -1,4 +1,4 @@
-import { Dialog } from "../ui/dialog.tsx";
+import { Dialog, DialogFrame } from "../ui/dialog.tsx";
 import { useState } from "react";
 import type { Scrutiny } from "../adapters/index.tsx";
 import { SelectField } from "../ui/fields.tsx";
@@ -67,12 +67,8 @@ export function NewIssueDialog({ open, onOpenChange, projectId, onCreated }: { o
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/30 dark:bg-black/50" />
-        <Dialog.Popup className="fixed top-[6vh] left-1/2 z-50 flex max-h-[88vh] w-[min(720px,calc(100vw-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-lg bg-raised shadow-float outline-none">
-          <div className="flex h-12 shrink-0 items-center border-b border-border-muted px-5">
-            <Dialog.Title className="text-base font-medium text-ink">New issue</Dialog.Title>
-          </div>
-          <div className="thin-scrollbar flex flex-col gap-4 overflow-y-auto px-5 py-4">
+        <DialogFrame title="New issue" frameWidth={720} top={6} maxHeight={88}>
+          <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
             <div className="grid grid-cols-3 gap-4">
               {field("Type", <SelectField label="Type" value={form.kind} options={kindOptions} canEdit onChange={async (v) => set("kind", v)} />)}
               {field("Priority", <SelectField label="Priority" value={form.priority} options={priorityOptions} canEdit onChange={async (v) => set("priority", v)} />)}
@@ -92,10 +88,10 @@ export function NewIssueDialog({ open, onOpenChange, projectId, onCreated }: { o
               {field("Output", area("output", "One artifact per line"), "one per line")}
             </div>
           </div>
-          <div className="shrink-0 border-t border-border-muted px-5 py-3">
+          <DialogFrame.Footer>
             <EditActions saving={saving} error={error} onSave={submit} onCancel={() => onOpenChange(false)} />
-          </div>
-        </Dialog.Popup>
+          </DialogFrame.Footer>
+        </DialogFrame>
       </Dialog.Portal>
     </Dialog.Root>
   );
