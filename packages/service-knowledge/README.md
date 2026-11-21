@@ -32,7 +32,7 @@ Parts 2 and 3 carry no Python code. Both call the CLI from part 1, so install th
 | `git` | any | clones, drift detection |
 | `python3` | **>= 3.11** (`vaultctl` requires 3.11; this package requires 3.10) | CLI runtime |
 | `pipx` **or** `uv` | any | isolated, editable install; `install.sh` uses pipx and falls back to uv |
-| `node` | >= 18 | plugin launcher (`launch.mjs`); pi |
+| `node` | a current LTS (no minimum is declared; the launcher uses only `node:` built-ins, tested on Node 24) | plugin launcher (`launch.mjs`); pi |
 | network | GitHub | both repos below are public, no credentials needed |
 
 Drift detection works from git history. `service-knowledge drift migrate` refuses a shallow
@@ -52,7 +52,7 @@ cd ~/dev/xtrm/packages/service-knowledge
    next to the xtrm checkout (default `~/dev/vaultctl`) unless it is already there.
    Override with `VAULTCTL_DIR=/path` or `VAULTCTL_REPO=<url>`.
 3. Installs this package **editable** and injects `vaultctl` editable into the same environment.
-4. Runs `pipx ensurepath` so `~/.local/bin` is on `PATH` in new shells.
+4. With pipx, runs `pipx ensurepath` so `~/.local/bin` is on `PATH` in new shells. With the `uv` fallback it does not: run `uv tool update-shell`, or add `~/.local/bin` to `PATH` yourself.
 
 Verify (open a new shell first if `~/.local/bin` was just added):
 
@@ -109,6 +109,7 @@ source in [`../service-knowledge-ext`](../service-knowledge-ext)). Use **one** o
 pi install npm:@jaggerxtrm/pi-service-knowledge
 ```
 
+`pi install /home/you/dev/xtrm/packages/service-knowledge-ext` adds the same entry for you.
 Do not list the extension twice. Then verify:
 
 ```bash
@@ -137,14 +138,19 @@ fail-closed in drift checks; preview the repair with `service-knowledge drift mi
 
 ### Check the whole chain
 
-Run this on each machine, from a repo that has a registry:
+Run this on each machine, from a repo that has a registry (part 4):
 
 ```bash
 service-knowledge --version                    # CLI >= 0.9.0 plus the vaultctl line
-service-knowledge status                       # registry present, index current
-claude plugin list | grep service-knowledge    # Claude Code: enabled
-pi list | grep service-knowledge               # pi: listed
+service-knowledge status                       # "umbrella packs: 1" or more, fts5 cache present
+service-knowledge mcp call knowledge_status    # JSON with "registry_present": true and a service_count
+claude plugin list | grep -A3 service-knowledge   # Claude Code: Status enabled
+pi list | grep service-knowledge               # pi: the package is listed
 ```
+
+`mcp call` runs the same code the plugin and the pi extension serve, so a JSON answer here
+proves the CLI half of both. In a new Claude Code or pi session, call `knowledge_status` once to
+prove the other half.
 
 ### Update
 
