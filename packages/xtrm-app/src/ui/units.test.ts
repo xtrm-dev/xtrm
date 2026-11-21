@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -178,7 +179,45 @@ const SCROLL_TREATMENT = /\b(?:thin|no)-scrollbar\b/;
  * markdown renderer emits). A block with neither is an offence.
  */
 const CSS_SCROLL = /overflow(?:-[xy])?:\s*(?:auto|scroll)\b/;
-const CSS_TREATMENT = /scrollbar-width\s*:/;
+
+/**
+ * The scroll treatments this codebase has, and where each one reaches. The list is closed on
+ * purpose: a rule that accepts any `scrollbar-*` declaration teaches the next author nothing, and
+ * the next author then copies whichever form happened to pass. A value outside this list is its own
+ * offence (`css-scrollbar-value`), so `auto`, an unseen hex or an unseen `var()` is red rather than
+ * silently accepted as a treatment.
+ */
+const SCROLLBAR_TREATMENTS: ReadonlyArray<{ property: string; value: string; reaches: string }> = [
+  {
+    property: "scrollbar-width",
+    value: "thin",
+    reaches: ".thin-scrollbar on a rendered element, and .xtrm-prose pre where the markdown renderer's <pre> cannot carry a class",
+  },
+  {
+    property: "scrollbar-width",
+    value: "none",
+    reaches: ".no-scrollbar, where the bar is hidden and the wheel or keyboard still scrolls the pane",
+  },
+  {
+    property: "scrollbar-color",
+    value: "var(--color-border-strong) transparent",
+    reaches: "the same two containers: the tread and the thumb .thin-scrollbar sets",
+  },
+];
+
+const CSS_TREATMENT = /scrollbar-width\s*:\s*thin\s*[;}]/;
+const CSS_SCROLLBAR_DECLARATION = /(scrollbar-(?:width|color))\s*:\s*([^;{}]+)/g;
+
+/** Every `scrollbar-*` declaration in a block, with the pair that has to be on the closed list. */
+const scrollbarDeclarations = (body: string) =>
+  [...body.matchAll(CSS_SCROLLBAR_DECLARATION)].map((match) => ({
+    property: (match[1] ?? "").trim(),
+    value: (match[2] ?? "").trim(),
+    literal: match[0].trim(),
+  }));
+
+const isKnownScrollbarTreatment = (declaration: { property: string; value: string }) =>
+  SCROLLBAR_TREATMENTS.some((known) => known.property === declaration.property && known.value === declaration.value);
 
 const inScope = (file: string) => !OUT_OF_SCOPE.some((dir) => file.startsWith(dir + "/") || file.startsWith(dir + join("")));
 
@@ -220,6 +259,10 @@ const offenders = (file: string): Offence[] => {
 
   if (file.endsWith(".css")) {
     for (const block of cssBlocks(source)) {
+      for (const declaration of scrollbarDeclarations(block.body)) {
+        if (isKnownScrollbarTreatment(declaration)) continue;
+        found.push({ rule: "css-scrollbar-value", match: declaration.literal, line: lineOf(source, block.offset) });
+      }
       if (!CSS_SCROLL.test(block.body) || CSS_TREATMENT.test(block.body)) continue;
       if (SCROLL_TREATMENT.test(block.selector)) continue;
       found.push({ rule: "css-scroll-container", match: block.selector, line: lineOf(source, block.offset) });
@@ -400,16 +443,28 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     expect(cssBlocks(css).map((block) => block.selector)).not.toContain("@layer utilities");
   });
 
-  it("fails loudly when its own model is not evaluated, instead of reporting no drift", () => {
+  it("tells a missing model from an empty one: the walk must evaluate what it is given", () => {
     // Finding (7): #467 shipped a commit in which this file did not parse, so the park model never
     // ran and "zero offenders" was reported by a gate that had not looked. A missing map and an empty
-    // map print the same reassuring sentence, so the gate plants its own sentinel — a real file in
-    // the walked tree carrying a real offence — and requires the walk to report it. Only then does
-    // "no drift" mean the gate looked.
-    const sentinel = join(ROOT, "ui", "__gate-sentinel.tmp.ts");
+    // map print the same reassuring sentence, so the gate carries its own sentinel — a miniature tree
+    // holding one real offence — and requires the walk to enumerate it, the rules to report it, and a
+    // park naming no offence to disagree with it. Only then does "no drift" mean the gate looked.
+    //
+    // The tree lives in the OS temp directory, not in `src`: a killed process skips `finally`, and a
+    // gate that can leave a stray file in the tree it polices is a worse defect than the one it
+    // closes. Pointing the walk at a temp root also proves the walk is root-agnostic, which walking
+    // `src` could never show.
+    const sentinelRoot = mkdtempSync(join(tmpdir(), "units-gate-"));
+    const sentinel = join(sentinelRoot, "nested", "probe.tsx");
+    const cssSentinel = join(sentinelRoot, "probe.css");
+    mkdirSync(join(sentinelRoot, "nested"), { recursive: true });
     writeFileSync(sentinel, 'export const planted = "gap-[2px]";\n');
+    writeFileSync(cssSentinel, ".probe-block {\n  overflow-x: auto;\n  scrollbar-width: auto;\n}\n");
     try {
-      expect(walk(ROOT), "the sentinel must be enumerated by the same walk the gate uses").toContain(sentinel);
+      expect(
+        walk(sentinelRoot),
+        "a missing model and an empty model must fail differently: the walk must enumerate the sentinel it was given",
+      ).toContain(sentinel);
       expect(
         offenders(sentinel).map((offence) => offence.rule),
         "the sentinel must be reported by the same rules the gate applies",
@@ -420,8 +475,13 @@ describe("the console has no px font size or glyph size outside the ladder", () 
         parkDrift(sentinel, offenders(sentinel)),
         "a park naming no offence must not agree with a file that has one",
       ).not.toEqual([]);
+      // The scrollbar accept-list is closed: a form the two known treatments do not name is red, and
+      // a container left without a known treatment is red beside it.
+      const cssRules = offenders(cssSentinel).map((offence) => offence.rule);
+      expect(cssRules, "an unknown scrollbar value must not count as a treatment").toContain("css-scrollbar-value");
+      expect(cssRules, "a container with no known treatment must still be reported").toContain("css-scroll-container");
     } finally {
-      rmSync(sentinel, { force: true });
+      rmSync(sentinelRoot, { recursive: true, force: true });
     }
     // The declarations this test depends on must be present and non-empty, or the sentinel above
     // would pass through an empty rule list and prove nothing.
