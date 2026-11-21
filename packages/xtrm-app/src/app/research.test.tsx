@@ -739,3 +739,67 @@ describe("Run analysis resolves the versioned Experiment/Workload/QuestionSpec b
     expect(await within(main).findByText(questionSpec.instructions)).toBeTruthy();
   });
 });
+
+describe("Research page outlines", () => {
+  // XTRM-954. Each route's outline is pinned as a SEQUENCE of (level, text) in rendered order, not as
+  // a set of levels: a per-level presence check passes when someone flattens a group, and a
+  // "never jumps more than one level" check passes when a sibling is rendered one level too deep,
+  // because 2 then 3 is a legal nesting step. Pinned sequences fail on both. The expectation is
+  // fixture-coupled on purpose: adding a section to a Research page should be a visible edit here.
+  //
+  // The invariant: the first heading on a page is level 1 or 2, depth never exceeds 4 (XTRM-940
+  // seq 6), and a level-3 heading is a group inside a page — which is why the experiment page's
+  // nested "Charts" group is the only level-3 entry, and the run page's "Charts" section is level 2.
+  const PAGES = [
+    {
+      url: "/research/experiments",
+      ready: () => screen.findByText("dup-detect-baseline"),
+      expected: ["2 Unreadable run — no resolvable experiment"],
+    },
+    {
+      url: "/research/experiments/dup-detect-baseline",
+      ready: () => screen.findByText("Metric glossary"),
+      expected: ["2 Definition", "2 Metric glossary", "2 Declared charts", "3 Charts", "2 Related runs"],
+    },
+    {
+      url: "/research/runs/run-a",
+      ready: () => screen.findByText("Manifest & versions"),
+      expected: [
+        "2 Why this run",
+        "2 Method",
+        "2 Metrics",
+        "2 Charts",
+        "2 Samples",
+        "2 Telemetry events",
+        "2 Annotations",
+        "2 Manifest & versions",
+      ],
+    },
+    {
+      url: "/research/compare?baseline=run-a&candidate=run-b",
+      ready: () => screen.findByRole("table", { name: "Metric comparison" }),
+      expected: ["2 Charts"],
+    },
+  ] as const;
+
+  it.each(PAGES)("starts at level 2 and nests its groups: $url", async ({ url, ready, expected }) => {
+    renderAt(url);
+    await ready();
+    // The chart group mounts after first paint; waiting for it makes the sequence the complete one.
+    await screen.findByText("Charts").catch(() => null);
+    const actual = screen
+      .queryAllByRole("heading")
+      .map((h) => `${Number(h.tagName.slice(1))} ${h.textContent}`);
+    expect(actual).toEqual([...expected]);
+  });
+
+  it("leaves the runs list heading-free, as the other list surfaces are", async () => {
+    renderAt("/research/runs");
+    await screen.findByText("Latest conclusion");
+    // Deliberate, recorded at the Runs section in ResearchSurface.tsx: a list surface carries its
+    // name in the toolbar and its outline is the column headers, exactly as IssuesSurface.tsx and
+    // PullsSurface.tsx do — neither emits a heading at all. Pinned so a later reader cannot "fix"
+    // the omission by promoting a group label into a page title.
+    expect(screen.queryAllByRole("heading")).toEqual([]);
+  });
+});

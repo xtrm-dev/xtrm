@@ -125,17 +125,20 @@ export function ResearchCharts({
   experiment,
   runIds,
   runLabels,
+  level = 2,
 }: {
   experiment: Record<string, unknown>;
   runIds: string[];
   runLabels?: Record<string, string>;
+  /** 3 when the caller nests this group inside a section, as the experiment page does. */
+  level?: 2 | 3;
 }) {
   const specs = chartSpecs(experiment);
   if (specs.length === 0 || runIds.length === 0) return null;
 
   return (
     <section aria-label="Charts" className="flex flex-col">
-      <SectionHeader title="Charts" level={3} className="mb-2" />
+      <SectionHeader title="Charts" level={level} className="mb-2" />
       <div className="grid gap-3 px-3 xl:grid-cols-2">
         {specs.map((spec) => (
           <article key={spec.id} className="flex min-w-0 flex-col" aria-label={spec.title}>
