@@ -1261,6 +1261,8 @@ export class ProvenanceService {
       source: source === "beads" ? "beads" : "sb",
       legacyState: (r["legacy_state"] as string | null) ?? null,
       closedAt: r["closed_at"] as number,
+      // Legacy imported closures carry no blocker override.
+      blockerOverride: null,
     };
   }
 

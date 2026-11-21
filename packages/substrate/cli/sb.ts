@@ -174,6 +174,9 @@ function closureSummary(db: ReturnType<typeof openSubstrate>, svc: IssueService,
         journalResultRefs: latest.journalResultRefs,
         receiptRefs: latest.receiptRefs,
         artifactRefs: latest.artifactRefs,
+        // XTRM-959: a forced close stays visible in the bounded show summary,
+        // so a reader cannot mistake it for an ordered close. null = not forced.
+        blockerOverride: latest.blockerOverride,
       };
     }
   } catch {
@@ -689,9 +692,19 @@ lease keeps its generation; only its expiry moves.`,
 --holder defaults to SUBSTRATE_HOLDER, so a session releases its own claim
 without restating the name. Releasing another holder's claim still requires
 the explicit flag, and the same fail-closed rule applies when neither is set.`,
-  "issue.close": `usage: sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> [--actor <who>] [--participant <id>] [--run <id>] [--activation <id>] [--attempt <id>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--project <id>]
+  "issue.close": `usage: sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> [--actor <who>] [--participant <id>] [--run <id>] [--activation <id>] [--attempt <id>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--force-close-with-open-blocker <why>] [--project <id>]
 
 writes an immutable Closure row (outcome, reason, actor, session, revision/hash, refs) and rests on done (cancelled for the cancelled outcome). Bare \`sb issue close <ref>\` stays the legacy lifecycle alias (no Closure invented).
+
+Blockers: a close is refused while a declared blocking dependency is still open,
+because a terminal issue whose own dependency is unresolved cannot be told apart
+from an ordered close. Only a closed issue or a merged PR satisfies a blocker —
+an open PR is not evidence. The refusal names each open blocker by ref. To close
+anyway, state why the dependency no longer binds with
+--force-close-with-open-blocker <why>; that reason is recorded on the Closure
+row. superseded|duplicate closes are exempt (they point at another issue rather
+than claiming delivery), and the legacy bare close can only refuse: it writes no
+Closure row, so it has nowhere to record an override.
 
 Methodology: close answers WHY the Issue became terminal. Pick the bounded
 outcome honestly (completed, superseded, duplicate, wont_fix, invalid,
@@ -1542,7 +1555,7 @@ export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.claim": ["project", "holder", "ttl-ms", "activation"],
   "issue.renew": ["project", "holder", "ttl-ms", "activation"],
   "issue.release": ["project", "holder", "activation"],
-  "issue.close": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact", "link-gate", "gate-override"],
+  "issue.close": ["project", "outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact", "link-gate", "gate-override", "force-close-with-open-blocker"],
   "issue.state": ["project", "until", "actor", "link-gate", "gate-override"],
   "issue.reopen": ["project", "reason", "actor", "participant", "run", "activation", "attempt"],
   "issue.defer": ["project", "until"],
@@ -1856,6 +1869,7 @@ function closurePayload(c: {
   terminalState: string; outcome: string; reason: string; actor: string;
   executionContext: unknown; validationRefs: string[]; journalResultRefs: string[];
   receiptRefs: string[]; artifactRefs: string[]; closedAt: number;
+  blockerOverride?: { reason: string; refs: string[] } | null;
 }): Record<string, unknown> {
   return {
     closureId: c.closureId,
@@ -1872,6 +1886,8 @@ function closurePayload(c: {
     receiptRefs: c.receiptRefs,
     artifactRefs: c.artifactRefs,
     closedAt: c.closedAt,
+    // XTRM-959: null means the close was not forced past an open blocker.
+    blockerOverride: c.blockerOverride ?? null,
   };
 }
 
@@ -2381,6 +2397,10 @@ function runIssue(
       const ref = needRef(rest);
       const resolved = refInContext(svc, flags, ref);
       if (!hasClosureFlags(flags)) {
+        // XTRM-959: the legacy alias writes no Closure row, so it has nowhere
+        // to record an override and can only refuse. Deliberate closes go
+        // through --outcome with --force-close-with-open-blocker.
+        new ClosureService(db, svc).assertNoOpenBlockers(resolved.id);
         const closed = svc.setLifecycleState(resolved.id, "done", undefined, {
           actor: flag(flags, "actor") ?? "sb-cli",
           linkGate: (flag(flags, "link-gate") as never) ?? undefined,
@@ -2403,6 +2423,7 @@ function runIssue(
         artifactRefs: splitList(flagList(flags, "artifact")),
         linkGate: (flag(flags, "link-gate") as never) ?? undefined,
         gateOverride: flag(flags, "gate-override") ?? undefined,
+        blockerOverrideReason: flag(flags, "force-close-with-open-blocker") ?? null,
       });
       return emit(ctx, command, { ...issueSummary(svc.getIssue(resolved.id)), closure: closurePayload(closure) });
     }

@@ -443,3 +443,146 @@ describe("C1 §96 closure identity canonical write seam (XTRM-447)", () => {
     assert.ok(!storedRaw.includes(upper), "the uppercase spelling is not persisted");
   });
 });
+
+// XTRM-959: a close must consult the issue's declared blocking dependencies.
+// Before this check, `sb issue close` wrote a Closure row on an issue whose
+// readiness printed `blocked` in the same breath — a terminal issue whose own
+// dependency was unresolved, indistinguishable from an ordered close.
+describe("XTRM-959 close consults open blockers", () => {
+  function blockedPair(svc: IssueService) {
+    const blocker = seedIssue(svc, "the blocker");
+    const dependent = seedIssue(svc, "the dependent");
+    svc.addEdge(blocker.id, dependent.id, "blocks");
+    return { blocker, dependent };
+  }
+
+  it("refuses a delivery close, names the blocker ref and the override flag, and writes nothing", () => {
+    const { svc, closures } = scratch();
+    const { blocker, dependent } = blockedPair(svc);
+    assert.throws(
+      () => closures.closeIssue(dependent.id, { outcome: "completed", reason: "shipped", actor: "tester" }),
+      (err: Error) => {
+        assert.match(err.message, /refusing to close C1-2/);
+        assert.match(err.message, new RegExp(blocker.locator));
+        assert.match(err.message, /only by a closed issue or a merged PR/);
+        assert.match(err.message, /--force-close-with-open-blocker/);
+        return true;
+      },
+    );
+    // The refusal is total: lifecycle untouched, no Closure row invented.
+    assert.equal(svc.getIssue(dependent.id).lifecycleState, "open");
+    assert.equal(closures.getLatestClosure(dependent.id), null);
+    assert.equal(svc.getIssue(blocker.id).lifecycleState, "open");
+  });
+
+  it("records the stated reason and the blocker refs when the caller forces the close", () => {
+    const { svc, closures } = scratch();
+    const { blocker, dependent } = blockedPair(svc);
+    const closure = closures.closeIssue(dependent.id, {
+      outcome: "completed",
+      reason: "delivered ahead of the dependency",
+      actor: "tester",
+      blockerOverrideReason: "the blocker only gates the follow-up, not this slice",
+    });
+    assert.equal(closure.outcome, "completed");
+    assert.deepEqual(closure.blockerOverride, {
+      reason: "the blocker only gates the follow-up, not this slice",
+      refs: [blocker.locator],
+    });
+    // Durable, not just returned: re-read the row through the service.
+    const reread = closures.getLatestClosure(dependent.id);
+    assert.deepEqual(reread?.blockerOverride, closure.blockerOverride);
+    assert.equal(svc.getIssue(dependent.id).lifecycleState, "done");
+  });
+
+  it("refuses an override that is not a sentence, and names the floor", () => {
+    const { svc, closures } = scratch();
+    const { blocker, dependent } = blockedPair(svc);
+    // "" / "   " / one word / the blocker's own ref pasted / the flag's own name.
+    for (const bad of ["", "   ", "ok", blocker.locator, "--force-close-with-open-blocker"]) {
+      assert.throws(
+        () =>
+          closures.closeIssue(dependent.id, {
+            outcome: "completed",
+            reason: "shipped",
+            actor: "tester",
+            blockerOverrideReason: bad,
+          }),
+        /needs at least two words saying why|still open/,
+      );
+    }
+    assert.equal(svc.getIssue(dependent.id).lifecycleState, "open");
+    assert.equal(closures.getLatestClosure(dependent.id), null);
+  });
+
+  it("leaves an unblocked close unaffected and records no override", () => {
+    const { svc, closures } = scratch();
+    const { blocker, dependent } = blockedPair(svc);
+    closures.closeIssue(blocker.id, { outcome: "completed", reason: "blocker finished", actor: "tester" });
+    const closure = closures.closeIssue(dependent.id, {
+      outcome: "completed",
+      reason: "now unblocked",
+      actor: "tester",
+    });
+    assert.equal(closure.outcome, "completed");
+    assert.equal(closure.blockerOverride, null);
+    assert.equal(svc.getIssue(dependent.id).lifecycleState, "done");
+  });
+
+  it("does not block superseded or duplicate closes, which claim no delivery", () => {
+    const { svc, closures } = scratch();
+    const first = blockedPair(svc);
+    const superseded = closures.closeIssue(first.dependent.id, {
+      outcome: "superseded",
+      reason: "replaced by C1-9",
+      actor: "tester",
+    });
+    assert.equal(superseded.outcome, "superseded");
+    assert.equal(superseded.blockerOverride, null);
+    const second = blockedPair(svc);
+    const duplicate = closures.closeIssue(second.dependent.id, {
+      outcome: "duplicate",
+      reason: "same as C1-1",
+      actor: "tester",
+    });
+    assert.equal(duplicate.outcome, "duplicate");
+    assert.equal(duplicate.blockerOverride, null);
+  });
+
+  it("refuses the legacy bare close too, and says which command would record an override", () => {
+    const { dbPath, svc } = scratch();
+    const { blocker, dependent } = blockedPair(svc);
+    const error = cliFail(dbPath, ["issue", "close", dependent.locator, "--project", "prj_c1"]);
+    assert.match(error, /refusing to close/);
+    assert.match(error, new RegExp(blocker.locator));
+    assert.match(error, /--force-close-with-open-blocker/);
+    assert.equal(svc.getIssue(dependent.id).lifecycleState, "open");
+  });
+
+  it("closes through the CLI with the override and shows it on the Closure row", () => {
+    const { dbPath, svc } = scratch();
+    const { blocker, dependent } = blockedPair(svc);
+    const data = cli(dbPath, [
+      "issue", "close", dependent.locator,
+      "--project", "prj_c1",
+      "--outcome", "completed",
+      "--reason", "delivered deliberately",
+      "--force-close-with-open-blocker", "the blocker gates only the follow-up",
+    ]) as { closure: { blockerOverride: { reason: string; refs: string[] } | null } };
+    assert.deepEqual(data.closure.blockerOverride, {
+      reason: "the blocker gates only the follow-up",
+      refs: [blocker.locator],
+    });
+    // The bounded `issue show` projection must carry it too: a forced close that
+    // is only visible in the close response is invisible to the next reader.
+    process.env["SUBSTRATE_PROJECT"] = "prj_c1";
+    try {
+      const shown = cli(dbPath, ["issue", "show", dependent.locator]) as {
+        closure: { blockerOverride: { reason: string; refs: string[] } | null };
+      };
+      assert.deepEqual(shown.closure.blockerOverride, data.closure.blockerOverride);
+    } finally {
+      delete process.env["SUBSTRATE_PROJECT"];
+    }
+  });
+});
