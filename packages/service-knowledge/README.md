@@ -83,8 +83,8 @@ claude plugin install service-knowledge@xtrm
 claude plugin list | grep -A2 service-knowledge        # expect: enabled
 ```
 
-If the `xtrm` marketplace is already registered, run `claude plugin marketplace update xtrm`
-instead of `add`. In a Claude Code session, the server `service-knowledge` should show as
+If the `xtrm` marketplace is already registered, skip `add`; `claude plugin marketplace update xtrm`
+only refreshes its catalogue. In a Claude Code session, the server `service-knowledge` should show as
 connected with five tools (`knowledge_search`, `knowledge_get`, `knowledge_evidence_for_files`,
 `knowledge_status`, `knowledge_drift`). Restart the session after installing.
 
@@ -131,10 +131,13 @@ service-knowledge install        # vendors machinery, wires hooks, builds the in
 service-knowledge status         # install state, package vs consumer version
 ```
 
-Repos still on a legacy layout (`.claude/service-registry.json`, flat registries) need
-`service-knowledge migrate` first. A registry that has `last_sync` but no `last_sync_ref` is
-fail-closed in drift checks; preview the repair with `service-knowledge drift migrate`, then add
-`--apply`.
+`install` also renames a legacy `service-skills` umbrella to `service-knowledge`
+(`service-knowledge migrate` runs only that step). The extension and the tools read only the
+umbrella layout above. A registry that exists only at a legacy location
+(`.claude/skills/service-registry.json` or a flat `service-registry.json` at the repo root) is
+not found; move it with `src/service_knowledge/scripts/layout_migrator.py`, which no CLI
+subcommand calls. A registry that has `last_sync` but no `last_sync_ref` is fail-closed in
+drift checks; preview the repair with `service-knowledge drift migrate`, then add `--apply`.
 
 ### Check the whole chain
 
@@ -162,8 +165,14 @@ git -C ~/dev/vaultctl pull --ff-only
 ```
 
 Re-run `./install.sh` only when packaging changes (a new dependency). After the CLI, update the
-plugin (`claude plugin marketplace update xtrm`) and, for source B, the pi package
-(`pi update`). Update the CLI **before** the plugin or extension. In each consumer repo,
+plugin and, for source B, the pi package. Update the CLI **before** the plugin or extension.
+
+```bash
+claude plugin marketplace update xtrm          # refresh the catalogue
+claude plugin update service-knowledge@xtrm    # update the plugin; restart Claude Code to apply
+pi update --extensions                         # source B only; a bare `pi update` updates pi itself
+```
+ In each consumer repo,
 `service-knowledge update` pulls the vendored machinery to the current package version.
 
 ### Troubleshooting
