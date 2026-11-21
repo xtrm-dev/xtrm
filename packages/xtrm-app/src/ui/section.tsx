@@ -27,7 +27,7 @@ export function SectionHeader({
   sticky,
   className,
 }: {
-  title: string;
+  title: ReactNode;
   count?: ReactNode;
   aside?: ReactNode;
   inset?: SectionInset;
@@ -55,6 +55,34 @@ export function SectionHeader({
       {count !== undefined && count !== null && <span className="shrink-0 text-xs text-ink-faint tabular">{count}</span>}
       {aside && <div className="ml-auto flex shrink-0 items-center gap-1">{aside}</div>}
     </div>
+  );
+}
+
+/**
+ * A titled section with its own frame: one hairline above, `px-5 py-4` padding, header inset
+ * `drawer`. This is the drawer body's unit, and the unit a page-level detail view uses when it
+ * wants the same rhythm.
+ */
+export function Section({
+  title,
+  count,
+  aside,
+  level = 3,
+  className,
+  children,
+}: {
+  title: ReactNode;
+  count?: ReactNode;
+  aside?: ReactNode;
+  level?: 2 | 3;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={cx("flex flex-col gap-2 border-t border-border-muted px-5 py-4 first:border-t-0", className)}>
+      <SectionHeader title={title} count={count} aside={aside} inset="drawer" level={level} />
+      {children}
+    </section>
   );
 }
 

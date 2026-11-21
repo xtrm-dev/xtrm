@@ -1,14 +1,16 @@
 import type { ReactNode } from "react";
 import { cx } from "./primitives.tsx";
-import { SectionHeader } from "./section.tsx";
+import { Section } from "./section.tsx";
 
-/** Titled section inside the drawer: the shared section header on the drawer's own frame. */
-export function InspectorSection({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+/**
+ * Titled section inside the drawer. `Section` is the component; this name is the one 55 call sites
+ * already read, so it stays as an alias instead of a rename sweep.
+ */
+export function InspectorSection({ title, children, aside }: { title: ReactNode; children: ReactNode; aside?: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2 border-t border-border-muted px-5 py-4 first:border-t-0">
-      <SectionHeader title={title} inset="drawer" level={3} aside={aside} />
+    <Section title={title} aside={aside}>
       {children}
-    </section>
+    </Section>
   );
 }
 

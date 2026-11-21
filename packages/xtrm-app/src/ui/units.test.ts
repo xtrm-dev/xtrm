@@ -67,14 +67,14 @@ const RULES = [
   { pattern: /fontSize:\s*\d/g, why: "px font style: name a text token" },
   // A row indent in px does not follow the operator's root size: derive it from INDENT_REM.
   { pattern: /paddingLeft:\s*\d+(?:\.\d+)?\b/g, why: "px indent: derive it from INDENT_REM (src/issues/issue-table.ts)" },
-  { pattern: /paddingLeft:\s*[\w.]+\s*\*\s*\d+(?:\.\d+)?\s*\}/g, why: "numeric indent multiplier: use INDENT_REM so the step follows root" },
+  { pattern: /paddingLeft:\s*[\w.]+\s*\*\s*\d+(?:\.\d+)?/g, why: "numeric indent multiplier: use INDENT_REM so the step follows root" },
   // The stylesheet and an inline style are the two forms a className cannot reach around.
   { pattern: /font-size:\s*\d*\.?\d+px/g, why: "px font-size in CSS: use var(--text-*)" },
   { pattern: /fontSize:\s*["'`]\d*\.?\d+px["'`]/g, why: "px font style: use var(--text-*)" },
 ];
 
 /** A scroll container must name `.thin-scrollbar` or `.no-scrollbar` on the same element. */
-const SCROLL_CONTAINER = /\boverflow(?:-[xy])?-(?:auto|scroll)\b/g;
+const SCROLL_CONTAINER = /\boverflow(?:-[xy])?-(?:auto|scroll)\b/;
 const SCROLL_TREATMENT = /\b(?:thin|no)-scrollbar\b/;
 
 const inScope = (file: string) => !OUT_OF_SCOPE.some((dir) => file.startsWith(dir + "/") || file.startsWith(dir + join("")));
@@ -95,13 +95,13 @@ const offenders = (file: string) => {
   const lines = source.split("\n");
   // A className is written on one line in every call site here; a scroll container that splits its
   // className across lines still fails, and the fix is to keep the treatment beside the overflow.
+  // Both regexes are non-global on purpose: a `g` regex used with `.test()` advances `lastIndex`,
+  // so alternating lines silently skipped the check.
   const untreatmented = lines.flatMap((text, i) =>
     SCROLL_CONTAINER.test(text) && !SCROLL_TREATMENT.test(text)
       ? [`${relative(process.cwd(), file)}:${i + 1} ${text.trim()} — scroll container: add thin-scrollbar or no-scrollbar`]
       : [],
   );
-  // `SCROLL_CONTAINER` is a `g` regex reused across lines; reset before the next file reads it.
-  SCROLL_CONTAINER.lastIndex = 0;
   return [
     ...RULES.flatMap((rule) =>
       [...source.matchAll(rule.pattern)].map((match) => `${relative(process.cwd(), file)}:${lineOf(source, match.index ?? 0)} ${match[0]} — ${rule.why}`),
@@ -140,6 +140,7 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       'const g = "text-[0.625rem]";',
       "const h = { paddingLeft: 16 };",
       "const i = { paddingLeft: depth * 16 };",
+      "const j = { paddingLeft: depth * 16, };",
       "h1 { font-size: 11px; }",
     ].join("\n");
     expect(
@@ -148,7 +149,12 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       ),
       "the scroll rule must catch the bare container and spare both treatments",
     ).toEqual(['<div className="overflow-y-auto" />']);
-    SCROLL_CONTAINER.lastIndex = 0;
+    // Two offenders on one line pair must both be caught: with a `g` regex the second was skipped.
+    expect(
+      ['<div className="overflow-y-auto" />', '<div className="overflow-x-auto" />'].filter(
+        (line) => SCROLL_CONTAINER.test(line) && !SCROLL_TREATMENT.test(line),
+      ),
+    ).toHaveLength(2);
     const hits = RULES.flatMap((rule) => [...sample.matchAll(rule.pattern)].map((match) => match[0]));
     expect(hits).toEqual([
       "text-[11px]",
@@ -157,7 +163,8 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "width={16}",
       "size={13}",
       "paddingLeft: 16",
-      "paddingLeft: depth * 16 }",
+      "paddingLeft: depth * 16",
+      "paddingLeft: depth * 16",
       "font-size: 11px",
       'fontSize: "11px"',
     ]);
