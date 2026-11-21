@@ -16,7 +16,7 @@ import { useAdapters } from "../adapters/index.tsx";
  * accessible name, which `aria-labelledby` would otherwise have to repeat at every call site. */
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div role="group" aria-label={title} className="border-t border-border-muted pt-4 first:border-t-0 first:pt-0">
+    <div role="group" aria-label={title} className="border-t border-border-muted first:border-t-0">
       <Section title={title} level={2}>
         {children}
       </Section>
