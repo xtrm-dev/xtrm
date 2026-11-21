@@ -81,6 +81,17 @@ describe("FieldLabel", () => {
     expect(heading.parentElement?.className).not.toContain("h-7");
     expect(heading.parentElement?.className).not.toContain("px-");
   });
+
+  // The class assertions above cannot tell delegation from a copy: the pre-fix h3 carried the same
+  // two classes. Identical DOM can: if FieldLabel ever re-implements the header, this fails even
+  // while every class still matches.
+  it("delegates to SectionHeader instead of re-implementing it", () => {
+    const fromLabel = render(<FieldLabel>Details</FieldLabel>).container.innerHTML;
+    const fromHeader = render(<SectionHeader title="Details" inset="none" level={3} />).container.innerHTML;
+    // FieldLabel is the header plus a margin, nothing else: the header markup has to appear verbatim.
+    expect(fromLabel).toContain(fromHeader);
+    expect(fromLabel.replace(fromHeader, "")).toBe('<div class="mb-1"></div>');
+  });
 });
 
 describe("the micro scale", () => {

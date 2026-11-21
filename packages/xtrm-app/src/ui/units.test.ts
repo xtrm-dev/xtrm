@@ -71,9 +71,12 @@ const RULES = [
   { pattern: /size-\[\d*\.?\d+px\]/g, why: "px glyph size: use an ICON_CLASS step or a rem value" },
   { pattern: /\b(size|width|height)=\{\d+(?:\.\d+)?\}/g, why: "px glyph attribute: take an IconSize" },
   { pattern: /fontSize:\s*\d/g, why: "px font style: name a text token" },
-  // A row indent in px does not follow the operator's root size: derive it from INDENT_REM.
-  { pattern: /paddingLeft:\s*\d+(?:\.\d+)?\b/g, why: "px indent: derive it from INDENT_REM (src/issues/issue-table.ts)" },
-  { pattern: /paddingLeft:\s*[\w.]+\s*\*\s*\d+(?:\.\d+)?/g, why: "numeric indent multiplier: use INDENT_REM so the step follows root" },
+  // A row indent in px does not follow the operator's root size: derive it from INDENT_REM. The rule
+  // covers every side, not just the left one, and the quoted form too: a `paddingTop: "6px"` is the
+  // same drift as an unquoted one and was the shape the indent rule missed.
+  { pattern: /padding(?:Top|Right|Bottom|Left)?:\s*(?:[1-9]\d*(?:\.\d+)?|0?\.\d+)\b/g, why: "px padding: derive it from INDENT_REM (src/issues/issue-table.ts) or use a spacing step" },
+  { pattern: /padding(?:Top|Right|Bottom|Left)?:\s*[\w.]+\s*\*\s*\d+(?:\.\d+)?/g, why: "numeric padding multiplier: use INDENT_REM so the step follows root" },
+  { pattern: /padding(?:Top|Right|Bottom|Left)?:\s*["'`][\d.]+px["'`]/g, why: "quoted px padding: name a spacing step or derive it from INDENT_REM" },
   // The stylesheet and an inline style are the two forms a className cannot reach around.
   { pattern: /font-size:\s*\d*\.?\d+px/g, why: "px font-size in CSS: use var(--text-*)" },
   { pattern: /fontSize:\s*["'`]\d*\.?\d+px["'`]/g, why: "px font style: use var(--text-*)" },
@@ -154,6 +157,7 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       'const f = "text-[0.7rem]";',
       'const g = "text-[0.625rem]";',
       "const h = { paddingLeft: 16 };",
+      'const h2 = { paddingTop: "6px" };',
       "const i = { paddingLeft: depth * 16 };",
       "const j = { paddingLeft: depth * 16, };",
       "h1 { font-size: 11px; }",
@@ -180,6 +184,7 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "paddingLeft: 16",
       "paddingLeft: depth * 16",
       "paddingLeft: depth * 16",
+      'paddingTop: "6px"',
       "font-size: 11px",
       'fontSize: "11px"',
     ]);
