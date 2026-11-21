@@ -790,16 +790,20 @@ describe("Research page outlines", () => {
     const actual = screen
       .queryAllByRole("heading")
       .map((h) => `${Number(h.tagName.slice(1))} ${h.textContent}`);
-    expect(actual).toEqual([...expected]);
+    expect(actual, "a Research page opens at level 2, never deeper than 4, and renders a group at 3").toEqual([...expected]);
   });
 
   it("leaves the runs list heading-free, as the other list surfaces are", async () => {
     renderAt("/research/runs");
     await screen.findByText("Latest conclusion");
     // Deliberate, recorded at the Runs section in ResearchSurface.tsx: a list surface carries its
-    // name in the toolbar and its outline is the column headers, exactly as IssuesSurface.tsx and
-    // PullsSurface.tsx do — neither emits a heading at all. Pinned so a later reader cannot "fix"
-    // the omission by promoting a group label into a page title.
-    expect(screen.queryAllByRole("heading")).toEqual([]);
+    // name in the toolbar and its outline is the column headers. The literal is 0, not "fewer than a
+    // detail page" — an agreement between two routes can be satisfied by a page that is uniformly
+    // wrong, and an exception recorded only in prose is indistinguishable from an oversight the day
+    // someone adds a heading here by accident.
+    expect(
+      screen.queryAllByRole("heading").map((h) => h.textContent),
+      "a list surface's name lives in the toolbar and its outline is the column headers: IssuesSurface.tsx and PullsSurface.tsx each emit zero headings, so /research/runs gains a page title only by amending XTRM-954 rule (10)",
+    ).toHaveLength(0);
   });
 });
