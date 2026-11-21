@@ -1949,7 +1949,7 @@ function readCommitEvidence(flags: Flags): Array<{ sha: string; message: string 
   };
   const range = flag(flags, "commits-range");
   if (range !== undefined) {
-    if (!/^[0-9A-Za-z^~.]+\.[0-9A-Za-z^~.]+$/.test(range)) throw new Error("--commits-range must be <base>..<head>");
+    if (!/^[0-9A-Za-z^~.]+\.\.[0-9A-Za-z^~.]+$/.test(range)) throw new Error("--commits-range must be <base>..<head>");
     const res = git(["log", "--format=%H%x1f%B%x1e", range]);
     if (res.status !== 0) {
       throw new Error(`git log ${range} failed in ${repoRoot}: ${res.stderr.trim()}`);

@@ -334,6 +334,40 @@ describe("pull-request writers", () => {
     assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["commit_claimed_elsewhere"]);
   });
 
+  // XTRM-953 round 2, all three found by reading the reader instead of the writer.
+  it("a subject that names this issue and a sibling attaches the mention, not a multi-issue drop", () => {
+    const sibling = w.svc.createIssue({ projectId: "prj_xtrm", title: "sibling", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    // The form `links check` enumerates happily. A single-ref rule dropped the
+    // commit while the check listed it: a reader disagreement.
+    const message = `chore: two lanes (${w.issue.humanRef}, ${sibling.humanRef}) (#500)`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "c".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 1, findings: 2 });
+    assert.equal(w.links.listForIssue(w.issue.id)[0]!.relation, "mentioned");
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code).sort(), ["commit_multi_issue_named", "subject_receipt_missing"]);
+  });
+
+  it("a subject that names only siblings is one multi-issue finding, and links nothing", () => {
+    const a = w.svc.createIssue({ projectId: "prj_xtrm", title: "a", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    const b = w.svc.createIssue({ projectId: "prj_xtrm", title: "b", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    const message = `chore: two lanes (${a.humanRef}, ${b.humanRef}) (#501)`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "d".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 1 });
+    assert.equal(w.links.listForIssue(w.issue.id).length, 0);
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["commit_multi_issue"]);
+  });
+
+  it("reports a subject suffix once per commit, however often the observation runs", () => {
+    // The `gh` shim re-runs the same observation. A counter that adds for an
+    // already-present row reports a delta that did not happen, and the receipt
+    // finding is a fact about the commit, not about this run.
+    const sha = "e".repeat(40);
+    const message = `feat(console): one section header (${w.issue.humanRef}) (#466)`;
+    const input = { issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha, message }] };
+    assert.deepEqual(w.links.linkCommits(input), { created: 0, mentioned: 1, findings: 1 });
+    assert.deepEqual(w.links.linkCommits(input), { created: 0, mentioned: 0, findings: 0 });
+    assert.equal(w.links.listFindings("prj_xtrm").length, 1);
+  });
+
   it("a subject suffix that resolves to nothing is skipped silently", () => {
     const message = "feat: unknown lane (XTRM-424242) (#999)";
     const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "5".repeat(40), message }] });
@@ -614,6 +648,41 @@ describe("pull-request writers", () => {
       assert.deepEqual(data, { created: 0, mentioned: 1, findings: 1 });
       const rows = w.db.prepare("SELECT sha FROM issue_pr_commits").all() as Array<{ sha: string }>;
       assert.deepEqual(rows, []);
+    } finally {
+      process.chdir(saved);
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: --commits-range refuses a range with no separator", () => {
+    // The separator was `\.` instead of `\.\.` for three commits because no test
+    // passed a range that a loosened validator would accept: `abc.def` reaches git
+    // and dies on `fatal: ambiguous argument`, which looks like a repository fault
+    // rather than a refused flag. A range test using only HEAD~1..HEAD cannot see a
+    // separator bug, so both halves are pinned here.
+    const repo = tempDir("sb-pr-cli-");
+    const saved = process.cwd();
+    try {
+      const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+      git(["init", "-q"]);
+      git(["config", "user.email", "t@example.com"]);
+      git(["config", "user.name", "t"]);
+      writeFileSync(join(repo, "a.txt"), "a");
+      git(["add", "a.txt"]);
+      git(["commit", "-q", "-m", "init"]);
+      process.chdir(repo);
+      for (const range of ["abc.def", "HEAD~1.HEAD", "a.b.c"]) {
+        const res = runCli([
+          "--db", join(w.dir, "state.db"), "--json",
+          "issue", "link", "pr", w.issue.humanRef, "--project", "prj_xtrm", "--repo", "o/r", "--number", "7",
+          "--commits-range", range,
+        ]);
+        assert.notEqual(res.code, 0, `${range} must be refused`);
+        assert.match(res.stderr + res.stdout, /--commits-range must be <base>\.\.<head>/, range);
+        // Refused by the flag, before any git call: the message names the shape,
+        // not a repository fact.
+        assert.doesNotMatch(res.stderr + res.stdout, /ambiguous argument|fatal:/, range);
+      }
     } finally {
       process.chdir(saved);
       rmSync(repo, { recursive: true, force: true });

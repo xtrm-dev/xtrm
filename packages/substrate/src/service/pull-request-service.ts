@@ -292,31 +292,39 @@ export class PullRequestService {
           // without a message rewrite; a commit that carries an `XTRM-Issue:`
           // trailer never reaches here, because the trailer is authoritative.
           const suffixed = subjectIssueRefs(commit.message);
-          if (suffixed.length > 1) {
-            finding("commit_multi_issue", commit.sha, `subject names ${suffixed.join(", ")}`);
-            continue;
-          }
           if (suffixed.length === 0) continue;
-          let suffixId: string;
-          try {
-            suffixId = issues.resolveRef(suffixed[0]!).id;
-          } catch {
-            // Silent, unlike the trailer path: an unresolvable ref in a subject
-            // is a typo, and a typo in a commit that will not be edited is not
-            // evidence of anything about this issue. The distinguishable case -
-            // a real sibling ref that names a different issue - is reported
-            // below, because it is a fact this issue's reader cannot see.
-            continue;
+          // `(XTRM-811.23)` and `(XTRM-949, XTRM-958)` are both real subjects, and the second
+          // is the form `links check` enumerates happily while a single-ref rule drops the
+          // commit: a reader disagreement, not an edge. Resolve every ref once, then decide on
+          // the one that names THIS issue; only a commit that names several and none of them
+          // this one is a multi-issue commit.
+          const resolved: Array<{ id: string; ref: string }> = [];
+          for (const ref of suffixed) {
+            try {
+              resolved.push({ id: issues.resolveRef(ref).id, ref });
+            } catch {
+              // Silent, per ref: an unresolvable ref in a subject is a typo, and a typo in a
+              // commit that will not be edited is not evidence about this issue.
+            }
           }
-          if (suffixId !== input.issueId) {
-            // Another Issue is named, and that IS worth one finding: an unknown
-            // ref is a typo nobody can act on, but a commit naming a sibling
-            // issue of this Project is evidence this issue's reader cannot
-            // otherwise see. The trailer path reports the same case.
-            if (issues.getIssue(suffixId).projectId === issues.getIssue(input.issueId).projectId) {
-              finding("commit_claimed_elsewhere", commit.sha, `subject names ${suffixed[0]}, not this issue`);
+          const mine = resolved.filter((r) => r.id === input.issueId);
+          if (mine.length === 0) {
+            // One finding, not two: a commit naming several others is reported as a multi-issue
+            // commit, and only a commit naming exactly one sibling is reported as claimed
+            // elsewhere. Reporting both for one commit spends the reader's attention twice on
+            // the same fact.
+            if (resolved.length > 1) {
+              finding("commit_multi_issue", commit.sha, `subject names ${resolved.map((r) => r.ref).join(", ")}, none of them this issue`);
+              continue;
+            }
+            const other = resolved[0];
+            if (other && issues.getIssue(other.id).projectId === issues.getIssue(input.issueId).projectId) {
+              finding("commit_claimed_elsewhere", commit.sha, `subject names ${other.ref}, not this issue`);
             }
             continue;
+          }
+          if (resolved.length > 1 && mine.length === 1) {
+            finding("commit_multi_issue_named", commit.sha, `subject names ${resolved.map((r) => r.ref).join(", ")}; this issue is named too`);
           }
           // A subject ref carries no receipt, so it can name the issue but not
           // attest a delivery: the link is a mention, as a receipt-less trailer
@@ -326,9 +334,10 @@ export class PullRequestService {
           // never reaches the filter with any commit count. Measured, not
           // reasoned - a subject-only link reports `gate_mentioned_only` with
           // and without the row (XTRM-953).
-          this.mentionFromTrailer(input, now, commit.sha);
-          mentioned += 1;
-          finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
+          if (this.mentionFromTrailer(input, now, commit.sha)) {
+            mentioned += 1;
+            finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
+          }
           continue;
         }
         // Two distinct trailer names are a multi-issue commit even when one
@@ -348,21 +357,18 @@ export class PullRequestService {
         const revision = trailers.issues[0]?.issueRevision ?? null;
         const receiptId = trailers.receipts[0] ?? null;
         if (trailers.receipts.length === 0) {
-          this.mentionFromTrailer(input, now, commit.sha);
-          mentioned += 1;
+          if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
           finding("trailer_receipt_missing", commit.sha, "no XTRM-Receipt trailer");
           continue;
         }
         if (trailers.receipts.length > 1) {
-          this.mentionFromTrailer(input, now, commit.sha);
-          mentioned += 1;
+          if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
           finding("trailer_receipt_ambiguous", commit.sha, `receipts: ${trailers.receipts.join(", ")}`);
           continue;
         }
         const verdict = this.classifyReceipt(receiptId!, input.issueId);
         if (!verdict.ok) {
-          this.mentionFromTrailer(input, now, commit.sha);
-          mentioned += 1;
+          if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
           // Trailer path keeps its own code namespace; stale stays shared.
           const code = verdict.code === "receipt_unknown"
             ? "trailer_receipt_unknown"
@@ -476,8 +482,14 @@ export class PullRequestService {
     return Number(info.changes ?? 0) > 0;
   }
 
-  private mentionFromTrailer(input: CommitLinkInput, now: number, sha: string): void {
-    if (this.insertLink(input.issueId, input.repository, input.number, "mentioned", "trailer", null, input.actor, now)) {
+  /**
+   * A mention link, and whether this call is the one that created it. The boolean is load-bearing:
+   * the `gh` shim re-runs the same observation, and a counter that adds for an already-present row
+   * reports a delta that did not happen.
+   */
+  private mentionFromTrailer(input: CommitLinkInput, now: number, sha: string): boolean {
+    const created = this.insertLink(input.issueId, input.repository, input.number, "mentioned", "trailer", null, input.actor, now);
+    if (created) {
       this.issues!.appendEvent(input.issueId, "provenance.link_mentioned", {
         repository: input.repository,
         number: input.number,
@@ -486,6 +498,7 @@ export class PullRequestService {
         actor: input.actor,
       }, now);
     }
+    return created;
   }
 
   private classifyReceipt(receiptId: string, issueId: string): { ok: true; receipt: WorkReceipt } | { ok: false; code: string; detail: string } {

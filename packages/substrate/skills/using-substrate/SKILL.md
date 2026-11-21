@@ -138,7 +138,12 @@ sb provenance attach <ref> pr <owner/repo#n|url|#n> [--receipt <id>]
   in an `XTRM-Issue:` trailer or in the `(XTRM-nnn)` subject suffix `xt` writes. The two
   are not equal: a trailer plus an `XTRM-Receipt:` attests a delivery (`created_from`), a
   subject suffix only names the Issue (`mentioned`, with a `subject_receipt_missing`
-  finding), and a trailer always wins when both are present. With `--issue` it prints the
+  finding), and a trailer always wins when both are present. That difference lives in the
+  link's relation and its finding, **not** in its `source`: a suffix-sourced mention is
+  stored `source: "trailer"` because the source vocabulary describes how the link was
+  observed, and `mentioned` already tells you what it is worth. A subject naming several
+  Issues links the one it names and records `commit_multi_issue_named`; one naming several
+  others attaches nothing and records `commit_multi_issue`. With `--issue` it prints the
   manual and auto verdicts and their codes; the default check adds verdicts and exits 1
   only under `enforce`. `--dry-run` writes nothing. `--limit` bounds PRs scanned, not
   commits, so a small value often lists no candidate at all.
