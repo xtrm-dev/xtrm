@@ -50,11 +50,11 @@ All notable changes to the `service-knowledge` package.
   layout — it no longer prints "already migrated" or a bare "migrated" line
   that hides a refusal.
 
-### Fixed — line endings survive every write path (XTRM-850)
+### Fixed — line endings survive the enumerated write paths (XTRM-850)
 - New `scripts/_textio.py`: `detect_newline`, `render_for`, `write_text` and
   `atomic_write` sniff the existing target for `b"\r\n"` and write with the
   matching convention. Reads stay text mode; only the write side is aware.
-- Every read-modify-write uses it: `reconcile.atomic_write` (and therefore
+- The enumerated read-modify-writes use it: `reconcile.atomic_write` (and therefore
   `gated_write` for `SKILL.md`, plus the YAML registry stamp),
   `umbrella_generator.write_umbrella`, `skill_migrator.migrate_skill_file`,
   `layout_migrator` (SKILL.md ref rewrite and registry relocation),
