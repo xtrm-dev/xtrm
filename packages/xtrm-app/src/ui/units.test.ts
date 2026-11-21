@@ -230,7 +230,29 @@ const walk = (dir: string): string[] =>
     return inScope(path) ? [path] : [];
   });
 
+/** A directory the walk owes a contribution from: it holds a file the walk should read. */
+const ownsSource = (dir: string): boolean =>
+  readdirSync(dir, { withFileTypes: true }).some(
+    (entry) => entry.isFile() && /\.(tsx?|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name),
+  );
+
 const lineOf = (source: string, index: number) => source.slice(0, index).split("\n").length;
+
+/**
+ * What an offence asks for, by the kind of file it was found in. A stylesheet block cannot carry a
+ * class, so telling it to "add thin-scrollbar" would be advice it cannot follow: the in-block
+ * treatment exists because a rendered `pre` has no class to hold one.
+ */
+const advice = (rule: string): string => {
+  if (rule === "css-scroll-container") {
+    return "a stylesheet container declares its treatment in the block: `scrollbar-width: thin` (visible, themed) or `scrollbar-width: none` (hidden)";
+  }
+  if (rule === "css-scrollbar-value") {
+    return `scroll treatment is a closed list: ${SCROLLBAR_TREATMENTS.map((known) => `${known.property}: ${known.value}`).join(" | ")}`;
+  }
+  if (rule === "scroll-container") return "scroll container: add thin-scrollbar or no-scrollbar";
+  return RULES.find((candidate) => candidate.id === rule)?.why ?? "unnamed rule";
+};
 
 /**
  * Declaration blocks of a stylesheet. At-rules (`@layer`, `@media`) are skipped because their bodies
@@ -336,21 +358,31 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory() ? [join(dir, entry.name), ...directories(join(dir, entry.name))] : [],
       );
-    const ownSources = (dir: string) =>
-      readdirSync(dir, { withFileTypes: true }).filter(
-        (entry) => entry.isFile() && /\.(tsx?|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name),
-      );
     const missing = directories(ROOT)
       .filter((dir) => inScope(join(dir, "x")))
-      // A directory whose own files are all test files (`__fixtures__` beside its spec) has nothing
-      // the walk should have read, so it is not asked to contribute.
-      .filter((dir) => ownSources(dir).length > 0)
+      // The predicate is "owns a file the walk should have read", not "contains a file": a directory
+      // of tests only (`__fixtures__` beside its spec) has nothing to scan, and a directory with one
+      // real source file plus tests is still required. Both cases are asserted against a temp tree
+      // below, so this filter is a rule rather than a permission.
+      .filter((dir) => ownsSource(dir))
       .filter((dir) => !files.some((file) => file.startsWith(dir + "/")));
-    expect(missing, "every in-scope directory must contribute a file to the walk").toEqual([]);
+    const depth = (dir: string) => dir.split("/").length;
+    // Two failures, two sentences: a top-level directory that contributes nothing means the walk's
+    // filter skipped it, a nested one means the walk stopped recursing. One assertion could not say
+    // which, and the next reader would take whichever they expected.
+    expect(
+      missing.filter((dir) => depth(dir) === depth(ROOT) + 1),
+      "a top-level directory owns a source file but contributes none to the walk: the walk's filter skipped it",
+    ).toEqual([]);
+    expect(
+      missing.filter((dir) => depth(dir) > depth(ROOT) + 1),
+      "the walk does not recurse: a nested directory owns a source file but contributes none",
+    ).toEqual([]);
     // A guard over an empty file list would pass by accident.
     expect(files.length).toBeGreaterThan(120);
     expect(files, "the stylesheet must be in the walk").toContain(join("src", "styles.css"));
     expect(files.filter((f) => f.startsWith(join("src", "agent"))), "agent is out of scope").toEqual([]);
+
 
     const drifted: string[] = [];
     for (const file of files) {
@@ -358,7 +390,7 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       const parked = PARKS[file];
       if (!parked) {
         for (const offence of found) {
-          const why = RULES.find((rule) => rule.id === offence.rule)?.why ?? "scroll container: add thin-scrollbar or no-scrollbar";
+          const why = advice(offence.rule);
           drifted.push(`${file}:${offence.line} ${offence.match} — ${why} [${offence.rule}]`);
         }
         continue;
@@ -374,6 +406,26 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       }
     }
     expect(drifted, "no px or off-scale literal may stand outside the ladder").toEqual([]);
+  });
+
+  it("asks a directory for a contribution only when it owns a file the walk should read", () => {
+    // The filter that keeps `__fixtures__` quiet must stay a rule and not become a permission: one
+    // real source file beside several tests is still a directory the walk owes a contribution from.
+    const probe = mkdtempSync(join(tmpdir(), "units-owns-"));
+    try {
+      const mixed = join(probe, "one-source-beside-tests");
+      const testsOnly = join(probe, "tests-only");
+      mkdirSync(mixed, { recursive: true });
+      mkdirSync(testsOnly, { recursive: true });
+      writeFileSync(join(mixed, "row.tsx"), "export const row = 1;\n");
+      writeFileSync(join(mixed, "row.test.tsx"), "it(\"x\", () => {});\n");
+      writeFileSync(join(mixed, "row.stories.tsx"), "export const story = 1;\n");
+      writeFileSync(join(testsOnly, "thing.test.ts"), "it(\"x\", () => {});\n");
+      expect(ownsSource(mixed), "one source file beside tests still makes the directory owed").toBe(true);
+      expect(ownsSource(testsOnly), "a directory of tests only has nothing the walk should read").toBe(false);
+    } finally {
+      rmSync(probe, { recursive: true, force: true });
+    }
   });
 
   it("keeps every park honest, in both directions, by naming the offence", () => {
