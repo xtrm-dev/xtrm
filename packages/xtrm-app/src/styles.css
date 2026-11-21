@@ -301,7 +301,11 @@
     border-radius: var(--radius-md);
     background: var(--color-deep);
     border: 1px solid var(--color-border-muted);
+    /* A rendered `pre` carries no class, so it takes the thin-scrollbar treatment here rather than
+       from `.thin-scrollbar`: same width and colour, declared where this container can hold them. */
     overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
   }
   .xtrm-prose pre code {
     padding: 0;
