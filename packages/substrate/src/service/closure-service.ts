@@ -482,8 +482,6 @@ export class ClosureService {
     // habit is exactly what makes an override unreadable to the next person.
     const words = reason.split(/\s+/).filter((w) => w.length > 0);
     const lowered = reason.toLowerCase();
-    // Pasting the ref or the flag name satisfies a word count without saying
-    // anything, which is the habit the floor exists to prevent.
     // Three ways to satisfy the parser without saying anything: pasting the ref,
     // pasting a flag-shaped token, or pasting the flag's own name. Each arm is
     // named in its refusal, because a caller who guessed wrong needs to know
