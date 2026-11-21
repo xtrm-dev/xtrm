@@ -481,6 +481,24 @@ describe("the console has no px font size or glyph size outside the ladder", () 
         .map((block) => block.selector),
       "a container that nests another rule must still be scanned",
     ).toEqual([".bare", ".nesting"]);
+
+    // An at-rule is skipped as a block, but its body is not: `@media` holds ordinary rules, and a px
+    // length declared inside one must be found. Skipping at-rule bodies wholesale would be the same
+    // defect as dropping a nesting block, one level up.
+    const mediaRoot = mkdtempSync(join(tmpdir(), "units-css-"));
+    const mediaFile = join(mediaRoot, "media.css");
+    writeFileSync(
+      mediaFile,
+      "@media (min-width: 40rem) {\n  .media-probe {\n    overflow-x: auto;\n    padding-inline: 8px;\n  }\n}\n",
+    );
+    try {
+      expect(
+        offenders(mediaFile).map((offence) => `${offence.rule} ${offence.match}`),
+        "a rule inside an at-rule must be scanned like one outside it: the container and the px length are both reported",
+      ).toEqual(expect.arrayContaining(["css-scroll-container .media-probe", "css-px-spacing padding-inline: 8px"]));
+    } finally {
+      rmSync(mediaRoot, { recursive: true, force: true });
+    }
     expect(cssBlocks(css).map((block) => block.selector)).not.toContain("@layer utilities");
   });
 
