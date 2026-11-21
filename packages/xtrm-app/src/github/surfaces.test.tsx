@@ -7,7 +7,7 @@ import { mapIssue, mapRelease, parseLabels } from "../adapters/github/live.ts";
 import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
 import { createAppRouter } from "../app/router.tsx";
 import { filterIssues, parseGithubIssueRef } from "./issues.ts";
-import { splitFrontmatter } from "./ContentSurface.tsx";
+import { DocumentBody, splitFrontmatter } from "./ContentSurface.tsx";
 
 function renderAt(url: string) {
   const history = createMemoryHistory({ initialEntries: [url] });
@@ -114,6 +114,23 @@ describe("Repository content surface", () => {
     expect(parsed.fields).toEqual([["session_date", "2026-09-18"], ["branch", "main"]]);
     expect(parsed.body).toBe("# Report\n\nBody.");
     expect(splitFrontmatter("# Plain\n")).toEqual({ fields: [], body: "# Plain\n" });
+  });
+
+  // XTRM-956: the frontmatter row is metadata beside a 13px body, so it keeps the step below it. The
+  // assertion is on the rendered grid class, not on the source: a `size` that a later `cx` overrode
+  // would still read as "passed" in the file and render one step too large.
+  it("renders frontmatter one text step below the body copy", () => {
+    const raw = ["---", "owner: xtrm", "reviewer:", "---", "", "Body text."].join("\n");
+    const { container } = render(<DocumentBody content={raw} empty="no report" />);
+    const dl = container.querySelector("dl");
+    expect(dl).not.toBeNull();
+    expect(dl!.className).toContain("text-xs");
+    expect(dl!.className).not.toContain("text-sm");
+    expect(dl!.textContent).toContain("owner");
+    expect(dl!.textContent).toContain("xtrm");
+    // An empty value degrades to an em dash rather than an empty cell.
+    expect(dl!.textContent).toContain("—");
+    expect(container.textContent).toContain("Body text.");
   });
 
   it("renders the README and switches to CHANGELOG and to a session report", async () => {
