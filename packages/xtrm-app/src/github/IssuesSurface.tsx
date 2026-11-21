@@ -43,7 +43,7 @@ function Labels({ labels }: { labels: string[] }) {
   return (
     <span className="flex min-w-0 items-center gap-1">
       {labels.slice(0, 2).map((l) => (
-        <Badge key={l} size="xs" className="max-w-full truncate" title={l} style={{ flexShrink: 1, minWidth: 0 }}>
+        <Badge key={l} size="xs" shrink className="max-w-full truncate" title={l}>
           {l}
         </Badge>
       ))}

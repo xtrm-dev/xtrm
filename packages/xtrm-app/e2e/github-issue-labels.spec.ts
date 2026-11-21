@@ -1,14 +1,20 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * XTRM-942 review, measured in Chromium: the row's label chips could not shrink. `Badge` hardcodes
+ * XTRM-942 review, measured in Chromium: the row's label chips could not shrink. `Badge` hardcoded
  * `shrink-0` and `cx` is a plain join with no tailwind-merge, so `truncate` never engaged and a long
- * label pair painted 84px past its 144px labels cell, over the comments column. The fix lives at the
- * call site (`IssuesSurface.tsx`): `style={{ flexShrink: 1, minWidth: 0 }}`, because appending a
- * `shrink` class cannot beat the primitive's own class.
+ * label pair painted 84px past its 144px labels cell, over the comments column.
  *
- * jsdom cannot measure, so the guard is here: the same two label pairs the reviewer measured are
- * injected into the real cell on the real route, and the assertion fails if the chips stop shrinking.
+ * XTRM-952 replaced the call-site `style={{ flexShrink: 1, minWidth: 0 }}` workaround with the
+ * primitive's own contract: `<Badge shrink>` emits `shrink min-w-0` instead of `shrink-0`, so the
+ * class can win because the base class is no longer emitted. That workaround produced the masking
+ * state this spec has to distinguish: with the inline style present the guard passed while the
+ * primitive still refused to shrink.
+ *
+ * jsdom cannot measure, so the guard is here. The primary assertion is the container's: the labels
+ * cell must contain its chips (`scrollWidth <= clientWidth`). The chip-level assertions name the
+ * mechanism, and the two are separable on purpose — a gate that insisted on the mechanism would
+ * fail on harmless redundancy such as a call site that also sets the style.
  */
 
 const REPO = "xtrm-dev/xtrm";
@@ -58,6 +64,8 @@ function labelGeometry() {
       // A truncated chip reports more text than it shows; that is the ellipsis engaging.
       truncated: el.scrollWidth > el.clientWidth,
       shrink: getComputedStyle(el).flexShrink,
+      // Which class produced that shrink: the primitive's own opt-in, or something else.
+      fromPrimitive: el.classList.contains("shrink") && !el.classList.contains("shrink-0"),
     })),
   };
 }
@@ -72,16 +80,34 @@ for (const theme of ["light", "dark"] as const) {
       const geometry = (await page.evaluate(labelGeometry))!;
       const where = `${theme} ${pair.join(" + ")}`;
 
-      // The cell contains its chips: the pre-fix value here was 84px on the long pair.
+      // Layout claim, the one a reader sees: the cell contains its chips. It covers a broken render —
+      // 85px of overflow on the long pair at this base, and 85px again with the primitive reverted and
+      // the call site clean. Note that the reverted run does not report that number: the first pair's
+      // mechanism assertion fails before the long pair is reached, so the 85px is measured evidence in
+      // the PR body, not guard output.
       expect(geometry.overflow, `${where}: the labels cell does not overflow`).toBeLessThanOrEqual(0);
       for (const chip of geometry.chips) {
+        // Mechanism reading. On this primitive it is entailed by `fromPrimitive` below, and it is kept
+        // for what its failure says: "can shrink, expected 1, received 0" names the property, where the
+        // class check names the source.
         expect(chip.shrink, `${where}: ${chip.text} can shrink`).toBe("1");
+        // The assertion that separates a shipped fix from a masked one. A chip that shrinks while the
+        // primitive still emits `shrink-0` is being rescued from outside the primitive (an inline
+        // style), which is the mask this issue exists to remove. It cannot be spoofed by a caller
+        // adding `shrink` while the primitive keeps `shrink-0`: both classes land in the list and the
+        // check returns false.
+        expect(chip.fromPrimitive, `${where}: ${chip.text} shrinks because the primitive offers it`).toBe(true);
         expect(chip.right, `${where}: ${chip.text} stays inside its cell`).toBeLessThanOrEqual(geometry.cellRight);
       }
       // Truncation is what keeps the text honest: the chip shows an ellipsis instead of painting over
-      // the next column. The short pair fits, so only the long pair must be clipped.
+      // the next column. The long pair must clip. The short pair must NOT, and that is asserted rather
+      // than described: it fits with zero slack (77 + 63 + gap 4 = 144), so any metric change — a font
+      // revision, one more character, a border, a zoom step — flips it to clipping with no other signal,
+      // and an ellipsis inside the cell leaves the container assertion green.
       if (pair === PAIRS[1]) {
         expect(geometry.chips.map((c) => c.truncated), `${where}: both long chips truncate`).toEqual([true, true]);
+      } else {
+        expect(geometry.chips.map((c) => c.truncated), `${where}: the short pair fits`).toEqual([false, false]);
       }
     }
   });
