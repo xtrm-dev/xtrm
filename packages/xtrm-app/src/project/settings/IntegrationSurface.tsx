@@ -4,6 +4,7 @@ import type { BoardGap, ProjectBinding, ProjectHealth, StatusBoardAdapter, UnitP
 import { useAdapters } from "../../adapters/index.tsx";
 import { useShell } from "../../shell/context.tsx";
 import { ErrorState, LoadingState, ago } from "../../ui/primitives.tsx";
+import { SectionHeader } from "../../ui/section.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
 
 /**
@@ -91,9 +92,9 @@ function Fact({ label, value, mono, testId, unverified }: { label: string; value
 
 function Group({ title, children, testId }: { title: string; children: ReactNode; testId: string }) {
   return (
-    <section aria-label={title} data-testid={testId} className="px-1.5">
-      <h3 className="border-b border-border py-1 text-xs font-medium text-ink-muted">{title}</h3>
-      <dl className="py-1">{children}</dl>
+    <section aria-label={title} data-testid={testId} className="flex min-w-0 flex-col">
+      <SectionHeader title={title} inset="list" level={3} className="border-b border-border" />
+      <dl className="px-3 py-1">{children}</dl>
     </section>
   );
 }

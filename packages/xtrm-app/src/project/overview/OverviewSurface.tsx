@@ -5,6 +5,7 @@ import { useAdapters } from "../../adapters/index.tsx";
 import type { BoardNext, BoardRecord } from "../../adapters/status-board/types.ts";
 import { useShell } from "../../shell/context.tsx";
 import { ErrorState, LoadingState, Row, ago } from "../../ui/primitives.tsx";
+import { SectionHeader } from "../../ui/section.tsx";
 import { IntegrationState } from "../IntegrationState.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
 import { AttentionList, RowHint, attentionCounts, buildAttention, type AttentionReason } from "./AttentionList.tsx";
@@ -83,19 +84,21 @@ export function OverviewSurface() {
       <IntegrationState binding={binding.data} health={health.data ?? null} base={base} />
       <NowNext record={next.data ?? null} base={base} />
       <section aria-label="Attention" className="flex flex-col">
-        <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border-muted px-3 py-1.5">
-          <h2 className="text-xs font-medium tracking-wide text-ink-faint uppercase">Attention</h2>
-          <span className="text-xs text-ink-faint tabular" data-testid="attention-count">
-            {counts.total}
-          </span>
-          <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
-            {REASON_ORDER.filter((reason) => counts[reason] > 0).map((reason) => (
-              <span key={reason} data-testid={`attention-count-${reason.replaceAll(" ", "-").toLowerCase()}`}>
-                {reason} <span className="tabular">{counts[reason]}</span>
-              </span>
-            ))}
-          </span>
-        </header>
+        <SectionHeader
+          title="Attention"
+          count={<span data-testid="attention-count">{counts.total}</span>}
+          wrap
+          className="border-b border-border-muted"
+          aside={
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint" data-testid="attention-reasons">
+              {REASON_ORDER.filter((reason) => counts[reason] > 0).map((reason) => (
+                <span key={reason} data-testid={`attention-count-${reason.replaceAll(" ", "-").toLowerCase()}`}>
+                  {reason} <span className="tabular">{counts[reason]}</span>
+                </span>
+              ))}
+            </span>
+          }
+        />
         {caveats.length > 0 && (
           <p className="px-3 pt-1 text-xs text-ink-faint" data-testid="attention-caveat">
             Incomplete read: {caveats.join("; ")}.
@@ -122,10 +125,7 @@ function NowNext({ record, base }: { record: BoardRecord<BoardNext> | null; base
   const href = ref ? `${base}/work/issues/${ref}` : null;
   return (
     <section aria-label="Now and next" className="flex flex-col">
-      <header className="flex items-center gap-2 border-b border-border-muted px-3 py-1.5">
-        <h2 className="text-xs font-medium tracking-wide text-ink-faint uppercase">Now / next</h2>
-        <span className="ml-auto text-xs text-ink-faint">from board/next</span>
-      </header>
+      <SectionHeader title="Now / next" className="border-b border-border-muted" aside={<span className="text-xs text-ink-faint">from board/next</span>} />
       {record && rows.length > 0 ? (
         <ul className="flex flex-col" data-testid="now-next-rows">
           {rows.map((row) => {

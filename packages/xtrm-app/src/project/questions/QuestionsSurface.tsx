@@ -5,6 +5,7 @@ import type { Answer, BoardRecord, Question } from "../../adapters/status-board/
 import { useShell } from "../../shell/context.tsx";
 import { Icon } from "../../ui/icon.tsx";
 import { ErrorState, LoadingState } from "../../ui/primitives.tsx";
+import { SectionHeader } from "../../ui/section.tsx";
 import { IntegrationState } from "../IntegrationState.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
 import { QuestionRow } from "./QuestionRow.tsx";
@@ -70,12 +71,12 @@ function QuestionGroups({ groups, answered }: { groups: ReadonlyArray<QuestionGr
     <>
       {groups.map((group) => (
         <section key={group.owner} aria-label={`Owner ${group.owner}`} data-testid="question-group" data-owner={group.owner}>
-          <h4 className="flex items-baseline gap-2 px-1.5 pt-2 pb-1 text-xs font-medium text-ink-muted">
-            <span className="truncate">{group.owner}</span>
-            <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-group-count">
-              {group.rows.length}
-            </span>
-          </h4>
+          <SectionHeader
+            title={<span className="truncate">{group.owner}</span>}
+            count={<span data-testid="question-group-count">{group.rows.length}</span>}
+            inset="list"
+            level={4}
+          />
           <ul className="flex flex-col">
             {group.rows.map((question) => (
               <QuestionRow key={question.id} question={question} answered={answered} />
@@ -144,19 +145,19 @@ export function QuestionsSurface() {
         Read-only. Answering stays on the status board until XTRM-821.
       </p>
       {caveats.length > 0 && (
-        <p className="px-1.5 pt-1 text-xs text-ink-faint" data-testid="questions-caveat">
+        <p className="px-3 pt-1 text-xs text-ink-faint" data-testid="questions-caveat">
           Incomplete read: {caveats.join("; ")}.
         </p>
       )}
-      {rows.length === 0 && <p className="px-1.5 py-2 text-xs text-ink-faint">No open questions on this board.</p>}
+      {rows.length === 0 && <p className="px-3 py-2 text-xs text-ink-faint">No open questions on this board.</p>}
       {unansweredGroups.length > 0 && (
         <section aria-label="Unanswered questions" data-testid="question-section" data-section="unanswered">
-          <h3 className="flex items-baseline gap-2 px-1.5 pt-2 pb-1 text-xs font-medium text-ink">
-            <span className="truncate">Unanswered</span>
-            <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-section-count">
-              {unansweredRows.length}
-            </span>
-          </h3>
+          <SectionHeader
+            title="Unanswered"
+            count={<span data-testid="question-section-count">{unansweredRows.length}</span>}
+            inset="list"
+            level={3}
+          />
           <QuestionGroups groups={unansweredGroups} answered={false} />
         </section>
       )}
@@ -164,8 +165,8 @@ export function QuestionsSurface() {
         // Native disclosure: closed by default, so the answered backlog never pushes the open
         // questions below the first screen; the summary names the count the reader would find.
         <details data-testid="question-section" data-section="answered" className="group">
-          <summary className="flex cursor-pointer list-none items-baseline gap-2 px-1.5 pt-3 pb-1 text-xs font-medium text-ink-muted outline-none select-none hover:text-ink focus-visible:text-ink">
-            <Icon name="forward" size="xs" className="shrink-0 self-center text-ink-faint transition-transform group-open:rotate-90 motion-reduce:transition-none" />
+          <summary className="flex h-8 cursor-pointer list-none items-center gap-2 px-3 text-xs font-medium text-ink-muted outline-none select-none hover:text-ink focus-visible:text-ink">
+            <Icon name="chevronDown" size="xs" className="shrink-0 -rotate-90 text-ink-faint transition-transform group-open:rotate-0 motion-reduce:transition-none" />
             <span className="truncate">Answered</span>
             <span className="shrink-0 text-xs text-ink-faint tabular" data-testid="question-section-count">
               {answeredRows.length}

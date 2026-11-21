@@ -25,25 +25,32 @@ export function SectionHeader({
   level = 2,
   mono,
   sticky,
+  wrap,
   className,
 }: {
   title: ReactNode;
   count?: ReactNode;
   aside?: ReactNode;
   inset?: SectionInset;
-  /** Heading level: sections are h2, sections inside the drawer's entity h2 are h3. */
-  level?: 2 | 3;
+  /**
+   * Heading level follows the outline, not the styling: page sections are h2, a group inside a
+   * section is h3, an owner inside a group is h4. The type is identical at every level; only the
+   * document outline changes, so a screen reader hears the nesting the layout already shows.
+   */
+  level?: 2 | 3 | 4;
   /** The timeline's day caption: dates stay mono, but on the same box as every other header. */
   mono?: boolean;
   sticky?: boolean;
+  /** Let a long aside fall to a second line instead of clipping it; the box grows, the gutter does not. */
+  wrap?: boolean;
   className?: string;
 }) {
-  const Heading = level === 2 ? "h2" : "h3";
+  const Heading = level === 2 ? "h2" : level === 3 ? "h3" : "h4";
   return (
     <div
       className={cx(
         "flex shrink-0 items-center gap-2",
-        inset === "list" && "h-8 px-3",
+        inset === "list" && (wrap ? "min-h-8 flex-wrap px-3 py-1" : "h-8 px-3"),
         inset === "drawer" && "h-7",
         sticky && "sticky top-0 z-10 bg-surface",
         className,

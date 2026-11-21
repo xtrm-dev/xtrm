@@ -92,7 +92,7 @@ export function EventRow({ event, timeLabel, endLabel, past, repoBase }: EventRo
         <dl
           id={detailsId}
           data-testid={detailsId}
-          className="grid grid-cols-[3.5rem_1fr] gap-x-3 gap-y-0.5 border-l border-border-muted px-3 py-1.5 pl-6 text-xs"
+          className="grid grid-cols-[3.5rem_1fr] gap-x-3 gap-y-0.5 border-l border-border-muted px-3 py-1.5 pl-5 text-xs"
         >
           <dt className="text-ink-faint">ref</dt>
           <dd className="font-mono text-ink-muted">{event.ref ?? "—"}</dd>

@@ -140,4 +140,27 @@ describe("the micro scale", () => {
     expect(dense.className).toContain("text-xs");
     expect(dense.className).not.toContain("text-sm");
   });
+
+  // XTRM-935 (epic XTRM-933): the Project surfaces exposed the two remaining needs of the header.
+  // A group inside a group is an h4, not a second header component; a long aside wraps on the same
+  // gutter instead of shrinking the name or clipping the counts.
+  it("follows the outline to h4 without changing the type", () => {
+    render(<SectionHeader title="owner: dawid" level={4} inset="list" />);
+    const heading = screen.getByRole("heading", { level: 4, name: "owner: dawid" });
+    expect(heading.className).toContain("text-xs");
+    expect(heading.className).toContain("text-ink-faint");
+    expect((heading.parentElement as HTMLElement).className).toContain("h-8");
+  });
+
+  it("wraps a long aside on the same gutter instead of clipping it", () => {
+    render(<SectionHeader title="Attention" count={3} wrap aside={<span>Question 1 Blocked 1</span>} />);
+    const heading = screen.getByRole("heading", { level: 2, name: "Attention" });
+    const box = heading.parentElement as HTMLElement;
+    expect(box.className).toContain("flex-wrap");
+    // Wrapped means a minimum height, not a fixed one: the box grows, the gutter stays px-3.
+    expect(box.className).toContain("min-h-8");
+    // `min-h-8` contains the substring `h-8`; compare classes, not substrings.
+    expect(box.className.split(/\s+/)).not.toContain("h-8");
+    expect(box.className).toContain("px-3");
+  });
 });
