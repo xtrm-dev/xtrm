@@ -33,6 +33,12 @@ const ROOT = "src";
  * Scope excludes `src/agent/**` and `src/components/reui/**`: the Agent half has its own redesign
  * epic and the reui copies are unused scaffolding (epic XTRM-933 non-goals). Everything else is the
  * console language and is in scope.
+ *
+ * The scrollbar is part of that language. `styles.css` ships two treatments — `.thin-scrollbar`
+ * (the sidebar and inspector default) and `.no-scrollbar` (chrome that must not show a gutter) — and
+ * a bare `overflow-auto` silently gets the platform bar instead: a different width, a different
+ * colour, and a ~6px shift in row geometry between two views that should line up. The rule below
+ * requires every scroll container to name its treatment, so the Activity view cannot drift again.
  */
 const OUT_OF_SCOPE = [join("src", "agent"), join("src", "components", "reui")];
 
@@ -67,6 +73,10 @@ const RULES = [
   { pattern: /fontSize:\s*["'`]\d*\.?\d+px["'`]/g, why: "px font style: use var(--text-*)" },
 ];
 
+/** A scroll container must name `.thin-scrollbar` or `.no-scrollbar` on the same element. */
+const SCROLL_CONTAINER = /\boverflow(?:-[xy])?-(?:auto|scroll)\b/g;
+const SCROLL_TREATMENT = /\b(?:thin|no)-scrollbar\b/;
+
 const inScope = (file: string) => !OUT_OF_SCOPE.some((dir) => file.startsWith(dir + "/") || file.startsWith(dir + join("")));
 
 const walk = (dir: string): string[] =>
@@ -78,14 +88,26 @@ const walk = (dir: string): string[] =>
     return inScope(path) ? [path] : [];
   });
 
+const lineOf = (source: string, index: number) => source.slice(0, index).split("\n").length;
+
 const offenders = (file: string) => {
   const source = readFileSync(file, "utf8");
-  return RULES.flatMap((rule) =>
-    [...source.matchAll(rule.pattern)].map((match) => {
-      const line = source.slice(0, match.index).split("\n").length;
-      return `${relative(process.cwd(), file)}:${line} ${match[0]} — ${rule.why}`;
-    }),
+  const lines = source.split("\n");
+  // A className is written on one line in every call site here; a scroll container that splits its
+  // className across lines still fails, and the fix is to keep the treatment beside the overflow.
+  const untreatmented = lines.flatMap((text, i) =>
+    SCROLL_CONTAINER.test(text) && !SCROLL_TREATMENT.test(text)
+      ? [`${relative(process.cwd(), file)}:${i + 1} ${text.trim()} — scroll container: add thin-scrollbar or no-scrollbar`]
+      : [],
   );
+  // `SCROLL_CONTAINER` is a `g` regex reused across lines; reset before the next file reads it.
+  SCROLL_CONTAINER.lastIndex = 0;
+  return [
+    ...RULES.flatMap((rule) =>
+      [...source.matchAll(rule.pattern)].map((match) => `${relative(process.cwd(), file)}:${lineOf(source, match.index ?? 0)} ${match[0]} — ${rule.why}`),
+    ),
+    ...untreatmented,
+  ];
 };
 
 describe("the console has no px font size or glyph size outside the ladder", () => {
@@ -120,6 +142,13 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "const i = { paddingLeft: depth * 16 };",
       "h1 { font-size: 11px; }",
     ].join("\n");
+    expect(
+      ['<div className="overflow-y-auto" />', '<div className="thin-scrollbar overflow-y-auto" />', '<div className="no-scrollbar overflow-x-auto" />'].filter(
+        (line) => SCROLL_CONTAINER.test(line) && !SCROLL_TREATMENT.test(line),
+      ),
+      "the scroll rule must catch the bare container and spare both treatments",
+    ).toEqual(['<div className="overflow-y-auto" />']);
+    SCROLL_CONTAINER.lastIndex = 0;
     const hits = RULES.flatMap((rule) => [...sample.matchAll(rule.pattern)].map((match) => match[0]));
     expect(hits).toEqual([
       "text-[11px]",
