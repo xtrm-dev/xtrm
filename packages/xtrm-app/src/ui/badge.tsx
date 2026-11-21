@@ -32,16 +32,24 @@ export interface BadgeProps extends Omit<ComponentProps<"span">, "children"> {
   size?: keyof typeof SIZE;
   /** Tabular mono for values that must line up (latency, counts, versions). */
   mono?: boolean;
+  /**
+   * Opt in to shrinking. A badge is `shrink-0` by default so a chip never compresses in a toolbar,
+   * a table cell or a list gutter; inside a constrained, wrapping container that default is the
+   * wrong answer, because the chip then paints over its neighbours instead of truncating. Pass
+   * this when the container is the one that must win, and pair it with `truncate`/`max-w-full`.
+   */
+  shrink?: boolean;
   title?: string;
   children?: ReactNode;
 }
 
-export function Badge({ tone = "neutral", size = "sm", mono, className, children, ...props }: BadgeProps) {
+export function Badge({ tone = "neutral", size = "sm", mono, shrink, className, children, ...props }: BadgeProps) {
   return (
     <span
       data-slot="badge"
       className={cx(
-        "inline-flex shrink-0 items-center justify-center gap-1 rounded font-medium whitespace-nowrap tabular",
+        "inline-flex items-center justify-center gap-1 rounded font-medium whitespace-nowrap tabular",
+        shrink ? "min-w-0 shrink" : "shrink-0",
         TONE[tone],
         SIZE[size],
         mono && "font-mono",

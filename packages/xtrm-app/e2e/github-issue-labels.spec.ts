@@ -1,14 +1,20 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * XTRM-942 review, measured in Chromium: the row's label chips could not shrink. `Badge` hardcodes
+ * XTRM-942 review, measured in Chromium: the row's label chips could not shrink. `Badge` hardcoded
  * `shrink-0` and `cx` is a plain join with no tailwind-merge, so `truncate` never engaged and a long
- * label pair painted 84px past its 144px labels cell, over the comments column. The fix lives at the
- * call site (`IssuesSurface.tsx`): `style={{ flexShrink: 1, minWidth: 0 }}`, because appending a
- * `shrink` class cannot beat the primitive's own class.
+ * label pair painted 84px past its 144px labels cell, over the comments column.
  *
- * jsdom cannot measure, so the guard is here: the same two label pairs the reviewer measured are
- * injected into the real cell on the real route, and the assertion fails if the chips stop shrinking.
+ * XTRM-952 replaced the call-site `style={{ flexShrink: 1, minWidth: 0 }}` workaround with the
+ * primitive's own contract: `<Badge shrink>` emits `shrink min-w-0` instead of `shrink-0`, so the
+ * class can win because the base class is no longer emitted. That workaround produced the masking
+ * state this spec has to distinguish: with the inline style present the guard passed while the
+ * primitive still refused to shrink.
+ *
+ * jsdom cannot measure, so the guard is here. The primary assertion is the container's: the labels
+ * cell must contain its chips (`scrollWidth <= clientWidth`). The chip-level assertions name the
+ * mechanism, and the two are separable on purpose — a gate that insisted on the mechanism would
+ * fail on harmless redundancy such as a call site that also sets the style.
  */
 
 const REPO = "xtrm-dev/xtrm";
@@ -72,9 +78,14 @@ for (const theme of ["light", "dark"] as const) {
       const geometry = (await page.evaluate(labelGeometry))!;
       const where = `${theme} ${pair.join(" + ")}`;
 
-      // The cell contains its chips: the pre-fix value here was 84px on the long pair.
+      // Primary claim, the layout a reader sees: the cell contains its chips. The pre-fix value here
+      // was 85px on the long pair at this base, and 85px again with the primitive reverted and the
+      // call site clean — that second run is what the guard is for.
       expect(geometry.overflow, `${where}: the labels cell does not overflow`).toBeLessThanOrEqual(0);
       for (const chip of geometry.chips) {
+        // Mechanism claim, deliberately separate from the layout one: a passing container check with
+        // `shrink` at 0 would mean something else is absorbing the overflow, and this assertion names
+        // which state the guard distinguishes rather than trusting the number alone.
         expect(chip.shrink, `${where}: ${chip.text} can shrink`).toBe("1");
         expect(chip.right, `${where}: ${chip.text} stays inside its cell`).toBeLessThanOrEqual(geometry.cellRight);
       }
