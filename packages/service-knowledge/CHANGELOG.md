@@ -4,6 +4,13 @@ All notable changes to the `service-knowledge` package.
 
 ## [Unreleased]
 
+### Fixed — hook wiring and `.gitignore` keep CRLF (XTRM-921)
+- `wire_hooks`, `unwire_hooks` and `ensure_runtime_gitignored` now write through
+  `_textio.write_text`, so a CRLF `.claude/settings.json` or `.gitignore` keeps CRLF
+  across a real change. LF targets stay LF and a missing target is created as LF.
+  These were the last read-modify-write sites outside XTRM-850's list, which makes
+  the "every write path" claim below true.
+
 ### Fixed — the layout migrator never loses data (XTRM-849)
 - **Behaviour change:** `layout_migrator.migrate_pack` now runs a READ-ONLY
   preflight over the whole pack before any mutation. For every service it
