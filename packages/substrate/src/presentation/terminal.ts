@@ -283,6 +283,18 @@ export function renderIssueShow(payload: Record<string, unknown>, opts: Terminal
   }
   if (provenance) summary.push(`Provenance ${String(provenance.eventCount ?? 0)} events${provenance.lastEventType ? ` · ${String(provenance.lastEventType)}` : ""}`);
   if (closure) summary.push(`Closure ${String(closure.outcome ?? closure.terminalState ?? "terminal")} · ${String(closure.reason ?? "")}`.trim());
+  if (closure) {
+    // XTRM-959: a forced close says so in the summary line, so a reader cannot
+    // mistake a deliberate override for an ordered close. The full reason and
+    // the blocker refs live on the Closure row (readable with --json).
+    const forced = closure["blockerOverride"] as { reason?: unknown; refs?: unknown } | null | undefined;
+    if (forced && typeof forced === "object") {
+      const refs = Array.isArray(forced.refs) ? (forced.refs as unknown[]).map(String) : [];
+      summary.push(
+        `  forced past open ${refs.length === 1 ? "blocker" : "blockers"}${refs.length > 0 ? ` ${refs.join(", ")}` : ""}: ${String(forced.reason ?? "")}`,
+      );
+    }
+  }
   if (closure && closure["closed"] === true) {
     // The evidence refs are why the Issue is terminal; name their counts so a
     // reader knows the Closure row carries them and can read them with --json.

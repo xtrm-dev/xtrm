@@ -64,6 +64,13 @@ export interface CloseIssueInput {
   artifactRefs?: string[];
   linkGate?: GateMode;
   gateOverride?: string;
+  /**
+   * XTRM-959: the caller's stated justification for closing while a blocking
+   * dependency is still open. Empty/absent means "no override" — the close is
+   * then refused, because a terminal issue whose own declared dependency is
+   * unresolved cannot be told apart from an ordered close.
+   */
+  blockerOverrideReason?: string | null;
   now?: number;
 }
 
@@ -173,6 +180,14 @@ export class ClosureService {
     if ((TERMINAL_STATES as readonly string[]).includes(issue.lifecycleState)) {
       throw new Error(`already terminal: ${issueId} is ${issue.lifecycleState}; reopen before closing again (history is immutable)`);
     }
+    // XTRM-959: a declared blocking dependency that is still open refuses the
+    // close, unless the caller says why it no longer binds. Checked before the
+    // link gate and before any row is written, so a refusal leaves no partial
+    // closure. Outcomes that point at another issue rather than delivering
+    // (superseded|duplicate) and the cancel path are exempt by contract.
+    const blockerOverride = kind === "close"
+      ? this.settleOpenBlockers(issueId, input.outcome, input.blockerOverrideReason ?? null)
+      : null;
     if (kind === "close" && input.outcome === "completed") {
       // Only a delivery close is gated. Before any closure row: warn (event,
       // proceed), enforce (throw, write nothing) or off.
@@ -219,6 +234,7 @@ export class ClosureService {
       source: "sb",
       legacyState: null,
       closedAt: now,
+      blockerOverride,
     };
     this.insertClosure(closure);
     this.db
@@ -358,6 +374,8 @@ export class ClosureService {
       source: "beads",
       legacyState: input.legacyState,
       closedAt: input.closedAt ?? closedAt,
+      // Synthesised for an already-terminal issue: no override was recorded.
+      blockerOverride: null,
     };
     return withTransaction(this.db, () => {
       if (this.getLatestClosure(issueId) !== null) return this.getLatestClosure(issueId);
@@ -419,6 +437,76 @@ export class ClosureService {
 
   // -- internals ---------------------------------------------------------------
 
+  // -- XTRM-959: open blocking dependencies on the close path ---------------
+  // Read from the local store (no network): a blocker is satisfied only by a
+  // closed issue, never by an open PR. Human refs are what the caller can act
+  // on, so the refusal names those rather than internal ids.
+
+  private openBlockerRefs(issueId: string): string[] {
+    return this.issues.unsatisfiedBlockers(issueId).map((id) => {
+      try {
+        return this.issues.getIssue(id).locator;
+      } catch {
+        return id;
+      }
+    });
+  }
+
+  /** Refuses a delivery close past an open blocker unless `overrideReason` says why it no longer binds. */
+  private settleOpenBlockers(
+    issueId: string,
+    outcome: ClosureOutcome,
+    overrideReason: string | null,
+  ): { reason: string; refs: string[] } | null {
+    // `superseded` and `duplicate` point at another issue instead of claiming
+    // delivery; `cancelled` is the cancel path. None of them assert that the
+    // blocked work was done, so none of them carry this check (contract
+    // CONSTRAINT, XTRM-959).
+    if (outcome === "superseded" || outcome === "duplicate" || outcome === "cancelled") return null;
+    const refs = this.openBlockerRefs(issueId);
+    if (refs.length === 0) return null;
+    const issue = this.issues.getIssue(issueId);
+    const reason = (overrideReason ?? "").trim();
+    if (reason === "") {
+      throw new Error(
+        `refusing to close ${issue.locator}: ${refs.length === 1 ? "blocker" : "blockers"} ${refs.join(", ")} ` +
+          `${refs.length === 1 ? "is" : "are"} still open. A blocker is satisfied only by a closed issue or a merged PR — ` +
+          `an open PR is not evidence. Close ${refs.join(", ")} first, or state why it no longer binds: ` +
+          `sb issue close ${issue.locator} --outcome ${outcome} --reason "<why this issue is finished>" ` +
+          `--force-close-with-open-blocker "<why ${refs.join(", ")} no longer binds>"`,
+      );
+    }
+    // The flag carries the reason, so it must read like one: a bare boolean (or
+    // a word that only satisfies a parser) becomes a habit within a week, and a
+    // habit is exactly what makes an override unreadable to the next person.
+    const words = reason.split(/\s+/).filter((w) => w.length > 0);
+    if (words.length < 2 || reason.length < 12) {
+      throw new Error(
+        `refusing to close ${issue.locator}: --force-close-with-open-blocker needs a sentence saying why ` +
+          `${refs.join(", ")} no longer binds, not "${reason}". Nothing was closed.`,
+      );
+    }
+    return { reason, refs };
+  }
+
+  /**
+   * Legacy bare `close` (no Closure row) shares the blocker rule, but has no
+   * row to record an override on — so it can only refuse. A caller who means
+   * to close past a blocker uses `--outcome ... --force-close-with-open-blocker`.
+   */
+  assertNoOpenBlockers(issueId: string): void {
+    const refs = this.openBlockerRefs(issueId);
+    if (refs.length === 0) return;
+    const issue = this.issues.getIssue(issueId);
+    throw new Error(
+      `refusing to close ${issue.locator}: ${refs.length === 1 ? "blocker" : "blockers"} ${refs.join(", ")} ` +
+        `${refs.length === 1 ? "is" : "are"} still open. A blocker is satisfied only by a closed issue or a merged PR — ` +
+        `an open PR is not evidence. To close deliberately, state why it no longer binds: ` +
+        `sb issue close ${issue.locator} --outcome completed --reason "<why this issue is finished>" ` +
+        `--force-close-with-open-blocker "<why ${refs.join(", ")} no longer binds>"`,
+    );
+  }
+
   private insertClosure(c: Closure): void {
     this.db
       .prepare(
@@ -426,8 +514,9 @@ export class ClosureService {
            (closure_id, issue_id, issue_revision, contract_hash, terminal_state, outcome,
             reason, actor, execution_context_json, validation_refs_json,
             journal_result_refs_json, receipt_refs_json, artifact_refs_json,
-            source, legacy_state, closed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            source, legacy_state, closed_at, blocker_override_reason,
+            blocker_override_refs_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         c.closureId,
@@ -446,6 +535,8 @@ export class ClosureService {
         c.source,
         c.legacyState,
         c.closedAt,
+        c.blockerOverride ? c.blockerOverride.reason : null,
+        JSON.stringify(c.blockerOverride ? c.blockerOverride.refs : []),
       );
   }
 
@@ -526,6 +617,11 @@ export class ClosureService {
       source: source === "beads" ? "beads" : "sb",
       legacyState: (r["legacy_state"] as string | null) ?? null,
       closedAt: r["closed_at"] as number,
+      blockerOverride: (() => {
+        const why = r["blocker_override_reason"] as string | null | undefined;
+        if (why === null || why === undefined || why === "") return null;
+        return { reason: why, refs: list("blocker_override_refs_json") };
+      })(),
     };
   }
 
