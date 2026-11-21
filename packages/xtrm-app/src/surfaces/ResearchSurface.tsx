@@ -10,9 +10,10 @@ import { useShell } from "../shell/context.tsx";
 import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, cx, type Tone } from "../ui/primitives.tsx";
+import { Fields } from "../ui/drawer.tsx";
 import { SectionHeader } from "../ui/section.tsx";
 import { ToolbarButton } from "../ui/toolbar.tsx";
-import { MetricFields, UsageFields } from "./research-format.tsx";
+import { LABEL_COLUMN, MetricFields, UsageFields } from "./research-format.tsx";
 import { ResearchCharts, chartSpecs } from "./research-charts.tsx";
 import { DecisionCriteriaSection, GlossaryMetricRow, MethodSection, ResearchQuestionSection, ResultSummarySection } from "./research-semantic.tsx";
 
@@ -124,15 +125,6 @@ function GlossaryDefinitionRow({ name, entry }: { name: string; entry: MetricGlo
   );
 }
 
-function DetailField({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="col-span-2 grid grid-cols-subgrid">
-      <dt className="text-ink-faint">{label}</dt>
-      <dd className="text-ink">{value}</dd>
-    </div>
-  );
-}
-
 /** The stable experiment-detail route: registry definition first, related runs second. Missing
  * optional fields are explicitly absent, never placeholdered with invented prose. */
 export function ExperimentDetailSurface() {
@@ -170,26 +162,29 @@ export function ExperimentDetailSurface() {
           <div className="flex flex-col gap-6">
             <section aria-label="Definition" className="flex flex-col px-3">
               <SectionHeader title="Definition" level={2} inset="none" className="mb-2" />
-              <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1.5 text-sm">
-                <DetailField label="Description" value={semantics?.description ?? <span className="text-ink-faint">not recorded</span>} />
-                <DetailField label="Research question" value={semantics?.researchQuestion ?? <span className="text-ink-faint">not recorded</span>} />
-                <DetailField label="Hypothesis" value={semantics?.hypothesis ?? <span className="text-ink-faint">not recorded</span>} />
-                {semantics?.terminology && (
-                  <DetailField
-                    label="Terminology"
-                    value={
-                      <dl className="space-y-0.5">
-                        {semantics.terminology.map(([term, definition]) => (
-                          <div key={term} className="flex gap-2 text-xs leading-snug">
-                            <dt className="shrink-0 font-mono text-ink">{term}</dt>
-                            <dd className="text-ink-faint">{definition}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    }
-                  />
-                )}
-              </dl>
+              <Fields
+                labelWidth={LABEL_COLUMN}
+                rows={[
+                  ["Description", semantics?.description ?? <span className="text-ink-faint">not recorded</span>],
+                  ["Research question", semantics?.researchQuestion ?? <span className="text-ink-faint">not recorded</span>],
+                  ["Hypothesis", semantics?.hypothesis ?? <span className="text-ink-faint">not recorded</span>],
+                  ...(semantics?.terminology
+                    ? [
+                        [
+                          "Terminology",
+                          <dl className="space-y-0.5">
+                            {semantics.terminology.map(([term, definition]) => (
+                              <div key={term} className="flex gap-2 text-xs leading-snug">
+                                <dt className="shrink-0 font-mono">{term}</dt>
+                                <dd className="text-ink-faint">{definition}</dd>
+                              </div>
+                            ))}
+                          </dl>,
+                        ] as [ReactNode, ReactNode],
+                      ]
+                    : []),
+                ]}
+              />
             </section>
             <DecisionCriteriaSection experiment={semantics} />
             <section aria-label="Metric glossary" className="flex flex-col">
@@ -573,38 +568,37 @@ function ManifestSection({ runId, manifest, onInspect }: { runId: string; manife
           </button>
         }
       />
-      <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1.5 text-sm">
-        <dt className="text-ink-faint">Experiment</dt>
-        <dd className="text-ink">{experiment ? `${experiment.id}@${experiment.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
-        <dt className="text-ink-faint">Workload</dt>
-        <dd className="text-ink">{workload ? `${workload.id}@${workload.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
-        <dt className="text-ink-faint">Variant</dt>
-        <dd className="text-ink">{variant ? `${variant.id}@${variant.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
-        <dt className="text-ink-faint">Dataset</dt>
-        <dd className="text-ink">{dataset ? `${dataset.id}@${dataset.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
-        <dt className="text-ink-faint">Accounting</dt>
-        <dd className="text-ink">
-          {accounting ? (
-            `${accounting.priceTableVersion} · ${accounting.telemetrySchemaVersion} · ${accounting.otelSemconvRef}`
-          ) : (
-            <span className="text-danger">Accounting provenance unavailable</span>
-          )}
-        </dd>
-        <dt className="text-ink-faint">Lineage</dt>
-        <dd className="text-ink">
-          {lineage.length === 0 ? (
-            <span className="text-ink-faint">no lineage refs</span>
-          ) : (
-            <span className="flex flex-wrap gap-x-3">
-              {lineage.map((l) => (
-                <button key={`${l.relation}:${l.runId}`} type="button" onClick={() => inspect({ kind: "research-run", ref: l.runId })} className="text-accent-ink hover:underline">
-                  {l.relation} → {l.runId}
-                </button>
-              ))}
-            </span>
-          )}
-        </dd>
-      </dl>
+      <Fields
+        labelWidth={LABEL_COLUMN}
+        rows={[
+          ["Experiment", experiment ? `${experiment.id}@${experiment.version}` : <span className="text-ink-faint">unresolved</span>],
+          ["Workload", workload ? `${workload.id}@${workload.version}` : <span className="text-ink-faint">unresolved</span>],
+          ["Variant", variant ? `${variant.id}@${variant.version}` : <span className="text-ink-faint">unresolved</span>],
+          ["Dataset", dataset ? `${dataset.id}@${dataset.version}` : <span className="text-ink-faint">unresolved</span>],
+          [
+            "Accounting",
+            accounting ? (
+              `${accounting.priceTableVersion} · ${accounting.telemetrySchemaVersion} · ${accounting.otelSemconvRef}`
+            ) : (
+              <span className="text-danger">Accounting provenance unavailable</span>
+            ),
+          ],
+          [
+            "Lineage",
+            lineage.length === 0 ? (
+              <span className="text-ink-faint">no lineage refs</span>
+            ) : (
+              <span className="flex flex-wrap gap-x-3">
+                {lineage.map((l) => (
+                  <button key={`${l.relation}:${l.runId}`} type="button" onClick={() => inspect({ kind: "research-run", ref: l.runId })} className="text-accent-ink hover:underline">
+                    {l.relation} → {l.runId}
+                  </button>
+                ))}
+              </span>
+            ),
+          ],
+        ]}
+      />
     </section>
   );
 }
@@ -675,8 +669,13 @@ export function RunComparisonSurface() {
             <div role="columnheader" className={COMPARISON_CELL}>Metric</div>
             <div role="columnheader" className={COMPARISON_CELL}>{baselineId} (baseline)</div>
             {candidateIds.map((c) => (
-              <div key={c} role="columnheader" aria-colspan={2} className={COMPARISON_CELL} style={{ gridColumn: "span 2" }}>
-                {c}
+              // The candidate header spans its value and delta tracks, and the value track is
+              // `minmax(0, 1.2fr)`: a run id longer than the track would wrap inside the fixed
+              // `h-8` row and push the table down. It ellipsises instead, with the id in `title`.
+              <div key={c} role="columnheader" aria-colspan={2} className={cx(COMPARISON_CELL, "overflow-hidden")} style={{ gridColumn: "span 2" }}>
+                <span className="min-w-0 truncate" title={c}>
+                  {c}
+                </span>
               </div>
             ))}
           </div>

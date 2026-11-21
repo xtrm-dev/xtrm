@@ -5,9 +5,11 @@
 // run manifest. Missing v2 fields render nothing rather than a placeholder, so a pre-v2
 // experiment keeps its old page shape. The first viewport answers why / what happened /
 // what it means; provenance stays below (see ResearchSurface).
+import type { ReactNode } from "react";
 import { useResearchQuestionSpec } from "../app/queries.ts";
-import { MetricFields } from "./research-format.tsx";
+import { DENSE_LABEL_COLUMN, LABEL_COLUMN, MetricFields } from "./research-format.tsx";
 import { Badge } from "../ui/badge.tsx";
+import { Fields } from "../ui/drawer.tsx";
 import { Row } from "../ui/primitives.tsx";
 import { SectionHeader } from "../ui/section.tsx";
 import {
@@ -67,47 +69,30 @@ export function ResearchQuestionSection({
   if (!experiment?.researchQuestion && !experiment?.hypothesis && !intent.purpose && !intent.rationale) return null;
   return (
     <SemanticSection title="Why this run" hint={runId}>
-      <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1.5">
-        {experiment?.researchQuestion && (
-          <>
-            <dt className="text-ink-faint">Research question</dt>
-            <dd className="text-ink">{experiment.researchQuestion}</dd>
-          </>
-        )}
-        {experiment?.hypothesis && (
-          <>
-            <dt className="text-ink-faint">Hypothesis</dt>
-            <dd className="text-ink">{experiment.hypothesis}</dd>
-          </>
-        )}
-        {intent.purpose && (
-          <>
-            <dt className="text-ink-faint">Run purpose</dt>
-            <dd className="text-ink-muted">{intent.purpose}</dd>
-          </>
-        )}
-        {intent.rationale && (
-          <>
-            <dt className="text-ink-faint">Why now</dt>
-            <dd className="text-ink-muted">{intent.rationale}</dd>
-          </>
-        )}
-        {experiment?.terminology && (
-          <>
-            <dt className="text-ink-faint self-start pt-0.5">Terminology</dt>
-            <dd>
-              <dl className="space-y-0.5">
-                {experiment.terminology.map(([term, definition]) => (
-                  <div key={term} className="flex gap-2 text-xs leading-snug">
-                    <dt className="shrink-0 font-mono text-ink">{term}</dt>
-                    <dd className="text-ink-faint">{definition}</dd>
-                  </div>
-                ))}
-              </dl>
-            </dd>
-          </>
-        )}
-      </dl>
+      <Fields
+        labelWidth={LABEL_COLUMN}
+        rows={[
+          ...(experiment?.researchQuestion ? [["Research question", <span className="text-ink">{experiment.researchQuestion}</span>] as [ReactNode, ReactNode]] : []),
+          ...(experiment?.hypothesis ? [["Hypothesis", <span className="text-ink">{experiment.hypothesis}</span>] as [ReactNode, ReactNode]] : []),
+          ...(intent.purpose ? [["Run purpose", <span className="text-ink-muted">{intent.purpose}</span>] as [ReactNode, ReactNode]] : []),
+          ...(intent.rationale ? [["Why now", <span className="text-ink-muted">{intent.rationale}</span>] as [ReactNode, ReactNode]] : []),
+          ...(experiment?.terminology
+            ? [
+                [
+                  "Terminology",
+                  <dl className="space-y-0.5">
+                    {experiment.terminology.map(([term, definition]) => (
+                      <div key={term} className="flex gap-2 text-xs leading-snug">
+                        <dt className="shrink-0 font-mono">{term}</dt>
+                        <dd className="text-ink-faint">{definition}</dd>
+                      </div>
+                    ))}
+                  </dl>,
+                ] as [ReactNode, ReactNode],
+              ]
+            : []),
+        ]}
+      />
     </SemanticSection>
   );
 }
@@ -203,7 +188,7 @@ function QuestionSpecRow({ q }: { q: QuestionRef }) {
       </div>
       {instructions && <p className="text-xs leading-snug text-ink-muted">{instructions}</p>}
       {criteria && (
-        <dl className="grid grid-cols-[3.5rem_1fr] gap-x-2 text-xs leading-snug">
+        <dl className="grid gap-x-2 text-xs leading-snug" style={{ gridTemplateColumns: `${DENSE_LABEL_COLUMN} 1fr` }}>
           {criteria.map(([k, v]) => (
             <div key={k} className="col-span-2 grid grid-cols-subgrid">
               <dt className="font-mono text-ink-faint">{k}</dt>
@@ -238,20 +223,24 @@ export function MethodSection({
     .filter((q) => q.id && q.version);
   return (
     <SemanticSection title="Method">
-      <dl className="mb-2 grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1.5">
-        <dt className="text-ink-faint">Dataset</dt>
-        <dd className="text-ink">{dataset ? `${dataset.id}@${dataset.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
-        <dt className="text-ink-faint">Workload</dt>
-        <dd className="text-ink">{workload ? `${workload.id}@${workload.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
-        <dt className="text-ink-faint">Variant</dt>
-        <dd className="text-ink">{variant ? `${variant.id}@${variant.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
-        <dt className="text-ink-faint">Backend</dt>
-        <dd className="font-mono text-xs text-ink-muted">
-          {backend
-            ? [String(backend.provider ?? "?"), String(backend.model ?? "?"), String(backend.model_version ?? "?")].join(" · ")
-            : <span className="text-ink-faint">unrecorded</span>}
-        </dd>
-      </dl>
+      <div className="mb-2">
+        <Fields
+          labelWidth={LABEL_COLUMN}
+          rows={[
+            ["Dataset", dataset ? `${dataset.id}@${dataset.version}` : <span className="text-ink-faint">unresolved</span>],
+            ["Workload", workload ? `${workload.id}@${workload.version}` : <span className="text-ink-faint">unresolved</span>],
+            ["Variant", variant ? `${variant.id}@${variant.version}` : <span className="text-ink-faint">unresolved</span>],
+            [
+              "Backend",
+              <span className="font-mono text-xs text-ink-muted">
+                {backend
+                  ? [String(backend.provider ?? "?"), String(backend.model ?? "?"), String(backend.model_version ?? "?")].join(" · ")
+                  : <span className="text-ink-faint">unrecorded</span>}
+              </span>,
+            ],
+          ]}
+        />
+      </div>
       {refs.length > 0 && (
         <>
           <p className="mb-1.5 text-xs text-ink-faint">System One questions ({refs.length})</p>

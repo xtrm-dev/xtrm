@@ -7,6 +7,22 @@ import { Fields } from "../ui/drawer.tsx";
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
 
+/** The one label-column step for a Research field grid (XTRM-948).
+ *
+ * `Fields` already owns the gutter (`gap-x-3`, 0.75rem), so the COLUMN is the step and a page must
+ * not restate the template: a 10rem column starts its values at 172px, an 8rem column at 140px, and
+ * 7.5rem at 132px, so four pages that look alike disagreed about where a value begins. Pass this to
+ * `Fields` rather than writing a new `gridTemplateColumns`.
+ *
+ * The one sanctioned exception is the dense criteria grid: keys are literally `true`/`false` (about
+ * 28px of text in a 56px track) with its own `gap-x-2`, because it is a key/value legend, not a
+ * field list. It is bounded by LABEL LENGTH, not by row density — an 8-character label is the limit,
+ * and renaming those keys to `supported`/`unsupported` would overflow the fixed track. */
+export const LABEL_COLUMN = "10rem";
+
+/** The sanctioned dense exception's column (see `LABEL_COLUMN`). */
+export const DENSE_LABEL_COLUMN = "3.5rem";
+
 /** One renderer, two layouts: `fields` is the drawer's label/value list, `inline` is the compact
  * single line shared by the run analysis metrics table and the comparison metric cell. */
 export type FieldLayout = "fields" | "inline";
@@ -29,6 +45,7 @@ export function MetricFields({ metric, layout = "fields" }: { metric: Metric; la
   const interval = metric.ci95 ? `[${fmt(metric.ci95[0])}, ${fmt(metric.ci95[1])}]` : <span className="text-ink-faint">no interval — {metric.method}</span>;
   return (
     <Fields
+      labelWidth={LABEL_COLUMN}
       rows={[
         ["Value", <span className="tabular">{fmt(metric.value)}</span>],
         ["95% CI", interval],

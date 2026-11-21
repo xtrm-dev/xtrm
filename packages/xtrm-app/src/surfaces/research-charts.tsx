@@ -2,6 +2,7 @@ import { useResearchChartData } from "../app/queries.ts";
 import type { ChartDataRow } from "../adapters/research/types.ts";
 import { ErrorState, LoadingState } from "../ui/primitives.tsx";
 import { SectionHeader } from "../ui/section.tsx";
+import { LABEL_COLUMN } from "./research-format.tsx";
 
 export interface ChartSpec {
   id: string;
@@ -100,7 +101,7 @@ function MetricDatasetChart({
           const left = Math.min(zero, x);
           const width = Math.max(Math.abs(x - zero), 0.8);
           return (
-            <div key={row.runId} className="grid grid-cols-[8rem_1fr_auto] items-center gap-2 text-xs">
+            <div key={row.runId} className="grid items-center gap-2 text-xs" style={{ gridTemplateColumns: `${LABEL_COLUMN} 1fr auto` }}>
               <span className="truncate font-mono text-ink-faint" title={runLabels?.[row.runId] ?? row.runId}>{runLabels?.[row.runId] ?? row.runId}</span>
               <div className="relative h-4 overflow-hidden rounded-sm bg-control" aria-hidden="true">
                 <span className="absolute inset-y-0 w-px bg-border-muted" style={{ left: `${zero}%` }} />
@@ -111,7 +112,7 @@ function MetricDatasetChart({
           );
         })}
         {missing.map((row) => (
-          <div key={row.runId} className="grid grid-cols-[8rem_1fr] gap-2 text-xs">
+          <div key={row.runId} className="grid gap-2 text-xs" style={{ gridTemplateColumns: `${LABEL_COLUMN} 1fr` }}>
             <span className="truncate font-mono text-ink-faint">{runLabels?.[row.runId] ?? row.runId}</span>
             <span className="text-ink-faint">not reported</span>
           </div>

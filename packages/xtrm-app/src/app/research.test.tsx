@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 import { fixtureAdapters } from "../adapters/index.tsx";
 import { fixtureResearch } from "../adapters/research/fixture.ts";
+import { mapRunSummary } from "../adapters/research/live.ts";
 import fixture from "../adapters/research/__fixtures__/xtrm-research-fixture.json";
 import { isInvalidManifestRow, type Metric, type ResearchAdapter, type RunListRow, type RunSummary, type SampleRecord, type TailCursor, type TailEvent } from "../adapters/research/types.ts";
 import { MODES, modeForPath } from "./destinations.ts";
@@ -481,6 +482,34 @@ describe("A metric renders value, interval and method together, whichever half i
     expect(declared).toBe(firstBodyRow!.children.length);
     expect(screen.getByRole("columnheader", { name: "run-b" }).getAttribute("aria-colspan")).toBe("2");
   });
+
+  it("keeps a run id longer than its column on one line, ellipsised with the whole id in title", async () => {
+    // The value column is `minmax(0, 1.2fr)` and the header row is a fixed `h-8`, so an id wider
+    // than its track has to truncate: wrapping moves the table down and misaligns the columns.
+    // The fixture ids are 5 characters, which cannot show either behaviour, so this case supplies
+    // its own comparison through the adapter seam.
+    const LONG = "run-2026-09-16-dup-detect-baseline-replay-with-a-long-slug";
+    const baseline = mapRunSummary(fixture.compareAB["run-a"]);
+    renderWithResearch(`/research/compare?baseline=run-a&candidate=${LONG}`, {
+      compare: async (runIds) => {
+        // `compare` is keyed by run id. The baseline carries the metrics and the candidate is
+        // deliberately empty: this case is about the header, not the values.
+        const [baselineId, ...candidateIds] = runIds;
+        expect(candidateIds).toEqual([LONG]);
+        const out: Record<string, RunSummary> = {};
+        for (const id of runIds) out[id] = { ...baseline, metrics: id === baselineId ? baseline.metrics : {} };
+        return out;
+      },
+    });
+    const header = await screen.findByRole("columnheader", { name: LONG });
+    const span = header.querySelector("span")!;
+    expect(span.textContent).toBe(LONG);
+    expect(span.getAttribute("title")).toBe(LONG);
+    expect(span.className).toContain("truncate");
+    // Clipped rather than wrapped: one line box, no taller than the header row it sits in.
+    const row = screen.getByRole("columnheader", { name: "Metric" }).parentElement!;
+    expect(header.getBoundingClientRect().height).toBeLessThanOrEqual(row.getBoundingClientRect().height);
+  });
 });
 
 describe("Usage with some fields null and some present under one null_reason", () => {
@@ -805,5 +834,38 @@ describe("Research page outlines", () => {
       screen.queryAllByRole("heading").map((h) => h.textContent),
       "a list surface's name lives in the toolbar and its outline is the column headers: IssuesSurface.tsx and PullsSurface.tsx each emit zero headings, so /research/runs gains a page title only by amending XTRM-954 rule (10)",
     ).toHaveLength(0);
+  });
+});
+
+describe("Every Research field grid shares one label column (XTRM-948)", () => {
+  // The union was seven widths (3.5 / 6.5 / 7 / 7.5 / 8 / 10rem + auto) for one concept, so two
+  // fields that look alike started their values at different x: 10rem -> 172px, 8rem -> 140px,
+  // 7.5rem -> 132px. `Fields` owns the gutter (gap-x-3), so the COLUMN is the step. This pins the
+  // column as a RENDERED property (the grid template the element actually carries) rather than a
+  // class name, because a class assertion passes on `grid-cols-[8rem_1fr]` just the same.
+  //
+  // The run page is the page that renders more than one grid: Hypothesis (2 rows), Method (4 rows)
+  // and Manifest & versions (6 rows, the one that used to be 8rem). The experiment page renders a
+  // single grid, so it cannot show a disagreement.
+  const template = (el: Element) => getComputedStyle(el).gridTemplateColumns.split(" ")[0];
+  const gridsWithTerms = () => Array.from(document.querySelectorAll("dl")).filter((dl) => dl.querySelector("dt") !== null);
+
+  it("starts every field-grid value in the same column", async () => {
+    renderAt("/research/runs/run-a");
+    await screen.findByText("Manifest & versions");
+    const columns = gridsWithTerms().map(template);
+    expect(columns.length, "the run page renders Hypothesis, Method and Manifest & versions").toBe(3);
+    expect(new Set(columns).size, "one label column: a page must not restate the template").toBe(1);
+    // jsdom does not resolve rem to px, so this pins the DECLARED step. The rendered pitch is measured
+    // in the browser (e2e/research-label-column.spec.ts): 10rem + the primitive's 0.75rem gutter = 172px.
+    expect(columns[0], "10rem is the shared step; a value starts at 172px (10rem + 0.75rem gutter)").toBe("10rem");
+  });
+
+  it("keeps the manifest column off its old 8rem", async () => {
+    renderAt("/research/runs/run-a");
+    await screen.findByText("Manifest & versions");
+    const manifest = gridsWithTerms().find((dl) => dl.querySelectorAll("dt").length === 6)!;
+    expect(manifest, "the manifest grid is the six-row one (Experiment/Workload/Variant/Dataset/Accounting/Lineage)").toBeTruthy();
+    expect(template(manifest), "8rem put a manifest value at 140px and a Definition value at 172px on the same console").toBe("10rem");
   });
 });
