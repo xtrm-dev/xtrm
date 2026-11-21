@@ -80,25 +80,34 @@ for (const theme of ["light", "dark"] as const) {
       const geometry = (await page.evaluate(labelGeometry))!;
       const where = `${theme} ${pair.join(" + ")}`;
 
-      // Primary claim, the layout a reader sees: the cell contains its chips. The pre-fix value here
-      // was 85px on the long pair at this base, and 85px again with the primitive reverted and the
-      // call site clean — that second run is what the guard is for.
+      // Layout claim, the one a reader sees: the cell contains its chips. It covers a broken render —
+      // 85px of overflow on the long pair at this base, and 85px again with the primitive reverted and
+      // the call site clean. Note that the reverted run does not report that number: the first pair's
+      // mechanism assertion fails before the long pair is reached, so the 85px is measured evidence in
+      // the PR body, not guard output.
       expect(geometry.overflow, `${where}: the labels cell does not overflow`).toBeLessThanOrEqual(0);
       for (const chip of geometry.chips) {
-        // Mechanism claim, deliberately separate from the layout one: a passing container check with
-        // `shrink` at 0 would mean something else is absorbing the overflow, and this assertion names
-        // which state the guard distinguishes rather than trusting the number alone.
+        // Mechanism reading. On this primitive it is entailed by `fromPrimitive` below, and it is kept
+        // for what its failure says: "can shrink, expected 1, received 0" names the property, where the
+        // class check names the source.
         expect(chip.shrink, `${where}: ${chip.text} can shrink`).toBe("1");
-        // Names the mechanism, not the cell: a chip that shrinks while the primitive still emits
-        // `shrink-0` is being rescued by something else (an inline style), which is the mask this
-        // issue exists to remove.
+        // The assertion that separates a shipped fix from a masked one. A chip that shrinks while the
+        // primitive still emits `shrink-0` is being rescued from outside the primitive (an inline
+        // style), which is the mask this issue exists to remove. It cannot be spoofed by a caller
+        // adding `shrink` while the primitive keeps `shrink-0`: both classes land in the list and the
+        // check returns false.
         expect(chip.fromPrimitive, `${where}: ${chip.text} shrinks because the primitive offers it`).toBe(true);
         expect(chip.right, `${where}: ${chip.text} stays inside its cell`).toBeLessThanOrEqual(geometry.cellRight);
       }
       // Truncation is what keeps the text honest: the chip shows an ellipsis instead of painting over
-      // the next column. The short pair fits, so only the long pair must be clipped.
+      // the next column. The long pair must clip. The short pair must NOT, and that is asserted rather
+      // than described: it fits with zero slack (77 + 63 + gap 4 = 144), so any metric change — a font
+      // revision, one more character, a border, a zoom step — flips it to clipping with no other signal,
+      // and an ellipsis inside the cell leaves the container assertion green.
       if (pair === PAIRS[1]) {
         expect(geometry.chips.map((c) => c.truncated), `${where}: both long chips truncate`).toEqual([true, true]);
+      } else {
+        expect(geometry.chips.map((c) => c.truncated), `${where}: the short pair fits`).toEqual([false, false]);
       }
     }
   });
