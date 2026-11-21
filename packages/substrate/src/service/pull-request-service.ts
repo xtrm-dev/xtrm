@@ -335,9 +335,10 @@ export class PullRequestService {
           // reasoned - a subject-only link reports `gate_mentioned_only` with
           // and without the row (XTRM-953).
           if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-          // A finding is a standing state, not a one-shot event: `links check` re-derives
-          // "what is wrong right now" and a reader who saw it once and not again would take
-          // it as fixed. The counter stays idempotent because it counts what this run did.
+          // A finding is an event, and `links check` re-derives it from the
+          // `issue_events` row, so a re-run reports nothing new without the
+          // finding becoming false. The counter stays idempotent because it
+          // counts what this run did (XTRM-953).
           finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
           continue;
         }
