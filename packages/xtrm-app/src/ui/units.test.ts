@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -249,14 +249,20 @@ const directories = (dir: string): string[] =>
  * a top-level directory the filter skipped, a nested one the recursion never reached.
  *
  * Takes its root and its file list as arguments so both can be asserted against a tree a test owns —
- * a guard over `ROOT` alone can only be falsified by editing the repository.
+ * a guard over `ROOT` alone can only be falsified by editing the repository. The world a test
+ * supplies must exercise the predicate it thinks it is testing, or it agrees with the bug: one of
+ * its directories holds an own source beside a contributing child, which separates the two.
  */
 function unpaidDirectories(root: string, files: string[]): { topLevel: string[]; nested: string[] } {
   const depth = (dir: string) => dir.split("/").length;
   const unpaid = directories(root)
     .filter((dir) => inScope(join(dir, "x")))
     .filter((dir) => ownsSource(dir))
-    .filter((dir) => !files.some((file) => file.startsWith(dir + "/")));
+    // "Did this directory's own files get read?", not "is any file under it?". The prefix test let a
+    // parent whose child contributes report nothing while the parent's own sources never entered the
+    // walk — `src/project` holds exactly two own sources beside seven subdirectories, so the shape
+    // exists today. `dirname` is imported from node:path.
+    .filter((dir) => !files.some((file) => dirname(file) === dir));
   return {
     topLevel: unpaid.filter((dir) => depth(dir) === depth(root) + 1),
     nested: unpaid.filter((dir) => depth(dir) > depth(root) + 1),
@@ -454,8 +460,11 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     try {
       mkdirSync(join(tree, "a", "b"), { recursive: true });
       mkdirSync(join(tree, "ts-only"), { recursive: true });
+      mkdirSync(join(tree, "beside-child", "child"), { recursive: true });
       writeFileSync(join(tree, "a", "b", "row.ts"), "export const row = 1;\n");
       writeFileSync(join(tree, "ts-only", "col.ts"), "export const col = 1;\n");
+      writeFileSync(join(tree, "beside-child", "own.ts"), "export const own = 1;\n");
+      writeFileSync(join(tree, "beside-child", "child", "deep.ts"), "export const deep = 1;\n");
 
       expect(
         directories(tree),
@@ -468,8 +477,27 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       expect(
         unpaid.topLevel,
         "a directory owning a `.ts` source is owed a contribution, at the top level too",
-      ).toEqual([join(tree, "ts-only")]);
-      expect(unpaid.nested, "and at a nested level").toEqual([join(tree, "a", "b")]);
+      ).toEqual([join(tree, "beside-child"), join(tree, "ts-only")]);
+      expect(unpaid.nested, "and at a nested level").toEqual([
+        join(tree, "a", "b"),
+        join(tree, "beside-child", "child"),
+      ]);
+
+      // A directory's own file beside a child that contributes. Asking "is any file under this
+      // directory?" instead of "did this directory's own files get read?" leaves the parent
+      // exempt while its own source vanishes from the walk — `src/project` has that shape today.
+      // The file list here holds the child only, so the parent's own source was never read.
+      // Both children contribute, so the only directory left owed is the parent whose own source
+      // never entered the walk.
+      const partial = unpaidDirectories(tree, [
+        join(tree, "a", "b", "row.ts"),
+        join(tree, "beside-child", "child", "deep.ts"),
+      ]);
+      expect(
+        partial.topLevel,
+        "a child that contributes does not discharge its parent's own unread source",
+      ).toEqual([join(tree, "beside-child"), join(tree, "ts-only")]);
+      expect(partial.nested, "the child did contribute, so it is not owed").toEqual([]);
     } finally {
       rmSync(tree, { recursive: true, force: true });
     }
