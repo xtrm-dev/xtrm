@@ -83,3 +83,12 @@ def test_gitignore_keeps_lf_and_creates_lf(tmp_path):
     _init_repo(other)
     common.ensure_runtime_gitignored(other)
     assert b"\r" not in (other / ".gitignore").read_bytes()
+
+
+def test_gitignore_crlf_without_trailing_newline(tmp_path):
+    _init_repo(tmp_path)
+    gi = tmp_path / ".gitignore"
+    gi.write_bytes(b"node_modules/\r\ndist/")
+    common.ensure_runtime_gitignored(tmp_path)
+    data = gi.read_bytes()
+    assert data == b"node_modules/\r\ndist/\r\n.xtrm/state/service-knowledge/\r\n"

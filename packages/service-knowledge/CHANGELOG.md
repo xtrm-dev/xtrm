@@ -8,8 +8,9 @@ All notable changes to the `service-knowledge` package.
 - `wire_hooks`, `unwire_hooks` and `ensure_runtime_gitignored` now write through
   `_textio.write_text`, so a CRLF `.claude/settings.json` or `.gitignore` keeps CRLF
   across a real change. LF targets stay LF and a missing target is created as LF.
-  These were the last read-modify-write sites outside XTRM-850's list, which makes
-  the "every write path" claim below true.
+  These were the sites XTRM-850 left out. Other write sites outside the
+  service-knowledge install and reconcile paths (for example `scaffolder.py` and
+  the hook writes in `install-service-knowledge.py`) are not covered by this change.
 
 ### Fixed — the layout migrator never loses data (XTRM-849)
 - **Behaviour change:** `layout_migrator.migrate_pack` now runs a READ-ONLY
@@ -66,9 +67,8 @@ All notable changes to the `service-knowledge` package.
   re-emitting it as LF would rewrite every line. Lone `\r` cannot be preserved
   (the unchanged text-mode read folds it), and that limit is now stated in the
   helper.
-- Not yet converted (outside this issue's enumerated list, follow-up):
-  `cli.common` still rewrites `.claude/settings.json` and `.gitignore` through
-  a text-mode read-modify-write, so those two files normalise CRLF to LF.
+- `cli.common` hook wiring and `.gitignore` writes were converted afterwards
+  (XTRM-921, see above).
 - `bootstrap.save_registry` now writes a trailing newline like every sibling
   registry writer (it previously wrote none).
 - `bootstrap.py` and `skill_migrator.py` gained the explicit sibling
