@@ -32,7 +32,7 @@ function SemanticSection({ title, children, hint }: { title: string; hint?: stri
     <section aria-label={title} className="flex flex-col px-3">
       <SectionHeader
         title={title}
-        level={3}
+        level={2}
         inset="none"
         className="mb-2"
         aside={hint ? <span className="text-xs text-ink-faint">{hint}</span> : undefined}

@@ -46,6 +46,14 @@ export function ExperimentListSurface() {
   const runCounts = useMemo(() => runCountsByExperiment(runs.data), [runs.data]);
   // `invalid_manifest` rows have no resolvable experiment id, but a broken run must stay
   // visible rather than being filtered out of the view.
+  //
+  // Heading outline (XTRM-954). This route's level-2 entry is the error section's title: "Unreadable
+  // run — no resolvable experiment" is rendered only under `unknown.length > 0` below, so on a clean
+  // data render the route is heading-free under the same rule as /research/runs — a list surface
+  // carries its name in the toolbar and its outline is the column headers. The pinned expectation for
+  // this route in src/app/research.test.tsx is fixture-coupled to the unreadable-run state, which is
+  // why that line is load-bearing: deleting it after a fixture cleanup is a decision, not a cleanup.
+  // Pinning the clean-data outline as well needs an adapter change, filed separately.
   const unknown = useMemo(() => (runs.data ?? []).filter(isInvalidManifestRow), [runs.data]);
   const openExperiment = (id: string) => void navigate({ to: experimentHref(id) } as never);
 
@@ -70,7 +78,7 @@ export function ExperimentListSurface() {
         })}
         {unknown.length > 0 && (
           <>
-            <SectionHeader title="Unreadable run — no resolvable experiment" level={3} />
+            <SectionHeader title="Unreadable run — no resolvable experiment" level={2} />
             {unknown.map((row) => (
               <Row key={row.id} aria-label={`${row.id} unknown experiment`}>
                 <StatusDot tone="danger" label="invalid_manifest" />
@@ -161,7 +169,7 @@ export function ExperimentDetailSurface() {
         ) : (
           <div className="flex flex-col gap-6">
             <section aria-label="Definition" className="flex flex-col px-3">
-              <SectionHeader title="Definition" level={3} inset="none" className="mb-2" />
+              <SectionHeader title="Definition" level={2} inset="none" className="mb-2" />
               <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1.5 text-sm">
                 <DetailField label="Description" value={semantics?.description ?? <span className="text-ink-faint">not recorded</span>} />
                 <DetailField label="Research question" value={semantics?.researchQuestion ?? <span className="text-ink-faint">not recorded</span>} />
@@ -185,7 +193,7 @@ export function ExperimentDetailSurface() {
             </section>
             <DecisionCriteriaSection experiment={semantics} />
             <section aria-label="Metric glossary" className="flex flex-col">
-              <SectionHeader title="Metric glossary" level={3} />
+              <SectionHeader title="Metric glossary" level={2} />
               {glossary.size === 0 ? (
                 <p className="px-3 text-sm text-ink-faint">This experiment declares no metric glossary.</p>
               ) : (
@@ -197,11 +205,15 @@ export function ExperimentDetailSurface() {
               )}
             </section>
             <section aria-label="Declared charts" className="flex flex-col">
-              <SectionHeader title="Declared charts" level={3} />
+              <SectionHeader title="Declared charts" level={2} />
               {specs.length === 0 ? (
                 <p className="px-3 text-sm text-ink-faint">This experiment declares no charts.</p>
               ) : relatedRuns.length > 0 ? (
-                <ResearchCharts experiment={experiment.data!} runIds={relatedRuns.map((r) => r.id)} />
+                <ResearchCharts
+                  experiment={experiment.data!}
+                  runIds={relatedRuns.map((r) => r.id)}
+                  level={3}
+                />
               ) : (
                 <div className="flex flex-col divide-y divide-border-muted">
                   {specs.map((spec) => (
@@ -215,7 +227,7 @@ export function ExperimentDetailSurface() {
               )}
             </section>
             <section aria-label="Related runs" className="flex flex-col">
-              <SectionHeader title="Related runs" level={3} />
+              <SectionHeader title="Related runs" level={2} />
               {relatedRuns.length === 0 ? (
                 <p className="px-3 text-sm text-ink-faint">No runs reference this experiment.</p>
               ) : (
@@ -317,6 +329,11 @@ export function RunListSurface() {
     );
 
   return (
+    // Deliberate omission (XTRM-954): this page has no page-level heading. A list surface carries
+    // its name in the toolbar and its outline is the column headers, exactly as Issues and Pull
+    // requests do — IssuesSurface.tsx and PullsSurface.tsx emit no heading at all. The invariant is
+    // "the first heading on a page is level 1 or 2"; this page starts at the table instead, and that
+    // is a recorded exception, not an oversight to be fixed by promoting a group label.
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Runs">
       <SurfaceToolbar>
         <SourceBadge source={research.source} />
@@ -425,7 +442,7 @@ export function RunAnalysisSurface() {
             <ResultSummarySection summary={resultSummary} />
             <MethodSection manifest={manifest!} workloadDef={workload.data} />
             <section aria-label="Metrics" className="flex flex-col">
-              <SectionHeader title="Metrics" level={3} />
+              <SectionHeader title="Metrics" level={2} />
               {metrics.isPending ? (
                 <LoadingState rows={3} label="Loading metrics" />
               ) : metrics.isError ? (
@@ -461,7 +478,7 @@ export function RunAnalysisSurface() {
               <ResearchCharts experiment={experiment.data} runIds={[runId]} runLabels={{ [runId]: variantRef?.id ?? runId }} />
             ) : null}
             <section aria-label="Samples" className="flex flex-col">
-              <SectionHeader title="Samples" level={3} />
+              <SectionHeader title="Samples" level={2} />
               {samples.isPending ? (
                 <LoadingState rows={3} label="Loading samples" />
               ) : samples.isError ? (
@@ -487,7 +504,7 @@ export function RunAnalysisSurface() {
               )}
             </section>
             <section aria-label="Telemetry events" className="flex flex-col">
-              <SectionHeader title="Telemetry events" level={3} />
+              <SectionHeader title="Telemetry events" level={2} />
               {tail.isPending ? (
                 <LoadingState rows={3} label="Loading telemetry" />
               ) : tail.isError ? (
@@ -511,7 +528,7 @@ export function RunAnalysisSurface() {
               )}
             </section>
             <section aria-label="Annotations" className="flex flex-col">
-              <SectionHeader title="Annotations" level={3} />
+              <SectionHeader title="Annotations" level={2} />
               {run.data.annotations.length === 0 ? (
                 <p className="px-3 text-sm text-ink-faint">No annotations recorded.</p>
               ) : (
@@ -547,7 +564,7 @@ function ManifestSection({ runId, manifest, onInspect }: { runId: string; manife
     <section aria-label="Manifest and versions" className="flex flex-col px-3">
       <SectionHeader
         title="Manifest & versions"
-        level={3}
+        level={2}
         inset="none"
         className="mb-2"
         aside={
