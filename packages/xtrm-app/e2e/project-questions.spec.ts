@@ -34,8 +34,19 @@ for (const t of ["light", "dark"] as const) {
 
     // Each row prints its ref, text, recommendation, why, age and answered state; the open
     // question is the row the operator can act on.
-    await expect(unanswered.getByTestId("question-row").first()).toBeVisible();
-    await expect(unanswered.getByTestId("question-row").first().getByTestId("question-state")).toHaveText("unanswered");
+    const openRow = unanswered.getByTestId("question-row").first();
+    await expect(openRow).toBeVisible();
+    await expect(openRow.getByTestId("question-state")).toHaveText("unanswered");
+
+    // XTRM-935: the row is the standard 32px row with the second line as a 10px detail line, so
+    // a variable-height row cannot come back without failing here. Measured, not asserted from
+    // a class: a restyle that keeps the class and changes the box still fails.
+    const rowBox = await openRow.boundingBox();
+    expect(Math.round(rowBox?.height ?? 0)).toBe(32);
+    const detailSize = await openRow
+      .getByTestId("question-why")
+      .evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+    expect(detailSize).toBeCloseTo(10, 1);
     for (const id of ["question-text", "question-rec", "question-why", "question-age"]) {
       await expect(unanswered.getByTestId("question-row").first().getByTestId(id)).not.toBeEmpty();
     }

@@ -30,6 +30,18 @@ for (const t of ["light", "dark"] as const) {
 
     // Credential evidence is a path and a flag, never a value.
     await expect(page.getByTestId("integration-key-file")).toHaveText(/^\/\S+ — readable$/);
+
+    // XTRM-935: the binding facts are one `Fields` grid, so the label column is 160px and every
+    // value starts at 172px at the 10px step. A slice that re-introduces a local grid drifts these
+    // numbers without failing any content assertion, which is why the boxes are measured here.
+    const firstValue = page.getByTestId("integration-repository");
+    const firstLabel = firstValue.locator("xpath=../../dt").first();
+    const labelBox = await firstLabel.boundingBox();
+    const valueBox = await firstValue.boundingBox();
+    expect(Math.round(labelBox?.width ?? 0)).toBe(160);
+    expect(Math.round((valueBox?.x ?? 0) - (labelBox?.x ?? 0))).toBe(172);
+    const valueSize = await firstValue.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+    expect(valueSize).toBeCloseTo(11.52, 1);
     await expect(page.getByTestId("integration-credential-note")).toContainText("never returns a credential value");
 
     // Sync health, schedule, run, last sync, drift.
