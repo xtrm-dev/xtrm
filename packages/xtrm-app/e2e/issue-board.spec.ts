@@ -95,3 +95,68 @@ for (const theme of ["light", "dark"] as const) {
     ).toBe(true);
   });
 }
+
+/**
+ * XTRM-943: the drop affordance. A lane has no ring to paint, so the affordance is the hairline
+ * turning accent plus a faint accent fill — the `over === column.id` branch of the lane class list.
+ *
+ * Named limit, and the reason this test is written the way it is: a *native* drag cannot reach that
+ * branch in this harness. `page.mouse` down/move/up and `locator.dragTo` both leave the border at
+ * `border-border-muted` (measured: `rgba(15, 15, 20, 0.07)` before, during and after, three
+ * attempts), because Playwright only synthesizes HTML5 drag events while DragEvent interception is
+ * enabled and the fixture's React handlers never see a `dragover` otherwise. A synthetic
+ * `DragEvent("dragover")` dispatched from `page.evaluate` does reach React, but only once the
+ * `dragstart` on the card has been given a task boundary to commit its state: in the same evaluate
+ * the lane class list stays unchanged, one `requestAnimationFrame` later it carries
+ * `border-l-accent/60 bg-accent-soft/40`. What would make a native drag testable here is drag
+ * interception in this project's Playwright config; until then this test drives the contract
+ * (dragover sets the accent, drop clears it) rather than the pointer pipeline.
+ */
+for (const theme of ["light", "dark"] as const) {
+  test(`the hovered lane takes the accent affordance (${theme})`, async ({ page }) => {
+    await openBoard(page, theme);
+    const lane = page.locator('[data-testid^="board-column-"]').nth(3);
+    const read = () =>
+      lane.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { border: s.borderLeftColor, background: s.backgroundColor, cls: el.className };
+      });
+
+    const rest = await read();
+    expect(rest.cls, "the lane rests on the muted hairline").not.toContain("border-l-accent");
+
+    const settled = await page.evaluate(async () => {
+      const card = document.querySelector('[data-testid="board-card"]')!;
+      const target = document.querySelectorAll('[data-testid^="board-column-"]')[3] as Element;
+      const frame = () => new Promise((r) => requestAnimationFrame(r));
+      const dt = new DataTransfer();
+      card.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
+      // The card's dragstart sets React state; the lane handler needs that committed first.
+      await frame();
+      await frame();
+      target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt }));
+      await frame();
+      await frame();
+      const s = getComputedStyle(target);
+      return { border: s.borderLeftColor, background: s.backgroundColor, cls: target.className };
+    });
+    expect(settled.cls, "dragover turns the lane's hairline accent").toContain("border-l-accent/60");
+    expect(settled.border, "the accent hairline is resolved, not just a class").toMatch(/^oklab\(/);
+    expect(settled.background, "the lane takes a faint accent fill").toMatch(/^oklab\(/);
+
+    // Drop clears it again, so the affordance is not sticky.
+    const dropped = await page.evaluate(async () => {
+      const target = document.querySelectorAll('[data-testid^="board-column-"]')[3] as Element;
+      const frame = () => new Promise((r) => requestAnimationFrame(r));
+      target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() }));
+      await frame();
+      await frame();
+      const cls = target.className;
+      // The lane carries transition-colors, so the resolved colour lags the class by a fade.
+      await new Promise((r) => setTimeout(r, 400));
+      return { cls, border: getComputedStyle(target).borderLeftColor };
+    });
+    expect(dropped.cls, "drop drops the accent class").not.toContain("border-l-accent");
+    expect(dropped.border, "drop returns the lane to the muted hairline").not.toMatch(/^oklab\(/);
+  });
+}
