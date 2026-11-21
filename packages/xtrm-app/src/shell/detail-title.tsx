@@ -5,8 +5,9 @@ import type { ReactNode } from "react";
  *
  * Panel titles are `text-base`; the issue page sets its own step on `InlineTitle`, so nothing
  * here changes a page title's size. `lead` puts a key chip before the name (the PR drawer's
- * `PR #212`), `aside` a link after it, `meta` rows underneath; the research panels pass only an
- * eyebrow, which keeps their markup exactly as it was.
+ * `PR #212`), `aside` a link after it, `meta` rows underneath. The research panels pass only an
+ * eyebrow: they render the eyebrow and the heading with no extra wrapper, so their title markup is
+ * the same elements in the same place, not a rewritten tree.
  */
 export function DetailTitle({
   eyebrow,
