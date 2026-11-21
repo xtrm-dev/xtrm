@@ -172,7 +172,7 @@ describe("Research uses the shared shell, and nothing of its own", () => {
     fireEvent.click(trigger);
     const panel = await screen.findByRole("dialog");
     const row = within(panel).getByText("Research").closest("div")!;
-    expect(row.querySelector('[data-slot="badge"]')?.textContent).toBe("fixture");
+    expect(row.querySelector('[data-testid="source-state"]')?.textContent).toBe("fixture");
   });
 
   it("follows the adapter's source rather than a hard-coded string", async () => {
@@ -181,7 +181,7 @@ describe("Research uses the shared shell, and nothing of its own", () => {
     fireEvent.click(trigger);
     const panel = await screen.findByRole("dialog");
     const row = within(panel).getByText("Research").closest("div")!;
-    expect(row.querySelector('[data-slot="badge"]')?.textContent).toBe("live");
+    expect(row.querySelector('[data-testid="source-state"]')?.textContent).toBe("live");
   });
 });
 
