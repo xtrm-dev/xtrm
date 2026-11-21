@@ -150,11 +150,57 @@ export function subjectIssueRefs(message: string): string[] {
   // The parenthesised group, not one ref: a lane commit names several issues
   // in one suffix, `chore: two lanes (XTRM-949, XTRM-958)`.
   for (const group of subject.matchAll(/\(([^()]*)\)/g)) {
-    for (const m of (group[1] ?? "").matchAll(/[A-Z][A-Z0-9]*-\d+(?:\.\d+)*/g)) {
-      if (!out.includes(m[0])) out.push(m[0]);
+    for (const ref of refsInGroup(group[1] ?? "")) {
+      if (!out.includes(ref)) out.push(ref);
     }
   }
   return out;
+}
+
+/**
+ * Refs inside one parenthesised group, scanned by index rather than by regex.
+ * The regex form (`[A-Z][A-Z0-9]*-\d+(?:\.\d+)*`) is a nested quantifier over
+ * commit-message text, which CodeQL reports as js/polynomial-redos (PR #482);
+ * a ref is at most `PREFIX-1.2.3`, so a single left-to-right pass is both
+ * linear by construction and easier to read than the pattern it replaces.
+ */
+function refsInGroup(group: string): string[] {
+  const refs: string[] = [];
+  const isUpper = (c: string | undefined): boolean => c !== undefined && c >= "A" && c <= "Z";
+  const isDigit = (c: string | undefined): boolean => c !== undefined && c >= "0" && c <= "9";
+  const isBody = (c: string | undefined): boolean => isUpper(c) || isDigit(c);
+  const scanDigits = (from: number): number => {
+    let i = from;
+    while (isDigit(group[i])) i += 1;
+    return i;
+  };
+  let i = 0;
+  while (i < group.length) {
+    if (!isUpper(group[i])) {
+      i += 1;
+      continue;
+    }
+    const start = i;
+    while (isBody(group[i])) i += 1;
+    if (group[i] !== "-") {
+      i = start + 1;
+      continue;
+    }
+    const afterDigits = scanDigits(i + 1);
+    if (afterDigits === i + 1) {
+      i = start + 1;
+      continue;
+    }
+    i = afterDigits;
+    // Dotted children: `XTRM-811.23`, `XTRM-184.2.3`.
+    while (group[i] === ".") {
+      const next = scanDigits(i + 1);
+      if (next === i + 1) break;
+      i = next;
+    }
+    refs.push(group.slice(start, i));
+  }
+  return refs;
 }
 
 /**
