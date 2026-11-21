@@ -328,10 +328,23 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     // A floor over the whole tree cannot see one directory quietly leaving the walk: measured, `src`
     // holds 134 files and `src/github` contributes 11, so dropping that directory still cleared a
     // `> 120` floor. Each in-scope directory therefore has to contribute, named when it does not.
-    const missing = readdirSync(ROOT, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => join(ROOT, entry.name))
+    //
+    // Every directory, not every top-level one: a nested directory can leave the walk while a sibling
+    // keeps its parent contributing — `src/project/questions` (five files) does exactly that. The
+    // enumeration mirrors the walk's own shape, so the directory the walk skips is the one reported.
+    const directories = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? [join(dir, entry.name), ...directories(join(dir, entry.name))] : [],
+      );
+    const ownSources = (dir: string) =>
+      readdirSync(dir, { withFileTypes: true }).filter(
+        (entry) => entry.isFile() && /\.(tsx?|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name),
+      );
+    const missing = directories(ROOT)
       .filter((dir) => inScope(join(dir, "x")))
+      // A directory whose own files are all test files (`__fixtures__` beside its spec) has nothing
+      // the walk should have read, so it is not asked to contribute.
+      .filter((dir) => ownSources(dir).length > 0)
       .filter((dir) => !files.some((file) => file.startsWith(dir + "/")));
     expect(missing, "every in-scope directory must contribute a file to the walk").toEqual([]);
     // A guard over an empty file list would pass by accident.
