@@ -163,6 +163,11 @@ export function subjectIssueRefs(message: string): string[] {
  * commit-message text, which CodeQL reports as js/polynomial-redos (PR #482);
  * a ref is at most `PREFIX-1.2.3`, so a single left-to-right pass is both
  * linear by construction and easier to read than the pattern it replaces.
+ *
+ * "Linear" is a claim about this code, so it is a claim a test can hold: every
+ * advance below is `i + 1` or further, never a reset to an earlier offset. A
+ * rescan from `start + 1` looks linear on real commit subjects and is quadratic
+ * on `("A" * 32000)`, which is exactly the shape the regex was flagged for.
  */
 function refsInGroup(group: string): string[] {
   const refs: string[] = [];
@@ -183,12 +188,15 @@ function refsInGroup(group: string): string[] {
     const start = i;
     while (isBody(group[i])) i += 1;
     if (group[i] !== "-") {
-      i = start + 1;
+      // Resume where the scan stopped, not at `start + 1`: rescanning an uppercase run
+      // that carries no dash is quadratic, and the comment below already promised a
+      // single left-to-right pass (XTRM-953, measured by reviewer-472 on #482).
+      i += 1;
       continue;
     }
     const afterDigits = scanDigits(i + 1);
     if (afterDigits === i + 1) {
-      i = start + 1;
+      i += 1;
       continue;
     }
     i = afterDigits;

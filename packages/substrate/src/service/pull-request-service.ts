@@ -334,10 +334,11 @@ export class PullRequestService {
           // never reaches the filter with any commit count. Measured, not
           // reasoned - a subject-only link reports `gate_mentioned_only` with
           // and without the row (XTRM-953).
-          if (this.mentionFromTrailer(input, now, commit.sha)) {
-            mentioned += 1;
-            finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
-          }
+          if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
+          // A finding is a standing state, not a one-shot event: `links check` re-derives
+          // "what is wrong right now" and a reader who saw it once and not again would take
+          // it as fixed. The counter stays idempotent because it counts what this run did.
+          finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
           continue;
         }
         // Two distinct trailer names are a multi-issue commit even when one
@@ -353,7 +354,14 @@ export class PullRequestService {
           finding("trailer_issue_unknown", commit.sha, `no issue matches ${named[0]}`);
           continue;
         }
-        if (resolvedId !== input.issueId) continue;
+        if (resolvedId !== input.issueId) {
+          // A trailer naming another issue in this Project is worth one finding, exactly as a
+          // subject suffix naming a sibling is: it is evidence this issue's reader cannot see.
+          if (issues.getIssue(resolvedId).projectId === issues.getIssue(input.issueId).projectId) {
+            finding("commit_claimed_elsewhere", commit.sha, `trailer names ${named[0]}, not this issue`);
+          }
+          continue;
+        }
         const revision = trailers.issues[0]?.issueRevision ?? null;
         const receiptId = trailers.receipts[0] ?? null;
         if (trailers.receipts.length === 0) {

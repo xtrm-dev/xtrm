@@ -473,12 +473,13 @@ describe("pull-request writers", () => {
     const foreignTrailer = `XTRM-Issue: ${other.humanRef}\nXTRM-Receipt: ${receipt.id}`;
     const before = w.links.listForIssue(w.issue.id).length;
     const r3 = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "2".repeat(40), message: foreignTrailer }] });
-    assert.deepEqual({ created: r3.created, mentioned: r3.mentioned, findings: r3.findings }, { created: 0, mentioned: 0, findings: 0 });
-    // A foreign trailer is skipped entirely: no new row appears for the target.
+    // A trailer naming a sibling is one finding, the same shape a subject suffix gets: it is
+    // evidence this issue's reader cannot otherwise see. It is still not a link for us.
+    assert.deepEqual({ created: r3.created, mentioned: r3.mentioned, findings: r3.findings }, { created: 0, mentioned: 0, findings: 1 });
     assert.equal(w.links.listForIssue(w.issue.id).length, before);
     assert.deepEqual(
       w.links.listFindings("prj_xtrm").map((f) => f.code).sort(),
-      ["trailer_issue_unknown", "trailer_receipt_ambiguous"],
+      ["commit_claimed_elsewhere", "trailer_issue_unknown", "trailer_receipt_ambiguous"],
     );
   });
 

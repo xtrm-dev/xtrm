@@ -84,6 +84,48 @@ describe("parseAllTrailers", () => {
   });
 });
 
+describe("refsInGroup is linear (XTRM-953)", () => {
+  // A docstring claiming linearity is not a guard: the shipped scanner resumed a failed
+  // run at `start + 1`, which is quadratic on one long uppercase run and indistinguishable
+  // from linear on real subjects. A budget over a pathological input is the only assertion
+  // that can go red for the defect, and it is generous enough not to flake on a slow box.
+  const scan = (n: number): number => {
+    const subject = `feat: x (${"A".repeat(n)})`;
+    const started = performance.now();
+    subjectIssueRefs(subject);
+    return performance.now() - started;
+  };
+  it("scans a 32k uppercase run in well under a tenth of the quadratic time", () => {
+    scan(2000); // warm the JIT so the budget measures the algorithm, not compilation
+    const small = scan(4000);
+    const big = scan(32000);
+    // 8x the input: linear is ~8x, the defect measured ~270x (208 ms -> 18768 ms).
+    assert.ok(big < 2000, `a 32k run took ${big.toFixed(0)}ms; it must stay in the linear regime`);
+    assert.ok(big < small * 40 + 200, `8x the input took ${(big / Math.max(small, 0.001)).toFixed(0)}x the time (${small.toFixed(0)}ms -> ${big.toFixed(0)}ms)`);
+  });
+
+  it("still returns exactly what the regex returned, so the budget is not bought by scanning less", () => {
+    // These pin BEHAVIOUR, not approval: the scanner is permissive by design (a prefix is any
+    // uppercase/digit run, so `(ABXTRM-9)` is a ref and `(XTRM-9AB)` reads as `XTRM-9`), and
+    // every value here is what the recursive-descent regex form returned on the same subject.
+    // The pair of tests is the point: linearity must be bought by the scanner's advance, never
+    // by scanning less. If a later refactor narrows the shape, these rows move with it and the
+    // diff says so.
+    const cases: Array<[string, string[]]> = [
+      ["(XTRM-934)", ["XTRM-934"]],
+      ["(XTRM-811.23)", ["XTRM-811.23"]],
+      ["(XTRM-949, XTRM-958)", ["XTRM-949", "XTRM-958"]],
+      ["(ABXTRM-9)", ["ABXTRM-9"]],
+      ["(XTRM-9AB)", ["XTRM-9"]],
+      ["(A-B-1)", ["B-1"]],
+      ["(XTRM---3)", []],
+      ["(9XTRM-1)", ["XTRM-1"]],
+      ["(XTRM-9.)", ["XTRM-9"]],
+    ];
+    for (const [subject, expected] of cases) assert.deepEqual(subjectIssueRefs(subject), expected, subject);
+  });
+});
+
 describe("subjectIssueRefs (XTRM-953)", () => {
   // `xt` names its issue in the subject, not in a trailer. Both shapes must be
   // readable or a whole merge queue's evidence is invisible: before this, zero
