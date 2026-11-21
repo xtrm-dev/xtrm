@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { useAdapters } from "../../adapters/index.tsx";
 import { projectForRepo, useProjects } from "../../app/queries.ts";
 import { useIssueIndex } from "../../refs/references.tsx";
@@ -13,6 +13,7 @@ import { ProjectShell } from "../ProjectShell.tsx";
 import { BoardWorkerRow, WORKER_COLUMNS } from "./WorkerRow.tsx";
 import { WorkersTree } from "./WorkersTree.tsx";
 import { buildFlatGroups, buildWorkersTree } from "./model.ts";
+import { missingTitleRefs, useIssueTitles } from "./titles.ts";
 
 /**
  * Project Workers (console-ui-system §6, XTRM-819): the tree the operator asked for —
@@ -61,10 +62,13 @@ export function WorkersSurface() {
   const rows = (workers.data?.records ?? []).map((r) => r.doc);
   const model = graph.data ? buildWorkersTree(graph.data, rows) : null;
   const flat = buildFlatGroups(rows, { includeArchived });
-  // A vertex the graph names only by session UUID borrows its issue's title. The reference
-  // chips already read this index on this surface, so the titles cost no extra read (XTRM-912).
+  // A vertex the graph names only by session UUID borrows its issue's title (XTRM-912). The index is
+  // the console's own board read, and on live data it covered far fewer issues than the graph names,
+  // so a title the index does not carry is read by ref, bounded to the rows that print one (XTRM-918).
   const issues = useIssueIndex();
-  const titleOf = useCallback((ref: string) => issues.get(ref)?.title ?? null, [issues]);
+  const wanted = useMemo(() => missingTitleRefs(model, issues), [model, issues]);
+  const titles = useIssueTitles(wanted, projectId);
+  const titleOf = useCallback((ref: string) => issues.get(ref)?.title ?? titles.get(ref) ?? null, [issues, titles]);
 
   const setSearch = (next: { view?: string; archived?: boolean }) =>
     navigate({ to: `${base}/project/workers`, search: { ...next } as never, replace: true });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fixtureSubstrate } from "../../adapters/substrate/fixture.ts";
 import type { Worker } from "../../adapters/status-board/types.ts";
-import { buildFlatGroups, buildWorkersTree, claimState, CLAIM_SOON_MS, statusTone } from "./model.ts";
+import { buildFlatGroups, buildWorkersTree, claimState, CLAIM_SOON_MS, isHumanName, statusTone } from "./model.ts";
 
 const graph = () => fixtureSubstrate.dispatchGraph("prj_xtrm");
 
@@ -51,6 +51,20 @@ describe("Workers tree model", () => {
     expect(buildWorkersTree(await graph(), [never]).orphans.map((w) => w.name)).toEqual(["ghost"]);
     // A board row with no issue at all cannot join, so it is an orphan too.
     expect(buildWorkersTree(await graph(), [boardWorker({ name: "no-issue", issue: undefined })]).orphans.map((w) => w.name)).toEqual(["no-issue"]);
+  });
+
+  // XTRM-918: the name check decides whether a row borrows its issue's title, so each input it
+  // rejects has its own line — a live graph carries all of them.
+  it("tells a human name from every machine name the graph carries", () => {
+    expect(isHumanName("console-lead")).toBe(true);
+    expect(isHumanName("MMD-5007-stable-hotfixes-and-retention-release-lane-lead")).toBe(true);
+    expect(isHumanName("01a1d9f5-9bb7-77d7-92a7-b5041c46717b")).toBe(false);
+    expect(isHumanName("01A1D9F5-9BB7-77D7-92A7-B5041C46717B")).toBe(false);
+    expect(isHumanName("$3")).toBe(false);
+    expect(isHumanName("act:act_layout_worker")).toBe(false);
+    expect(isHumanName("   ")).toBe(false);
+    expect(isHumanName(null)).toBe(false);
+    expect(isHumanName(undefined)).toBe(false);
   });
 
   it("reads a claim as none, held, ending within 2h, or expired", () => {
