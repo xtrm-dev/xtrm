@@ -3,6 +3,7 @@ import { useAdapters } from "../adapters/index.tsx";
 import { useRepoDocument, useRepoReport, useRepoReports } from "../app/queries.ts";
 import { ReferenceActionsProvider } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
+import { Fields } from "../ui/drawer.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
@@ -35,14 +36,7 @@ function DocumentBody({ content, empty }: { content: string | null | undefined; 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-6 py-5">
       {fields.length > 0 && (
-        <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-md border border-border-muted px-3 py-2 text-xs">
-          {fields.map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="text-ink-faint">{k}</dt>
-              <dd className="min-w-0 break-words text-ink">{v || <span className="text-ink-faint">—</span>}</dd>
-            </div>
-          ))}
-        </dl>
+        <Fields rows={fields.map(([k, v]) => [k, v || <span key={k} className="text-ink-faint">—</span>])} />
       )}
       <Markdown>{body}</Markdown>
     </div>
