@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -15,6 +15,18 @@ import { describe, expect, it } from "vitest";
  *
  * The rule set covered `src/ui` + `src/shell` first; the review of #454 found the same literals in
  * `src/project`, `src/github` and `src/issues`, so the walk now covers all of `src`.
+ *
+ * XTRM-951 (review of #466): this gate claimed more than it checked in five places, and each fix
+ * below is paired with the mutation that shows the gate now fails on the shape it used to miss.
+ * The claims the gate still cannot make are listed in `HOLES`, with an owner, because an unstated
+ * limit is read as coverage — "no mutation exercises this" once told a reviewer not to look.
+ *
+ * An offence is read from this file's own report, not from a source grep. The grep this finding
+ * replaced returned five fixture hits, so a human had to know the fixture list before deciding
+ * anything; `GATE_REPORT=1 npx vitest run src/ui/units.test.ts --silent=false --reporter=verbose`
+ * prints every offence it sees, parked or not, with its rule id, and a failing run names the same
+ * lines in its assertion message. The report is the gate's own instrument: the counts it prints for
+ * each park are the numbers that park holds, not a second script's reading of them.
  */
 
 const ROOT = "src";
@@ -28,7 +40,9 @@ const ROOT = "src";
  * The rules below close that hole and the px-indent hole beside it:
  * - a rem font size must BE a token (`text-[0.7rem]` is refused; 0.7 is not a step),
  * - a row indent must be derived, not a bare number (`paddingLeft: depth * 16` cannot follow root),
- * - the old px rules stay.
+ * - the old px rules stay,
+ * - logical properties (`paddingInline`, `marginBlockStart`) are covered by the same rules as their
+ *   physical twins: `paddingInline` was a shipped way past a rule that only spoke `paddingLeft`.
  *
  * Scope excludes `src/agent/**` and `src/components/reui/**`: the Agent half has its own redesign
  * epic and the reui copies are unused scaffolding (epic XTRM-933 non-goals). Everything else is the
@@ -42,55 +56,129 @@ const ROOT = "src";
  */
 const OUT_OF_SCOPE = [join("src", "agent"), join("src", "components", "reui")];
 
+type Offence = { rule: string; match: string; line: number };
+
 /**
- * Known debt, parked as a COUNT per file, with the slice that pays it down.
+ * Known debt, parked as THE OFFENCE, not a count per file.
  *
- * Parking a whole file was the wrong instrument: it exempted every offender inside it, including
- * the ones a rule was written for. `src/project/workers/WorkerRow.tsx` was parked for one
- * `paddingLeft: 16`, and the parking then hid a `paddingLeft: depth * 14` twelve lines away — the
- * gate passed while the drift it names was live. A count is the same promise without the blind
- * spot: the parked file may hold exactly this many offenders, a new one fails, and a slice that
- * pays one down must lower the number in the same commit that fixes it.
+ * Parking a whole file exempted every offender inside it. Parking a count was the next instrument,
+ * and it still let an offence be swapped for a different one: the file kept two offenders and the
+ * gate stayed green while the rule it was written for was violated (probe on the shipped tree:
+ * replace `gap-[2px]` at src/issues/meta.tsx:31 with `text-[0.7rem]`). A park now names the rule and
+ * the literal, keyed without a line number so code can move, with a multiset comparison so a
+ * duplicate counts: the file may hold exactly these offences, the slice that pays one down must
+ * delete it from the park in the same commit, and a substitution fails.
  */
-const DEBT: Record<string, { allowed: number; owner: string }> = {
-  [join("src", "issues", "PullRequestsBlock.tsx")]: { allowed: 2, owner: "XTRM-941" },
-  [join("src", "shell", "ContextSidebar.tsx")]: { allowed: 3, owner: "XTRM-939" },
-  [join("src", "issues", "meta.tsx")]: { allowed: 1, owner: "XTRM-943" },
+type Park = { owner: string; offences: Array<{ rule: string; match: string }> };
+
+const PARKS: Record<string, Park> = {
+  [join("src", "issues", "PullRequestsBlock.tsx")]: {
+    owner: "XTRM-941",
+    offences: [
+      { rule: "offscale-rem-font", match: "text-[0.68rem]" },
+      { rule: "offscale-rem-font", match: "text-[0.68rem]" },
+    ],
+  },
+  [join("src", "shell", "ContextSidebar.tsx")]: {
+    owner: "XTRM-939",
+    offences: [
+      { rule: "offscale-rem-font", match: "text-[0.65rem]" },
+      { rule: "offscale-rem-font", match: "text-[0.68rem]" },
+      { rule: "offscale-rem-font", match: "text-[0.68rem]" },
+    ],
+  },
+  [join("src", "issues", "meta.tsx")]: { owner: "XTRM-943", offences: [{ rule: "arbitrary-px-spacing", match: "gap-[2px]" }] },
 };
+
+/**
+ * Claims this gate does NOT make, each with an owner and the place the claim is actually discharged.
+ *
+ * XTRM-951: a gate that stays quiet about its own limits is read as coverage. Findings (6) and (8)
+ * of the #466 review are not closable by a source scan, so they are named here and proved elsewhere;
+ * the PR that added this list carries the mutation matrix that shows which assertion catches what.
+ */
+const HOLES = [
+  {
+    id: "prop-path",
+    owner: "XTRM-951",
+    why: "a rendered assertion cannot tell 'the prop was honoured' from 'the prop happened to render the same thing' (measured on #473: Fields ignoring `size` toward `xs` passes). The gate proves values at rendered states; which states are distinguished is a property of the mutation set, exercised in the spec that asserts the class and the measurement, not here.",
+  },
+  {
+    id: "structural-suppression",
+    owner: "XTRM-951",
+    why: "a wrapper whose single child is always first element silently defeats `border-t`/`first:border-t-0`, and no source scan sees the rendered sibling relation. It is asserted where it renders (the settings/e2e geometry assertions), never here.",
+  },
+] as const;
 
 /** Every rem value the type scale actually defines (styles.css §typography). */
 const REM_TOKENS = ["0.625rem", "0.72rem", "0.8125rem", "0.875rem", "1.125rem", "1.25rem", "1.5rem", "2rem"];
 const OFFSCALE_REM = new RegExp(`text-\\[(?!${REM_TOKENS.map((r) => r.replace(".", "\\.")).join("|")})[\\d.]+rem\\]`, "g");
 
-const RULES = [
-  { pattern: /text-\[\d*\.?\d+px\]/g, why: "px font size: name a text token (text-2xs, text-xs, text-sm)" },
-  { pattern: OFFSCALE_REM, why: `off-scale rem font size: ${REM_TOKENS.join(" / ")} are the only steps` },
-  { pattern: /size-\[\d*\.?\d+px\]/g, why: "px glyph size: use an ICON_CLASS step or a rem value" },
-  { pattern: /\b(size|width|height)=\{\d+(?:\.\d+)?\}/g, why: "px glyph attribute: take an IconSize" },
-  { pattern: /fontSize:\s*\d/g, why: "px font style: name a text token" },
+/**
+ * `id` is the park key and the report label: it names the rule, so a park can never be satisfied by
+ * a different rule's literal. The spacing patterns cover the logical properties as well as the
+ * physical ones, in every form the review found (numeric, multiplier, quoted, and the Tailwind
+ * `ps-`/`me-` classes beside `pl-`/`mr-`).
+ */
+const RULES: Array<{ id: string; pattern: RegExp; why: string }> = [
+  { id: "px-font", pattern: /text-\[\d*\.?\d+px\]/g, why: "px font size: name a text token (text-2xs, text-xs, text-sm)" },
+  { id: "offscale-rem-font", pattern: OFFSCALE_REM, why: `off-scale rem font size: ${REM_TOKENS.join(" / ")} are the only steps` },
+  { id: "px-glyph", pattern: /size-\[\d*\.?\d+px\]/g, why: "px glyph size: use an ICON_CLASS step or a rem value" },
+  { id: "px-glyph-attr", pattern: /\b(size|width|height)=\{\d+(?:\.\d+)?\}/g, why: "px glyph attribute: take an IconSize" },
+  { id: "px-font-style", pattern: /fontSize:\s*\d/g, why: "px font style: name a text token" },
   // A row indent in px does not follow the operator's root size: derive it from INDENT_REM. The rule
   // covers every side, not only the left one, in the numeric, multiplier and quoted forms: a
   // `paddingTop: "6px"`, a `padding: "0 8px"` and a `marginLeft: depth * 14` are the same drift as an
   // unquoted `paddingLeft: 16`, and each was a shape an earlier version of this rule walked past.
   // The `(?!rem|px|em|%)` guard keeps a CSS shorthand such as `margin: 1.1rem 0 0.4rem` out of it:
   // a unit is not px.
-  { pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left)?:\s*(?:[1-9]\d*(?:\.\d+)?|0?\.\d+)(?![\d.])(?!\s*(?:rem|px|em|%))/g, why: "unitless spacing value in px: derive it from INDENT_REM (src/issues/issue-table.ts) or use a spacing step" },
-  { pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left)?:\s*[\w.]+\s*\*\s*\d+(?:\.\d+)?/g, why: "numeric spacing multiplier: use INDENT_REM so the step follows root" },
-  { pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left)?:\s*["'`][^"'`]*\d*\.?\d+px["'`]?/g, why: "quoted px spacing: name a spacing step or derive it from INDENT_REM" },
+  {
+    id: "px-spacing",
+    pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left|Inline|Block|InlineStart|InlineEnd|BlockStart|BlockEnd)?:\s*(?:[1-9]\d*(?:\.\d+)?|0?\.\d+)(?![\d.])(?!\s*(?:rem|px|em|%))/g,
+    why: "unitless spacing value in px: derive it from INDENT_REM (src/issues/issue-table.ts) or use a spacing step",
+  },
+  {
+    id: "spacing-multiplier",
+    pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left|Inline|Block|InlineStart|InlineEnd|BlockStart|BlockEnd)?:\s*[\w.]+\s*\*\s*\d+(?:\.\d+)?/g,
+    why: "numeric spacing multiplier: use INDENT_REM so the step follows root",
+  },
+  {
+    id: "quoted-px-spacing",
+    pattern: /(?:padding|margin)(?:Top|Right|Bottom|Left|Inline|Block|InlineStart|InlineEnd|BlockStart|BlockEnd)?:\s*["'`][^"'`]*\d*\.?\d+px["'`]?/g,
+    why: "quoted px spacing: name a spacing step or derive it from INDENT_REM",
+  },
   // A style prop is not the only place a number hides: an arbitrary Tailwind spacing class carries
   // the same px value with no reader able to see the scale, and `gap-[2px]` sits in the issue board
   // today. Spacing classes name a scale step; only an arbitrary px is refused.
-  { pattern: /\b(?:p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|space-x|space-y)-\[\d*\.?\d+px\]/g, why: "arbitrary px spacing class: use a scale step (2, 4, 6 cells) or a token" },
+  {
+    id: "arbitrary-px-spacing",
+    pattern: /\b(?:p|px|py|pt|pb|pl|pr|ps|pe|m|mx|my|mt|mb|ml|mr|ms|me|gap|space-x|space-y)-\[\d*\.?\d+px\]/g,
+    why: "arbitrary px spacing class: use a scale step (2, 4, 6 cells) or a token",
+  },
   // The stylesheet takes units, so its shorthand is only a problem when the unit IS px.
-  { pattern: /\b(?:padding|margin)(?:-top|-right|-bottom|-left)?:\s*[^;{}\n"'`]*\d*\.?\d+px/g, why: "px spacing in CSS: use a token or a rem value" },
+  {
+    id: "css-px-spacing",
+    pattern: /\b(?:padding|margin)(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?:\s*[^;{}\n"'`]*\d*\.?\d+px/g,
+    why: "px spacing in CSS: use a token or a rem value",
+  },
   // The stylesheet and an inline style are the two forms a className cannot reach around.
-  { pattern: /font-size:\s*\d*\.?\d+px/g, why: "px font-size in CSS: use var(--text-*)" },
-  { pattern: /fontSize:\s*["'`]\d*\.?\d+px["'`]/g, why: "px font style: use var(--text-*)" },
+  { id: "css-px-font-size", pattern: /font-size:\s*\d*\.?\d+px/g, why: "px font-size in CSS: use var(--text-*)" },
+  { id: "px-font-style-string", pattern: /fontSize:\s*["'`]\d*\.?\d+px["'`]/g, why: "px font style: use var(--text-*)" },
 ];
 
 /** A scroll container must name `.thin-scrollbar` or `.no-scrollbar` on the same element. */
 const SCROLL_CONTAINER = /\boverflow(?:-[xy])?-(?:auto|scroll)\b/;
 const SCROLL_TREATMENT = /\b(?:thin|no)-scrollbar\b/;
+
+/**
+ * XTRM-951, finding (2): the scroll rule above reads JSX, so a CSS-declared container was invisible
+ * while `.xtrm-prose pre { overflow-x: auto }` sat in the shipped stylesheet. A CSS rule is a
+ * container of its own, and its treatment is the same language expressed where that container can
+ * carry it: `scrollbar-width` in the same declaration block (the utilities cannot reach a `pre` the
+ * markdown renderer emits). A block with neither is an offence.
+ */
+const CSS_SCROLL = /overflow(?:-[xy])?:\s*(?:auto|scroll)\b/;
+const CSS_TREATMENT = /scrollbar-width\s*:/;
 
 const inScope = (file: string) => !OUT_OF_SCOPE.some((dir) => file.startsWith(dir + "/") || file.startsWith(dir + join("")));
 
@@ -105,24 +193,86 @@ const walk = (dir: string): string[] =>
 
 const lineOf = (source: string, index: number) => source.slice(0, index).split("\n").length;
 
-const offenders = (file: string) => {
+/** Declaration blocks of a stylesheet, skipping the ones that only nest other blocks. */
+const cssBlocks = (source: string): Array<{ selector: string; body: string; offset: number }> => {
+  const blocks: Array<{ selector: string; body: string; offset: number }> = [];
+  const open: Array<{ selector: string; bodyStart: number; nested: boolean }> = [];
+  let boundary = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    if (source[i] === "{") {
+      open.push({ selector: source.slice(boundary, i).trim(), bodyStart: i + 1, nested: false });
+      boundary = i + 1;
+    } else if (source[i] === "}") {
+      const block = open.pop();
+      if (block && !block.nested) blocks.push({ selector: block.selector, body: source.slice(block.bodyStart, i), offset: block.bodyStart });
+      const parent = open[open.length - 1];
+      if (parent) parent.nested = true;
+      boundary = i + 1;
+    }
+  }
+  return blocks;
+};
+
+const offenders = (file: string): Offence[] => {
   const source = readFileSync(file, "utf8");
-  const lines = source.split("\n");
-  // A className is written on one line in every call site here; a scroll container that splits its
-  // className across lines still fails, and the fix is to keep the treatment beside the overflow.
-  // Both regexes are non-global on purpose: a `g` regex used with `.test()` advances `lastIndex`,
-  // so alternating lines silently skipped the check.
-  const untreatmented = lines.flatMap((text, i) =>
-    SCROLL_CONTAINER.test(text) && !SCROLL_TREATMENT.test(text)
-      ? [`${relative(process.cwd(), file)}:${i + 1} ${text.trim()} — scroll container: add thin-scrollbar or no-scrollbar`]
-      : [],
-  );
-  return [
-    ...RULES.flatMap((rule) =>
-      [...source.matchAll(rule.pattern)].map((match) => `${relative(process.cwd(), file)}:${lineOf(source, match.index ?? 0)} ${match[0]} — ${rule.why}`),
-    ),
-    ...untreatmented,
-  ];
+  const id = relative(process.cwd(), file);
+  const found: Offence[] = [];
+
+  if (file.endsWith(".css")) {
+    for (const block of cssBlocks(source)) {
+      if (!CSS_SCROLL.test(block.body) || CSS_TREATMENT.test(block.body)) continue;
+      if (SCROLL_TREATMENT.test(block.selector)) continue;
+      found.push({ rule: "css-scroll-container", match: block.selector, line: lineOf(source, block.offset) });
+    }
+  } else {
+    // A className is written on one line in every call site here; a scroll container that splits its
+    // className across lines still fails, and the fix is to keep the treatment beside the overflow.
+    // Both regexes are non-global on purpose: a `g` regex used with `.test()` advances `lastIndex`,
+    // so alternating lines silently skipped the check.
+    source.split("\n").forEach((text, i) => {
+      if (!SCROLL_CONTAINER.test(text) || SCROLL_TREATMENT.test(text)) return;
+      found.push({ rule: "scroll-container", match: text.trim(), line: i + 1 });
+    });
+  }
+
+  for (const rule of RULES) {
+    for (const match of source.matchAll(rule.pattern)) {
+      found.push({ rule: rule.id, match: match[0], line: lineOf(source, match.index ?? 0) });
+    }
+  }
+  return found;
+};
+
+/**
+ * The park comparison is a multiset match of `rule + literal`, so it survives code moving, refuses a
+ * substituted offence, and refuses a duplicate of a parked one. Both directions are reported: a new
+ * offence in a parked file, and a parked offence that is gone (the slice paid it and left the park).
+ */
+const parkDrift = (file: string, found: Offence[]): string[] => {
+  const park = PARKS[file] ?? { owner: "", offences: [] };
+  const key = (offence: { rule: string; match: string }) => `${offence.rule} ${offence.match}`;
+  const parked = new Map<string, number>();
+  for (const offence of park.offences) parked.set(key(offence), (parked.get(key(offence)) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  const lines: string[] = [];
+  for (const offence of found) {
+    const k = key(offence);
+    const count = (seen.get(k) ?? 0) + 1;
+    seen.set(k, count);
+    if (count > (parked.get(k) ?? 0)) {
+      lines.push(`${file}: new offence in a parked file — ${k} (line ${offence.line})${park.owner ? `; owner ${park.owner} did not park it` : ""}`);
+    }
+  }
+  for (const [k, allowed] of parked) {
+    const got = seen.get(k) ?? 0;
+    if (got < allowed) {
+      lines.push(`${file}: parked offence is gone — ${k} (${allowed - got} fewer than parked): the slice paid it down, delete it from the park`);
+    }
+  }
+  if (lines.length === 0 && parked.size === 0 && found.length > 0) {
+    lines.push(`${file}: parked no offences while ${found.length} were found — name them in the park`);
+  }
+  return lines;
 };
 
 describe("the console has no px font size or glyph size outside the ladder", () => {
@@ -132,25 +282,47 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     expect(files.length).toBeGreaterThan(120);
     expect(files, "the stylesheet must be in the walk").toContain(join("src", "styles.css"));
     expect(files.filter((f) => f.startsWith(join("src", "agent"))), "agent is out of scope").toEqual([]);
-    const parked = (file: string) => relative(process.cwd(), file) in DEBT;
-    expect(files.filter((file) => !parked(file)).flatMap(offenders)).toEqual([]);
+
+    const drifted: string[] = [];
+    for (const file of files) {
+      const found = offenders(file);
+      const parked = PARKS[file];
+      if (!parked) {
+        for (const offence of found) {
+          const why = RULES.find((rule) => rule.id === offence.rule)?.why ?? "scroll container: add thin-scrollbar or no-scrollbar";
+          drifted.push(`${file}:${offence.line} ${offence.match} — ${why} [${offence.rule}]`);
+        }
+        continue;
+      }
+      drifted.push(...parkDrift(file, found));
+    }
+    if (process.env.GATE_REPORT === "1") {
+      for (const file of files) {
+        const found = offenders(file);
+        if (found.length === 0) continue;
+        console.log(`${file}: ${found.length} offender(s), ${PARKS[file] ? "parked" : "unparked"}`);
+        for (const offence of found) console.log(`  :${offence.line} ${offence.match} [${offence.rule}]`);
+      }
+    }
+    expect(drifted, "no px or off-scale literal may stand outside the ladder").toEqual([]);
   });
 
-  it("keeps every parked count honest, in both directions", () => {
-    // A parked count is a receipt: more offenders means new drift in a file nobody is watching, fewer
-    // means the slice paid it and the number must come down. A count of zero is not parking at all.
-    const drift = Object.entries(DEBT).flatMap(([file, { allowed, owner }]) => {
-      const found = offenders(file).length;
-      if (!/^XTRM-\d+/.test(owner)) return [`${file}: parked by "${owner}", which is not an issue ref`];
-      if (allowed === 0) return [`${file}: parked at 0, so delete the entry instead of parking nothing`];
-      if (found === allowed) return [];
-      return [
-        found > allowed
-          ? `${file}: parked ${allowed}, found ${found} — new drift in a parked file`
-          : `${file}: parked ${allowed}, found ${found} — the slice paid it down, lower the count`,
-      ];
+  it("keeps every park honest, in both directions, by naming the offence", () => {
+    // A park is a receipt: it names a rule and a literal, so swapping one offence for another in the
+    // same file fails, and a slice that pays one down must delete the entry in the same commit.
+    expect(Object.keys(PARKS).length, "a park list that shrank to nothing no longer holds the debt it names").toBeGreaterThan(0);
+    const findings = Object.entries(PARKS).flatMap(([file, park]) => {
+      const lines: string[] = [];
+      if (!/^XTRM-\d+$/.test(park.owner)) lines.push(`${file}: parked by "${park.owner}", which is not an issue ref`);
+      if (park.offences.length === 0 && offenders(file).length > 0) lines.push(`${file}: parked with no offences while ${offenders(file).length} were found`);
+      for (const offence of park.offences) {
+        if (!RULES.some((rule) => rule.id === offence.rule) && offence.rule !== "scroll-container") {
+          lines.push(`${file}: park names rule "${offence.rule}", which no rule id declares`);
+        }
+      }
+      return [...lines, ...parkDrift(file, offenders(file))];
     });
-    expect(drift).toEqual([]);
+    expect(findings, "each park names its owner and its offence").toEqual([]);
   });
 
   it("is not vacuous: every rule catches the literal it was written for", () => {
@@ -169,7 +341,12 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "const h4 = { marginLeft: depth * 14 };",
       "const i = { paddingLeft: depth * 16 };",
       "const j = { paddingLeft: depth * 16, };",
+      "const l = { paddingInline: 12 };",
+      "const m = { marginBlockStart: 8 };",
+      'const n = "ps-[2px]";',
+      "const o = { fontSize: 11 };",
       "h1 { font-size: 11px; }",
+      ".a { padding-inline: 8px; }",
     ].join("\n");
     expect(
       ['<div className="overflow-y-auto" />', '<div className="thin-scrollbar overflow-y-auto" />', '<div className="no-scrollbar overflow-x-auto" />'].filter(
@@ -183,22 +360,81 @@ describe("the console has no px font size or glyph size outside the ladder", () 
         (line) => SCROLL_CONTAINER.test(line) && !SCROLL_TREATMENT.test(line),
       ),
     ).toHaveLength(2);
-    const hits = RULES.flatMap((rule) => [...sample.matchAll(rule.pattern)].map((match) => match[0]));
-    expect(hits).toEqual([
-      "text-[11px]",
-      "text-[0.7rem]",
-      "size-[11px]",
-      "width={16}",
-      "size={13}",
-      "paddingLeft: 16",
-      "marginLeft: depth * 14",
-      "paddingLeft: depth * 16",
-      "paddingLeft: depth * 16",
-      'paddingTop: "6px"',
-      'padding: "0 8px"',
-      "gap-[2px]", 
-      "font-size: 11px",
-      'fontSize: "11px"',
-    ]);
+    const hit = (id: string, source: string) => [...source.matchAll(RULES.find((rule) => rule.id === id)!.pattern)].map((match) => match[0]);
+    for (const [id, literal] of [
+      ["px-font", "text-[11px]"],
+      ["offscale-rem-font", "text-[0.7rem]"],
+      ["px-glyph", "size-[11px]"],
+      ["px-glyph-attr", "width={16}"],
+      ["px-font-style", "fontSize: 1"],  // the rule matches the leading digit of any numeric value
+      ["px-spacing", "paddingLeft: 16"],
+      ["spacing-multiplier", "marginLeft: depth * 14"],
+      ["quoted-px-spacing", 'paddingTop: "6px"'],
+      ["arbitrary-px-spacing", "gap-[2px]"],
+      ["css-px-font-size", "font-size: 11px"],
+      ["px-font-style-string", 'fontSize: "11px"'],
+    ] as const) {
+      expect(hit(id, sample), `rule ${id} must catch ${literal}`).toContain(literal);
+    }
+    // The logical twins are the shape the previous rule set walked past.
+    expect(hit("px-spacing", sample)).toEqual(expect.arrayContaining(["paddingInline: 12", "marginBlockStart: 8"]));
+    expect(hit("arbitrary-px-spacing", sample)).toContain("ps-[2px]");
+    expect(hit("css-px-spacing", sample)).toContain("padding-inline: 8px");
+    // And the legal shapes the epic declared stay legal.
+    for (const legal of [
+      "padding: 0",
+      'paddingLeft: "var(--row-indent)"',
+      'paddingInline: "var(--row-indent)"',
+      "paddingRight: gutter",
+      "margin: 1.1rem 0 0.4rem",
+      "padding: 0.05rem 0.3rem",
+      "paddingLeft: depth * INDENT_REM",
+    ]) {
+      const caught = RULES.flatMap((rule) => [...legal.matchAll(rule.pattern)].map((match) => match[0]));
+      expect(caught, `legal shape refused: ${legal}`).toEqual([]);
+    }
+    // A CSS scroll container without a treatment is caught, a treated one is spared, and a block that
+    // only nests other blocks is not mistaken for a declaration block.
+    const css = [".bare {", "  overflow-x: auto;", "}", ".treated {", "  overflow-y: auto;", "  scrollbar-width: thin;", "}", "@layer utilities {", "  .wrap {", "    display: flex;", "  }", "}"].join("\n");
+    expect(cssBlocks(css).filter((block) => CSS_SCROLL.test(block.body) && !CSS_TREATMENT.test(block.body)).map((block) => block.selector)).toEqual([".bare"]);
+    expect(cssBlocks(css).map((block) => block.selector)).not.toContain("@layer utilities");
+  });
+
+  it("fails loudly when its own model is not evaluated, instead of reporting no drift", () => {
+    // Finding (7): #467 shipped a commit in which this file did not parse, so the park model never
+    // ran and "zero offenders" was reported by a gate that had not looked. A missing map and an empty
+    // map print the same reassuring sentence, so the gate plants its own sentinel — a real file in
+    // the walked tree carrying a real offence — and requires the walk to report it. Only then does
+    // "no drift" mean the gate looked.
+    const sentinel = join(ROOT, "ui", "__gate-sentinel.tmp.ts");
+    writeFileSync(sentinel, 'export const planted = "gap-[2px]";\n');
+    try {
+      expect(walk(ROOT), "the sentinel must be enumerated by the same walk the gate uses").toContain(sentinel);
+      expect(
+        offenders(sentinel).map((offence) => offence.rule),
+        "the sentinel must be reported by the same rules the gate applies",
+      ).toContain("arbitrary-px-spacing");
+      // A park that names the wrong offence must fail: otherwise the park model could be empty and
+      // still agree with itself.
+      expect(
+        parkDrift(sentinel, offenders(sentinel)),
+        "a park naming no offence must not agree with a file that has one",
+      ).not.toEqual([]);
+    } finally {
+      rmSync(sentinel, { force: true });
+    }
+    // The declarations this test depends on must be present and non-empty, or the sentinel above
+    // would pass through an empty rule list and prove nothing.
+    expect(RULES.length).toBeGreaterThan(10);
+    const parkedMeta = PARKS[join("src", "issues", "meta.tsx")];
+    expect(parkedMeta?.offences.length ?? 0, "the debt the gate parks must be named, not counted").toBeGreaterThan(0);
+    expect(PARKS[join("src", "issues", "meta.tsx")]?.offences.map((offence) => offence.match), "a park must name the literal it holds").toContain("gap-[2px]");
+  });
+
+  it("keeps every named hole owned", () => {
+    for (const hole of HOLES) {
+      expect(hole.owner, `hole ${hole.id} has no owner`).toMatch(/^XTRM-\d+$/);
+      expect(hole.why.length, `hole ${hole.id} does not say what it cannot prove`).toBeGreaterThan(80);
+    }
   });
 });

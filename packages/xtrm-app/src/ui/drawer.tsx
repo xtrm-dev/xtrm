@@ -28,8 +28,8 @@ export function Fields({
   size = "sm",
 }: {
   rows: Array<[ReactNode, ReactNode]>;
-  /** rem length of the label column; timeline rows use 3.5rem, the drawer 7.5rem. */
-  labelWidth?: string;
+  /** rem or ch length of the label column; timeline rows use 3.5rem, the drawer 7.5rem. */
+  labelWidth?: `${number}rem` | `${number}ch`;
   /** Value step: `sm` is body copy, `xs` is dense metadata (timeline, integration facts). */
   size?: "xs" | "sm";
 }) {
