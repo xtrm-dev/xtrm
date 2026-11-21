@@ -238,6 +238,31 @@ const ownsSource = (dir: string): boolean =>
 
 const lineOf = (source: string, index: number) => source.slice(0, index).split("\n").length;
 
+/** Every directory under `dir`, in the walk's own shape, so the directory the walk skipped is the one reported. */
+const directories = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? [join(dir, entry.name), ...directories(join(dir, entry.name))] : [],
+  );
+
+/**
+ * The directories that owe the walk a file and contribute none, split by the two failures they mean:
+ * a top-level directory the filter skipped, a nested one the recursion never reached.
+ *
+ * Takes its root and its file list as arguments so both can be asserted against a tree a test owns —
+ * a guard over `ROOT` alone can only be falsified by editing the repository.
+ */
+function unpaidDirectories(root: string, files: string[]): { topLevel: string[]; nested: string[] } {
+  const depth = (dir: string) => dir.split("/").length;
+  const unpaid = directories(root)
+    .filter((dir) => inScope(join(dir, "x")))
+    .filter((dir) => ownsSource(dir))
+    .filter((dir) => !files.some((file) => file.startsWith(dir + "/")));
+  return {
+    topLevel: unpaid.filter((dir) => depth(dir) === depth(root) + 1),
+    nested: unpaid.filter((dir) => depth(dir) > depth(root) + 1),
+  };
+}
+
 /**
  * What an offence asks for, by the kind of file it was found in. A stylesheet block cannot carry a
  * class, so telling it to "add thin-scrollbar" would be advice it cannot follow: the in-block
@@ -354,28 +379,19 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     // Every directory, not every top-level one: a nested directory can leave the walk while a sibling
     // keeps its parent contributing — `src/project/questions` (five files) does exactly that. The
     // enumeration mirrors the walk's own shape, so the directory the walk skips is the one reported.
-    const directories = (dir: string): string[] =>
-      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-        entry.isDirectory() ? [join(dir, entry.name), ...directories(join(dir, entry.name))] : [],
-      );
-    const missing = directories(ROOT)
-      .filter((dir) => inScope(join(dir, "x")))
-      // The predicate is "owns a file the walk should have read", not "contains a file": a directory
-      // of tests only (`__fixtures__` beside its spec) has nothing to scan, and a directory with one
-      // real source file plus tests is still required. Both cases are asserted against a temp tree
-      // below, so this filter is a rule rather than a permission.
-      .filter((dir) => ownsSource(dir))
-      .filter((dir) => !files.some((file) => file.startsWith(dir + "/")));
-    const depth = (dir: string) => dir.split("/").length;
+    // Every directory, not every top-level one, and the same computation the falsifier below pins:
+    // a nested directory can leave the walk while a sibling keeps its parent contributing.
+    //
     // Two failures, two sentences: a top-level directory that contributes nothing means the walk's
     // filter skipped it, a nested one means the walk stopped recursing. One assertion could not say
     // which, and the next reader would take whichever they expected.
+    const { topLevel, nested } = unpaidDirectories(ROOT, files);
     expect(
-      missing.filter((dir) => depth(dir) === depth(ROOT) + 1),
+      topLevel,
       "a top-level directory owns a source file but contributes none to the walk: the walk's filter skipped it",
     ).toEqual([]);
     expect(
-      missing.filter((dir) => depth(dir) > depth(ROOT) + 1),
+      nested,
       "the walk does not recurse: a nested directory owns a source file but contributes none",
     ).toEqual([]);
     // A guard over an empty file list would pass by accident.
@@ -425,6 +441,37 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       expect(ownsSource(testsOnly), "a directory of tests only has nothing the walk should read").toBe(false);
     } finally {
       rmSync(probe, { recursive: true, force: true });
+    }
+  });
+
+  it("enumerates nested directories, and owes the walk a `.ts`-only directory", () => {
+    // Two properties the coverage guard stands on, asserted on a tree this test owns because neither
+    // can be falsified against `ROOT`: the enumeration recurses (a top-level-only list returns an
+    // empty `missing`, so neither failure sentence can fire), and the predicate counts a `.ts` source
+    // (ten directories here hold only `.ts`, and narrowing it to `(tsx|css)$` would silently stop
+    // requiring all ten through `unpaidDirectories`).
+    const tree = mkdtempSync(join(tmpdir(), "units-dirs-"));
+    try {
+      mkdirSync(join(tree, "a", "b"), { recursive: true });
+      mkdirSync(join(tree, "ts-only"), { recursive: true });
+      writeFileSync(join(tree, "a", "b", "row.ts"), "export const row = 1;\n");
+      writeFileSync(join(tree, "ts-only", "col.ts"), "export const col = 1;\n");
+
+      expect(
+        directories(tree),
+        "the directory walk must recurse: a nested directory is enumerated",
+      ).toEqual(expect.arrayContaining([join(tree, "a"), join(tree, "a", "b")]));
+
+      // An empty file list is the condition the guard exists for: the walk contributed nothing.
+      // Both levels are named, which is what makes this a test of the predicate *in its use*.
+      const unpaid = unpaidDirectories(tree, []);
+      expect(
+        unpaid.topLevel,
+        "a directory owning a `.ts` source is owed a contribution, at the top level too",
+      ).toEqual([join(tree, "ts-only")]);
+      expect(unpaid.nested, "and at a nested level").toEqual([join(tree, "a", "b")]);
+    } finally {
+      rmSync(tree, { recursive: true, force: true });
     }
   });
 
