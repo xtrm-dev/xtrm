@@ -1,5 +1,8 @@
 import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
 import { Dialog } from "../ui/dialog.tsx";
+import { Fields } from "../ui/drawer.tsx";
+import { SectionHeader } from "../ui/section.tsx";
+import { ToolbarButton, ToolbarTabs } from "../ui/toolbar.tsx";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { IssueDetail, IssueLink } from "../adapters/index.tsx";
 import { planNormalization, type NormalizationPlan } from "../adapters/substrate/contract.ts";
@@ -44,7 +47,7 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
   const actions = useIssueActions(issue);
   const { substrate } = useAdapters();
   const loadOlderJournal = useCallback((before: number) => substrate.readJournal(issue.ref, { before }), [substrate, issue.ref]);
-  const [tab, setTab] = useState<"journal" | "lineage" | "provenance">("journal");
+  const [tab, setTab] = useState<Tab>("journal");
   const [focusSequence, setFocusSequence] = useState<number | null>(null);
   const plan = useMemo(() => planNormalization(issue.contract), [issue.contract]);
   const c = issue.contract;
@@ -74,30 +77,28 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
       <ClosureCard closure={issue.closure} issue={issue} />
 
       <section className="flex flex-col gap-3 border-t border-border-muted pt-4">
-        <div role="tablist" aria-label="Issue activity" className="flex items-center gap-1">
-          {(
-            [
-              ["journal", "Journal", issue.journalTotal],
-              ["lineage", "Lineage", issue.children.length + issue.blockers.length + (issue.parent ? 1 : 0)],
-              ["provenance", "Provenance", issue.provenance.claims.length + issue.provenance.bindings.length + issue.provenance.receipts.length + issue.provenance.commits.length + issue.provenance.prs.length],
-            ] as const
-          ).map(([id, label, count]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              onClick={() => {
-                setTab(id);
-                setFocusSequence(null);
-              }}
-              className={cx("flex h-7 items-center gap-1.5 rounded-md px-2 text-sm outline-none focus-visible:bg-hover", tab === id ? "bg-hover text-ink" : "text-ink-faint hover:text-ink-muted")}
-            >
-              {label}
-              {count > 0 && <span className="text-xs text-ink-faint tabular">{count}</span>}
-            </button>
-          ))}
-        </div>
+        <ToolbarTabs
+          label="Issue activity"
+          value={tab}
+          onChange={(id) => {
+            setTab(id as Tab);
+            setFocusSequence(null);
+          }}
+          tabs={[
+            { id: "journal", label: "Journal", count: issue.journalTotal || undefined },
+            { id: "lineage", label: "Lineage", count: issue.children.length + issue.blockers.length + (issue.parent ? 1 : 0) || undefined },
+            {
+              id: "provenance",
+              label: "Provenance",
+              count:
+                issue.provenance.claims.length +
+                  issue.provenance.bindings.length +
+                  issue.provenance.receipts.length +
+                  issue.provenance.commits.length +
+                  issue.provenance.prs.length || undefined,
+            },
+          ]}
+        />
         {tab === "journal" && <JournalTab issue={issue} canWrite={canWrite} onAdd={actions.addNote} focusSequence={focusSequence} onLoadOlder={loadOlderJournal} />}
         {tab === "lineage" && <LineageTab issue={issue} nav={nav} />}
         {tab === "provenance" && (
@@ -158,32 +159,24 @@ function IssueBreadcrumb({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
   );
 }
 
-function Detail({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid min-h-7 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3">
-      <span className="text-sm text-ink-faint">{label}</span>
-      <div className="min-w-0 text-sm text-ink">{children}</div>
-    </div>
-  );
-}
+/** The label column of the details grid; `Fields` owns the rest of the geometry. */
+const DETAIL_LABEL = "6.5rem";
+
+/** The three activity tabs; `ToolbarTabs` reports ids as plain strings. */
+type Tab = "journal" | "lineage" | "provenance";
 
 /**
- * The bound Jira issue for this Substrate issue (ADR-002 D6): rendered only when the repository
- * has a Jira binding and the bridge reports a link, so an unbound repository shows no row at all
- * and a page never promises a Jira issue that does not exist.
+ * The bound Jira issue for this Substrate issue (ADR-002 D6) as a `Fields` row: an unbound
+ * repository yields no row at all, so a page never promises a Jira issue that does not exist.
  */
-function JiraDetail({ issueRef }: { issueRef: string }) {
+function useJiraRow(issueRef: string): [ReactNode, ReactNode] | null {
   const { repo } = useShell();
   const binding = useJiraBinding(repo.fullName);
   const bound = binding.data?.configured === true;
   const index = useJiraIssueIndex(repo.fullName, bound);
   const jira = index.byIssueRef.get(issueRef);
   if (!bound || jira === undefined) return null;
-  return (
-    <Detail label="Jira">
-      <JiraChip issue={jira} showStatusText />
-    </Detail>
-  );
+  return ["Jira", <JiraChip issue={jira} showStatusText />];
 }
 
 function IssueChip({ link }: { link: IssueLink }) {
@@ -193,67 +186,104 @@ function IssueChip({ link }: { link: IssueLink }) {
 function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; canWrite: boolean; nav: Nav; compact?: boolean }) {
   const actions = useIssueActions(issue);
   const [reasonsOpen, setReasonsOpen] = useState(false);
+  const jira = useJiraRow(issue.ref);
   const progress = issue.release ?? (issue.childCount ? { childrenDone: issue.childrenDone, childrenTotal: issue.childCount } : null);
+  const rows: Array<[ReactNode, ReactNode]> = [
+    [
+      "Status",
+      <SelectField
+        label="Status"
+        value={LIFECYCLES.some((l) => l.value === issue.lifecycle) ? (issue.lifecycle as (typeof LIFECYCLES)[number]["value"]) : null}
+        options={lifecycleOptions}
+        canEdit={canWrite}
+        onChange={actions.setLifecycle}
+      />,
+    ],
+    [
+      "Readiness",
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          disabled={!issue.reasons.length}
+          onClick={() => setReasonsOpen((v) => !v)}
+          className="-mx-2 flex h-7 items-center gap-2 self-start rounded-md px-2 outline-none enabled:hover:bg-hover focus-visible:bg-hover"
+        >
+          <StatusDot tone={issue.dispatchable ? "accent" : TERMINAL.has(issue.lifecycle) ? "done" : "neutral"} label={issue.readinessState} />
+          <span className={issue.dispatchable ? "text-accent-ink" : "text-ink"}>{readinessLabel(issue.readinessState)}</span>
+          {issue.reasons.length > 0 && (
+            <span className="text-xs text-ink-faint">
+              {issue.reasons.length} {issue.reasons.length === 1 ? "gap" : "gaps"}
+            </span>
+          )}
+        </button>
+        {reasonsOpen && (
+          <ul className="flex flex-col gap-1 text-xs text-ink-muted">
+            {issue.reasons.map((r) => (
+              <li key={r} className="flex gap-1.5">
+                <span className="mt-1.5 size-1 shrink-0 rounded-full bg-ink-faint" />
+                {r}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>,
+    ],
+    [
+      "Priority",
+      <SelectField label="Priority" value={issue.priority} options={priorityOptions} canEdit={canWrite && issue.priority !== null} onChange={actions.setPriority} empty="Not exposed" />,
+    ],
+    [
+      "Scrutiny",
+      <SelectField
+        label="Scrutiny"
+        value={(issue.scrutiny as "LOW" | null) ?? ((issue.contract.raw.scrutiny as "LOW" | undefined) ?? null)}
+        options={scrutinyOptions}
+        canEdit={canWrite}
+        onChange={actions.setScrutiny}
+      />,
+    ],
+    ["Parent", issue.parent ? <IssueChip link={issue.parent} /> : <span className="text-ink-faint">None</span>],
+    ...(jira ? [jira] : []),
+    ...(progress
+      ? [
+          [
+            "Children" as ReactNode,
+            <div className="flex items-center gap-2">
+              <div className="h-1 w-20 overflow-hidden rounded-full bg-control">
+                <div className="h-full bg-ink-muted" style={{ width: `${(progress.childrenDone / Math.max(1, progress.childrenTotal)) * 100}%` }} />
+              </div>
+              <span className="text-xs text-ink-muted tabular">
+                {progress.childrenDone}/{progress.childrenTotal} done
+              </span>
+            </div>,
+          ] as [ReactNode, ReactNode],
+        ]
+      : []),
+    ...(issue.blockers.length > 0
+      ? [
+          [
+            "Blocked by" as ReactNode,
+            <div className="flex flex-col">
+              {issue.blockers.map((b) => (
+                <IssueChip key={b.ref} link={b} />
+              ))}
+            </div>,
+          ] as [ReactNode, ReactNode],
+        ]
+      : []),
+    ["Claim", issue.claim ? `${issue.claim.holder}` : <span className="text-ink-faint">Unclaimed</span>],
+    ...(compact
+      ? []
+      : ([
+          ["Created", formatDate(issue.createdAt)],
+          ["Updated", issue.updatedAt ? ago(issue.updatedAt) : "—"],
+          ...(issue.closure.closed ? [["Closed", issue.closure.closedAt ? ago(issue.closure.closedAt) : (issue.closure.outcome ?? "closed")]] : []),
+        ] as Array<[ReactNode, ReactNode]>)),
+  ];
   return (
     <div className={cx("flex flex-col gap-1", !compact && "rounded-lg border border-border-muted p-4")}>
       {!compact && <FieldLabel>Details</FieldLabel>}
-      <Detail label="Status">
-        <SelectField label="Status" value={LIFECYCLES.some((l) => l.value === issue.lifecycle) ? (issue.lifecycle as (typeof LIFECYCLES)[number]["value"]) : null} options={lifecycleOptions} canEdit={canWrite} onChange={actions.setLifecycle} />
-      </Detail>
-      <Detail label="Readiness">
-        <button type="button" disabled={!issue.reasons.length} onClick={() => setReasonsOpen((v) => !v)} className="-mx-2 flex h-7 items-center gap-2 rounded-md px-2 outline-none enabled:hover:bg-hover focus-visible:bg-hover">
-          <StatusDot tone={issue.dispatchable ? "accent" : TERMINAL.has(issue.lifecycle) ? "done" : "neutral"} label={issue.readinessState} />
-          <span className={issue.dispatchable ? "text-accent-ink" : "text-ink"}>{readinessLabel(issue.readinessState)}</span>
-          {issue.reasons.length > 0 && <span className="text-xs text-ink-faint">{issue.reasons.length} {issue.reasons.length === 1 ? "gap" : "gaps"}</span>}
-        </button>
-      </Detail>
-      {reasonsOpen && (
-        <ul className="mb-1 ml-[7.25rem] flex flex-col gap-1 text-xs text-ink-muted">
-          {issue.reasons.map((r) => (
-            <li key={r} className="flex gap-1.5">
-              <span className="mt-1.5 size-1 shrink-0 rounded-full bg-ink-faint" />
-              {r}
-            </li>
-          ))}
-        </ul>
-      )}
-      <Detail label="Priority">
-        <SelectField label="Priority" value={issue.priority} options={priorityOptions} canEdit={canWrite && issue.priority !== null} onChange={actions.setPriority} empty="Not exposed" />
-      </Detail>
-      <Detail label="Scrutiny">
-        <SelectField label="Scrutiny" value={(issue.scrutiny as "LOW" | null) ?? ((issue.contract.raw.scrutiny as "LOW" | undefined) ?? null)} options={scrutinyOptions} canEdit={canWrite} onChange={actions.setScrutiny} />
-      </Detail>
-      <Detail label="Parent">{issue.parent ? <IssueChip link={issue.parent} /> : <span className="text-ink-faint">None</span>}</Detail>
-      <JiraDetail issueRef={issue.ref} />
-      {progress && (
-        <Detail label="Children">
-          <div className="flex items-center gap-2">
-            <div className="h-1 w-20 overflow-hidden rounded-full bg-control">
-              <div className="h-full bg-ink-muted" style={{ width: `${(progress.childrenDone / Math.max(1, progress.childrenTotal)) * 100}%` }} />
-            </div>
-            <span className="text-xs text-ink-muted tabular">
-              {progress.childrenDone}/{progress.childrenTotal} done
-            </span>
-          </div>
-        </Detail>
-      )}
-      {issue.blockers.length > 0 && (
-        <Detail label="Blocked by">
-          <div className="flex flex-col">
-            {issue.blockers.map((b) => (
-              <IssueChip key={b.ref} link={b} />
-            ))}
-          </div>
-        </Detail>
-      )}
-      <Detail label="Claim">{issue.claim ? `${issue.claim.holder}` : <span className="text-ink-faint">Unclaimed</span>}</Detail>
-      {!compact && (
-        <>
-          <Detail label="Created">{formatDate(issue.createdAt)}</Detail>
-          <Detail label="Updated">{issue.updatedAt ? ago(issue.updatedAt) : "—"}</Detail>
-          {issue.closure.closed && <Detail label="Closed">{issue.closure.closedAt ? ago(issue.closure.closedAt) : (issue.closure.outcome ?? "closed")}</Detail>}
-        </>
-      )}
+      <Fields labelWidth={DETAIL_LABEL} rows={rows} />
       {!canWrite && <p className="mt-2 text-xs text-ink-faint">Read-only: Substrate writes are disabled for this source.</p>}
     </div>
   );
@@ -265,7 +295,7 @@ function NormalizeBanner({ plan, issue, canWrite, onApply }: { plan: Normalizati
   const [error, setError] = useState<string | null>(null);
   const FIELD_LABEL: Record<string, string> = { success: "Success", scope: "Scope", nonGoals: "Non-goals", constraints: "Constraints", validation: "Validation", output: "Output", references: "References" };
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-border-muted bg-deep/50 px-4 py-3">
+    <div className="flex items-start gap-3 border-l border-border-strong pl-3">
       <Icon name="alert" size="sm" className="mt-0.5 shrink-0 text-ink-faint" />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="text-sm text-ink">This contract was imported with its sections inside Problem.</p>
@@ -348,9 +378,7 @@ function LineageTab({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
       {groups.map(([title, items]) =>
         items.length ? (
           <div key={title} className="flex flex-col">
-            <span className="mb-1 text-xs font-medium text-ink-faint">
-              {title} <span className="tabular">{items.length}</span>
-            </span>
+            <SectionHeader title={title} count={items.length} inset="none" level={4} />
             {items.map((l) => (
               <Row key={l.ref} density="sidebar" onActivate={() => nav.onOpenIssue(l.ref)}>
                 <StatusDot tone={lifecycleTone(l.lifecycle)} label={lifecycleLabel(l.lifecycle)} />

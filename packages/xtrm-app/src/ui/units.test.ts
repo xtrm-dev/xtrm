@@ -56,7 +56,6 @@ const DEBT: Record<string, { allowed: number; owner: string }> = {
   [join("src", "issues", "PullRequestsBlock.tsx")]: { allowed: 2, owner: "XTRM-941" },
   [join("src", "github", "identity.tsx")]: { allowed: 2, owner: "XTRM-941" },
   [join("src", "shell", "ContextSidebar.tsx")]: { allowed: 3, owner: "XTRM-939" },
-  [join("src", "settings", "SettingsSurface.tsx")]: { allowed: 1, owner: "XTRM-937" },
   [join("src", "issues", "meta.tsx")]: { allowed: 1, owner: "XTRM-943" },
 };
 

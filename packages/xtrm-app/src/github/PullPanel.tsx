@@ -2,6 +2,7 @@ import { usePull } from "../app/queries.ts";
 import { checkLabel, checkTone, conversationUnavailable, mergeableText, parsePullRef, reviewLabel, usePrLinkedRefs } from "./pr.ts";
 import { ReferenceActionsProvider, ReferenceChip } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
+import { DetailTitle } from "../shell/detail-title.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { EmptyState, ErrorState, LoadingState, StatusDot, ago } from "../ui/primitives.tsx";
 import { PrKey, PrStateChip } from "../ui/pr-key.tsx";
@@ -36,45 +37,50 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
   if (pull.isError) return <ErrorState title={`Could not read ${refValue}`} error={pull.error} />;
   const p = pull.data;
 
+  const meta = (
+    <>
+      <div className="flex min-w-0 items-center gap-2 text-xs">
+        <PrStateChip state={p.state} draft={p.draft} />
+        <span
+          className="min-w-0 truncate font-mono text-xs text-ink-muted"
+          title={`${p.headBranch ?? "unknown"} → ${p.baseBranch ?? "unknown"}`}
+        >
+          {p.headBranch ?? "unknown"} → {p.baseBranch ?? "unknown"}
+        </span>
+        <span
+          className="shrink-0 tabular text-xs"
+          title={p.additions === null && p.deletions === null ? "Diff counts unavailable from the source" : "Diff counts from the pull request"}
+        >
+          {p.additions === null && p.deletions === null ? (
+            <span className="text-ink-faint">diff unknown</span>
+          ) : (
+            <>
+              <span className="text-diff-add">+{p.additions ?? "?"}</span>{" "}
+              <span className="text-diff-del">−{p.deletions ?? "?"}</span>
+            </>
+          )}
+        </span>
+        <span className="shrink-0 text-ink-faint">{p.changedFiles === null ? "files unknown" : `${p.changedFiles} files`}</span>
+      </div>
+      <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
+        <AuthorInline login={p.author} />
+        <span className="truncate">
+          · opened {ago(p.createdAt)} · updated {ago(p.updatedAt)}
+        </span>
+      </p>
+    </>
+  );
+
   return (
     <ReferenceActionsProvider open={(r) => inspect(r)} repo={parsed.fullName}>
-      <div data-testid="pull-header" className="flex flex-col gap-1.5 px-5 pt-4 pb-3">
-        <div className="flex items-start gap-3">
-          <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-2">
-            <PrKey number={p.number} state={p.state} draft={p.draft} quiet className="shrink-0" />
-            <h2 className="min-w-0 text-base leading-snug font-medium text-pretty text-ink">{p.title}</h2>
-          </span>
-          <GithubPill href={p.url} size="sm" variant="ghost" />
-        </div>
-        <div className="flex min-w-0 items-center gap-2 text-xs">
-          <PrStateChip state={p.state} draft={p.draft} />
-          <span
-            className="min-w-0 truncate font-mono text-xs text-ink-muted"
-            title={`${p.headBranch ?? "unknown"} → ${p.baseBranch ?? "unknown"}`}
-          >
-            {p.headBranch ?? "unknown"} → {p.baseBranch ?? "unknown"}
-          </span>
-          <span
-            className="shrink-0 tabular text-xs"
-            title={p.additions === null && p.deletions === null ? "Diff counts unavailable from the source" : "Diff counts from the pull request"}
-          >
-            {p.additions === null && p.deletions === null ? (
-              <span className="text-ink-faint">diff unknown</span>
-            ) : (
-              <>
-                <span className="text-diff-add">+{p.additions ?? "?"}</span>{" "}
-                <span className="text-diff-del">−{p.deletions ?? "?"}</span>
-              </>
-            )}
-          </span>
-          <span className="shrink-0 text-ink-faint">{p.changedFiles === null ? "files unknown" : `${p.changedFiles} files`}</span>
-        </div>
-        <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
-          <AuthorInline login={p.author} />
-          <span className="truncate">
-            · opened {ago(p.createdAt)} · updated {ago(p.updatedAt)}
-          </span>
-        </p>
+      <div data-testid="pull-header">
+        <DetailTitle
+          lead={<PrKey number={p.number} state={p.state} draft={p.draft} quiet className="shrink-0" />}
+          aside={<GithubPill href={p.url} size="sm" variant="ghost" />}
+          meta={meta}
+        >
+          {p.title}
+        </DetailTitle>
       </div>
 
       <InspectorSection title="Linked Substrate issues">
@@ -102,9 +108,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
 
       {p.body && (
         <InspectorSection title="Description">
-          <div className="rounded-md border border-border-muted px-3 py-2">
-            <Markdown html>{p.body}</Markdown>
-          </div>
+          <Markdown html>{p.body}</Markdown>
         </InspectorSection>
       )}
 
@@ -124,7 +128,7 @@ export function PullPanel({ refValue, follow }: { refValue: string; follow: bool
                   )}
                 </div>
                 {r.body?.trim() && (
-                  <div className="ml-5 rounded-md border border-border-muted px-3 py-2">
+                  <div className="border-l border-border-muted pl-3">
                     <Markdown html>{r.body}</Markdown>
                   </div>
                 )}

@@ -1,6 +1,7 @@
 import type { PullRequestComment, PullRequestReview, PullRequestReviewComment, ReviewState } from "../adapters/types.ts";
 import { reviewLabel } from "./pr.ts";
 import { Markdown } from "../ui/markdown.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { AuthorAvatar, AuthorName } from "./identity.tsx";
 import { ago } from "../ui/primitives.tsx";
@@ -111,12 +112,12 @@ function Message({ author, at, url, badge, body }: { author: string; at: string;
       <div className="flex min-w-0 items-center gap-2">
         <AuthorAvatar login={author} />
         <AuthorName login={author} className="text-sm text-ink" />
-        {badge && <span className="shrink-0 rounded-sm border border-border-muted px-1 text-xs text-ink-faint">{badge}</span>}
+        {badge && <Badge size="xs">{badge}</Badge>}
         <span className="ml-auto">
           <When at={at} url={url} />
         </span>
       </div>
-      <div className="rounded-md border border-border-muted px-3 py-2">
+      <div className="border-l border-border-muted pl-3">
         <Markdown html>{body}</Markdown>
       </div>
     </div>
