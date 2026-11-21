@@ -9,7 +9,8 @@ import { useResearchCompare, useResearchExperiment, useResearchExperiments, useR
 import { useShell } from "../shell/context.tsx";
 import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
 import { Icon } from "../ui/icon.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, type Tone } from "../ui/primitives.tsx";
+import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, cx, type Tone } from "../ui/primitives.tsx";
+import { SectionHeader } from "../ui/section.tsx";
 import { ToolbarButton } from "../ui/toolbar.tsx";
 import { MetricFields, UsageFields } from "./research-format.tsx";
 import { ResearchCharts, chartSpecs } from "./research-charts.tsx";
@@ -51,10 +52,10 @@ export function ExperimentListSurface() {
   let body;
   if (experiments.isPending) body = <LoadingState label="Loading experiments" />;
   else if (experiments.isError) body = <ErrorState title="Research registry unavailable" error={experiments.error} />;
-  else if (experiments.data.length === 0 && unknown.length === 0) body = <p className="px-6 py-6 text-sm text-ink-faint">No experiment definitions are registered.</p>;
+  else if (experiments.data.length === 0 && unknown.length === 0) body = <EmptyState icon="research" title="No experiment definitions are registered." />;
   else
     body = (
-      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-2">
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto py-2">
         {experiments.data.map((experiment: ExperimentRef) => {
           const count = runCounts.get(experiment.id) ?? 0;
           return (
@@ -69,7 +70,7 @@ export function ExperimentListSurface() {
         })}
         {unknown.length > 0 && (
           <>
-            <h2 className="px-3 py-1.5 text-xs font-medium text-ink-faint">Unreadable run — no resolvable experiment</h2>
+            <SectionHeader title="Unreadable run — no resolvable experiment" level={3} />
             {unknown.map((row) => (
               <Row key={row.id} aria-label={`${row.id} unknown experiment`}>
                 <StatusDot tone="danger" label="invalid_manifest" />
@@ -98,7 +99,7 @@ export function ExperimentListSurface() {
 
 function GlossaryDefinitionRow({ name, entry }: { name: string; entry: MetricGlossaryEntry }) {
   return (
-    <div className="flex flex-col gap-0.5 border-b border-border-muted px-3 py-2 last:border-b-0" aria-label={name}>
+    <div className="flex flex-col gap-0.5 px-3 py-1.5" aria-label={name}>
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="font-mono text-xs text-ink-faint">{name}</span>
         <span className="text-sm text-ink">{entry.label}</span>
@@ -142,7 +143,7 @@ export function ExperimentDetailSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={`Experiment ${experimentId}`}>
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-muted px-4">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border-muted px-3">
         <Breadcrumbs
           className="text-sm"
           items={[
@@ -152,15 +153,15 @@ export function ExperimentDetailSurface() {
         />
         {version && <span className="ml-auto font-mono text-xs text-ink-faint">{experimentId}@{version}</span>}
       </header>
-      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto py-4">
         {experiment.isPending ? (
           <LoadingState rows={8} label="Loading experiment" />
         ) : experiment.isError ? (
           <ErrorState title={`Experiment definition unavailable: ${experimentId}`} error={experiment.error} />
         ) : (
           <div className="flex flex-col gap-6">
-            <section aria-label="Definition">
-              <h2 className="mb-2 text-xs font-medium text-ink-faint">Definition</h2>
+            <section aria-label="Definition" className="flex flex-col px-3">
+              <SectionHeader title="Definition" level={3} inset="none" className="mb-2" />
               <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1.5 text-sm">
                 <DetailField label="Description" value={semantics?.description ?? <span className="text-ink-faint">not recorded</span>} />
                 <DetailField label="Research question" value={semantics?.researchQuestion ?? <span className="text-ink-faint">not recorded</span>} />
@@ -183,42 +184,42 @@ export function ExperimentDetailSurface() {
               </dl>
             </section>
             <DecisionCriteriaSection experiment={semantics} />
-            <section aria-label="Metric glossary">
-              <h2 className="mb-2 text-xs font-medium text-ink-faint">Metric glossary</h2>
+            <section aria-label="Metric glossary" className="flex flex-col">
+              <SectionHeader title="Metric glossary" level={3} />
               {glossary.size === 0 ? (
-                <p className="text-sm text-ink-faint">This experiment declares no metric glossary.</p>
+                <p className="px-3 text-sm text-ink-faint">This experiment declares no metric glossary.</p>
               ) : (
-                <div className="flex flex-col rounded-md border border-border-muted">
+                <div className="flex flex-col divide-y divide-border-muted">
                   {[...glossary.entries()].map(([name, entry]) => (
                     <GlossaryDefinitionRow key={name} name={name} entry={entry} />
                   ))}
                 </div>
               )}
             </section>
-            <section aria-label="Declared charts">
-              <h2 className="mb-2 text-xs font-medium text-ink-faint">Declared charts</h2>
+            <section aria-label="Declared charts" className="flex flex-col">
+              <SectionHeader title="Declared charts" level={3} />
               {specs.length === 0 ? (
-                <p className="text-sm text-ink-faint">This experiment declares no charts.</p>
+                <p className="px-3 text-sm text-ink-faint">This experiment declares no charts.</p>
               ) : relatedRuns.length > 0 ? (
                 <ResearchCharts experiment={experiment.data!} runIds={relatedRuns.map((r) => r.id)} />
               ) : (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col divide-y divide-border-muted">
                   {specs.map((spec) => (
-                    <div key={spec.id} className="rounded-md border border-border-muted px-3 py-2">
+                    <div key={spec.id} className="flex flex-col gap-1 px-3 py-2">
                       <p className="text-sm text-ink">{spec.title}</p>
                       <p className="text-xs text-ink-faint">{spec.description}</p>
-                      <p className="mt-1 font-mono text-xs text-ink-faint">{spec.datasets.join(", ")}</p>
+                      <p className="font-mono text-xs text-ink-faint">{spec.datasets.join(", ")}</p>
                     </div>
                   ))}
                 </div>
               )}
             </section>
-            <section aria-label="Related runs">
-              <h2 className="mb-2 text-xs font-medium text-ink-faint">Related runs</h2>
+            <section aria-label="Related runs" className="flex flex-col">
+              <SectionHeader title="Related runs" level={3} />
               {relatedRuns.length === 0 ? (
-                <p className="text-sm text-ink-faint">No runs reference this experiment.</p>
+                <p className="px-3 text-sm text-ink-faint">No runs reference this experiment.</p>
               ) : (
-                <div className="flex flex-col divide-y divide-border-muted rounded-md border border-border-muted">
+                <div className="flex flex-col divide-y divide-border-muted">
                   {relatedRuns.map((run) => (
                     <Row key={run.id} density="list" aria-label={run.id} onActivate={() => void navigate({ to: `/research/runs/${run.id}` } as never)}>
                       <StatusDot tone={runStatusTone(run.status)} label={run.status} />
@@ -294,11 +295,11 @@ export function RunListSurface() {
   let body;
   if (runs.isPending) body = <LoadingState label="Loading runs" />;
   else if (runs.isError) body = <ErrorState title="Research bridge unavailable" error={runs.error} />;
-  else if (runs.data.length === 0) body = <p className="px-6 py-6 text-sm text-ink-faint">No runs recorded yet.</p>;
+  else if (runs.data.length === 0) body = <EmptyState icon="research" title="No runs recorded yet." />;
   else
     body = (
-      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        <Row density="sidebar" className="text-xs text-ink-faint">
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto py-2">
+        <Row className="text-xs text-ink-faint">
           <span className="w-3.5" />
           <span className="w-3.5" />
           <span className="w-28 shrink-0">Run</span>
@@ -400,7 +401,7 @@ export function RunAnalysisSurface() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={`Run ${runId}`}>
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border-muted px-4">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border-muted px-3">
         <Breadcrumbs
           className="text-sm"
           items={[
@@ -411,7 +412,7 @@ export function RunAnalysisSurface() {
         {run.data && <StatusDot tone={runStatusTone(run.data.status)} label={run.data.status} />}
         {manifest && readVersionRef(manifest.variant) && <span className="ml-auto font-mono text-xs text-ink-faint">{readVersionRef(manifest.variant)!.id}@{readVersionRef(manifest.variant)!.version}</span>}
       </header>
-      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto py-4">
         {run.isPending ? (
           <LoadingState rows={8} label="Loading run" />
         ) : run.isError ? (
@@ -423,16 +424,16 @@ export function RunAnalysisSurface() {
             <DecisionCriteriaSection experiment={semantics} />
             <ResultSummarySection summary={resultSummary} />
             <MethodSection manifest={manifest!} workloadDef={workload.data} />
-            <section aria-label="Metrics">
-              <h2 className="mb-2 text-xs font-medium text-ink-faint">Metrics</h2>
+            <section aria-label="Metrics" className="flex flex-col">
+              <SectionHeader title="Metrics" level={3} />
               {metrics.isPending ? (
                 <LoadingState rows={3} label="Loading metrics" />
               ) : metrics.isError ? (
                 <ErrorState title="Metrics unavailable" error={metrics.error} />
               ) : Object.keys(metrics.data.metrics).length === 0 ? (
-                <p className="text-sm text-ink-faint">No metrics reported for this run.</p>
+                <p className="px-3 text-sm text-ink-faint">No metrics reported for this run.</p>
               ) : (
-                <div className="flex flex-col rounded-md border border-border-muted">
+                <div className="flex flex-col divide-y divide-border-muted">
                   {Object.entries(metrics.data.metrics).map(([key, metric]) => {
                     // Metric keys are namespaced `evaluator::metric`; the glossary and legend are
                     // keyed by the bare metric name.
@@ -459,16 +460,16 @@ export function RunAnalysisSurface() {
             ) : experiment.data ? (
               <ResearchCharts experiment={experiment.data} runIds={[runId]} runLabels={{ [runId]: variantRef?.id ?? runId }} />
             ) : null}
-            <section aria-label="Samples">
-              <h2 className="mb-2 text-xs font-medium text-ink-faint">Samples</h2>
+            <section aria-label="Samples" className="flex flex-col">
+              <SectionHeader title="Samples" level={3} />
               {samples.isPending ? (
                 <LoadingState rows={3} label="Loading samples" />
               ) : samples.isError ? (
                 <ErrorState title="Sample records unavailable" error={samples.error} />
               ) : samples.data.length === 0 ? (
-                <p className="text-sm text-ink-faint">No sample records recorded.</p>
+                <p className="px-3 text-sm text-ink-faint">No sample records recorded.</p>
               ) : (
-                <div className="flex flex-col rounded-md border border-border-muted">
+                <div className="flex flex-col">
                   <Row density="list" className="text-xs text-ink-faint">
                     <span className="w-24 shrink-0">Sample</span>
                     <span className="w-20 shrink-0">Status</span>
@@ -485,16 +486,16 @@ export function RunAnalysisSurface() {
                 </div>
               )}
             </section>
-            <section aria-label="Telemetry events">
-              <h2 className="mb-2 text-xs font-medium text-ink-faint">Telemetry events</h2>
+            <section aria-label="Telemetry events" className="flex flex-col">
+              <SectionHeader title="Telemetry events" level={3} />
               {tail.isPending ? (
                 <LoadingState rows={3} label="Loading telemetry" />
               ) : tail.isError ? (
                 <ErrorState title="Telemetry log unavailable" error={tail.error} />
               ) : tail.data.events.length === 0 ? (
-                <p className="text-sm text-ink-faint">No telemetry events recorded.</p>
+                <p className="px-3 text-sm text-ink-faint">No telemetry events recorded.</p>
               ) : (
-                <div className="flex flex-col divide-y divide-border-muted rounded-md border border-border-muted">
+                <div className="flex flex-col divide-y divide-border-muted">
                   {tail.data.events.map((event) => (
                     <Row key={event.seq} density="list" aria-label={`event ${event.seq} ${event.kind}`}>
                       <span className="w-12 shrink-0 tabular text-xs text-ink-faint">{event.seq}</span>
@@ -509,12 +510,12 @@ export function RunAnalysisSurface() {
                 </div>
               )}
             </section>
-            <section aria-label="Annotations">
-              <h2 className="mb-2 text-xs font-medium text-ink-faint">Annotations</h2>
+            <section aria-label="Annotations" className="flex flex-col">
+              <SectionHeader title="Annotations" level={3} />
               {run.data.annotations.length === 0 ? (
-                <p className="text-sm text-ink-faint">No annotations recorded.</p>
+                <p className="px-3 text-sm text-ink-faint">No annotations recorded.</p>
               ) : (
-                <div className="flex flex-col divide-y divide-border-muted rounded-md border border-border-muted">
+                <div className="flex flex-col divide-y divide-border-muted">
                   {run.data.annotations.map((a, i) => (
                     <Row key={i} density="list" onActivate={() => inspect({ kind: "research-annotation", ref: `${runId}|${i}` })} aria-label={String(a.kind ?? `annotation-${i}`)}>
                       <span className="w-32 shrink-0 truncate text-xs text-ink-faint">{String(a.kind ?? "—")}</span>
@@ -543,13 +544,18 @@ function ManifestSection({ runId, manifest, onInspect }: { runId: string; manife
   const lineage = readLineage(manifest.lineage);
   const { inspect } = useShell();
   return (
-    <section aria-label="Manifest and versions">
-      <div className="mb-2 flex items-center gap-2">
-        <h2 className="text-xs font-medium text-ink-faint">Manifest &amp; versions</h2>
-        <button type="button" onClick={onInspect} className="ml-auto text-xs text-accent-ink hover:underline">
-          Open provenance
-        </button>
-      </div>
+    <section aria-label="Manifest and versions" className="flex flex-col px-3">
+      <SectionHeader
+        title="Manifest & versions"
+        level={3}
+        inset="none"
+        className="mb-2"
+        aside={
+          <button type="button" onClick={onInspect} className="text-xs text-accent-ink hover:underline">
+            Open provenance
+          </button>
+        }
+      />
       <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className="text-ink-faint">Experiment</dt>
         <dd className="text-ink">{experiment ? `${experiment.id}@${experiment.version}` : <span className="text-ink-faint">unresolved</span>}</dd>
@@ -604,6 +610,17 @@ function delta(candidate: number | undefined, baseline: number | undefined): str
   return d > 0 ? `+${d}` : String(d);
 }
 
+/** The comparison table is the console's table, not a `<table>`: a grid row template with a header
+ * row at `px-2` (Issues, Pull requests). One metric column, one baseline column, then a value and a
+ * delta column per candidate — the cell order the delta and the tests both read. */
+const COMPARISON_CELL = "flex min-w-0 items-center px-2 py-1";
+
+function comparisonColumns(candidateCount: number): string {
+  const columns = ["minmax(6rem, 1fr)", "minmax(0, 1.6fr)"];
+  for (let i = 0; i < candidateCount; i += 1) columns.push("minmax(0, 1.2fr)", "minmax(3rem, auto)");
+  return columns.join(" ");
+}
+
 export function RunComparisonSurface() {
   const { research } = useAdapters();
   const rawSearch = useSearch({ strict: false }) as Record<string, unknown>;
@@ -633,41 +650,38 @@ export function RunComparisonSurface() {
     const [baselineId, ...candidateIds] = runIds;
     const baseline = compare.data[baselineId!];
     const metricKeys = [...new Set(Object.values(compare.data).flatMap((s) => Object.keys(s.metrics)))].sort();
+    const grid = comparisonColumns(candidateIds.length);
     body = (
-      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <table className="w-full border-separate border-spacing-0 text-sm">
-          <thead>
-            <tr className="text-left text-xs text-ink-faint">
-              <th className="border-b border-border-muted px-2 py-1.5">Metric</th>
-              <th className="border-b border-border-muted px-2 py-1.5">{baselineId} (baseline)</th>
-              {candidateIds.map((c) => (
-                <th key={c} className="border-b border-border-muted px-2 py-1.5" colSpan={2}>
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {metricKeys.map((key) => (
-              <tr key={key}>
-                <td className="border-b border-border-muted px-2 py-1.5 font-mono text-xs text-ink-faint">{key}</td>
-                <td className="border-b border-border-muted px-2 py-1.5">
-                  <MetricCellView metric={baseline?.metrics[key]} />
-                </td>
-                {candidateIds.map((c) => (
-                  <Fragment key={c}>
-                    <td className="border-b border-border-muted px-2 py-1.5">
-                      <MetricCellView metric={compare.data[c]?.metrics[key]} />
-                    </td>
-                    <td className="border-b border-border-muted px-2 py-1.5 text-xs text-ink-faint tabular">
-                      {delta(compare.data[c]?.metrics[key]?.value, baseline?.metrics[key]?.value)}
-                    </td>
-                  </Fragment>
-                ))}
-              </tr>
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto pb-4">
+        <div role="table" aria-label="Metric comparison" className="flex flex-col">
+          <div role="row" className="grid h-8 items-center border-b border-border-subtle text-xs text-ink-faint" style={{ gridTemplateColumns: grid }}>
+            <div role="columnheader" className={COMPARISON_CELL}>Metric</div>
+            <div role="columnheader" className={COMPARISON_CELL}>{baselineId} (baseline)</div>
+            {candidateIds.map((c) => (
+              <div key={c} role="columnheader" aria-colspan={2} className={COMPARISON_CELL} style={{ gridColumn: "span 2" }}>
+                {c}
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+          {metricKeys.map((key) => (
+            <div key={key} role="row" className="grid min-h-8 items-center border-b border-border-subtle" style={{ gridTemplateColumns: grid }}>
+              <div role="cell" className={cx(COMPARISON_CELL, "font-mono text-xs text-ink-faint")}>{key}</div>
+              <div role="cell" className={COMPARISON_CELL}>
+                <MetricCellView metric={baseline?.metrics[key]} />
+              </div>
+              {candidateIds.map((c) => (
+                <Fragment key={c}>
+                  <div role="cell" className={COMPARISON_CELL}>
+                    <MetricCellView metric={compare.data[c]?.metrics[key]} />
+                  </div>
+                  <div role="cell" className={cx(COMPARISON_CELL, "text-xs text-ink-faint tabular")}>
+                    {delta(compare.data[c]?.metrics[key]?.value, baseline?.metrics[key]?.value)}
+                  </div>
+                </Fragment>
+              ))}
+            </div>
+          ))}
+        </div>
         {experiment.data ? (
           <div className="mt-6">
             <ResearchCharts experiment={experiment.data} runIds={runIds} runLabels={runLabels} />
