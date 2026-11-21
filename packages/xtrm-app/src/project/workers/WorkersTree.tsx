@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Worker } from "../../adapters/status-board/types.ts";
-import { EmptyState } from "../../ui/primitives.tsx";
-import { BoardWorkerRow, WorkerRow } from "./WorkerRow.tsx";
+import { Icon } from "../../ui/icon.tsx";
+import { EmptyState, cx } from "../../ui/primitives.tsx";
+import { BoardWorkerRow, CHEVRON, WorkerRow } from "./WorkerRow.tsx";
 import type { TreeNode, WorkersTreeModel } from "./model.ts";
 
 /**
@@ -68,8 +69,8 @@ export function WorkersTree({
               data-testid="workers-unknown-toggle"
               className="flex w-full items-center gap-1 rounded-sm px-1.5 py-1 text-left text-xs font-medium text-ink-muted outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40"
             >
-              <span className="w-3 shrink-0 text-ink-faint" aria-hidden>
-                {unknownOpen ? "▾" : "▸"}
+              <span className="flex size-5 shrink-0 items-center justify-center text-ink-faint" aria-hidden>
+                <Icon name="chevronDown" size="text" className={cx(CHEVRON, !unknownOpen && "-rotate-90")} />
               </span>
               unknown dispatcher ({unknownCount})
             </button>

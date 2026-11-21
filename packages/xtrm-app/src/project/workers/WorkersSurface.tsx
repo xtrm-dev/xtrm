@@ -5,10 +5,12 @@ import { useAdapters } from "../../adapters/index.tsx";
 import { projectForRepo, useProjects } from "../../app/queries.ts";
 import { useIssueIndex } from "../../refs/references.tsx";
 import { useShell } from "../../shell/context.tsx";
-import { ErrorState, LoadingState, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx } from "../../ui/primitives.tsx";
+import { ErrorState, LoadingState, cx } from "../../ui/primitives.tsx";
+import { SectionHeader } from "../../ui/section.tsx";
+import { ToolbarButton } from "../../ui/toolbar.tsx";
 import { IntegrationState } from "../IntegrationState.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
-import { BoardWorkerRow } from "./WorkerRow.tsx";
+import { BoardWorkerRow, WORKER_COLUMNS } from "./WorkerRow.tsx";
 import { WorkersTree } from "./WorkersTree.tsx";
 import { buildFlatGroups, buildWorkersTree } from "./model.ts";
 
@@ -68,25 +70,17 @@ export function WorkersSurface() {
     navigate({ to: `${base}/project/workers`, search: { ...next } as never, replace: true });
 
   // Rendered inside ProjectShell's own header row, so this is controls only.
+  // Selection is the shared toolbar idiom (Activity's filters, XTRM-855): `aria-pressed` plus ink
+  // text, never a pressed fill and never a third selected-state vocabulary.
   const toolbar = (
     <>
       <span className="flex items-center gap-1" role="group" aria-label="Workers view">
-        <button
-          type="button"
-          className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, view === "tree" && "bg-pressed text-ink")}
-          aria-pressed={view === "tree"}
-          onClick={() => setSearch({})}
-        >
+        <ToolbarButton aria-pressed={view === "tree"} className={cx(view === "tree" && "font-medium text-ink")} onClick={() => setSearch({})}>
           Tree
-        </button>
-        <button
-          type="button"
-          className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, view === "list" && "bg-pressed text-ink")}
-          aria-pressed={view === "list"}
-          onClick={() => setSearch({ view: "list" })}
-        >
+        </ToolbarButton>
+        <ToolbarButton aria-pressed={view === "list"} className={cx(view === "list" && "font-medium text-ink")} onClick={() => setSearch({ view: "list" })}>
           List
-        </button>
+        </ToolbarButton>
       </span>
       {view === "list" && (
         <label className="flex items-center gap-1 text-xs text-ink-muted">
@@ -126,10 +120,24 @@ export function WorkersSurface() {
   if (view === "list") {
     return shell(
       <div data-testid="workers-list">
-        {flat.groups.length === 0 && <p className="px-1.5 py-2 text-xs text-ink-faint">No workers on this board.</p>}
+        {flat.groups.length === 0 && <p className="px-3 py-2 text-xs text-ink-faint">No workers on this board.</p>}
+        {flat.groups.length > 0 && (
+          // Column labels share the row's own template (the Follow-ups pattern), so `ctx` and
+          // `claim` stop being unlabelled numbers at the row's end.
+          <div className="flex h-8 items-center gap-2.5 px-3 text-xs text-ink-faint" data-testid="workers-columns" aria-hidden>
+            <span className="min-w-0 flex-1">worker</span>
+            <span className={WORKER_COLUMNS}>
+              <span>state</span>
+              <span>issue</span>
+              <span>PR</span>
+              <span className="text-right">ctx</span>
+              <span className="text-right">claim</span>
+            </span>
+          </div>
+        )}
         {flat.groups.map((group) => (
           <section key={group.status ?? "no-status"} aria-label={`Workers ${group.status ?? "without a status"}`}>
-            <h3 className="px-1.5 pt-2 pb-1 text-xs font-medium text-ink-muted">{group.status ?? "no status"}</h3>
+            <SectionHeader title={group.status ?? "no status"} count={group.rows.length} inset="list" level={3} />
             {group.rows.map((worker) => (
               <BoardWorkerRow key={worker.name} worker={worker} now={now} testid="worker-flat-row" />
             ))}
@@ -141,7 +149,7 @@ export function WorkersSurface() {
 
   return shell(
     <div>
-      <div className="px-1.5 pt-1 text-xs text-ink-faint">
+      <div className="px-3 pt-1 text-xs text-ink-faint">
         {projectId === null
           ? "This repository is not bound to a Substrate project, so the dispatch graph is not available; the tree falls back to the board records."
           : graph.isLoading
@@ -149,7 +157,7 @@ export function WorkersSurface() {
             : null}
       </div>
       {graph.error && (
-        <p className="px-1.5 py-1 text-xs text-danger" data-testid="graph-error">
+        <p className="px-3 py-1 text-xs text-danger" data-testid="graph-error">
           The dispatch graph could not be read: {graph.error instanceof Error ? graph.error.message : "unknown error"}. The board records are listed below, grouped by status, without dispatcher edges.
         </p>
       )}

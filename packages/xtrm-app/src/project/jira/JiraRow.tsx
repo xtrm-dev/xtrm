@@ -20,6 +20,8 @@ import { jiraSyncLabel } from "./JiraChip.tsx";
 /** Shared column grid for the surface's header and every row; the last column is the row action. */
 export const JIRA_GRID = "grid grid-cols-[7.5rem_minmax(0,1fr)_7rem_7rem_6.5rem_7rem_1.25rem] items-center gap-3";
 
+// The reference table (src/issues/IssuesSurface.tsx) sets its primary text at the row size and
+// keeps only numeric/meta cells at text-xs; this table joins it rather than inventing a smaller body.
 const CELL = "min-w-0 truncate text-sm";
 
 /** The link state is ink-only: drift is the only state that earns a warning tone. */
@@ -32,15 +34,15 @@ export function JiraRow({ issue }: { issue: JiraIssue }) {
   const navigate = useNavigate();
   const { repo } = useShell();
   return (
-    <Row density="list" role="listitem" data-testid={`jira-row-${issue.key}`} data-jira-key={issue.key} className="h-9 gap-0">
+    <Row density="list" role="listitem" data-testid={`jira-row-${issue.key}`} data-jira-key={issue.key} className="gap-0">
       <div className={cx(JIRA_GRID, "w-full")}>
-        <span className={cx(CELL, "font-mono text-xs text-ink")} title={issue.key}>
+        <span className={cx(CELL, "font-mono text-ink")} title={issue.key}>
           {issue.key}
         </span>
         <span className={cx(CELL, "text-ink")} title={issue.summary ?? undefined}>
           {issue.summary ?? <span className="text-ink-faint">No summary</span>}
         </span>
-        <span className="flex min-w-0 items-center gap-1.5 text-sm text-ink-muted">
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
           {issue.status === null ? (
             <span className="text-ink-faint">No status</span>
           ) : (
@@ -50,9 +52,9 @@ export function JiraRow({ issue }: { issue: JiraIssue }) {
             </>
           )}
         </span>
-        <span className={cx(CELL, issue.assignee === null ? "text-ink-faint" : "text-ink-muted")}>{issue.assignee ?? "Unassigned"}</span>
+        <span className={cx(CELL, "text-xs", issue.assignee === null ? "text-ink-faint" : "text-ink-muted")}>{issue.assignee ?? "Unassigned"}</span>
         <span>
-          <Badge tone={jiraSyncTone(issue)} title="Substrate link state, read from external_bindings">
+          <Badge tone={jiraSyncTone(issue)} size="xs" title="Substrate link state, read from external_bindings">
             {jiraSyncLabel(issue)}
           </Badge>
         </span>

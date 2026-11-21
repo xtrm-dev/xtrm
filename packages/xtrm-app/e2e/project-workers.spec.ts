@@ -102,3 +102,81 @@ test("live-shaped rows never exceed their box, a five-PR trail collapses, and a 
   await overflow(1280);
   await page.screenshot({ path: shotPath(testInfo, SHOTS, "light-live-shape-unknown-open.png") });
 });
+
+/**
+ * XTRM-936 SUCCESS names "survives a 12px root", and a rebase can silently break it: a px indent
+ * measured once at 16px looks correct in jsdom and in a 16px run. This measures the row's own
+ * authored `--row-indent` (rem, 1.25rem per depth) against the root it is rendered at, at both
+ * the default root and the operator's 12px root, so a px indent — or a px-authored var — fails
+ * here instead of shipping.
+ */
+test("the workers tree indent resolves its rem expression at the operator's root", async ({ page }) => {
+  await page.goto("/rep/mercury/market-data/project/workers");
+  await expect(page.getByTestId("workers-tree")).toBeVisible();
+  await expect(page.getByTestId("worker-row").first()).toBeVisible();
+
+  const measure = () =>
+    page.evaluate(() => {
+      const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="worker-row"]'));
+      return {
+        root,
+        rows: rows.map((row) => {
+          const lead = row.firstElementChild as HTMLElement | null;
+          return {
+            authored: getComputedStyle(row).getPropertyValue("--row-indent").trim(),
+            padding: lead ? parseFloat(getComputedStyle(lead).paddingLeft) : Number.NaN,
+          };
+        }),
+      };
+    });
+
+  const setRoot = async (value: string) => {
+    await page.evaluate((root) => {
+      document.documentElement.style.fontSize = root;
+    }, value);
+    await page.waitForTimeout(150);
+  };
+
+  const at16 = await measure();
+  expect(at16.root).toBe(16);
+  // The fixture chain is console-lead -> board-worker -> test-engineer, so depth 1 and 2 exist.
+  // Without them the assertion would pass on an all-zero indent and prove nothing.
+  const indented16 = at16.rows.filter((row) => parseFloat(row.authored) > 0);
+  expect(indented16.length, "rows below the root of the tree").toBeGreaterThanOrEqual(2);
+
+  // The step itself, not just its scaling: every line above passes for a row indented by the
+  // wrong number of rems that happens to scale with the root, which is the obvious way to break
+  // this test while breaking the layout. One level is INDENT_REM (`src/issues/issue-table.ts:134`,
+  // 1.25rem) and every authored value is a multiple of it. This literal is the one copied number
+  // here, deliberately: it pins the geometry the resolved-value assertions cannot see, and a change
+  // to INDENT_REM is a contract change that should fail loudly rather than pass silently.
+  const steps = [...new Set(at16.rows.map((row) => parseFloat(row.authored)))].filter((step) => step > 0).sort((a, b) => a - b);
+  expect(steps[0], "one level of indentation").toBe(1.25);
+  for (const step of steps) {
+    expect(Math.abs(step / 1.25 - Math.round(step / 1.25)), `${step}rem is a multiple of one level`).toBeLessThan(1e-9);
+  }
+
+  for (const row of at16.rows) {
+    expect(row.authored, "the indent is authored in rem").toMatch(/^\d+(\.\d+)?rem$/);
+    expect(row.padding, `padding of ${row.authored} at a ${at16.root}px root`).toBeCloseTo(
+      parseFloat(row.authored) * at16.root,
+      1,
+    );
+  }
+
+  await setRoot("12px");
+  const at12 = await measure();
+  expect(at12.root).toBe(12);
+  expect(at12.rows.length).toBe(at16.rows.length);
+  at12.rows.forEach((row, i) => {
+    const sixteen = at16.rows[i]!;
+    expect(row.authored, "the authored expression does not change with the root").toBe(sixteen.authored);
+    expect(row.padding, `padding of ${row.authored} at a 12px root`).toBeCloseTo(parseFloat(row.authored) * 12, 1);
+    if (parseFloat(row.authored) > 0) {
+      // A px indent keeps its pixels at 12px; a rem indent shrinks by exactly the root ratio.
+      expect(row.padding, "the indent tracks the root").toBeLessThan(sixteen.padding);
+      expect(row.padding / sixteen.padding).toBeCloseTo(0.75, 2);
+    }
+  });
+});

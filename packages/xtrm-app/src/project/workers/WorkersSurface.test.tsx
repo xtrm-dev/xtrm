@@ -77,6 +77,10 @@ describe("Project Workers", () => {
     renderWorkers("?view=list", { ...fixtureAdapters, substrate, statusBoard: board });
 
     await screen.findByTestId("workers-list");
+    // The list labels its trailing values, so ctx and claim are not unlabelled numbers at the row's end.
+    const columns = screen.getByTestId("workers-columns");
+    expect(columns.getAttribute("aria-hidden")).toBe("true");
+    for (const label of ["state", "issue", "PR", "ctx", "claim"]) expect(columns.textContent).toContain(label);
     const source = await board.listWorkers(FIXTURE_BOARD_REPO);
     await waitFor(() => expect(screen.getByTestId("workers-count").textContent).toBe(`${source.records.length} workers`));
     expect(screen.getAllByTestId("worker-flat-row")).toHaveLength(source.records.length - 1);
