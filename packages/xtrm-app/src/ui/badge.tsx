@@ -22,9 +22,9 @@ const TONE: Record<BadgeTone, string> = {
 
 const SIZE = {
   /** Dense table cells and footer rows. */
-  xs: "h-4 px-1 text-[0.62rem] leading-none",
+  xs: "h-4 px-1 text-2xs leading-none",
   /** Default: a status next to a title, a count next to a label. */
-  sm: "h-[1.125rem] px-1.5 text-[0.68rem] leading-none",
+  sm: "h-[1.125rem] px-1.5 text-xs leading-none",
 } as const;
 
 export interface BadgeProps extends Omit<ComponentProps<"span">, "children"> {
@@ -41,7 +41,7 @@ export function Badge({ tone = "neutral", size = "sm", mono, className, children
     <span
       data-slot="badge"
       className={cx(
-        "inline-flex shrink-0 items-center justify-center gap-1 rounded font-medium whitespace-nowrap tabular-nums",
+        "inline-flex shrink-0 items-center justify-center gap-1 rounded font-medium whitespace-nowrap tabular",
         TONE[tone],
         SIZE[size],
         mono && "font-mono",

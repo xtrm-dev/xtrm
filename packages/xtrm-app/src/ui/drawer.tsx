@@ -1,23 +1,41 @@
 import type { ReactNode } from "react";
 import { cx } from "./primitives.tsx";
+import { SectionHeader } from "./section.tsx";
 
-/** Titled section inside the drawer. */
+/** Titled section inside the drawer: the shared section header on the drawer's own frame. */
 export function InspectorSection({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
     <section className="flex flex-col gap-2 border-t border-border-muted px-5 py-4 first:border-t-0">
-      <div className="flex items-center gap-2">
-        <h3 className="text-xs font-medium text-ink-faint">{title}</h3>
-        {aside && <div className="ml-auto">{aside}</div>}
-      </div>
+      <SectionHeader title={title} inset="drawer" level={3} aside={aside} />
       {children}
     </section>
   );
 }
 
-/** Label/value pairs; values keep their own ink. */
-export function Fields({ rows }: { rows: Array<[string, ReactNode]> }) {
+/**
+ * Label/value pairs; values keep their own ink (XTRM-934).
+ *
+ * The grid was re-implemented five times with five label widths (3.5rem / 6.5rem / 7.5rem /
+ * 10rem / auto) and two value sizes, so the same drawer and the same page disagreed about where a
+ * value starts. One implementation, two knobs: `labelWidth` for the column, `size` for the step.
+ * Pass rem only — a px width does not follow the operator's root size.
+ */
+export function Fields({
+  rows,
+  labelWidth = "7.5rem",
+  size = "sm",
+}: {
+  rows: Array<[string, ReactNode]>;
+  /** rem length of the label column; timeline rows use 3.5rem, the drawer 7.5rem. */
+  labelWidth?: string;
+  /** Value step: `sm` is body copy, `xs` is dense metadata (timeline, integration facts). */
+  size?: "xs" | "sm";
+}) {
   return (
-    <dl className="grid grid-cols-[7.5rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+    <dl
+      className={cx("grid gap-x-3 gap-y-1.5", size === "xs" ? "text-xs" : "text-sm")}
+      style={{ gridTemplateColumns: `${labelWidth} 1fr` }}
+    >
       {rows.map(([k, v]) => (
         <div key={k} className="contents">
           <dt className="text-ink-faint">{k}</dt>
