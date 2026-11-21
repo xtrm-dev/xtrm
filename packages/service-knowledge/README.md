@@ -80,7 +80,7 @@ Requires part 1 (`service-knowledge >= 0.9.0` on `PATH`) and `node`.
 ```bash
 claude plugin marketplace add xtrm-dev/specialists     # registers the marketplace named "xtrm"
 claude plugin install service-knowledge@xtrm
-claude plugin list | grep -A2 service-knowledge        # expect: enabled
+claude plugin list | grep -A3 service-knowledge        # expect: Status: enabled
 ```
 
 If the `xtrm` marketplace is already registered, skip `add`; `claude plugin marketplace update xtrm`
@@ -135,8 +135,18 @@ service-knowledge status         # install state, package vs consumer version
 (`service-knowledge migrate` runs only that step). The extension and the tools read only the
 umbrella layout above. A registry that exists only at a legacy location
 (`.claude/skills/service-registry.json` or a flat `service-registry.json` at the repo root) is
-not found; move it with `src/service_knowledge/scripts/layout_migrator.py`, which no CLI
-subcommand calls. A registry that has `last_sync` but no `last_sync_ref` is fail-closed in
+not found; move it with `layout_migrator.py`, which no CLI subcommand calls. Run it from the
+consumer repo root, using the copy in the xtrm checkout. It has no `--help`: its only option is
+`--preflight`, and any other dash-prefixed argument is ignored and the migration runs. With more
+than one pack under `.xtrm/skills`, set `XTRM_PACK` first.
+
+```bash
+M=~/dev/xtrm/packages/service-knowledge/src/service_knowledge/scripts/layout_migrator.py
+python3 "$M" --preflight    # read-only; prints every problem, exit 2 if it would refuse
+python3 "$M"                # migrates; flat copies are moved aside, never deleted
+```
+
+A registry that has `last_sync` but no `last_sync_ref` is fail-closed in
 drift checks; preview the repair with `service-knowledge drift migrate`, then add `--apply`.
 
 ### Check the whole chain
