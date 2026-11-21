@@ -50,7 +50,7 @@ import { PullRequestService } from "../src/service/pull-request-service.ts";
 import { LinkGateService, gateModeFromEnv } from "../src/service/link-gate-service.ts";
 import { GhCliPullRequestSource, PullRequestSyncService, syncReportText } from "../src/service/pull-request-sync-service.ts";
 import { canonicalPullReference, pullUrl, type IssuePullRequestView } from "../src/domain/pull-request.ts";
-import { parseAllTrailers } from "../src/domain/provenance.ts";
+import { parseAllTrailers, subjectIssueRefs } from "../src/domain/provenance.ts";
 import { IntegrationService } from "../src/service/integration-service.ts";
 import { RESULT_FIELDS, assessJournalEntry, assertResultPayload, isJournalKind } from "../src/domain/journal.ts";
 import { renderDispatchers, renderProvenanceTrace } from "../src/presentation/terminal.ts";
@@ -907,7 +907,7 @@ them (or before migration 017) reads as absent, never as a placeholder. They are
 never defaulted from the environment. --dispatcher-participant is a
 shell-safe label; --dispatcher-session is a lowercase UUID or a tmux
 session id ($N). A malformed value fails closed and writes no binding.`,
-  "links": `usage: sb links <check|sync> [args...]\n\ncheck lists T2 candidates (PR commits whose XTRM-Issue trailer names an Issue); sync runs the one-shot reconciler.`,
+  "links": `usage: sb links <check|sync> [args...]\n\ncheck lists T2 candidates (PR commits that name an Issue in an XTRM-Issue trailer or an '(XTRM-nnn)' subject suffix); sync runs the one-shot reconciler.`,
   "links.check": `usage: sb links check [--issue <ref>] [--project <id>] [--repo owner/name] [--limit <n>] [--link-gate warn|enforce|off] [--dry-run]
 
 Read-only. Without --issue, lists T2 candidates: PR commits whose XTRM-Issue
@@ -1477,7 +1477,16 @@ function runLinks(
     const detail = ghJson<GhPrView>(["pr", "view", String(pr.number), "--repo", repo, "--json", "url,commits"]);
     for (const commit of detail.commits ?? []) {
       const message = `${commit.messageHeadline}\n${commit.messageBody ?? ""}`;
-      for (const ref of [...new Set(parseAllTrailers(message).issues.map((i) => i.issueId))]) {
+      // A branch written by `xt` names its issue in the `(XTRM-938)` subject
+      // suffix, not in a trailer (XTRM-953). Reading only trailers reported a
+      // branch with no linkable commits when every commit named one.
+      const messageRefs = [
+        ...new Set([
+          ...parseAllTrailers(message).issues.map((i) => i.issueId),
+          ...subjectIssueRefs(commit.messageHeadline),
+        ]),
+      ];
+      for (const ref of messageRefs) {
         let issue;
         try {
           issue = svc.resolveRefInProject(ref, resolved.projectId);
@@ -1512,7 +1521,7 @@ function runLinks(
   };
   if (ctx.json) return emit(ctx, command, payload);
   const lines = [`LINKS CHECK — ${repo} · ${prs.length} PR(s) scanned · ${dryRun ? "dry run" : "read-only"}`];
-  if (candidates.length === 0) lines.push("(no XTRM-Issue trailer candidate)");
+  if (candidates.length === 0) lines.push("(no candidate: no commit names an Issue in an XTRM-Issue trailer or a (XTRM-nnn) subject suffix)");
   else {
     for (const c of candidates) {
       lines.push(`- ${String(c["issue"])}  ${String(c["repository"])}#${String(c["number"])}  ${String(c["sha"]).slice(0, 12)}  ${String(c["url"])}`);
@@ -1921,13 +1930,30 @@ function ambientRepository(db: ReturnType<typeof openSubstrate>, projectId: stri
   return null;
 }
 
+// The git commands below run on whichever host executes this CLI: in remote
+// mode `forwardCli` has already re-executed them on the registry host with the
+// verified server checkout as cwd, so `process.cwd()` IS the object store the
+// evidence must come from.
 function readCommitEvidence(flags: Flags): Array<{ sha: string; message: string }> {
+  const repoRoot = process.cwd();
   const out: Array<{ sha: string; message: string }> = [];
+  // The object store lives on the registry checkout over `substrate.remote`,
+  // not in the caller's cwd, so an unresolvable SHA is named with the
+  // directory `<sha> was looked for in` (XTRM-953): "unknown revision" and
+  // "bad object" for the same SHA are two different lies, and a caller cannot
+  // tell a missing object from an unreachable checkout. Every git invocation
+  // here is `git -C <repoRoot>` for the same reason.
+  const git = (args: string[]): { status: number | null; stdout: string; stderr: string } => {
+    const res = spawnSync("git", ["-C", repoRoot, ...args], { encoding: "utf8" });
+    return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
+  };
   const range = flag(flags, "commits-range");
   if (range !== undefined) {
-    if (!/^[0-9A-Za-z^~.]+\.\.[0-9A-Za-z^~.]+$/.test(range)) throw new Error("--commits-range must be <base>..<head>");
-    const res = spawnSync("git", ["log", "--format=%H%x1f%B%x1e", range], { encoding: "utf8" });
-    if (res.status !== 0) throw new Error(`git log ${range} failed: ${(res.stderr ?? "").trim()}`);
+    if (!/^[0-9A-Za-z^~.]+\.[0-9A-Za-z^~.]+$/.test(range)) throw new Error("--commits-range must be <base>..<head>");
+    const res = git(["log", "--format=%H%x1f%B%x1e", range]);
+    if (res.status !== 0) {
+      throw new Error(`git log ${range} failed in ${repoRoot}: ${res.stderr.trim()}`);
+    }
     for (const record of res.stdout.split("\u001e")) {
       const text = record.trim();
       const cut = text.indexOf("\u001f");
@@ -1937,8 +1963,13 @@ function readCommitEvidence(flags: Flags): Array<{ sha: string; message: string 
   }
   for (const sha of flagList(flags, "commit") ?? []) {
     if (!/^[0-9a-fA-F]{7,40}$/.test(sha)) throw new Error(`--commit is not a SHA: ${sha}`);
-    const res = spawnSync("git", ["show", "-s", "--format=%B", sha], { encoding: "utf8" });
-    if (res.status !== 0) throw new Error(`git show ${sha} failed: ${(res.stderr ?? "").trim()}`);
+    const res = git(["show", "-s", "--format=%B", sha]);
+    if (res.status !== 0) {
+      throw new Error(
+        `--commit ${sha}: git show failed in ${repoRoot} (${res.stderr.trim()}); ` +
+          "the commit must be in that repository's object store - a commit that exists only in a local worktree is not visible here",
+      );
+    }
     out.push({ sha, message: res.stdout });
   }
   return out;

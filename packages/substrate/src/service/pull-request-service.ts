@@ -2,10 +2,12 @@
 //
 // Writers never delete: a mention is a row, an unlink sets `superseded_at`,
 // and every read filters superseded rows out. A T2 row is evidence that a
-// commit carries the trailer; a finding is an `issue_events` row of type
-// `provenance.link_finding` and is reported, never thrown.
+// commit carries the trailer (or, since XTRM-953, names the issue in its
+// `(XTRM-938)` subject suffix, which is how `xt` writes one); a finding is an
+// `issue_events` row of type `provenance.link_finding` and is reported, never
+// thrown.
 
-import { parseAllTrailers } from "../domain/provenance.ts";
+import { parseAllTrailers, subjectIssueRefs } from "../domain/provenance.ts";
 import { withTransaction } from "../store/transactions.ts";
 import type { DatabaseSync } from "../store/database.ts";
 import {
@@ -251,7 +253,7 @@ export class PullRequestService {
     });
   }
 
-  /** T2: every commit whose XTRM-Issue trailer names this issue. */
+  /** T2: every commit that names this issue in a trailer or a subject suffix. */
   linkCommits(input: CommitLinkInput): { created: number; mentioned: number; findings: number } {
     const { issues } = this.requireWriters();
     const now = input.now ?? Date.now();
@@ -284,13 +286,46 @@ export class PullRequestService {
       for (const commit of input.commits) {
         const trailers = parseAllTrailers(commit.message);
         const named = [...new Set(trailers.issues.map((i) => i.issueId))];
+        if (named.length === 0) {
+          // No trailer: `xt` names its issue in the subject suffix (XTRM-953).
+          // Resolve the suffix through the same path so one branch is linkable
+          // without a message rewrite; a commit that carries an `XTRM-Issue:`
+          // trailer never reaches here, because the trailer is authoritative.
+          const suffixed = subjectIssueRefs(commit.message);
+          if (suffixed.length > 1) {
+            finding("commit_multi_issue", commit.sha, `subject names ${suffixed.join(", ")}`);
+            continue;
+          }
+          if (suffixed.length === 0) continue;
+          let suffixId: string;
+          try {
+            suffixId = issues.resolveRef(suffixed[0]!).id;
+          } catch {
+            // Silent, unlike the trailer path: a suffix is a naming convention,
+            // not a declaration of intent, so an unknown or foreign ref there is
+            // not a link finding. Recording one per commit that mentions another
+            // board's issue would bury the findings that do mean something.
+            continue;
+          }
+          if (suffixId !== input.issueId) continue;
+          // A subject ref carries no receipt, so it can name the issue but
+          // cannot attest a delivery: the link is a mention, as a receipt-less
+          // trailer already is. The commit row is still written, because the
+          // link gate counts `issue_pr_commits` rows for T2 and a mention view
+          // does not list them.
+          if (this.insertCommit(input.issueId, input.repository, input.number, commit.sha, null)) {
+            this.mentionFromTrailer(input, now, commit.sha);
+            mentioned += 1;
+          }
+          finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
+          continue;
+        }
         // Two distinct trailer names are a multi-issue commit even when one
         // of them does not resolve in this Project.
         if (named.length > 1) {
           finding("commit_multi_issue", commit.sha, `commit names ${named.join(", ")}`);
           continue;
         }
-        if (named.length === 0) continue;
         let resolvedId: string;
         try {
           resolvedId = issues.resolveRef(named[0]!).id;

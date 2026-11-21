@@ -2,7 +2,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseAllTrailers, parseTrailers } from "../src/domain/provenance.ts";
+import { parseAllTrailers, parseTrailers, subjectIssueRefs } from "../src/domain/provenance.ts";
 
 describe("parseAllTrailers", () => {
   it("returns both issue/revision pairs in order", () => {
@@ -81,5 +81,34 @@ describe("parseAllTrailers", () => {
 
   it("pins the single-value parser's legacy last-wins result", () => {
     assert.equal(parseTrailers("XTRM-Issue: A\nXTRM-Issue: B\n").issueId, "B");
+  });
+});
+
+describe("subjectIssueRefs (XTRM-953)", () => {
+  // `xt` names its issue in the subject, not in a trailer. Both shapes must be
+  // readable or a whole merge queue's evidence is invisible: before this, zero
+  // of the (XTRM-938)-style commits ever attached.
+  it("reads the suffix the way xt writes it", () => {
+    assert.deepEqual(subjectIssueRefs("feat(console): one section header (XTRM-934) (#466)"), ["XTRM-934"]);
+  });
+
+  it("reads dotted children and dedupes", () => {
+    assert.deepEqual(subjectIssueRefs("fix: thing (XTRM-811.23) (XTRM-811.23)"), ["XTRM-811.23"]);
+  });
+
+  it("reads every ref in a multi-issue subject", () => {
+    assert.deepEqual(subjectIssueRefs("chore: two lanes (XTRM-949, XTRM-958)"), ["XTRM-949", "XTRM-958"]);
+  });
+
+  it("reads only the subject line, because a ref in the body prose is not evidence", () => {
+    assert.deepEqual(subjectIssueRefs("feat: work\n\nsee (XTRM-123) for context"), []);
+  });
+
+  it("ignores lowercase and unparenthesised refs", () => {
+    assert.deepEqual(subjectIssueRefs("feat: xtrm-931 and XTRM-931 without parens"), []);
+  });
+
+  it("returns nothing for a message with no suffix", () => {
+    assert.deepEqual(subjectIssueRefs("just a subject"), []);
   });
 });

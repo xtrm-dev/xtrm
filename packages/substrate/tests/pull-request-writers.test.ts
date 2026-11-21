@@ -4,7 +4,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { contract, setup, tempDir } from "./helpers.ts";
@@ -300,6 +300,49 @@ describe("pull-request writers", () => {
     assert.deepEqual(findings.map((f) => [f.code, f.number]).sort(), [["trailer_receipt_missing", 7], ["trailer_receipt_missing", 8]]);
   });
 
+  // XTRM-953: the merge queue's commits name their issue in the subject suffix,
+  // so a trailer-only reader attached nothing at all. A suffix is weaker
+  // evidence than a trailer, and the weakness is recorded rather than hidden.
+  it("T2 reads a subject suffix as a mention, with the missing-receipt finding named", () => {
+    // The fixture project is prj_xtrm, so the suffix must name that prefix.
+    const message = `feat(console): one section header (${w.issue.humanRef}) (#466)`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "9".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 1, findings: 1 });
+    const view = w.links.listForIssue(w.issue.id)[0]!;
+    assert.deepEqual(view.sources, ["trailer"]);
+    // The row is stored even though a mention's view does not list it: the gate
+    // counts issue_pr_commits rows directly, so this is what makes T2 qualify.
+    const rows = w.db.prepare("SELECT sha FROM issue_pr_commits WHERE issue_id = ?").all(w.issue.id) as Array<{ sha: string }>;
+    assert.deepEqual(rows.map((r) => r.sha), ["9".repeat(40)]);
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["subject_receipt_missing"]);
+  });
+
+  it("a subject suffix that names another issue attaches nothing", () => {
+    const message = "feat(console): one section header (XTRM-999) (#466)"; // another issue, also prj_xtrm
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "8".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 0 });
+    assert.equal(w.links.listForIssue(w.issue.id).length, 0);
+  });
+
+  it("a subject suffix that resolves to nothing is skipped silently", () => {
+    const message = "feat: unknown lane (XTRM-424242) (#999)";
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "5".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 0 });
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), []);
+  });
+
+  it("a trailer wins over a conflicting subject suffix", () => {
+    const { receipt } = dispatchWithClaim(w);
+    const message = [
+      "feat: work (XTRM-999)",
+      "",
+      `XTRM-Issue: ${w.issue.humanRef}`,
+      `XTRM-Receipt: ${receipt.id}`,
+    ].join("\n");
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "4".repeat(40), message }] });
+    assert.deepEqual(result, { created: 1, mentioned: 0, findings: 0 });
+  });
+
   it("mention is persisted, idempotent, and unlink supersedes without deleting", () => {
     w.links.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
     w.links.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
@@ -528,6 +571,113 @@ describe("pull-request writers", () => {
     } finally {
       process.chdir(saved);
       rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: --commits-range links a branch whose commits name the issue in the subject suffix", () => {
+    // The XTRM-953 shape: `xt` writes `feat(console): … (XTRM-938) (#471)`, so a
+    // trailer-only reader reported zero linkable commits for a whole merge queue.
+    const repo = tempDir("sb-pr-cli-");
+    const saved = process.cwd();
+    try {
+      const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+      git(["init", "-q"]);
+      git(["config", "user.email", "t@example.com"]);
+      git(["config", "user.name", "t"]);
+      writeFileSync(join(repo, "a.txt"), "a");
+      git(["add", "a.txt"]);
+      git(["commit", "-q", "-m", "init"]);
+      writeFileSync(join(repo, "b.txt"), "b");
+      git(["add", "b.txt"]);
+      git(["commit", "-q", "-m", `feat(console): one section header (${w.issue.humanRef}) (#466)`]);
+      process.chdir(repo);
+      const res = runCli([
+        "--db", join(w.dir, "state.db"), "--json",
+        "issue", "link", "pr", w.issue.humanRef, "--project", "prj_xtrm", "--repo", "o/r", "--number", "7",
+        "--commits-range", "HEAD~1..HEAD",
+      ]);
+      assert.equal(res.code, 0, res.stderr);
+      const data = (JSON.parse(res.stdout) as { data: { created: number; mentioned: number } }).data;
+      // No receipt, so the honest outcome is a mention - but a mention with a
+      // commit row, which is what makes the link gate treat the PR as T2.
+      assert.deepEqual(data, { created: 0, mentioned: 1, findings: 1 });
+      const rows = w.db.prepare("SELECT sha, trailer_revision FROM issue_pr_commits").all() as Array<{ sha: string; trailer_revision: number | null }>;
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0]!.trailer_revision, null);
+    } finally {
+      process.chdir(saved);
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: --commit names the checkout it looked in when the object is absent", () => {
+    const repo = tempDir("sb-pr-cli-");
+    const saved = process.cwd();
+    try {
+      const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+      git(["init", "-q"]);
+      git(["config", "user.email", "t@example.com"]);
+      git(["config", "user.name", "t"]);
+      writeFileSync(join(repo, "a.txt"), "a");
+      git(["add", "a.txt"]);
+      git(["commit", "-q", "-m", "init"]);
+      process.chdir(repo);
+      const res = runCli([
+        "--db", join(w.dir, "state.db"), "--json",
+        "issue", "link", "pr", w.issue.humanRef, "--project", "prj_xtrm", "--repo", "o/r", "--number", "7",
+        "--commit", "0".repeat(40),
+      ]);
+      assert.notEqual(res.code, 0);
+      // The message must name the directory, not only git's opinion of the SHA:
+      // "unknown revision" and "bad object" for one SHA are two different lies.
+      // --json puts it in the error envelope; the text mode puts it on stderr.
+      const envelope = JSON.parse(res.stdout) as { ok: boolean; error: string };
+      assert.equal(envelope.ok, false);
+      assert.match(envelope.error, /0{40}: git show failed in /);
+      assert.match(envelope.error, /object store/);
+    } finally {
+      process.chdir(saved);
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: links check finds a commit that names the issue in the subject suffix", () => {
+    // The whole point of XTRM-953: before this, a branch written by `xt` reported
+    // zero linkable commits because every one of them named its issue in the
+    // subject instead of a trailer. A stub `gh` keeps the test off the network.
+    const home = tempDir("sb-gh-stub-");
+    const bin = join(home, "bin");
+    mkdirSync(bin, { recursive: true });
+    const commit = (headline: string) => ({
+      oid: "ab".repeat(20),
+      messageHeadline: headline,
+      messageBody: "",
+      authoredDate: "",
+      committedDate: "",
+      authors: [],
+    });
+    const pr = { number: 477, title: "research outline", url: "https://github.com/xtrm-dev/xtrm/pull/477", commits: [commit(`feat(console): research pages (${w.issue.humanRef}) (#477)`), commit("chore: no ref at all")] };
+    writeFileSync(
+      join(bin, "gh"),
+      `#!/usr/bin/env node\nconst a = process.argv.slice(2);\n` +
+        `if (a[0] === "pr" && a[1] === "list") console.log(JSON.stringify([{ number: ${pr.number}, title: ${JSON.stringify(pr.title)}, url: ${JSON.stringify(pr.url)} }]));\n` +
+        `else if (a[0] === "pr" && a[1] === "view") console.log(JSON.stringify(${JSON.stringify({ url: pr.url, commits: pr.commits })}));\n` +
+        `else process.exit(1);\n`,
+      { mode: 0o755 },
+    );
+    const savedPath = process.env["PATH"] ?? "";
+    process.env["PATH"] = `${bin}:${savedPath}`;
+    try {
+      const res = runCli([
+        "--db", join(w.dir, "state.db"), "--json",
+        "links", "check", "--project", "prj_xtrm", "--repo", "xtrm-dev/xtrm", "--limit", "5",
+      ]);
+      assert.equal(res.code, 0, res.stderr);
+      const data = (JSON.parse(res.stdout) as { data: { candidates: Array<{ issue: string; number: number; sha: string }> } }).data;
+      assert.deepEqual(data.candidates.map((c) => [c.issue, c.number, c.sha]), [[w.issue.humanRef, 477, "ab".repeat(20)]]);
+    } finally {
+      process.env["PATH"] = savedPath;
+      rmSync(home, { recursive: true, force: true });
     }
   });
 

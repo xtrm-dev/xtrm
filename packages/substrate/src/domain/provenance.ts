@@ -135,6 +135,29 @@ export interface AllTrailers {
 }
 
 /**
+ * Issue refs named by the conventional `(XTRM-938)` subject suffix (XTRM-953).
+ * `xt` commits name their issue in the subject, not in a trailer, so the T2
+ * link path has to read both: a branch written by `xt` is linkable without a
+ * message rewrite, and a commit carrying the real `XTRM-Issue:` trailer stays
+ * authoritative because callers try trailers first.
+ *
+ * Only the subject line is read. A ref in the body prose is not evidence: it
+ * describes what the commit talks about, which is what `prose` links are for.
+ */
+export function subjectIssueRefs(message: string): string[] {
+  const subject = message.split("\n", 1)[0] ?? "";
+  const out: string[] = [];
+  // The parenthesised group, not one ref: a lane commit names several issues
+  // in one suffix, `chore: two lanes (XTRM-949, XTRM-958)`.
+  for (const group of subject.matchAll(/\(([^()]*)\)/g)) {
+    for (const m of (group[1] ?? "").matchAll(/[A-Z][A-Z0-9]*-\d+(?:\.\d+)*/g)) {
+      if (!out.includes(m[0])) out.push(m[0]);
+    }
+  }
+  return out;
+}
+
+/**
  * Read every issue trailer, not only the last. T2 link writing and the
  * trailer guard need all values: a commit may name one issue and a
  * coordinator a second, or a squash commit may carry several issues.
