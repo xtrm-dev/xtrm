@@ -4,6 +4,7 @@ import { Icon } from "./icon.tsx";
 import { Markdown } from "./markdown.tsx";
 import { EditActions, MarkdownEditor } from "./markdown-editor.tsx";
 import { cx } from "./primitives.tsx";
+import { SectionHeader } from "./section.tsx";
 
 // Jira-style fields: read view by default, click to edit, explicit Save/Cancel, errors inline.
 
@@ -70,11 +71,15 @@ function EditTarget({ canEdit, onEdit, label, children, className }: { canEdit: 
   );
 }
 
+/**
+ * A form label above a control. It renders the shared section heading (`inset="none"`), so the
+ * label over an input and the heading over a drawer section cannot drift apart — they were the same
+ * `text-xs font-medium text-ink-faint` h3 written twice (XTRM-934).
+ */
 export function FieldLabel({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
-    <div className="mb-1 flex items-center gap-2">
-      <h3 className="text-xs font-medium text-ink-faint">{children}</h3>
-      {aside}
+    <div className="mb-1">
+      <SectionHeader title={children} aside={aside} inset="none" level={3} />
     </div>
   );
 }

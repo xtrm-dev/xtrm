@@ -4,7 +4,7 @@ import { cx } from "./primitives.tsx";
 
 const SIZE = {
   /** Header affordance: sits on the title line without crowding it. */
-  sm: "h-7 gap-1.5 px-2.5 text-[0.7rem]",
+  sm: "h-7 gap-1.5 px-2.5 text-xs",
   md: "h-8 gap-2 px-3 text-xs",
 } as const;
 

@@ -83,11 +83,18 @@ describe("the new rows and controls use the existing tokens", () => {
     expect(remOf(sizeClass(filterGlyph)) * 16).toBe(13);
   });
 
-  it("lets an icon button name a glyph size, and defaults to the button's own", () => {
+  it("lets an icon button name a glyph size, and defaults to the button's own text step", () => {
     const named = render(<IconButton icon="filter" label="Filter" iconSize="text" />);
     expect(sizeClass(named.getByRole("button", { name: "Filter" }).querySelector("svg")!)).toBe("size-[0.8125rem]");
+    // XTRM-934: a size-7 control took a 16px glyph and outweighed the 11.5px label beside it.
     const fallback = render(<IconButton icon="filter" label="Default" />);
-    expect(sizeClass(fallback.getByRole("button", { name: "Default" }).querySelector("svg")!)).toBe("size-4");
+    expect(sizeClass(fallback.getByRole("button", { name: "Default" }).querySelector("svg")!)).toBe("size-[0.8125rem]");
+    // A 36px control keeps the step it had.
+    const large = render(<IconButton icon="filter" label="Large" size="md" />);
+    expect(sizeClass(large.getByRole("button", { name: "Large" }).querySelector("svg")!)).toBe("size-[1.125rem]");
+    // A 16px mark is still available, but now it is an explicit decision.
+    const mark = render(<IconButton icon="filter" label="Mark" iconSize="sm" />);
+    expect(sizeClass(mark.getByRole("button", { name: "Mark" }).querySelector("svg")!)).toBe("size-4");
   });
 
   it("sizes the octocat mark from the same rem ladder", () => {

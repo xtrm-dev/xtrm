@@ -33,7 +33,7 @@ export function Tip({ label, shortcut, children, side = "bottom" }: { label: str
 }
 
 export function Kbd({ children }: { children: ReactNode }) {
-  return <kbd className="rounded-sm border border-border px-1 font-sans text-[0.68rem] text-ink-faint">{children}</kbd>;
+  return <kbd className="rounded-sm border border-border px-1 font-sans text-2xs text-ink-faint">{children}</kbd>;
 }
 
 type IconButtonProps = Omit<ComponentProps<"button">, "children"> & {
@@ -47,7 +47,15 @@ type IconButtonProps = Omit<ComponentProps<"button">, "children"> & {
   tooltipSide?: "top" | "bottom" | "left" | "right";
 };
 
-/** Icon-only button with a required accessible label and tooltip. */
+/**
+ * Icon-only button with a required accessible label and tooltip.
+ *
+ * The default glyph follows the control (XTRM-934): a `size-7` control takes `text` (0.8125rem,
+ * the step of the label beside it), a `size-9` control takes `md`. It used to default to `sm`
+ * (1rem), so 18 of 20 call sites rendered a 16px glyph in a 28px box next to 11.5px text, and the
+ * icon outweighed its own label. Pass `iconSize="sm"` where a 16px mark is intended on purpose
+ * (brand marks, the source tree).
+ */
 export function IconButton({ icon, label, shortcut, size = "sm", iconSize, active, tooltipSide, className, ...props }: IconButtonProps) {
   return (
     <Tip label={label} shortcut={shortcut} side={tooltipSide}>
@@ -62,7 +70,7 @@ export function IconButton({ icon, label, shortcut, size = "sm", iconSize, activ
           className,
         )}
       >
-        <Icon name={icon} size={iconSize ?? (size === "sm" ? "sm" : "md")} />
+        <Icon name={icon} size={iconSize ?? (size === "sm" ? "text" : "md")} />
       </button>
     </Tip>
   );
@@ -153,11 +161,11 @@ export function ContentPanel({ className, mono, ...props }: ComponentProps<"div"
 export function EmptyState({ icon, title, children, className }: { icon?: IconName; title: string; children?: ReactNode; className?: string }) {
   return (
     <div className={cx("flex flex-col items-center justify-center gap-2 px-6 py-16 text-center", className)}>
-      {icon && (
-        <span className="mb-1 inline-flex size-9 items-center justify-center rounded-lg border border-border-muted text-ink-faint">
-          <Icon name={icon} size="md" />
-        </span>
-      )}
+      {/*
+        No bordered tile around the mark (XTRM-934): an empty state is a hairline surface too, and a
+        36px rounded box made the icon the loudest element on eleven pages.
+      */}
+      {icon && <Icon name={icon} size="md" className="mb-1 text-ink-faint" />}
       <p className="text-sm font-medium text-ink">{title}</p>
       {children && <div className="max-w-sm text-sm text-ink-muted">{children}</div>}
     </div>
