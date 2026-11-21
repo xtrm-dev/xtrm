@@ -43,16 +43,22 @@ const ROOT = "src";
 const OUT_OF_SCOPE = [join("src", "agent"), join("src", "components", "reui")];
 
 /**
- * Known debt, with the slice that pays it. An entry that no longer has an offender FAILS: the list
- * shrinks as the slices land and cannot be used as a permanent parking lot.
+ * Known debt, parked as a COUNT per file, with the slice that pays it down.
+ *
+ * Parking a whole file was the wrong instrument: it exempted every offender inside it, including
+ * the ones a rule was written for. `src/project/workers/WorkerRow.tsx` was parked for one
+ * `paddingLeft: 16`, and the parking then hid a `paddingLeft: depth * 14` twelve lines away — the
+ * gate passed while the drift it names was live. A count is the same promise without the blind
+ * spot: the parked file may hold exactly this many offenders, a new one fails, and a slice that
+ * pays one down must lower the number in the same commit that fixes it.
  */
-const DEBT: Record<string, string> = {
-  [join("src", "issues", "PullRequestsBlock.tsx")]: "XTRM-941",
-  [join("src", "github", "identity.tsx")]: "XTRM-941",
-  [join("src", "shell", "ContextSidebar.tsx")]: "XTRM-939",
-  [join("src", "surfaces", "ActivitySurface.tsx")]: "XTRM-936",
-  [join("src", "project", "workers", "WorkerRow.tsx")]: "XTRM-936",
-  [join("src", "settings", "SettingsSurface.tsx")]: "XTRM-937",
+const DEBT: Record<string, { allowed: number; owner: string }> = {
+  [join("src", "issues", "PullRequestsBlock.tsx")]: { allowed: 2, owner: "XTRM-941" },
+  [join("src", "github", "identity.tsx")]: { allowed: 2, owner: "XTRM-941" },
+  [join("src", "shell", "ContextSidebar.tsx")]: { allowed: 3, owner: "XTRM-939" },
+  [join("src", "surfaces", "ActivitySurface.tsx")]: { allowed: 4, owner: "XTRM-936" },
+  [join("src", "project", "workers", "WorkerRow.tsx")]: { allowed: 1, owner: "XTRM-936" },
+  [join("src", "settings", "SettingsSurface.tsx")]: { allowed: 1, owner: "XTRM-937" },
 };
 
 /** Every rem value the type scale actually defines (styles.css §typography). */
@@ -121,12 +127,21 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     expect(files.filter((file) => !parked(file)).flatMap(offenders)).toEqual([]);
   });
 
-  it("keeps the known debt list shrinking instead of permanent", () => {
-    // Every parked file still has an offender (an entry that no longer offends must be deleted), and
-    // every parked file is one a slice owns.
-    const stale = Object.keys(DEBT).filter((file) => offenders(file).length === 0);
-    expect(stale, "stale debt entries: the slice migrated the file, delete the entry").toEqual([]);
-    expect(Object.values(DEBT).every((owner) => /^XTRM-\d+/.test(owner))).toBe(true);
+  it("keeps every parked count honest, in both directions", () => {
+    // A parked count is a receipt: more offenders means new drift in a file nobody is watching, fewer
+    // means the slice paid it and the number must come down. A count of zero is not parking at all.
+    const drift = Object.entries(DEBT).flatMap(([file, { allowed, owner }]) => {
+      const found = offenders(file).length;
+      if (!/^XTRM-\d+/.test(owner)) return [`${file}: parked by "${owner}", which is not an issue ref`];
+      if (allowed === 0) return [`${file}: parked at 0, so delete the entry instead of parking nothing`];
+      if (found === allowed) return [];
+      return [
+        found > allowed
+          ? `${file}: parked ${allowed}, found ${found} — new drift in a parked file`
+          : `${file}: parked ${allowed}, found ${found} — the slice paid it down, lower the count`,
+      ];
+    });
+    expect(drift).toEqual([]);
   });
 
   it("is not vacuous: every rule catches the literal it was written for", () => {

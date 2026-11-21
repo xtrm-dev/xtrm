@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FieldLabel } from "./fields.tsx";
-import { InspectorSection } from "./drawer.tsx";
+import { Fields, InspectorSection } from "./drawer.tsx";
 import { Badge } from "./badge.tsx";
 import { EmptyState } from "./primitives.tsx";
 import { Kbd } from "./primitives.tsx";
@@ -110,5 +110,23 @@ describe("the micro scale", () => {
     expect(mark).toBeTruthy();
     // Eleven pages had a 36px rounded box around this mark; the icon is the only chrome now.
     expect(mark.parentElement?.className).not.toContain("border");
+  });
+
+  // XTRM-934 review round 2: `Fields` is the drawer's one label/value grid and its two knobs were the
+  // only part of the primitive with no test. Both are rem, and both steps are named tokens.
+  it("Fields keeps one label column and names its value step", () => {
+    const { container, rerender } = render(<Fields rows={[["State", "open"]]} />);
+    const dl = container.querySelector("dl") as HTMLElement;
+    // The default column is the drawer's, in rem so it follows the operator's root size.
+    expect(dl.style.gridTemplateColumns).toBe("7.5rem 1fr");
+    expect(dl.className).toContain("text-sm");
+    expect(dl.className).not.toMatch(/text-\[/);
+
+    rerender(<Fields rows={[["State", "open"]]} labelWidth="3.5rem" size="xs" />);
+    const dense = container.querySelector("dl") as HTMLElement;
+    // A timeline fact is metadata, not body copy: the column narrows and the step drops one.
+    expect(dense.style.gridTemplateColumns).toBe("3.5rem 1fr");
+    expect(dense.className).toContain("text-xs");
+    expect(dense.className).not.toContain("text-sm");
   });
 });
