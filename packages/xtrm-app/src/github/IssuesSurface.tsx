@@ -5,6 +5,7 @@ import { useGithubIssues } from "../app/queries.ts";
 import { GithubNotice } from "./auth.tsx";
 import { filterIssues, githubIssueRef, issueStateLabel, issueStateTone, type IssueView } from "./issues.ts";
 import { useShell } from "../shell/context.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, ago, cx } from "../ui/primitives.tsx";
@@ -42,9 +43,9 @@ function Labels({ labels }: { labels: string[] }) {
   return (
     <span className="flex min-w-0 items-center gap-1">
       {labels.slice(0, 2).map((l) => (
-        <span key={l} className="min-w-0 truncate rounded-sm bg-control px-1.5 py-px text-xs text-ink-muted" title={l}>
+        <Badge key={l} size="xs" className="max-w-full truncate" title={l} style={{ flexShrink: 1, minWidth: 0 }}>
           {l}
-        </span>
+        </Badge>
       ))}
       {labels.length > 2 && <span className="shrink-0 text-xs text-ink-faint tabular">+{labels.length - 2}</span>}
     </span>

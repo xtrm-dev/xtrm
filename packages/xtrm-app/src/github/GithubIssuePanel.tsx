@@ -2,6 +2,7 @@ import { useGithubIssue } from "../app/queries.ts";
 import { parseGithubIssueRef, issueStateLabel, issueStateTone } from "./issues.ts";
 import { ReferenceActionsProvider } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Fields, InspectorSection } from "../ui/drawer.tsx";
 import { GithubPill } from "../ui/github-pill.tsx";
 import { Markdown } from "../ui/markdown.tsx";
@@ -44,7 +45,7 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
           rows={[
             ["Author", <AuthorInline key="author" login={i.author} />],
             ["State", issueStateLabel(i.state)],
-            ["Labels", i.labels.length ? <span className="flex flex-wrap gap-1">{i.labels.map((l) => <span key={l} className="rounded-sm bg-control px-1.5 py-px text-xs text-ink-muted">{l}</span>)}</span> : <span className="text-ink-faint">None</span>],
+            ["Labels", i.labels.length ? <span className="flex flex-wrap gap-1">{i.labels.map((l) => <Badge key={l} size="sm">{l}</Badge>)}</span> : <span className="text-ink-faint">None</span>],
             ["Comments", <span className="tabular">{i.comments}</span>],
             ["Opened", ago(i.createdAt)],
             ["Closed", i.closedAt ? ago(i.closedAt) : <span className="text-ink-faint">—</span>],
@@ -54,9 +55,7 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
 
       {i.body && (
         <InspectorSection title="Description">
-          <div className="rounded-md border border-border-muted px-3 py-2">
-            <Markdown html>{i.body}</Markdown>
-          </div>
+          <Markdown html>{i.body}</Markdown>
         </InspectorSection>
       )}
 

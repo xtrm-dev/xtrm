@@ -2,6 +2,7 @@ import { useAdapters, type Release } from "../adapters/index.tsx";
 import { useReleases } from "../app/queries.ts";
 import { ReferenceActionsProvider } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
@@ -15,8 +16,8 @@ function ReleaseEntry({ release, latest }: { release: Release; latest: boolean }
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
           <h3 className="text-sm font-semibold text-ink">{release.name}</h3>
-          <span className="rounded-sm bg-control px-1.5 py-px font-mono text-xs text-ink-muted">{release.tag}</span>
-          {latest && <span className="rounded-sm bg-accent-soft px-1.5 py-px text-xs text-accent-ink">latest</span>}
+          <Badge size="sm" mono>{release.tag}</Badge>
+          {latest && <Badge size="sm" tone="accent">latest</Badge>}
           <span className="ml-auto flex items-center gap-2 text-xs text-ink-faint">
             {release.author && <span>{release.author}</span>}
             {release.publishedAt ? (
@@ -32,9 +33,7 @@ function ReleaseEntry({ release, latest }: { release: Release; latest: boolean }
           </span>
         </div>
         {release.notes ? (
-          <div className="rounded-md border border-border-muted px-3 py-2">
-            <Markdown>{release.notes}</Markdown>
-          </div>
+          <Markdown>{release.notes}</Markdown>
         ) : (
           <p className="text-sm text-ink-faint">No release notes.</p>
         )}

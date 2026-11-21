@@ -1,3 +1,4 @@
+import { Badge } from "../ui/badge.tsx";
 import { GithubMark } from "../ui/github-mark.tsx";
 import { cx } from "../ui/primitives.tsx";
 
@@ -17,7 +18,7 @@ export function AuthorAvatar({ login, size = "md" }: { login: string; size?: "md
     );
   }
   return (
-    <span aria-hidden className={cx("flex shrink-0 items-center justify-center rounded-full bg-control font-medium text-ink-muted", BOX[size], size === "sm" ? "text-[0.65rem]" : "text-xs")}>
+    <span aria-hidden className={cx("flex shrink-0 items-center justify-center rounded-full bg-control font-medium text-ink-muted", BOX[size], size === "sm" ? "text-2xs" : "text-xs")}>
       {(login.slice(0, 1) || "—").toUpperCase()}
     </span>
   );
@@ -28,7 +29,7 @@ export function AuthorName({ login, className }: { login: string; className?: st
   return (
     <span className={cx("flex min-w-0 items-center gap-1.5", className)}>
       <span className="truncate">{login}</span>
-      {isBotLogin(login) && <span className="shrink-0 rounded-sm border border-border-muted px-1 text-[0.65rem] leading-4 text-ink-faint">app</span>}
+      {isBotLogin(login) && <Badge size="xs" tone="muted">app</Badge>}
     </span>
   );
 }
