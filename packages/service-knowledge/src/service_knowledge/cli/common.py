@@ -210,7 +210,7 @@ def wire_hooks(root: Path) -> list[str]:
     if not changed:
         return []
     settings_path.parent.mkdir(parents=True, exist_ok=True)
-    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    _write_text(settings_path, json.dumps(settings, indent=2) + "\n")
     return [".claude/settings.json"]
 
 
@@ -423,7 +423,7 @@ def ensure_runtime_gitignored(root: Path) -> list[str]:
     if pattern in existing or any(line.strip() == pattern.strip("/") for line in existing.splitlines()):
         return []
     suffix = "" if (existing == "" or existing.endswith(nl)) else nl
-    gi.write_text(existing + suffix + pattern + nl, encoding="utf-8")
+    _write_text(gi, existing + suffix + pattern + nl)
     return [".gitignore"]
 
 
@@ -475,6 +475,6 @@ def unwire_hooks(root: Path) -> list[str]:
             del hooks[event]
     if not changed:
         return []
-    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    _write_text(settings_path, json.dumps(settings, indent=2) + "\n")
     return [".claude/settings.json"]
 
