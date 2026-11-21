@@ -460,7 +460,7 @@ describe("XTRM-844 adversarial: migration 017", () => {
 
       const first = openSubstrate(dbPath);
       const firstLedger = readLedger(first);
-      assert.equal(firstLedger.maxVersion, 17, "the store is at head 17");
+      assert.equal(firstLedger.maxVersion, 18, "the store is at head 18 (017 landed, then XTRM-959's 018)");
       assert.equal(firstLedger.rows.length, 1, "exactly one ledger row for 017");
       assert.match(firstLedger.rows[0]!.checksum, /^[0-9a-f]{64}$/, "the checksum is a sha256 hex digest");
       first.close();
