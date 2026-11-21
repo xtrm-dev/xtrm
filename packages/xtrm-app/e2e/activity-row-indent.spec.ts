@@ -11,9 +11,20 @@ import { expect, test } from "@playwright/test";
 // the cap assertion below pins the value and cannot distinguish the two spellings. The indent
 // assertion is the one that would have failed.
 
-const ROOT_REM = 16;
-const STEP = 1.25 * ROOT_REM; // pl-5 / the console's one indent step (INDENT_REM = 1.25rem)
-const REFS_CAP = 16 * ROOT_REM; // max-w-64 == max-w-[16rem] == 256px
+// The indent is 1.25rem, so it is asserted at TWO roots. A guard that pins 20px only passes a
+// `pl-[20px]` indent — the exact defect the units gate refuses — because at a 16px root a rem step
+// and a px literal are the same number. At a 12px root they are not (15 vs 20), so the pair
+// distinguishes "one rem step" from "16px arithmetic" (XTRM-947 review, finding 5).
+const ROOTS = [16, 12];
+const STEP_REM = 1.25; // pl-5 / the console's one indent step (INDENT_REM = 1.25rem)
+const REFS_CAP_REM = 16; // max-w-64 == max-w-[16rem] == 256px
+
+async function setRoot(page: import("@playwright/test").Page, size: number) {
+  await page.evaluate((rem) => {
+    document.documentElement.style.fontSize = `${rem}px`;
+  }, size);
+  await page.waitForTimeout(100);
+}
 
 test("the expanded row body sits one 1.25rem step in from its row", async ({ page }) => {
   await page.goto("/rep/xtrm-dev/xtrm/code/activity");
@@ -29,26 +40,33 @@ test("the expanded row body sits one 1.25rem step in from its row", async ({ pag
   const body = listItem.locator("> div").nth(1);
   await expect(body).toBeVisible();
 
-  const liBox = (await listItem.boundingBox())!;
-  const bodyBox = (await body.boundingBox())!;
+  // Measured at each root, so the number and the step cannot be confused.
+  for (const root of ROOTS) {
+    await setRoot(page, root);
+    const step = STEP_REM * root;
 
-  // The body box is full-bleed inside the row; the INDENT lives in its padding, so measure the
-  // content edge the way the eye sees it: padding box left + computed padding-left.
-  const padLeft = await body.evaluate((el) => Number.parseFloat(getComputedStyle(el).paddingLeft));
-  expect(padLeft).toBe(STEP);
-  expect(bodyBox.x).toBe(liBox.x);
+    const liBox = (await listItem.boundingBox())!;
+    const bodyBox = (await body.boundingBox())!;
 
-  // And the text itself lands one step from the list edge, not two.
-  const firstText = body.locator("> *").first();
-  const textBox = (await firstText.boundingBox())!;
-  const expected = bodyBox.x + padLeft + (await firstText.evaluate((el) => Number.parseFloat(getComputedStyle(el).paddingLeft)));
-  expect(textBox.x).toBe(expected);
+    // The body box is full-bleed inside the row; the INDENT lives in its padding, so measure the
+    // content edge the way the eye sees it: padding box left + computed padding-left.
+    const padLeft = await body.evaluate((el) => Number.parseFloat(getComputedStyle(el).paddingLeft));
+    expect(padLeft, `at a ${root}px root the step is ${step}px: a rem step follows the root, a px literal does not`).toBe(step);
+    expect(bodyBox.x).toBe(liBox.x);
 
-  // The refs cluster is capped at the 16rem step, and never overflows its row.
-  const refs = listItem.getByTestId("activity-refs");
-  if ((await refs.count()) > 0) {
-    const maxWidth = await refs.first().evaluate((el) => getComputedStyle(el).maxWidth);
-    expect(maxWidth).toBe(`${REFS_CAP}px`);
-    expect((await refs.first().boundingBox())!.width).toBeLessThanOrEqual(REFS_CAP);
+    // And the text itself lands one step from the list edge, not two.
+    const firstText = body.locator("> *").first();
+    const textBox = (await firstText.boundingBox())!;
+    const textPad = await firstText.evaluate((el) => Number.parseFloat(getComputedStyle(el).paddingLeft));
+    expect(textBox.x, `at a ${root}px root`).toBe(bodyBox.x + padLeft + textPad);
+
+    // The refs cluster is capped at the 16rem step, and never overflows its row.
+    const cap = REFS_CAP_REM * root;
+    const refs = listItem.getByTestId("activity-refs");
+    if ((await refs.count()) > 0) {
+      const maxWidth = await refs.first().evaluate((el) => getComputedStyle(el).maxWidth);
+      expect(maxWidth, `16rem cap at a ${root}px root`).toBe(`${cap}px`);
+      expect((await refs.first().boundingBox())!.width).toBeLessThanOrEqual(cap);
+    }
   }
 });

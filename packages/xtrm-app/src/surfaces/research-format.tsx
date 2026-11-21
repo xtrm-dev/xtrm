@@ -17,7 +17,10 @@ const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
  * The one sanctioned exception is the dense criteria grid: keys are literally `true`/`false` (about
  * 28px of text in a 56px track) with its own `gap-x-2`, because it is a key/value legend, not a
  * field list. It is bounded by LABEL LENGTH, not by row density — an 8-character label is the limit,
- * and renaming those keys to `supported`/`unsupported` would overflow the fixed track. */
+ * and renaming those keys to `supported`/`unsupported` would overflow the fixed track.
+ *
+ * The 8rem column this replaces existed for the manifest grid alone; it is gone, and nothing should
+ * reintroduce it — `LABEL_COLUMN` is the column for every field list. */
 export const LABEL_COLUMN = "10rem";
 
 /** The sanctioned dense exception's column (see `LABEL_COLUMN`). */

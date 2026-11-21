@@ -624,7 +624,11 @@ function delta(candidate: number | undefined, baseline: number | undefined): str
 /** The comparison table is the console's table, not a `<table>`: a grid row template with a header
  * row at `px-2` (Issues, Pull requests). One metric column, one baseline column, then a value and a
  * delta column per candidate — the cell order the delta and the tests both read. */
-const COMPARISON_CELL = "flex min-w-0 items-center px-2 py-1";
+// Every cell in the comparison grid shares this class, so the clipping below is decided once for
+// the whole table rather than cell by cell: `min-w-0` lets the track shrink and `overflow-hidden`
+// stops a long value from widening the grid it sits in (XTRM-950). The value inside still needs
+// `truncate`, which is a text property and cannot live here.
+const COMPARISON_CELL = "flex min-w-0 items-center overflow-hidden px-2 py-1";
 
 function comparisonColumns(candidateCount: number): string {
   const columns = ["minmax(6rem, 1fr)", "minmax(0, 1.6fr)"];
@@ -667,12 +671,16 @@ export function RunComparisonSurface() {
         <div role="table" aria-label="Metric comparison" className="flex flex-col">
           <div role="row" className="grid h-8 items-center border-b border-border-subtle text-xs text-ink-faint" style={{ gridTemplateColumns: grid }}>
             <div role="columnheader" className={COMPARISON_CELL}>Metric</div>
-            <div role="columnheader" className={COMPARISON_CELL}>{baselineId} (baseline)</div>
+            <div role="columnheader" className={COMPARISON_CELL}>
+              <span className="min-w-0 truncate" title={baselineId}>
+                {baselineId} (baseline)
+              </span>
+            </div>
             {candidateIds.map((c) => (
               // The candidate header spans its value and delta tracks, and the value track is
               // `minmax(0, 1.2fr)`: a run id longer than the track would wrap inside the fixed
               // `h-8` row and push the table down. It ellipsises instead, with the id in `title`.
-              <div key={c} role="columnheader" aria-colspan={2} className={cx(COMPARISON_CELL, "overflow-hidden")} style={{ gridColumn: "span 2" }}>
+              <div key={c} role="columnheader" aria-colspan={2} className={COMPARISON_CELL} style={{ gridColumn: "span 2" }}>
                 <span className="min-w-0 truncate" title={c}>
                   {c}
                 </span>

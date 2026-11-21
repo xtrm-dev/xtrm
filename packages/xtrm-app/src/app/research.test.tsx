@@ -7,6 +7,7 @@ import { fixtureResearch } from "../adapters/research/fixture.ts";
 import { mapRunSummary } from "../adapters/research/live.ts";
 import fixture from "../adapters/research/__fixtures__/xtrm-research-fixture.json";
 import { isInvalidManifestRow, type Metric, type ResearchAdapter, type RunListRow, type RunSummary, type SampleRecord, type TailCursor, type TailEvent } from "../adapters/research/types.ts";
+import { DENSE_LABEL_COLUMN, LABEL_COLUMN } from "../surfaces/research-format.tsx";
 import { MODES, modeForPath } from "./destinations.ts";
 import { createAppRouter } from "./router.tsx";
 
@@ -505,10 +506,48 @@ describe("A metric renders value, interval and method together, whichever half i
     const span = header.querySelector("span")!;
     expect(span.textContent).toBe(LONG);
     expect(span.getAttribute("title")).toBe(LONG);
+
+    // Clipped rather than wrapped needs three parts, and jsdom resolves no layout (`rect.height` is
+    // 0 for every element, so a `rect <= rect` comparison here can never fail — it proved nothing).
+    // The parts that ARE readable are asserted: the clipped value, the cell that stops it widening
+    // the grid, and the addable combinations that would silently undo it. The rendered height is
+    // measured in a browser by e2e/research-label-column.spec.ts.
+    expect(span.className, "the value itself must ellipsise").toContain("truncate");
+    expect(span.className, "wrapping is the defect this guards: `whitespace-normal` undoes truncate").not.toContain("whitespace-normal");
+    expect(header.className, "the cell stops a long value widening the track it sits in").toContain("overflow-hidden");
+    expect(header.className).toContain("min-w-0");
+
+    // The baseline header sits in the same fixed row under the same class, so it has to carry the
+    // same clipping. Fixing one cell of two is how this defect survived its first review.
+    const baselineHeader = screen.getByRole("columnheader", { name: "run-a (baseline)" });
+    const baselineSpan = baselineHeader.querySelector("span")!;
+    expect(baselineSpan.className).toContain("truncate");
+    expect(baselineSpan.getAttribute("title"), "the whole id stays reachable").toBe("run-a");
+    expect(baselineHeader.className).toContain("overflow-hidden");
+  });
+});
+
+describe("A long baseline id clips like a long candidate id", () => {
+  it("ellipsises the baseline header instead of wrapping it into the fixed row", async () => {
+    // The candidate column got the fix first and the baseline column sits in the same fixed `h-8`
+    // row under the same class, so it is the sibling path back to the same defect (XTRM-950).
+    const LONG = "run-2026-09-16-dup-detect-baseline-replay-with-a-long-slug";
+    const summary = mapRunSummary(fixture.compareAB["run-a"]);
+    renderWithResearch(`/research/compare?baseline=${LONG}&candidate=run-b`, {
+      compare: async (runIds) => {
+        const [baselineId, ...candidateIds] = runIds;
+        const out: Record<string, RunSummary> = {};
+        for (const id of runIds) out[id] = { ...summary, metrics: id === baselineId ? summary.metrics : {} };
+        return out;
+      },
+    });
+    const header = await screen.findByRole("columnheader", { name: `${LONG} (baseline)` });
+    const span = header.querySelector("span")!;
+    expect(span.textContent).toBe(`${LONG} (baseline)`);
+    expect(span.getAttribute("title")).toBe(LONG);
     expect(span.className).toContain("truncate");
-    // Clipped rather than wrapped: one line box, no taller than the header row it sits in.
-    const row = screen.getByRole("columnheader", { name: "Metric" }).parentElement!;
-    expect(header.getBoundingClientRect().height).toBeLessThanOrEqual(row.getBoundingClientRect().height);
+    expect(header.className).toContain("overflow-hidden");
+    expect(header.className).toContain("min-w-0");
   });
 });
 
@@ -853,12 +892,22 @@ describe("Every Research field grid shares one label column (XTRM-948)", () => {
   it("starts every field-grid value in the same column", async () => {
     renderAt("/research/runs/run-a");
     await screen.findByText("Manifest & versions");
+    // The question-spec query resolves later and adds the dense criteria grid. Reading before it
+    // landed made this test compare three grids and miss the one that disagrees (XTRM-953 review).
+    await screen.findByText("board text similarity");
     const columns = gridsWithTerms().map(template);
-    expect(columns.length, "the run page renders Hypothesis, Method and Manifest & versions").toBe(3);
-    expect(new Set(columns).size, "one label column: a page must not restate the template").toBe(1);
+    // Four grids: Hypothesis, Method, Manifest & versions at the step, plus the dense exception.
+    const dense = columns.filter((c) => c === DENSE_LABEL_COLUMN);
+    const stepped = columns.filter((c) => c !== DENSE_LABEL_COLUMN);
+    expect(stepped.length, "the run page renders Hypothesis, Method and Manifest & versions at the step").toBe(3);
+    expect(new Set(stepped).size, "one label column: a page must not restate the template").toBe(1);
+    // The dense grid is an exception only while it is the ONLY thing off the step, and it is named
+    // rather than tolerated: a second opinion at 8rem would show up here as a stray column.
+    expect(dense.length, `the only grid off the step is the dense criteria legend (${DENSE_LABEL_COLUMN})`).toBe(1);
+    expect(columns.filter((c) => c !== LABEL_COLUMN && c !== DENSE_LABEL_COLUMN), "no third label column").toEqual([]);
     // jsdom does not resolve rem to px, so this pins the DECLARED step. The rendered pitch is measured
     // in the browser (e2e/research-label-column.spec.ts): 10rem + the primitive's 0.75rem gutter = 172px.
-    expect(columns[0], "10rem is the shared step; a value starts at 172px (10rem + 0.75rem gutter)").toBe("10rem");
+    expect(stepped[0], "10rem is the shared step; a value starts at 172px (10rem + 0.75rem gutter)").toBe(LABEL_COLUMN);
   });
 
   it("keeps the manifest column off its old 8rem", async () => {
