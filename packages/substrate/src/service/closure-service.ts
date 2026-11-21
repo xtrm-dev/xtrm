@@ -470,8 +470,9 @@ export class ClosureService {
     if (reason === "") {
       throw new Error(
         `refusing to close ${issue.locator}: ${refs.length === 1 ? "blocker" : "blockers"} ${refs.join(", ")} ` +
-          `${refs.length === 1 ? "is" : "are"} still open. A blocker is satisfied only by a closed issue or a merged PR — ` +
-          `an open PR is not evidence. Close ${refs.join(", ")} first, or state why it no longer binds: ` +
+          `${refs.length === 1 ? "is" : "are"} still open. A blocker is satisfied only when it is itself terminal ` +
+          `(done or archived): an open PR is not evidence, and neither is a merged one — this guard reads the ` +
+          `blocker's lifecycle state, not its PRs. Close ${refs.join(", ")} first, or state why it no longer binds: ` +
           `sb issue close ${issue.locator} --outcome ${outcome} --reason "<why this issue is finished>" ` +
           `--force-close-with-open-blocker "<why ${refs.join(", ")} no longer binds>"`,
       );
@@ -483,11 +484,29 @@ export class ClosureService {
     const lowered = reason.toLowerCase();
     // Pasting the ref or the flag name satisfies a word count without saying
     // anything, which is the habit the floor exists to prevent.
-    const namesOnly = refs.some((ref) => ref.toLowerCase() === lowered) || lowered.startsWith("--") || lowered.includes("force-close-with-open-blocker");
-    if (words.length < 2 || reason.length < 12 || namesOnly) {
+    // Three ways to satisfy the parser without saying anything: pasting the ref,
+    // pasting a flag-shaped token, or pasting the flag's own name. Each arm is
+    // named in its refusal, because a caller who guessed wrong needs to know
+    // which floor they hit — "needs two words" was false for a three-word
+    // reason that only named the flag.
+    const pastedRef = refs.some((ref) => ref.toLowerCase() === lowered);
+    const pastedFlagShape = lowered.startsWith("--");
+    const namedTheFlag = lowered.includes("force-close-with-open-blocker");
+    // Kept deliberately: a reason that mentions the flag itself is not a reason
+    // the blocker stopped binding, and this arm is what a distracted caller
+    // writes. It refuses such a sentence and says which arm refused it, rather
+    // than accepting it quietly — a caller who means it can reword.
+    const tooShort = words.length < 2 || reason.length < 12;
+    if (tooShort || pastedRef || pastedFlagShape || namedTheFlag) {
+      const why = pastedRef
+        ? `it is just the blocker's own ref, so it names what blocks and not why it stopped`
+        : pastedFlagShape
+          ? `it reads as a command-line flag, not as a reason ${refs.join(", ")} stopped binding`
+          : namedTheFlag
+            ? `it names --force-close-with-open-blocker instead of saying why ${refs.join(", ")} no longer binds`
+            : `it needs at least two words and twelve characters saying why ${refs.join(", ")} no longer binds`;
       throw new Error(
-        `refusing to close ${issue.locator}: --force-close-with-open-blocker needs at least two words saying why ` +
-          `${refs.join(", ")} no longer binds, not "${reason}". Nothing was closed.`,
+        `refusing to close ${issue.locator}: the override reason is not usable — ${why}, not "${reason}". Nothing was closed.`,
       );
     }
     return { reason, refs };
@@ -504,8 +523,9 @@ export class ClosureService {
     const issue = this.issues.getIssue(issueId);
     throw new Error(
       `refusing to close ${issue.locator}: ${refs.length === 1 ? "blocker" : "blockers"} ${refs.join(", ")} ` +
-        `${refs.length === 1 ? "is" : "are"} still open. A blocker is satisfied only by a closed issue or a merged PR — ` +
-        `an open PR is not evidence. To close deliberately, state why it no longer binds: ` +
+        `${refs.length === 1 ? "is" : "are"} still open. A blocker is satisfied only when it is itself terminal ` +
+        `(done or archived): an open PR is not evidence, and neither is a merged one — this guard reads the ` +
+        `blocker's lifecycle state, not its PRs. To close deliberately, state why it no longer binds: ` +
         `sb issue close ${issue.locator} --outcome completed --reason "<why this issue is finished>" ` +
         `--force-close-with-open-blocker "<why ${refs.join(", ")} no longer binds>"`,
     );

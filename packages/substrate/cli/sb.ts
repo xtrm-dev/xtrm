@@ -698,8 +698,10 @@ writes an immutable Closure row (outcome, reason, actor, session, revision/hash,
 
 Blockers: a close is refused while a declared blocking dependency is still open,
 because a terminal issue whose own dependency is unresolved cannot be told apart
-from an ordered close. Only a closed issue or a merged PR satisfies a blocker —
-an open PR is not evidence. The refusal names each open blocker by ref. To close
+from an ordered close. A blocker is satisfied only when it is itself terminal
+(done or archived): an open PR is not evidence, and neither is a merged one,
+because this guard reads the blocker's lifecycle state and not its PRs. The
+refusal names each open blocker by ref. To close
 anyway, state why the dependency no longer binds with
 --force-close-with-open-blocker <why>; that reason is recorded on the Closure
 row. superseded|duplicate closes are exempt (they point at another issue rather
@@ -1832,7 +1834,12 @@ function applyDeferUntil(svc: IssueService, issueId: string, raw: string | undef
 // Closure flag helpers (C1, ADR §96): the canonical close/reopen/cancel
 // surface. Any closure-scoped flag opts into the Closure path; bare verbs
 // stay legacy lifecycle aliases.
-const CLOSURE_FLAGS = ["outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact"];
+// `force-close-with-open-blocker` is on this list for the reason the list
+// exists: a caller who supplies it has opted into the Closure path, and leaving
+// it off sent `--force-close-with-open-blocker "<why>"` without `--outcome`
+// down the legacy branch, which discarded the sentence and refused the close
+// (XTRM-959 review finding 6). The flag then fails loudly on --outcome instead.
+const CLOSURE_FLAGS = ["outcome", "reason", "actor", "participant", "run", "activation", "attempt", "result", "receipt", "validation", "artifact", "force-close-with-open-blocker"];
 
 function hasClosureFlags(flags: Flags): boolean {
   return CLOSURE_FLAGS.some((f) => flags.has(f));
