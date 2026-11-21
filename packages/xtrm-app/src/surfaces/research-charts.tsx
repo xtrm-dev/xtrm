@@ -90,7 +90,7 @@ function MetricDatasetChart({
   return (
     <div className="flex flex-col gap-2" aria-label={`${meta.label} chart`}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h4 className="text-xs font-medium text-ink">{meta.label}</h4>
+        <p className="text-xs font-medium text-ink">{meta.label}</p>
         <span className="text-xs text-ink-faint">{meta.description}</span>
         {meta.direction && meta.direction !== "unspecified" && <span className="text-xs text-ink-faint">{meta.direction.replaceAll("_", " ")}</span>}
       </div>
