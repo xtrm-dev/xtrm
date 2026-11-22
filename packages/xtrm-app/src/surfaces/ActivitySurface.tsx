@@ -75,7 +75,7 @@ function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: bool
           <span className="font-medium">{row.object}</span>
         </span>
         {row.refs.length > 0 && (
-          <span className="flex max-w-[16rem] min-w-0 shrink-0 items-center gap-1 overflow-hidden" data-testid="activity-refs">
+          <span className="flex max-w-64 min-w-0 shrink-0 items-center gap-1 overflow-hidden" data-testid="activity-refs">
             {row.refs.map((r) =>
               r.kind === "issue" || r.kind === "pr" || r.kind === "gh-issue" ? (
                 // The console's own chip: same reference vocabulary as prose and the drawer.
@@ -90,8 +90,9 @@ function ActivityRowView({ row, open, onToggle }: { row: ActivityRow; open: bool
         )}
         <span className="w-10 shrink-0 text-right text-xs text-ink-faint tabular">{relativeTime(row.at)}</span>
       </Row>
+      {/* One step in from the row's gutter: the spacing scale's 1.25rem, not a sixth magic number. */}
       {open && (
-        <div className="flex flex-col gap-2 px-6 pb-3">
+        <div className="flex flex-col gap-2 pb-3 pl-5 pr-3">
           {row.meta.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-2xs text-ink-faint">
               {row.meta.map(([k, v], i) => (
