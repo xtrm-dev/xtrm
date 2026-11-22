@@ -123,7 +123,16 @@ describe("A1 CLI journal + lifecycle", () => {
     assert.match(refused, new RegExp(`${b} done`), "names the issue and the target state");
     assert.match(refused, new RegExp(`blocker ${a} is still open`), "names the open blocker by human ref");
     assert.match(refused, /sb issue close/);
+    // The remedy names a flag of the CLOSE verb; this verb must not accept it.
+    // Asserting the surface rejects it is what makes "the state path offers no
+    // override" a fact rather than a wording choice: a reader who pastes the
+    // flag onto `state` gets a flag error, not a silent no-op.
     assert.match(refused, /--force-close-with-open-blocker/);
+    assert.doesNotMatch(
+      mutFail(db, ["issue", "state", b, "done", "--force-close-with-open-blocker", "because"]),
+      /still open/,
+      "the state verb refuses the flag at the surface rather than treating it as an override",
+    );
     assert.equal((cli(db, ["issue", "show", b]) as { lifecycleState: string }).lifecycleState, "open");
 
     // archive is terminal too, and it is the quiet way past the rule: an
