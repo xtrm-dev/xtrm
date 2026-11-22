@@ -52,6 +52,17 @@ export const DRAWER_LABEL_COLUMN = "7.5rem";
 export const PAGE_LABEL_COLUMN = "10rem";
 
 /**
+ * The two content-sized grids (`IssueJournal`'s block keys, `Activity`'s argument list) floor on
+ * `PART_LABEL_COLUMN` / `SIDEBAR_LABEL_COLUMN` and let the track take the widest label above that
+ * floor, because their labels are data and there is no inventory to fit at authoring time.
+ *
+ * The floor is a visible pixel: the sweep that introduced it moved 6rem → 6.5rem and 4rem → 4.5rem,
+ * which is **+8px per grid**, and it shows only when every key in a block is shorter than the floor
+ * (measured on XTRM-971; a block with one long key hides it). Nothing pins that figure — the gate
+ * can prove the floor is a step, not that the step fits a block of short keys.
+ */
+
+/**
  * Label/value pairs; values keep their own ink (XTRM-934).
  *
  * The grid was re-implemented five times with five label widths and two value sizes, so the same
