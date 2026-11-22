@@ -13,6 +13,7 @@ import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { openBacking, type Backing } from "../integrations/pi/backing.ts";
 import {
   SessionBindings,
+  decidePiEditCall,
   resumeForSession,
   runBeforeCompact,
   toolIssueClaim,
@@ -234,6 +235,74 @@ describe("tool surface over the typed service", () => {
       assert.equal(bindings.boundRef("nope"), "PI-9");
     } finally {
       delete process.env["SUBSTRATE_ISSUE"];
+    }
+  });
+});
+
+// XTRM-969: the binding outlives the issue. A session that finished on a closed
+// issue learns about it at its next write, so the gate must name the issue, its
+// state, and the way out — never a bare machine id and "claim first".
+describe("edit-gate binding over a closed issue", () => {
+  it("allows a write under the session's own live claim", async () => {
+    const { svc, backing } = setup();
+    try {
+      const id = readyIssue(svc);
+      const bindings = new SessionBindings();
+      await toolIssueClaim(backing, bindings, { ref: id, holder: "pi-holder", sessionId: "sess-live" });
+      process.env["SUBSTRATE_HOLDER"] = "pi-holder";
+      const decision = await decidePiEditCall(backing, bindings, { sessionId: "sess-live" });
+      assert.equal(decision.allow, true, decision.reason);
+      assert.equal(decision.issueRef, id);
+    } finally {
+      delete process.env["SUBSTRATE_HOLDER"];
+      svc.close();
+      await backing.close();
+    }
+  });
+
+  it("refuses a write under a binding that points at a closed issue, naming it and the rebind", async () => {
+    const { svc, backing } = setup();
+    try {
+      const id = readyIssue(svc);
+      const bindings = new SessionBindings();
+      process.env["SUBSTRATE_HOLDER"] = "pi-holder";
+      await toolIssueClaim(backing, bindings, { ref: id, holder: "pi-holder", sessionId: "sess-dead" });
+      svc.issues.setLifecycleState(id, "done");
+      const decision = await decidePiEditCall(backing, bindings, { sessionId: "sess-dead" });
+      assert.equal(decision.allow, false, "a closed issue authorises no write");
+      const reason = decision.reason ?? "";
+      assert.match(reason, /PI-1/, "names the human ref");
+      assert.doesNotMatch(reason, /iss_/, "a machine id never appears without its human ref");
+      assert.match(reason, /\bdone\b/, "names the lifecycle state");
+      assert.match(reason, /sb issue claim/, "names the command that rebinds");
+      assert.doesNotMatch(reason, /claim first$/, "not the terse message that made a dead binding look stale");
+    } finally {
+      delete process.env["SUBSTRATE_HOLDER"];
+      svc.close();
+      await backing.close();
+    }
+  });
+
+  it("accepts a write once the session rebinds to the issue it is working on", async () => {
+    const { svc, backing } = setup();
+    try {
+      const first = readyIssue(svc, "Closed lane");
+      const second = readyIssue(svc, "Current lane");
+      const bindings = new SessionBindings();
+      process.env["SUBSTRATE_HOLDER"] = "pi-holder";
+      await toolIssueClaim(backing, bindings, { ref: first, holder: "pi-holder", sessionId: "sess-move" });
+      svc.issues.setLifecycleState(first, "done");
+      assert.equal((await decidePiEditCall(backing, bindings, { sessionId: "sess-move" })).allow, false);
+      // The rebind is the ordinary claim on the lane's own issue: no unrelated
+      // work, and the binding moves with it.
+      await toolIssueClaim(backing, bindings, { ref: second, holder: "pi-holder", sessionId: "sess-move" });
+      assert.equal(bindings.boundRef("sess-move"), second);
+      const decision = await decidePiEditCall(backing, bindings, { sessionId: "sess-move" });
+      assert.equal(decision.allow, true, decision.reason);
+    } finally {
+      delete process.env["SUBSTRATE_HOLDER"];
+      svc.close();
+      await backing.close();
     }
   });
 });
