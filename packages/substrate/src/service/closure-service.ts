@@ -225,6 +225,11 @@ export class ClosureService {
       .prepare("UPDATE issues SET lifecycle_state = ?, updated_at = ? WHERE id = ?")
       .run(terminalState, now, issueId);
     this.issues.appendEvent(issueId, "issue.lifecycle", { from: issue.lifecycleState, to: terminalState });
+    // XTRM-976: a claim cannot outlive the issue it was taken on. The
+    // transition releases every unreleased row (live or lapsed) inside this
+    // same transaction, and the journal names the transition so the next
+    // reader does not find a holder who never released.
+    this.issues.releaseClaimsForTransition(issueId, { transition: kind, closureId, now });
     this.issues.appendEvent(issueId, "issue.closed", {
       closure: closureId,
       outcome: closure.outcome,
