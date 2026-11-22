@@ -6,6 +6,7 @@ import { fixtureAdapters, type GithubAuthStatus, type GithubCapabilities } from 
 import { createFixtureGithubAuth, liveGithubAuth } from "../adapters/github/auth.ts";
 import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
 import { createAppRouter } from "../app/router.tsx";
+import { TOOLBAR_CONTROL, TOOLBAR_GHOST } from "../ui/primitives.tsx";
 
 declare module "*?raw" {
   const src: string;
@@ -17,6 +18,18 @@ import authAdapterSource from "../adapters/github/auth.ts?raw";
 import authUiSource from "./auth.tsx?raw";
 
 const TOKEN_LIKE = /(ghu|ghr|gho)_[A-Za-z0-9]+/;
+
+// XTRM-990: the shared control is a class pair, not a look. `ToolbarButton` renders
+// `TOOLBAR_CONTROL` then `TOOLBAR_GHOST` before any caller class, so matching that prefix proves
+// the control was built from it. `h-7` alone proves nothing: the deleted local `actionButton`
+// began `flex h-7` too, and a hand-written bordered copy would keep it.
+const TOOLBAR_PAIR = `${TOOLBAR_CONTROL} ${TOOLBAR_GHOST}`;
+
+function expectToolbarControl(control: Element) {
+  const className = control.getAttribute("class") ?? "";
+  expect(className.startsWith(TOOLBAR_PAIR)).toBe(true);
+  expect(className).not.toContain("border-border-muted");
+}
 
 function renderAt(url: string, status?: GithubAuthStatus, capabilities?: Record<string, GithubCapabilities>) {
   return renderAtAuth(url, createFixtureGithubAuth({ status, capabilities }));
@@ -151,9 +164,11 @@ describe("device-code drawer", () => {
     fireEvent.click(await within(await topBar()).findByRole("button", { name: "Enter GitHub code" }));
     const el = await screen.findByTestId("inspector-drawer");
     expect(await within(el).findByText("WDJC-8F39")).toBeTruthy();
+    expectToolbarControl(within(el).getByRole("button", { name: "Check now" }));
     githubAuth.__resolve("signed_in");
     fireEvent.click(within(el).getByRole("button", { name: "Check now" }));
     expect(await within(el).findByText("Signed in as Jaggerxtrm")).toBeTruthy();
+    expectToolbarControl(within(el).getByRole("button", { name: "Close" }));
     // The top bar follows the same status read.
     expect(await within(await topBar()).findByRole("button", { name: /Jaggerxtrm — GitHub account/ })).toBeTruthy();
   });
@@ -166,6 +181,8 @@ describe("device-code drawer", () => {
     });
     const el = await screen.findByTestId("inspector-drawer");
     expect(await within(el).findByText(/The device code expired/)).toBeTruthy();
+    expectToolbarControl(within(el).getByRole("button", { name: "Try again" }));
+    expectToolbarControl(within(el).getByRole("button", { name: "Check status" }));
     fireEvent.click(within(el).getByRole("button", { name: "Try again" }));
     expect(await within(el).findByText("WDJC-8F39")).toBeTruthy();
   });
@@ -174,11 +191,13 @@ describe("device-code drawer", () => {
 describe("inline GitHub notices", () => {
   const pulls = "/rep/xtrm-dev/xtrm/code/pulls";
 
-  it("calls out setup with a Settings link when not configured", async () => {
+  it("calls out setup with a Settings control when not configured", async () => {
     renderAt(pulls, { state: "not_configured", auth_source: "none" });
     const [notice] = await screen.findAllByTestId("github-notice");
     expect(notice!.dataset.state).toBe("not_configured");
     expect(within(notice!).getByText(/GitHub is not configured/)).toBeTruthy();
+    // XTRM-990: this was an accent-coloured underline link; it is the shared ghost control now.
+    expectToolbarControl(within(notice!).getByRole("button", { name: "Open Settings" }));
     fireEvent.click(within(notice!).getByRole("button", { name: "Open Settings" }));
     expect(await screen.findByText("GitHub — not configured")).toBeTruthy();
   });
@@ -192,9 +211,7 @@ describe("inline GitHub notices", () => {
     renderAt(pulls, { state: "signed_out", auth_source: "none" });
     const notice = (await screen.findByText("Sign in to load GitHub data.")).closest("[data-testid=github-notice]")!;
     // The top bar carries the same label, so the assertion is scoped to the notice it is about.
-    const signin = within(notice as HTMLElement).getByRole("button", { name: "Sign in with GitHub" });
-    expect(signin.className).toContain("h-7");
-    expect(signin.className).not.toContain("border-border-muted");
+    expectToolbarControl(within(notice as HTMLElement).getByRole("button", { name: "Sign in with GitHub" }));
   });
 
   it("asks to sign in again when expired", async () => {
@@ -220,9 +237,8 @@ describe("inline GitHub notices", () => {
     expect(install.getAttribute("href")).toContain("github.com/apps/xtrm-console/installations/new");
     // XTRM-990: notice controls are the shared toolbar control, not a private bordered button. The
     // install link is an anchor, so it takes the control classes rather than ToolbarButton itself.
-    expect(install.className).toContain("h-7");
-    expect(install.className).not.toContain("border-border-muted");
-    expect(within(el).getByRole("button", { name: "Open Settings" }).className).toContain("h-7");
+    expectToolbarControl(install);
+    expectToolbarControl(within(el).getByRole("button", { name: "Open Settings" }));
   });
 
   it("stays silent when signed in with the app installed", async () => {
@@ -245,7 +261,7 @@ describe("one control language in the auth surfaces", () => {
     // The drawer settles only once the pending status arrives; before that it renders a skeleton.
     expect(await within(el).findByText("WDJC-8F39")).toBeTruthy();
     for (const name of ["Copy device code", "Check now", "Cancel"]) {
-      expect(within(el).getByRole("button", { name }).className).toContain("h-7");
+      expectToolbarControl(within(el).getByRole("button", { name }));
     }
   });
 });
