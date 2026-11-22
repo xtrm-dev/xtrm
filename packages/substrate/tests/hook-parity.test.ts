@@ -193,6 +193,23 @@ describe("§54 hook parity", () => {
       false,
       "Pi gate: same holder different activation blocked",
     );
+    // XTRM-969: a closed binding is not a missing claim, and neither gate may
+    // answer a closed issue with "claim it". Both name the ref, the state and
+    // the command that rebinds — the two surfaces must not diverge here.
+    for (const [name, gate] of [
+      ["Pi", (st: Record<string, unknown>) => piEditGate(st as Parameters<typeof piEditGate>[0])],
+      ["Claude", (st: Record<string, unknown>) => evaluateEditState(st as Parameters<typeof evaluateEditState>[0])],
+    ] as const) {
+      const dead = gate({ issueRef: s.issueId, displayRef: s.humanRef, lifecycleState: "done", claimed: false });
+      assert.equal(dead.allow, false, `${name} gate refuses a closed binding without a claim`);
+      const reason = dead.reason ?? "";
+      assert.match(reason, new RegExp(s.humanRef), `${name} gate names the human ref`);
+      assert.doesNotMatch(reason, /iss_/, `${name} gate never shows a machine id alone`);
+      assert.match(reason, /\bdone\b/, `${name} gate names the lifecycle state`);
+      assert.match(reason, /sb issue claim/, `${name} gate names the command that rebinds`);
+      const claimedDead = gate({ issueRef: s.issueId, displayRef: s.humanRef, lifecycleState: "done", claim: { holder: "op", activationId: null }, claimed: true, holder: "op" });
+      assert.equal(claimedDead.allow, false, `${name} gate: a live claim cannot authorise a closed issue`);
+    }
     const cont = piStop({ issueRef: s.humanRef, claimed: true, holder: "op", checkpointsSinceClaim: 0, blockers: 1, handoffs: 0 });
     assert.equal(cont.needsCheckpoint, true);
     assert.ok(cont.continuity?.includes("sb issue resume"));
