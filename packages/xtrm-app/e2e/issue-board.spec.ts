@@ -32,8 +32,12 @@ function boardGeometry() {
   const columns = [...document.querySelectorAll('[data-testid^="board-column-"]')];
   const lane = columns[1] ?? columns[0] ?? null;
   const card = lane?.querySelector('[data-testid="board-card"]') ?? null;
-  // A lane heading is a page section (level 2), so the selector names h2 first: the assertion below
-  // would otherwise measure nothing and still pass, because `null` styles read as "none".
+  // The selector is a union on purpose, and the level is asserted separately below. Two wrong
+  // shapes were tried first: `h3, h4` matched nothing once the heading became level 2 (the geometry
+  // assertions then read `null` styles and passed), and `h2` alone matched nothing when the level was
+  // dropped back to 3. Neither selector can see a level, because `SectionHeader` emits identical
+  // classes at every level; only the tag name can, so the union keeps the element visible and
+  // `heading.tag` carries the claim.
   const heading = lane?.querySelector("h2, h3, h4") ?? null;
   const title = card?.querySelector("p") ?? null;
   const first = columns[0] ?? null;
@@ -58,6 +62,7 @@ function boardGeometry() {
       background: style(card, "backgroundColor"),
     },
     heading: {
+      tag: heading?.tagName ?? null,
       fontSize: style(heading, "fontSize"),
       color: style(heading, "color"),
       x: box(heading)?.x ?? null,
@@ -90,6 +95,12 @@ for (const theme of ["light", "dark"] as const) {
 
     // The caps header step: the section step (0.72rem), not body copy, and the header's gutter is
     // the card's, so a lane name starts on the same x as the card titles it names.
+    //
+    // The tag is asserted as well as the step, because the step cannot see the level: XTRM-954 says
+    // the first heading on a page is level 1 or 2, and the board is a mode of the Issues surface, so
+    // a lane name is a page section. `level={3}` renders the same 11.52px in the same classes, so a
+    // green outline check is not evidence the level is right — this line is.
+    expect(g.heading.tag, "the lane heading is a page section, not a group inside one").toBe("H2");
     expect(g.heading.fontSize, "the lane header is the section step").toBe("11.52px");
     expect(
       Math.abs((g.heading.x ?? 0) - (g.titleX ?? 0)) <= 1,

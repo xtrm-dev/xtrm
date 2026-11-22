@@ -1,8 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { AdaptersProvider, fixtureAdapters } from "../adapters/index.tsx";
+import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
+import { createAppRouter } from "../app/router.tsx";
 import { NewIssueDialog } from "../issues/NewIssueDialog.tsx";
 import { CommandMenu } from "./command-menu.tsx";
 import { Dialog, DialogFrame } from "./dialog.tsx";
@@ -45,21 +48,32 @@ describe("DialogFrame", () => {
     expect(within(slot("dialog-footer")!).getByRole("button", { name: "Save" })).toBeTruthy();
   });
 
-  it("takes the panel chrome by default and the palette chrome for a command list", () => {
-    const { unmount } = render(
+  it("takes the panel chrome by default", () => {
+    render(
       frame(
         <DialogFrame title="Normalize" frameWidth={760} top={8}>
           <div>body</div>
+          <DialogFrame.Footer>
+            <button type="button">Save</button>
+          </DialogFrame.Footer>
         </DialogFrame>,
       ),
     );
-    // A panel header is a title row in the section gutter; an input row needs its own gap instead.
-    const panelHeader = slot("dialog-header")!;
-    expect(panelHeader.className).toContain("h-12");
-    expect(panelHeader.className).toContain("px-5");
-    expect(panelHeader.className).not.toContain("gap-2");
-    unmount();
+    // A panel header is a title row in the section gutter, with no trailing gap: the title is the row.
+    const header = slot("dialog-header")!;
+    expect(header.className).toContain("h-12");
+    expect(header.className).toContain("px-5");
+    expect(header.className).not.toContain("gap-2");
+    // And a panel footer is an action row in the same gutter, not the palette's fixed-height hint row.
+    // This is the third chrome string, and until the review it was the one nothing pinned: `px-4 py-2`
+    // in place of `px-5 py-3` left every test green.
+    const footer = slot("dialog-footer")!;
+    expect(footer.className).toContain("px-5");
+    expect(footer.className).toContain("py-3");
+    expect(footer.className).not.toContain("h-9");
+  });
 
+  it("takes the palette chrome for a command list", () => {
     render(
       frame(
         <DialogFrame tone="palette" label="Search and commands" frameWidth={640} top={14} header={<input aria-label="query" />}>
@@ -70,15 +84,16 @@ describe("DialogFrame", () => {
         </DialogFrame>,
       ),
     );
-    const paletteHeader = slot("dialog-header")!;
-    expect(paletteHeader.className).toContain("h-12");
-    expect(paletteHeader.className).toContain("px-4");
-    expect(paletteHeader.className).toContain("gap-2");
+    // The palette header holds an input, so it carries the inter-control gap the panel has no use for.
+    const header = slot("dialog-header")!;
+    expect(header.className).toContain("h-12");
+    expect(header.className).toContain("px-4");
+    expect(header.className).toContain("gap-2");
     // The palette's footer is a hint row, not an action row: shorter, tighter, micro text.
-    const paletteFooter = slot("dialog-footer")!;
-    expect(paletteFooter.className).toContain("h-9");
-    expect(paletteFooter.className).toContain("px-4");
-    expect(paletteFooter.className).toContain("text-xs");
+    const footer = slot("dialog-footer")!;
+    expect(footer.className).toContain("h-9");
+    expect(footer.className).toContain("px-4");
+    expect(footer.className).toContain("text-xs");
     expect(screen.getByRole("dialog", { name: "Search and commands" })).toBeTruthy();
   });
 
@@ -97,6 +112,28 @@ describe("DialogFrame", () => {
     // And with a header and no title, the popup is named by `label`.
     expect(screen.getByRole("dialog", { name: "Search and commands" })).toBeTruthy();
   });
+
+  it("puts the geometry a call site passes into the popup's inline style", () => {
+    // The frame's three numbers are a CONSTRAINT in XTRM-944's contract (760 / 8 / 84 for the
+    // normalize dialog) and nothing asserted them: moving them to 800 / 4 / 40 left every test green.
+    // jsdom cannot resolve layout, but it reads an inline style string perfectly well.
+    render(
+      frame(
+        <DialogFrame title="Normalize" frameWidth={760} top={8} maxHeight={84}>
+          <div>body</div>
+        </DialogFrame>,
+      ),
+    );
+    const popup = screen.getByRole("dialog", { name: "Normalize" }) as HTMLElement;
+    expect(popup.style.top).toBe("8vh");
+    expect(popup.style.maxHeight).toBe("84vh");
+    // jsdom's CSSOM re-serialises the guard (`calc(100vw - 32px)` comes back as `-32px + 100vw`), so
+    // the width is asserted on the number the caller passed and the viewport term, not on the exact
+    // string: the exact string would pin the test to jsdom's arithmetic order rather than to the frame.
+    expect(popup.style.width).toContain("760px");
+    expect(popup.style.width).toContain("100vw");
+    expect(popup.style.width).toContain("min(");
+  });
 });
 
 describe("DialogFrame call sites", () => {
@@ -114,6 +151,23 @@ describe("DialogFrame call sites", () => {
     expect(footer, "the create dialog's actions live in the frame's footer").not.toBeNull();
     expect(within(footer!).getByRole("button", { name: "Save" })).toBeTruthy();
     expect(within(footer!).getByRole("button", { name: "Cancel" })).toBeTruthy();
+  });
+
+  it("renders the normalize dialog from its own call site, at the geometry the contract names", async () => {
+    // XTRM-944's CONSTRAINT names three numbers for this dialog (760 wide, 8vh down, 84vh tall) and the
+    // review's mutation was at the call site, not in the frame: `frameWidth={800} top={4} maxHeight={40}`
+    // in `src/issues/IssueView.tsx` left the suite at 31 files / 297 tests passed. Rendering the frame
+    // with those props would not catch that, so this opens the real dialog through the route.
+    const history = createMemoryHistory({ initialEntries: ["/rep/xtrm-dev/xtrm/work/issues/XTRM-302"] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createAppRouter({ adapters: { ...fixtureAdapters, substrate: createFixtureSubstrate() }, history, queryClient });
+    render(<RouterProvider router={router} />);
+    // XTRM-302 is the fixture's imported contract: its sections sit inside Problem, so the banner renders.
+    fireEvent.click(await screen.findByRole("button", { name: "Review mapping" }));
+    const popup = (await screen.findByRole("dialog", { name: /^Normalize XTRM-302 contract$/ })) as HTMLElement;
+    expect(popup.style.top).toBe("8vh");
+    expect(popup.style.maxHeight).toBe("84vh");
+    expect(popup.style.width).toContain("760px");
   });
 
   it("renders the command palette with its label and its hint footer", () => {
