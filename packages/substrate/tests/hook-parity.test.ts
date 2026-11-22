@@ -195,11 +195,22 @@ describe("§54 hook parity", () => {
     );
     // XTRM-969: a closed binding is not a missing claim, and neither gate may
     // answer a closed issue with "claim it". Both name the ref, the state and
-    // the command that rebinds — the two surfaces must not diverge here.
-    for (const [name, gate] of [
-      ["Pi", (st: Record<string, unknown>) => piEditGate(st as Parameters<typeof piEditGate>[0])],
-      ["Claude", (st: Record<string, unknown>) => evaluateEditState(st as Parameters<typeof evaluateEditState>[0])],
-    ] as const) {
+    // the command that rebinds — the two surfaces must not diverge here. One
+    // structural input type covers both gates, so the loop needs no cast.
+    type GateInput = {
+      issueRef: string | null;
+      lifecycleState?: "done" | "cancelled" | "archived" | null;
+      displayRef?: string | null;
+      claim?: { holder: string; activationId: string | null } | null;
+      claimed?: boolean;
+      holder?: string | null;
+      activationId?: string | null;
+    };
+    const gates: Array<[string, (state: GateInput) => { allow: boolean; reason?: string | null }]> = [
+      ["Pi", piEditGate],
+      ["Claude", evaluateEditState],
+    ];
+    for (const [name, gate] of gates) {
       const dead = gate({ issueRef: s.issueId, displayRef: s.humanRef, lifecycleState: "done", claimed: false });
       assert.equal(dead.allow, false, `${name} gate refuses a closed binding without a claim`);
       const reason = dead.reason ?? "";
