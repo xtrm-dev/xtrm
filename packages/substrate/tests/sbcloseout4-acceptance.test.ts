@@ -838,10 +838,17 @@ function cardinalityShortcuts(source: string): string[] {
     line
       .replace(/\/\*[\s\S]*?\*\//g, " ")
       .replace(/^\s*(\/\/|\*|#|<!--).*$/, " ");
+  // XTRM-967: a comparison whose two arms are string literals chooses a WORD
+  // ("blocker" : "blockers"), never an element, so it infers nothing about
+  // database cardinality. Exempting it keeps the guard pointed at the
+  // inference it was written for instead of at English pluralisation — a rule
+  // that forbids `n === 1 ? "a" : "b"` pushes authors toward worse wording, not
+  // toward safer code.
+  const picksAWord = (line: string): boolean => /\?\s*"[^"]*"\s*:\s*"[^"]*"/.test(line);
   return source
     .split("\n")
     .map((line) => withoutComments(line).replace(/\s+/g, " ").trim())
-    .filter((line) => line !== "" && /\b(length|size|count)\s*===?\s*1\b/.test(line));
+    .filter((line) => line !== "" && !picksAWord(line) && /\b(length|size|count)\s*===?\s*1\b/.test(line));
 }
 
 describe("A1 negative-control guard: no global-cardinality shortcut", () => {
@@ -861,5 +868,8 @@ describe("A1 negative-control guard: no global-cardinality shortcut", () => {
     assert.equal(cardinalityShortcuts("// projects.length === 1 is rejected (ADR §5)").length, 0);
     assert.equal(cardinalityShortcuts("/* projects.length === 1 is rejected */").length, 0);
     assert.equal(cardinalityShortcuts("const two = projects.length === 2;").length, 0);
+    // A word choice is not a cardinality pick; an element pick still is.
+    assert.equal(cardinalityShortcuts('const one = rows.length === 1 ? "row" : "rows";').length, 0);
+    assert.equal(cardinalityShortcuts("const only = rows.size == 1 ? rows[0] : null;").length, 1);
   });
 });
