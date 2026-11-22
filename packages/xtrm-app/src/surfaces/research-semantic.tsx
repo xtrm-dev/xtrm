@@ -44,11 +44,20 @@ function SemanticSection({ title, children, hint }: { title: string; hint?: stri
   );
 }
 
-function Bullets({ items, tone = "ink-muted" }: { items: string[]; tone?: string }) {
+/**
+ * XTRM-949: the tone is a complete class, looked up rather than spliced. The previous form built
+ * `text-${…}` inside a template, so neither `text-ink` nor `text-ink-muted` appeared anywhere in the
+ * source and the list rendered only because another element emitted the same utility. A map is used
+ * instead of a ternary because a ternary's branches are picked up by a source scan only when it
+ * happens to match — the map is a value the gate can read.
+ */
+const TONE_CLASS = { "ink-muted": "text-ink-muted", ink: "text-ink" } as const;
+
+function Bullets({ items, tone = "ink-muted" }: { items: string[]; tone?: keyof typeof TONE_CLASS }) {
   return (
     <ul className="ml-5 list-disc space-y-1">
       {items.map((item, i) => (
-        <li key={i} className={`text-${tone === "ink-muted" ? "ink-muted" : "ink"} leading-snug`}>
+        <li key={i} className={`${TONE_CLASS[tone]} leading-snug`}>
           {item}
         </li>
       ))}
