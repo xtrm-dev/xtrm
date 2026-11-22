@@ -141,9 +141,13 @@ sb provenance attach <ref> pr <owner/repo#n|url|#n> [--receipt <id>]
   names the Issue (`mentioned`, with a `subject_receipt_missing` finding on the suffix
   route and `trailer_receipt_missing` on the trailer route). A trailer always wins when
   both are present. That difference lives in the link's relation and its finding, **not**
-  in its `source`: both routes are stored `source: "trailer"` because the source
-  vocabulary describes how the link was observed, and `mentioned` already tells you what it
-  is worth. A receipt the commit carries is judged the same way on either route, so the
+  in its `source`: both routes are stored `source: "trailer"`, and that is an
+  acknowledged inaccuracy rather than a rule. `source` records the observation route —
+  `provenance`, `explicit`, `trailer`, `title`, `branch`, `prose`, `backfill` — so on the
+  suffix route it names a trailer that was never seen. The route is deliberately not given
+  its own value because the column is `CHECK (source IN (…))`, so a new value is a schema
+  migration; read `relation` for what the link is worth, and the finding code for how it
+  was found. A receipt the commit carries is judged the same way on either route, so the
   finding codes are namespaced by route (`subject_receipt_ambiguous` vs
   `trailer_receipt_ambiguous`) and `receipt_stale_revision` is shared. A subject naming several
   Issues links the one it names and records `commit_multi_issue_named`; one naming several

@@ -333,11 +333,25 @@ export class PullRequestService {
           // cannot attest a delivery: the link is a mention, as a receipt-less
           // trailer already is, and no commit row is written. `LinkGateService`
           // then reports `gate_mentioned_only`, measured with and without the row
-          // (XTRM-953). This is the one limit of the suffix route and it is
+          // (XTRM-953). This is the limit on what the route attests, and it is
           // written here rather than implied: `xt` writes the issue in the
           // subject and no trailer, so on a merge-queue branch every commit
           // takes this branch and none of them can attest until it also carries
-          // a receipt.
+          // a receipt. No hook in this repository writes that trailer today: no
+          // `prepare-commit-msg` hook is installed, `core.hooksPath` is unset,
+          // and none of the last 200 commit bodies carries `XTRM-Receipt:`, so
+          // the cure is reachable by a person typing a receipt and by no commit
+          // this toolchain wrote.
+          //
+          // The route has one more limit, on the same evidence: a link observed
+          // in a subject is stored `source: "trailer"`, so `source` alone cannot
+          // tell the two apart — and unlike the attestation limit above, this one
+          // is a plain inaccuracy, not a description of worth. `source` names the
+          // observation route, so a subject link claims a trailer was seen. The
+          // route is deliberately not given its own value because the column is
+          // `CHECK (source IN (…))` and a new value is a schema migration; the
+          // distinction is carried by `relation` and by the namespaced finding
+          // codes, never by `source` on its own.
           if (trailers.receipts.length === 0) {
             if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
             // A finding is an event, and `links check` re-derives it from the
