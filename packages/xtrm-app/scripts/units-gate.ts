@@ -12,6 +12,14 @@
 // the same defect one level down, so the reconciler measures with `offenders()` and `parkDrift()`
 // below, and prints the numbers this module reports. Two instruments reading the same files are not
 // evidence of each other; one instrument read twice is.
+//
+// XTRM-986: the content-sized grids are the one place the label sweep moved a visible pixel without a
+// named failing case. `src/issues/IssueJournal.tsx:86` floors on `PART_LABEL_COLUMN` and
+// `src/agent/Activity.tsx:124` on `SIDEBAR_LABEL_COLUMN`; those floors rose 6rem → 6.5rem and
+// 4rem → 4.5rem, which is +8px per grid, and it is visible only when every key in a block is shorter
+// than the floor (measured during XTRM-971). It is recorded here because a merged PR body is not a
+// place a later reader of this file looks. The limit those grids carry is the `label-width-constant`
+// hole below: the gate proves a step is a constant, not that the constant is wide enough.
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -102,23 +110,63 @@ export const PARKS: Record<string, Park> = {
  * of the #466 review are not closable by a source scan, so they are named here and proved elsewhere;
  * the PR that added this list carries the mutation matrix that shows which assertion catches what.
  */
-export const HOLES = [
+export type Hole = {
+  id: string;
+  owner: string;
+  /** One sentence naming what the gate cannot see, falsifiable by the next reader. */
+  why: string;
+  /**
+   * How the limit fails, in the two shapes this gate can have.
+   *
+   * `unjudged-form` — no rule matches the example, so the gate reads the line and passes it.
+   * `outside-walk` — the example is a genuine offence that no rule ever reads, because `walk` never
+   * reaches its file. Both are asserted in `units.test.ts`, so neither shape rests on prose.
+   */
+  kind: "unjudged-form" | "outside-walk";
+  /** One line of source the gate would have to judge and does not. */
+  example: string;
+  /** For `outside-walk`, where the example lives today, so a reader can check the tree. */
+  examplePath?: string;
+};
+
+export const HOLES: readonly Hole[] = [
   {
     id: "prop-path",
     owner: "XTRM-951",
+    kind: "unjudged-form",
+    example: 'expect(value.className).toBe("text-xs"); // passes whether the step was honoured or the default matched it',
     why: "a rendered assertion cannot tell 'the prop was honoured' from 'the prop happened to render the same thing' (measured on #473: Fields ignoring `size` toward `xs` passes). The gate proves values at rendered states; which states are distinguished is a property of the mutation set, exercised in the spec that asserts the class and the measurement, not here.",
   },
   {
     id: "structural-suppression",
     owner: "XTRM-951",
+    kind: "unjudged-form",
+    example: 'const Card = ({ children }: { children: ReactNode }) => <section className="border-t">{children}</section>;',
     why: "a wrapper whose single child is always first element silently defeats `border-t`/`first:border-t-0`, and no source scan sees the rendered sibling relation. It is asserted where it renders (the settings/e2e geometry assertions), never here.",
   },
   {
     id: "constant-indirection",
     owner: "XTRM-949",
-    why: "`${input} resize-y` is a whole interpolated value as written, so the glued-class rule spares it; whether `input` expands to a fragment of a class is not visible at the call site. Resolving a constant's initializer across a module is a different instrument and is not attempted here, so a class assembled through a named constant is unclosed by this gate and belongs to review instead.",
+    kind: "unjudged-form",
+    example: '<textarea className={`${input} resize-y`} />',
+    why: "`${input} resize-y` is a whole interpolated value as written, so the glued-class rule spares it; whether `input` expands to a fragment of a class is not visible at the call site (`src/issues/NewIssueDialog.tsx:64`, where `input` is a module-level class string). Resolving a constant's initializer across a module is a different instrument and is not attempted here, so a class assembled through a named constant is unclosed by this gate and belongs to review instead.",
   },
-] as const;
+  {
+    id: "agent-outside-the-walk",
+    owner: "XTRM-620",
+    kind: "outside-walk",
+    examplePath: join("src", "agent", "AgentSidebar.tsx"),
+    example: '<span className="text-[0.68rem]">{tokens}</span>',
+    why: "`src/agent` is in `OUT_OF_SCOPE`, so the rem ladder is not enforced there: 38 offences stand in that tree today (`text-[0.65rem]`, `text-[0.68rem]`, `text-[0.7rem]` and `text-[0.92rem]` across Activity, AgentSidebar and AgentSurface), and the operator's 12px root renders every one of them too large. The exclusion has an owner (the Agent epic) and a cost that is now measured rather than assumed; moving the tree inside the walk is that epic's change, not a rule's.",
+  },
+  {
+    id: "label-width-constant",
+    owner: "XTRM-940",
+    kind: "unjudged-form",
+    example: '<Fields rows={rows} labelWidth={PAGE_LABEL_COLUMN} />',
+    why: "`labelWidth={PAGE_LABEL_COLUMN}` is the intended form and passes by design: a step is fitted by measurement — the widest label plus a gutter at the surface's minimum width — and a regex cannot hold an arithmetic result. What the gate proves is that the constant exists and is not restated as a literal; what it cannot prove is that the constant is wide enough for the labels it now holds, which XTRM-940 records as the ladder.",
+  },
+];
 
 /** Every rem value the type scale actually defines (styles.css §typography). */
 export const REM_TOKENS = ["0.625rem", "0.72rem", "0.8125rem", "0.875rem", "1.125rem", "1.25rem", "1.5rem", "2rem"];

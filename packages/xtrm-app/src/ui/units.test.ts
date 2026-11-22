@@ -475,4 +475,29 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       expect(hole.why.length, `hole ${hole.id} does not say what it cannot prove`).toBeGreaterThan(80);
     }
   });
+
+  it("gives every hole an example the gate demonstrably does not judge", () => {
+    // An example is what makes a hole falsifiable: a reader can paste it into the tree and watch the
+    // gate pass, which is the difference between a stated limit and a claim of coverage.
+    for (const hole of HOLES) {
+      expect(hole.example.length, `hole ${hole.id} carries no example`).toBeGreaterThan(12);
+    }
+
+    // Pin each stated limit against the gate's own code, so an entry cannot drift into prose.
+    for (const hole of HOLES.filter((entry) => entry.kind === "unjudged-form")) {
+      // Fresh, non-global copies: a /g rule carries `lastIndex` between calls, and one shared pattern
+      // would judge the second example from the first one's position.
+      const hits = RULES.filter((rule) => new RegExp(rule.pattern.source, rule.pattern.flags.replace("g", "")).test(hole.example));
+      expect(hits.map((rule) => rule.id), `hole ${hole.id} claims no rule reads its example, but ${hits.length} does`).toEqual([]);
+      expect(gluedClassOffences(hole.example), `hole ${hole.id} claims the scanner cannot see its example`).toEqual([]);
+    }
+
+    for (const hole of HOLES.filter((entry) => entry.kind === "outside-walk")) {
+      // The example must be a REAL offence, otherwise the entry would describe an empty tree…
+      expect(offenders(hole.examplePath!).length, `hole ${hole.id} names a file with nothing to see`).toBeGreaterThan(0);
+      // …and the walk must not read it, which is the whole limit.
+      expect(walk(ROOT).filter((file) => file.startsWith(join("src", "agent") + "/"))).toEqual([]);
+      expect(inScope(hole.examplePath!)).toBe(false);
+    }
+  });
 });
