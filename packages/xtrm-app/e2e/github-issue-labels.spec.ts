@@ -45,17 +45,51 @@ const FONT_METRIC = "Figtree Variable";
  */
 const MIN_SHORT_SLACK = 20;
 
+/** How many times the face is requested before the guard calls it absent. */
+const FONT_ATTEMPTS = 2;
+
+/**
+ * Resolve the text metric the geometry below depends on, or fail saying which attempt gave up.
+ *
+ * `document.fonts.ready` alone is not enough: it resolves when the loading queue settles, and the
+ * queue settles on a host that 404s the woff2 as well as on one that serves it. `fonts.status` has the
+ * same blind spot — it read `"loaded"` in both states when this was measured. `fonts.load` issues the
+ * request itself, so asking it separates "not requested yet" from "absent", and `check` then reports
+ * which of those the face landed in. The geometry below is a TEXT metric, so the fallback stack
+ * silently shifts the chip by the 2px that produced the XTRM-966 disagreement: a host that never
+ * loaded the face must be red, and the red must say so.
+ *
+ * The retry is a RELOAD, not a second call. A face that failed to load is memoised for the life of the
+ * document, so `fonts.load` on the same page issues no second request at all — measured: with the first
+ * woff2 aborted and later requests allowed, two consecutive `fonts.load` calls both reported
+ * `NetworkError` while the request log showed exactly one woff2 request. A fresh document is what makes
+ * the retry a retry; measured at 2 requests and `check === true` after the reload.
+ */
+async function resolveFontMetric(page: Page) {
+  let resolved = false;
+  let attempts = 0;
+  while (!resolved && attempts < FONT_ATTEMPTS) {
+    attempts += 1;
+    if (attempts > 1) {
+      await page.reload();
+      await expect(page.locator('[data-testid="gh-issue-row"]').first()).toBeVisible();
+    }
+    await page.evaluate(() => document.fonts.ready);
+    // A rejection is a failed attempt, not an exception that skips the loop: `fonts.load` rejects on a
+    // request that failed in the network layer, which is the ordinary shape of the host flake.
+    await page.evaluate((f: string) => document.fonts.load(`1em "${f}"`).then(() => true, () => false), FONT_METRIC);
+    resolved = await page.evaluate((f: string) => document.fonts.check(`1em "${f}"`), FONT_METRIC);
+  }
+  expect(
+    resolved,
+    `${FONT_METRIC} did not resolve on attempt ${attempts} of ${FONT_ATTEMPTS} (the face was requested, the page was reloaded, and it reported absent again), so the chip metrics below are the fallback stack: the numbers this file asserts are meaningless`,
+  ).toBe(true);
+}
+
 async function openGithubIssues(page: Page) {
   await page.goto(`/rep/${REPO}/code/issues`);
   await expect(page.locator('[data-testid="gh-issue-row"]').first()).toBeVisible();
-  // The geometry below is a TEXT metric, so it is only meaningful once the webfont has resolved.
-  // `document.fonts.ready` waits for the load; the check then fails loudly instead of silently
-  // measuring the fallback stack, which is the 2px shift that produced the disagreement (XTRM-966).
-  await page.evaluate(() => document.fonts.ready);
-  expect(
-    await page.evaluate((f: string) => document.fonts.check(`1em "${f}"`), FONT_METRIC),
-    `${FONT_METRIC} did not resolve, so the chip metrics below are the fallback stack: the numbers this file asserts are meaningless`,
-  ).toBe(true);
+  await resolveFontMetric(page);
 }
 
 /** Replace the first row's labels with `labels`, reusing the chip's own classes and attributes. */
