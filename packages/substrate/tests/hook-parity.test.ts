@@ -220,6 +220,13 @@ describe("§54 hook parity", () => {
       assert.match(reason, /sb issue claim/, `${name} gate names the command that rebinds`);
       const claimedDead = gate({ issueRef: s.issueId, displayRef: s.humanRef, lifecycleState: "done", claim: { holder: "op", activationId: null }, claimed: true, holder: "op" });
       assert.equal(claimedDead.allow, false, `${name} gate: a live claim cannot authorise a closed issue`);
+      // No human ref supplied: the machine id must not become the message.
+      const bare = gate({ issueRef: s.issueId, lifecycleState: "done", claimed: false });
+      const bareReason = bare.reason ?? "";
+      assert.equal(bare.allow, false, `${name} gate still refuses a closed binding with no display ref`);
+      assert.doesNotMatch(bareReason, /iss_/, `${name} gate: no machine id when the human ref is unknown`);
+      assert.match(bareReason, /\bdone\b/, `${name} gate: the state still carries the meaning`);
+      assert.match(bareReason, /sb issue claim/, `${name} gate: the remedy survives a missing ref`);
     }
     const cont = piStop({ issueRef: s.humanRef, claimed: true, holder: "op", checkpointsSinceClaim: 0, blockers: 1, handoffs: 0 });
     assert.equal(cont.needsCheckpoint, true);

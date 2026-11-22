@@ -13,6 +13,7 @@ import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { openBacking, type Backing } from "../integrations/pi/backing.ts";
 import {
   SessionBindings,
+  deadBindingReason,
   decidePiEditCall,
   resumeForSession,
   runBeforeCompact,
@@ -304,6 +305,14 @@ describe("edit-gate binding over a closed issue", () => {
       svc.close();
       await backing.close();
     }
+  });
+
+  it("never prints a machine id in place of a reference, even with no human ref", () => {
+    const reason = deadBindingReason({ issueRef: "iss_01a2027a-0000-7000-8000-000000000000", lifecycleState: "done" });
+    assert.ok(reason, "a closed binding is refused");
+    assert.doesNotMatch(reason, /iss_/, "the machine id never reaches the operator");
+    assert.match(reason, /\bdone\b/, "the state is named instead");
+    assert.match(reason, /sb issue claim/, "the remedy still names the command");
   });
 });
 

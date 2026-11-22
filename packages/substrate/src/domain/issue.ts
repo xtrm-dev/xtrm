@@ -10,6 +10,12 @@ export type LifecycleState = (typeof LIFECYCLE_STATES)[number];
 
 export const TERMINAL_STATES: readonly LifecycleState[] = ["done", "cancelled", "archived"];
 
+// A store-assigned id (`iss_…`). Never an operator-facing reference: a message
+// that shows one is telling the reader an identifier it cannot use (XTRM-969).
+export function isMachineIssueId(ref: string | null | undefined): boolean {
+  return typeof ref === "string" && ref.startsWith("iss_");
+}
+
 export interface Project {
   id: string;
   prefix: string;

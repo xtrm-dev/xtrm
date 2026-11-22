@@ -13,7 +13,7 @@
 import { discoverIssueRef, openHandles } from "./runtime.ts";
 import { armPipeDrain } from "../write-and-exit.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
-import { TERMINAL_STATES, type LifecycleState } from "../../src/domain/issue.ts";
+import { TERMINAL_STATES, isMachineIssueId, type LifecycleState } from "../../src/domain/issue.ts";
 
 export interface EditGateInput {
   tool_name?: string;
@@ -53,18 +53,23 @@ export function evaluateEditState(state: {
   displayRef?: string | null;
 }): EditGateResult {
   if (!state.issueRef) return { allow: true, issueRef: null, reason: "no bound issue; nothing to gate" };
-  const ref = state.displayRef ?? state.issueRef;
+  const ref = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "this issue" : state.issueRef);
   // A closed issue authorises nothing, and the remedy is not a claim on it:
   // that claim is refused as terminal, which is how a lane gets pushed into
   // claiming unrelated work just to move the binding.
   if (state.lifecycleState && TERMINAL_STATES.includes(state.lifecycleState)) {
+    // Never substitute a machine id for a reference the operator can use.
+    const named = state.displayRef ?? (isMachineIssueId(state.issueRef) ? null : state.issueRef);
+    const subject = named
+      ? `the bound issue ${named} is ${state.lifecycleState}`
+      : `the bound issue is ${state.lifecycleState}`;
     return {
       allow: false,
       issueRef: state.issueRef,
       reason:
-        `the bound issue ${ref} is ${state.lifecycleState}: no write is authorised under a closed issue. ` +
-        `Bind to the issue this checkout is working on — \`sb issue claim <ref> --holder <name>\` rebinds it — ` +
-        `or stop here: the work you finished stays closed.`,
+        `${subject}: no write is authorised under a closed issue. ` +
+        `Bind to the issue this checkout is working on — \`sb issue claim ${named ?? "<ref>"} --holder <name>\` ` +
+        `rebinds it — or stop here: the work you finished stays closed.`,
     };
   }
   const claim = state.claim ?? null;
