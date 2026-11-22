@@ -69,6 +69,10 @@ describe("GitHub Issues surface", () => {
     expect(within(drawer).getAllByText("bug").length).toBeGreaterThan(0);
     // The drawer names the kind so a GitHub issue is never mistaken for an XTRM contract.
     expect(within(drawer).getByTitle("GitHub issue")).toBeTruthy();
+    // XTRM-990: the header affordance is the ghost pill, the same form the PR drawer uses.
+    const pill = within(drawer).getByTestId("github-pill");
+    expect(pill.className).toContain("hover:bg-hover");
+    expect(pill.className).not.toContain("bg-github");
     expect(router.state.location.search).toMatchObject({ inspect: "gh-issue:xtrm-dev/xtrm#41" });
   });
 
@@ -137,6 +141,14 @@ describe("Repository content surface", () => {
     renderAt(`${repo}/code/content`);
     expect(await screen.findByRole("region", { name: "Repository content" })).toBeTruthy();
     expect(await screen.findByText("Agent-first operating environment.")).toBeTruthy();
+
+    // XTRM-990: the Reports group is the shared SectionHeader at the list inset, not a bare span, so
+    // its box matches the list Row it sits above. The count is the header's own slot, beside the title.
+    const reports = screen.getByRole("heading", { name: "Reports", level: 3 });
+    const box = reports.parentElement!;
+    expect(box.className).toContain("h-8");
+    expect(box.className).toContain("px-3");
+    expect(reports.nextElementSibling!.textContent).toBe("2");
 
     fireEvent.click(screen.getByText("CHANGELOG"));
     expect(await screen.findByText(/GitHub Issues, Releases and Repository content surfaces/)).toBeTruthy();

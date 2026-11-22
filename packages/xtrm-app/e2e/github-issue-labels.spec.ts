@@ -193,6 +193,27 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
+/**
+ * XTRM-990: the issue drawer's `Open on GitHub` pill is the ghost form, the one the PR drawer carries
+ * (`PullPanel.tsx`). jsdom can only read the class string, so the rested fill is asserted in a browser,
+ * as `inspector-github.spec.ts` does for the pull drawer. The assertion is that it has no fill and
+ * takes one on hover, not the exact hover token: the token is a theme value.
+ */
+test("the issue drawer's GitHub pill is the ghost form", async ({ page }) => {
+  await page.goto(`/rep/${REPO}/code/issues`);
+  const row = page.locator('[data-testid="gh-issue-row"]').filter({ hasText: "Drawer keyboard trap" });
+  await row.locator("span", { hasText: "Drawer keyboard trap when maximized" }).first().click();
+  const drawer = page.getByTestId("inspector-drawer");
+  await expect(drawer.getByTestId("github-issue-header")).toBeVisible();
+  const pill = drawer.getByTestId("github-pill");
+  await expect(pill).toContainText("Open on GitHub");
+  expect(await pill.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  await pill.hover();
+  await expect
+    .poll(() => pill.evaluate((el) => getComputedStyle(el).backgroundColor), { timeout: 2000 })
+    .not.toBe("rgba(0, 0, 0, 0)");
+});
+
 test("the fixture's own labels still render", async ({ page }) => {
   await openGithubIssues(page);
   const row = page.locator('[data-testid="gh-issue-row"]').filter({ hasText: "Drawer keyboard trap" });

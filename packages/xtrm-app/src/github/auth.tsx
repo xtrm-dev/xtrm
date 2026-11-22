@@ -15,10 +15,8 @@ import { useShell } from "../shell/context.tsx";
 import { Fields, InspectorSection } from "../ui/drawer.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, LoadingState, StatusDot, cx, type Tone } from "../ui/primitives.tsx";
-
-const actionButton =
-  "flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border-muted px-2 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:border-border-strong disabled:opacity-40";
+import { EmptyState, LoadingState, StatusDot, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx, type Tone } from "../ui/primitives.tsx";
+import { ToolbarButton } from "../ui/toolbar.tsx";
 
 // --- shared bits ---------------------------------------------------------------
 
@@ -65,9 +63,9 @@ function Notice({
 function SettingsLink({ children }: { children: React.ReactNode }) {
   const go = useGo();
   return (
-    <button type="button" onClick={() => go("/settings")} className={cx(actionButton, "border-0 px-1 text-accent-ink hover:bg-transparent hover:underline")}>
+    <ToolbarButton onClick={() => go("/settings")} className="shrink-0">
       {children}
-    </button>
+    </ToolbarButton>
   );
 }
 
@@ -94,9 +92,7 @@ function AuthNotice({ status, onSignin }: { status: GithubAuthStatus; onSignin: 
           <span className="text-ink-faint">
             {status.auth_source === "shared" ? "Sign in to attribute actions to yourself." : "Pull requests and activity need a GitHub sign-in."}
           </span>
-          <button type="button" onClick={onSignin} className={actionButton}>
-            Sign in with GitHub
-          </button>
+          <ToolbarButton onClick={onSignin}>Sign in with GitHub</ToolbarButton>
         </Notice>
       );
     case "pending":
@@ -104,27 +100,21 @@ function AuthNotice({ status, onSignin }: { status: GithubAuthStatus; onSignin: 
         <Notice tone="active" label="GitHub sign-in in progress" state="pending">
           <span className="text-ink">Sign-in in progress.</span>
           <span className="text-ink-faint">Enter the code at github.com/login/device to finish.</span>
-          <button type="button" onClick={onSignin} className={actionButton}>
-            Enter code
-          </button>
+          <ToolbarButton onClick={onSignin}>Enter code</ToolbarButton>
         </Notice>
       );
     case "expired":
       return (
         <Notice tone="accent" label="GitHub sign-in expired" state="expired">
           <span className="text-ink">GitHub sign-in expired.</span>
-          <button type="button" onClick={onSignin} className={actionButton}>
-            Sign in again
-          </button>
+          <ToolbarButton onClick={onSignin}>Sign in again</ToolbarButton>
         </Notice>
       );
     case "error":
       return (
         <Notice tone="danger" label="GitHub sign-in error" state="error" alert>
           <span className="text-ink">GitHub sign-in failed{status.error ? `: ${status.error.message}` : "."}</span>
-          <button type="button" onClick={onSignin} className={actionButton}>
-            Try again
-          </button>
+          <ToolbarButton onClick={onSignin}>Try again</ToolbarButton>
         </Notice>
       );
   }
@@ -139,7 +129,7 @@ function InstallNotice({ repo }: { repo: string }) {
   return (
     <Notice tone="accent" label="GitHub App not installed on this repository" state="not-installed">
       <span className="text-ink">xtrm-console is not installed on {repo}.</span>
-      <a href={installUrl} target="_blank" rel="noreferrer" className={actionButton}>
+      <a href={installUrl} target="_blank" rel="noreferrer" className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST, "shrink-0")}>
         Install xtrm-console <Icon name="external" size="xs" />
       </a>
       <SettingsLink>Open Settings</SettingsLink>
@@ -269,9 +259,9 @@ function PendingView({ status }: { status: GithubAuthStatus }) {
             <span className="sr-only">Device code: </span>
             {device.user_code}
           </div>
-          <button type="button" onClick={() => void copy()} className={actionButton} aria-label="Copy device code">
-            <Icon name="copy" size="xs" /> Copy
-          </button>
+          <ToolbarButton onClick={() => void copy()} aria-label="Copy device code" icon="copy">
+            Copy
+          </ToolbarButton>
         </div>
         <span role="status" className="text-xs text-ink-faint">
           {copied ? "Code copied." : copyFailed ? "Copy failed — select the code manually." : ""}
@@ -299,12 +289,10 @@ function PendingView({ status }: { status: GithubAuthStatus }) {
           </p>
         )}
         <div className="mt-2 flex items-center gap-2">
-          <button type="button" onClick={() => void auth.refetch()} className={actionButton}>
-            Check now
-          </button>
-          <button type="button" onClick={() => cancel.mutate()} disabled={cancel.isPending} className={actionButton}>
+          <ToolbarButton onClick={() => void auth.refetch()}>Check now</ToolbarButton>
+          <ToolbarButton onClick={() => cancel.mutate()} disabled={cancel.isPending} className="disabled:opacity-40">
             Cancel
-          </button>
+          </ToolbarButton>
         </div>
       </InspectorSection>
     </>
@@ -325,9 +313,9 @@ function StartView({ title, body }: { title: string; body: string }) {
       </div>
       <InspectorSection title="Device sign-in">
         <div>
-          <button type="button" onClick={() => start.mutate()} disabled={start.isPending} className={actionButton}>
+          <ToolbarButton onClick={() => start.mutate()} disabled={start.isPending} className="disabled:opacity-40">
             {start.isPending ? "Starting…" : "Sign in with GitHub"}
-          </button>
+          </ToolbarButton>
         </div>
         <p className="text-xs text-ink-faint">GitHub shows a code here; entering it on github.com/login/device links this workspace to your account.</p>
       </InspectorSection>
@@ -375,9 +363,7 @@ export function DevicePanel() {
         </InspectorSection>
         <InspectorSection title="Done">
           <div>
-            <button type="button" onClick={() => dispatch({ type: "drawer/close" })} className={actionButton}>
-              Close
-            </button>
+            <ToolbarButton onClick={() => dispatch({ type: "drawer/close" })}>Close</ToolbarButton>
           </div>
         </InspectorSection>
       </>
@@ -399,12 +385,10 @@ export function DevicePanel() {
         </div>
         <InspectorSection title="Retry">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => start.mutate()} disabled={start.isPending} className={actionButton}>
+            <ToolbarButton onClick={() => start.mutate()} disabled={start.isPending} className="disabled:opacity-40">
               {start.isPending ? "Starting…" : "Try again"}
-            </button>
-            <button type="button" onClick={() => void query.refetch()} className={actionButton}>
-              Check status
-            </button>
+            </ToolbarButton>
+            <ToolbarButton onClick={() => void query.refetch()}>Check status</ToolbarButton>
           </div>
         </InspectorSection>
       </>

@@ -190,7 +190,11 @@ describe("inline GitHub notices", () => {
 
   it("asks for sign-in when signed out with no shared token", async () => {
     renderAt(pulls, { state: "signed_out", auth_source: "none" });
-    expect(await screen.findByText("Sign in to load GitHub data.")).toBeTruthy();
+    const notice = (await screen.findByText("Sign in to load GitHub data.")).closest("[data-testid=github-notice]")!;
+    // The top bar carries the same label, so the assertion is scoped to the notice it is about.
+    const signin = within(notice as HTMLElement).getByRole("button", { name: "Sign in with GitHub" });
+    expect(signin.className).toContain("h-7");
+    expect(signin.className).not.toContain("border-border-muted");
   });
 
   it("asks to sign in again when expired", async () => {
@@ -214,12 +218,35 @@ describe("inline GitHub notices", () => {
     expect(el.dataset.state).toBe("not-installed");
     const install = within(el).getByRole("link", { name: /Install xtrm-console/ });
     expect(install.getAttribute("href")).toContain("github.com/apps/xtrm-console/installations/new");
+    // XTRM-990: notice controls are the shared toolbar control, not a private bordered button. The
+    // install link is an anchor, so it takes the control classes rather than ToolbarButton itself.
+    expect(install.className).toContain("h-7");
+    expect(install.className).not.toContain("border-border-muted");
+    expect(within(el).getByRole("button", { name: "Open Settings" }).className).toContain("h-7");
   });
 
   it("stays silent when signed in with the app installed", async () => {
     renderAtAuth(pulls, createFixtureGithubAuth());
     await screen.findByText("feat(XTRM-301): rail keyboard model v2");
     expect(notices()).toHaveLength(0);
+  });
+});
+
+describe("one control language in the auth surfaces", () => {
+  // The local bordered button XTRM-937 removed from Settings was still here (XTRM-990); the source is
+  // the only place a reintroduced copy would hide, since both styles render as a button in the DOM.
+  it("keeps no private action button in this file", () => {
+    expect(authUiSource as string).not.toContain("const actionButton");
+  });
+
+  it("renders the device panel controls through ToolbarButton", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/code/pulls?inspect=github-auth:signin", PENDING);
+    const el = await screen.findByTestId("inspector-drawer");
+    // The drawer settles only once the pending status arrives; before that it renders a skeleton.
+    expect(await within(el).findByText("WDJC-8F39")).toBeTruthy();
+    for (const name of ["Copy device code", "Check now", "Cancel"]) {
+      expect(within(el).getByRole("button", { name }).className).toContain("h-7");
+    }
   });
 });
 
