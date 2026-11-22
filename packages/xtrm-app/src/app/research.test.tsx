@@ -826,7 +826,22 @@ describe("Research page outlines", () => {
 
   it("leaves the same route heading-free on clean data", async () => {
     renderWithResearch("/research/experiments", { listRuns: cleanRuns });
-    await screen.findByText("dup-detect-baseline");
+    // The definition alone proves the registry read, not the runs read: with a runs list that never
+    // resolves, rejects, or returns [], this row still renders and the heading count is still 0, so
+    // waiting on it passed on three broken reads. The anchor is the count beside the definition — it
+    // is 0 runs until rows arrive, so a non-zero count is proof that this state (clean rows, no
+    // unreadable run) was actually reached rather than assumed.
+    const definition = await screen.findByLabelText("dup-detect-baseline");
+    expect(definition).toBeTruthy();
+    await waitFor(
+      () => {
+        // Re-queried on every attempt: the row is re-rendered when the runs read settles, and a node
+        // captured before that can be the stale one still carrying "0 runs".
+        const count = within(screen.getByLabelText("dup-detect-baseline")).getByText(/^\d+ runs?$/);
+        expect(count.textContent, "clean data is reached through runs that rendered, not through a runs list that is still pending or empty").toMatch(/^[1-9]\d* run/);
+      },
+      { timeout: 3000 },
+    );
     // The literal is 0, not "only the error heading": the other state is asserted above, and an
     // agreement between two routes can be satisfied by a page that is uniformly wrong. The precedent
     // is named so the next person knows what to amend rather than what to add.
