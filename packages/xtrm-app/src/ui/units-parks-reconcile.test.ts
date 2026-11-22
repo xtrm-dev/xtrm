@@ -256,6 +256,9 @@ describe("the reconciler's exit status, as a resolver reads it", () => {
   const withStalePark = `${gateSource.replace(staleAnchor, `  [join("src", "issues", "meta.tsx")]: { owner: "XTRM-943", offences: [{ rule: "arbitrary-px-spacing", match: "gap-[2px]" }] },
   [join("src", "ui", "toolbar.tsx")]: { owner: "XTRM-000", offences: [{ rule: "offscale-rem-font", match: "text-[0.62rem]" }] },
 };`)}`;
+  const stalePark = `  [join("src", "ui", "toolbar.tsx")]: { owner: "XTRM-000", offences: [{ rule: "offscale-rem-font", match: "text-[0.62rem]" }] },`;
+  const parksBlock = /export const PARKS: Record<string, Park> = \{[\s\S]*?\n\};/;
+  const metaPark = `  [join("src", "issues", "meta.tsx")]: { owner: "XTRM-943", offences: [{ rule: "arbitrary-px-spacing", match: "gap-[2px]" }] },`;
 
   it("exits 1 on an unconflicted copy holding a park its file does not measure", () => {
     // The regression this pins: composing the status from `drift` alone reports "unchanged" here,
@@ -279,13 +282,34 @@ describe("the reconciler's exit status, as a resolver reads it", () => {
   it("unions a conflict by the greater multiplicity, not the sum", () => {
     // Both sides carry the same map. A sum would claim x2 of every offence, cap them at the
     // measurement, and exit 1 with `lowered` lines for a conflict that agrees with itself.
-    const twice = `<<<<<<< HEAD\n${gateSource}=======\n${gateSource}>>>>>>> stale/base\n`;
-    withCopy(twice, (file) => {
-      const done = runCli(["--file", file]);
+    //
+    // The subject is a probe file in a tree this test owns. It used to be the committed
+    // `PullRequestsBlock.tsx` park, which made this assertion fail the moment a slice paid that park
+    // to zero (XTRM-987 does exactly that): a test whose subject is the live park map re-imposes the
+    // coupling to committed state that the reconciler exists to remove.
+    const dir = mkdtempSync(join(tmpdir(), "x958-union-"));
+    try {
+      mkdirSync(join(dir, "scripts"), { recursive: true });
+      mkdirSync(join(dir, "src", "issues"), { recursive: true });
+      writeFileSync(
+        join(dir, "src", "issues", "probe.tsx"),
+        'export const A = () => <i className="text-[0.68rem]" />;\nexport const B = () => <i className="text-[0.68rem]" />;\n',
+        "utf8",
+      );
+      const probeParks = `export const PARKS: Record<string, Park> = {\n  [join("src", "issues", "probe.tsx")]: {\n    owner: "XTRM-000",\n    offences: [\n      { rule: "offscale-rem-font", match: "text-[0.68rem]" },\n      { rule: "offscale-rem-font", match: "text-[0.68rem]" },\n    ],\n  },\n};`;
+      const gate = gateSource.replace(parksBlock, probeParks);
+      expect(gate, "the probe map must replace the committed one, or the reader and the measurement disagree").not.toContain(metaPark);
+      writeFileSync(join(dir, "scripts", "units-gate.ts"), gate, "utf8");
+      // `--file` is a second copy: the reader stays the unconflicted gate, as a resolver keeps it.
+      const conflict = join(dir, "gate-conflict.ts");
+      writeFileSync(conflict, `<<<<<<< HEAD\n${gate}=======\n${gate}>>>>>>> stale/base\n`, "utf8");
+      const done = runCli(["--project-root", dir, "--file", conflict]);
       expect(done.stdout).not.toContain("lowered");
       expect(done.stdout).toContain("offscale-rem-font text-[0.68rem] x2 (measured 2)");
       expect(done.status, done.stdout + done.stderr).toBe(0);
-    });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("runs in the state it exists for: the project's own gate holds the markers", () => {
@@ -296,15 +320,16 @@ describe("the reconciler's exit status, as a resolver reads it", () => {
     try {
       mkdirSync(join(dir, "scripts"), { recursive: true });
       mkdirSync(join(dir, "src", "issues"), { recursive: true });
-      mkdirSync(join(dir, "src", "shell"), { recursive: true });
+      mkdirSync(join(dir, "src", "ui"), { recursive: true });
       writeFileSync(join(dir, "src", "issues", "meta.tsx"), 'export const A = () => <div className="gap-[2px]" />;\n', "utf8");
-      // The other two parked files must exist for the measurement to read them; empty, they measure
-      // zero, which is the ordinary "this tree paid them down" answer.
-      writeFileSync(join(dir, "src", "issues", "PullRequestsBlock.tsx"), "export const Empty = 1;\n", "utf8");
-      writeFileSync(join(dir, "src", "shell", "ContextSidebar.tsx"), "export const Empty = 1;\n", "utf8");
-      const ours = `  [join("src", "issues", "meta.tsx")]: { owner: "XTRM-943", offences: [{ rule: "arbitrary-px-spacing", match: "gap-[2px]" }] },`;
+      // The stale park this test pays to zero: its file exists and holds nothing, so the entry is
+      // dropped with the ordinary "measures zero" answer rather than a substitution message.
+      writeFileSync(join(dir, "src", "ui", "toolbar.tsx"), "export const Empty = 1;\n", "utf8");
+      const ours = metaPark;
       const theirs = ours.replace("gap-[2px]", "gap-[3px]");
-      const conflictedGate = gateSource.replace(ours, `<<<<<<< HEAD\n${ours}\n=======\n${theirs}\n>>>>>>> stale/base`);
+      const conflictedGate = gateSource
+        .replace(ours, `${ours}\n${stalePark}`)
+        .replace(ours, `<<<<<<< HEAD\n${ours}\n=======\n${theirs}\n>>>>>>> stale/base`);
       expect(conflictedGate).not.toEqual(gateSource);
       writeFileSync(join(dir, "scripts", "units-gate.ts"), conflictedGate, "utf8");
       const done = runCli(["--project-root", dir]);

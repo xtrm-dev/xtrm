@@ -17,6 +17,10 @@ describe("issue page pull-request surface", () => {
   it("shows created_from before mentioned, the sources and the manual gate badge", async () => {
     renderIssue("XTRM-301");
     const section = await screen.findByRole("region", { name: "Pull requests" });
+    // XTRM-987: the block and its relation groups are the shared SectionHeader, so the outline is
+    // 3/4 rather than a private span, and the gate badge rides in the header's aside.
+    expect(within(section).getByRole("heading", { name: "Pull requests", level: 3 })).toBeTruthy();
+    expect(within(section).getAllByRole("heading", { name: /^(Created from|Mentioned)$/, level: 4 })).toHaveLength(2);
     const labels = within(section).getAllByText(/^(Created from|Mentioned)$/).map((n) => n.textContent);
     expect(labels).toEqual(["Created from", "Mentioned"]);
     expect(within(section).getByText("gate refuse")).toBeTruthy();

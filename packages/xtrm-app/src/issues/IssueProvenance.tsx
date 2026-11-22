@@ -5,17 +5,17 @@ import { ReferenceChip } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { Fields, PART_LABEL_COLUMN } from "../ui/drawer.tsx";
+import { SectionHeader } from "../ui/section.tsx";
 import { StatusDot, cx } from "../ui/primitives.tsx";
 import { IdValue, Timestamp } from "./IssueJournal.tsx";
 
 const None = ({ children = "None" }: { children?: ReactNode }) => <span className="text-ink-faint">{children}</span>;
 
+/** A provenance group: the shared section header (XTRM-987) at the level this group already held. */
 function Group({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-1.5">
-      <h4 className="text-xs font-medium text-ink-faint">
-        {title} {count !== undefined && <span className="tabular">{count}</span>}
-      </h4>
+      <SectionHeader title={title} count={count} inset="none" level={4} />
       {children}
     </section>
   );

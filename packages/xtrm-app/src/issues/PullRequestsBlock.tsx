@@ -2,9 +2,8 @@ import { ReferenceChip } from "../refs/references.tsx";
 import type { IssueDetail, LinkEvent, PullLink } from "../adapters/types.ts";
 import { Badge } from "../ui/badge.tsx";
 import { cx } from "../ui/primitives.tsx";
+import { SectionHeader } from "../ui/section.tsx";
 import { PrStateBadge } from "./pr-state.tsx";
-
-const HEADING = "text-[0.68rem] font-medium uppercase tracking-wide text-ink-faint";
 
 function GateBadge({ gate }: { gate: IssueDetail["linkGate"] }) {
   const pass = gate.manual.verdict === "pass";
@@ -37,14 +36,14 @@ export function PullRequestsBlock({ links, gate }: { links: PullLink[]; gate: Is
   const mentioned = links.filter((l) => l.relation === "mentioned");
   return (
     <section aria-label="Pull requests" className="flex flex-col gap-2 border-t border-border-muted pt-4">
-      <div className="flex items-center gap-2">
-        <span className={HEADING}>Pull requests</span>
-        <GateBadge gate={gate} />
-      </div>
+      {/* One header language (XTRM-987): the block heading is a page section, its relation groups are
+       * a level down, both on the shared `inset="none"` box so they line up with the contract
+       * fields above. The gate badge rides in `aside`, where every other header puts its action. */}
+      <SectionHeader title="Pull requests" inset="none" level={3} aside={<GateBadge gate={gate} />} />
       {[["Created from", created], ["Mentioned", mentioned]].map(([label, rows]) =>
         (rows as PullLink[]).length === 0 ? null : (
           <div key={label as string} className="flex flex-col gap-1">
-            <span className="text-[0.68rem] text-ink-faint">{label as string}</span>
+            <SectionHeader title={label as string} inset="none" level={4} />
             {(rows as PullLink[]).map((link) => <LinkRow key={link.id} link={link} />)}
           </div>
         ),
