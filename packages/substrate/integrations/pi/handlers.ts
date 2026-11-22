@@ -500,10 +500,14 @@ export function evaluateEditGate(state: EditGateState): { allow: boolean; reason
   if (!state.issueRef) return { allow: true };
   const dead = deadBindingReason(state);
   if (dead) return { allow: false, reason: dead };
+  // One subject for every message, and one rendering for the command: a machine id
+  // is never shown, and `this issue` in prose must not leak into a command the
+  // operator is meant to paste (`sb issue claim this issue` claims nothing).
   const ref = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "this issue" : state.issueRef);
+  const commandRef = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "<ref>" : state.issueRef);
   const claim = state.claim ?? null;
   const claimed = claim !== null || state.claimed === true;
-  if (!claimed) return { allow: false, reason: `no live claim on ${ref}; run \`sb issue claim ${ref} --holder <name>\` first` };
+  if (!claimed) return { allow: false, reason: `no live claim on ${ref}; run \`sb issue claim ${commandRef} --holder <name>\` first` };
   if (claim) {
     if (!state.holder) return { allow: false, reason: `live claim on ${ref} held by ${claim.holder}; no current holder supplied` };
     if (!sameHolder(claim, state.holder, state.activationId ?? null)) {

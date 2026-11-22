@@ -53,7 +53,11 @@ export function evaluateEditState(state: {
   displayRef?: string | null;
 }): EditGateResult {
   if (!state.issueRef) return { allow: true, issueRef: null, reason: "no bound issue; nothing to gate" };
+  // One subject for every message, and one rendering for the command: a machine id
+  // is never shown, and `this issue` in prose must not leak into a command the
+  // operator is meant to paste (`sb issue claim this issue` claims nothing).
   const ref = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "this issue" : state.issueRef);
+  const commandRef = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "<ref>" : state.issueRef);
   // A closed issue authorises nothing, and the remedy is not a claim on it:
   // that claim is refused as terminal, which is how a lane gets pushed into
   // claiming unrelated work just to move the binding.
@@ -78,7 +82,7 @@ export function evaluateEditState(state: {
     return {
       allow: false,
       issueRef: state.issueRef,
-      reason: `no live claim on ${ref}; run \`sb issue claim ${ref} --holder <name>\` first`,
+      reason: `no live claim on ${ref}; run \`sb issue claim ${commandRef} --holder <name>\` first`,
     };
   }
   if (claim) {
@@ -86,14 +90,14 @@ export function evaluateEditState(state: {
       return {
         allow: false,
         issueRef: state.issueRef,
-        reason: `live claim on ${state.issueRef} held by ${claim.holder}; no current holder supplied, refusing without WHO`,
+        reason: `live claim on ${ref} held by ${claim.holder}; no current holder supplied, refusing without WHO`,
       };
     }
     if (!sameHolder(claim, state.holder, state.activationId ?? null)) {
       return {
         allow: false,
         issueRef: state.issueRef,
-        reason: `live claim on ${state.issueRef} held by ${claim.holder}${claim.activationId ? ` (activation ${claim.activationId})` : ""}; holder ${state.holder} may not mutate`,
+        reason: `live claim on ${ref} held by ${claim.holder}${claim.activationId ? ` (activation ${claim.activationId})` : ""}; holder ${state.holder} may not mutate`,
       };
     }
   }
