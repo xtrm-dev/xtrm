@@ -167,13 +167,28 @@ const RULES: Array<{ id: string; pattern: RegExp; why: string; prose?: boolean }
   {
     id: "label-grid-class",
     prose: true,
-    pattern: /grid-cols-\[[\d.]+(?:rem|ch)_(?:minmax\(0,\s*1fr\)|1fr)\]/g,
-    why: "hand-rolled label grid: a two-column <step>_minmax(0,1fr) grid names its column instead of the ladder — use Fields (or the step from src/ui/drawer.tsx in a style prop)",
+    // Two tracks, the second one value-shaped, and a numeric rem/ch in the first — the fitted shape
+    // (`6.5rem_minmax(0,1fr)`, `6rem_auto`) and the content-sized one (`minmax(6rem,auto)…`). A table
+    // template has more than two tracks and its second track is not `1fr`/`auto`, so it does not match.
+    pattern:
+      /grid-cols-\[(?:(?:minmax\(\s*)?[\d.]+(?:rem|ch)\s*(?:,[^)]*)?\)?)_(?:minmax\(0,\s*1fr\)|1fr|auto)\]/g,
+    why: "hand-rolled label grid: a two-track label/value grid names its column instead of the ladder — use Fields, or a step from src/ui/drawer.tsx (a content-sized column keeps its floor on a step too)",
+  },
+  {
+    id: "label-grid-style-literal",
+    prose: true,
+    // The style-prop spelling of the same decision: a numeric rem written into gridTemplateColumns.
+    // A template literal interpolating a step (`${LABEL_COLUMN} 1fr`) has no numeric rem and passes.
+    pattern: /gridTemplateColumns:\s*[`"'][^`"'\n]*[\d.]+(?:rem|ch)[^`"'\n]*[`"']/g,
+    why: "literal column template: a gridTemplateColumns string that hardcodes rem names its column instead of the ladder — interpolate a step from src/ui/drawer.tsx",
   },
   {
     id: "label-width-literal",
     prose: true,
-    pattern: /labelWidth="[\d.]+(?:rem|ch)"/g,
+    // Every spelling of the same literal: `labelWidth="10rem"`, `labelWidth={'10rem'}`, single quotes,
+    // a template literal. A constant (`labelWidth={PAGE_LABEL_COLUMN}`) is the intended form and passes;
+    // its value is fitted by measurement, which a regex cannot hold (XTRM-940 seq 33).
+    pattern: /labelWidth=\{?[`"'][\d.]+(?:rem|ch)[`"']\}?/g,
     why: "literal label column: import the step (DENSE/SIDEBAR/PART/DRAWER/PAGE_LABEL_COLUMN) so the column is a decision, not a number",
   },
 ];
@@ -565,7 +580,14 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       'const n = "ps-[2px]";',
       "const o = { fontSize: 11 };",
       'const p = <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3">;',
+      'const p2 = <div className="grid grid-cols-[6rem_auto]" />;',
+      'const p3 = <div className="grid grid-cols-[minmax(6rem,8rem)_1fr]" />;',
+      'const p4 = <div className="grid grid-cols-[minmax(4rem,auto)_minmax(0,1fr)]" />;',
+      'const p5 = <dl style={{ gridTemplateColumns: "6rem 1fr" }} />;',
       'const q = <Fields labelWidth="10rem" rows={rows} />;',
+      'const q1 = <Fields labelWidth={"10rem"} rows={rows} />;',
+      "const q2 = <Fields labelWidth={'10rem'} rows={rows} />;",
+      'const q3 = <Fields labelWidth={`10rem`} rows={rows} />;',
       "h1 { font-size: 11px; }",
       ".a { padding-inline: 8px; }",
     ].join("\n");
@@ -595,7 +617,17 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       ["css-px-font-size", "font-size: 11px"],
       ["px-font-style-string", 'fontSize: "11px"'],
       ["label-grid-class", "grid-cols-[6.5rem_minmax(0,1fr)]"],
+      // The spellings CORE's label-column sweep walked past (XTRM-971 review round 2): a fitted
+      // first track with a plain second one, a two-value minmax, and the content-sized shape whose
+      // floor is a literal. Each is the same decision written differently.
+      ["label-grid-class", "grid-cols-[6rem_auto]"],
+      ["label-grid-class", "grid-cols-[minmax(6rem,8rem)_1fr]"],
+      ["label-grid-class", "grid-cols-[minmax(4rem,auto)_minmax(0,1fr)]"],
+      ["label-grid-style-literal", 'gridTemplateColumns: "6rem 1fr"'],
       ["label-width-literal", 'labelWidth="10rem"'],
+      ["label-width-literal", 'labelWidth={"10rem"}'],
+      ["label-width-literal", "labelWidth={'10rem'}"],
+      ["label-width-literal", "labelWidth={`10rem`}"],
     ] as const) {
       expect(hit(id, sample), `rule ${id} must catch ${literal}`).toContain(literal);
     }
@@ -617,6 +649,10 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "grid grid-cols-[7.5rem_minmax(0,1fr)_7rem_7rem_6.5rem_7rem_1.25rem] items-center gap-3",
       "grid shrink-0 grid-cols-[6.5rem_7rem_3.5rem_2.5rem_6rem] items-center gap-2",
       "gridTemplateColumns: `${LABEL_COLUMN} 1fr auto`",
+      // A content-sized label column and a page column take their step the same way; only the
+      // shape differs, so a step interpolated into either template passes.
+      "gridTemplateColumns: `minmax(${PART_LABEL_COLUMN}, auto) minmax(0, 1fr)`",
+      'labelWidth={PAGE_LABEL_COLUMN}', 
     ]) {
       const caught = RULES.flatMap((rule) => [...legal.matchAll(rule.pattern)].map((match) => match[0]));
       expect(caught, `legal shape refused: ${legal}`).toEqual([]);

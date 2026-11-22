@@ -24,6 +24,10 @@ export function InspectorSection({ title, children, aside }: { title: ReactNode;
  * `packages/xtrm-app/src/ui/units.test.ts` refuses either a two-column label grid written as a class
  * or a literal `labelWidth`, which is what keeps this set closed instead of aspirational.
  *
+ * A content-sized column is a different shape, not a different size: where the labels are data
+ * (a journal block's keys, a tool call's arguments) there is no inventory to fit, so the grid takes
+ * the widest label and no more — and its floor is still a step from this ladder.
+ *
  * The gutter is not a knob: every grid uses `gap-x-3` (0.75rem), the value that `Fields` hardcodes,
  * and the agent sidebar is the one exception at `gap-x-2`. A gutter that drifts per call site starts
  * the same nominal column 4px apart, which is the defect this ladder replaced.
@@ -32,7 +36,7 @@ export function InspectorSection({ title, children, aside }: { title: ReactNode;
 /** Rows whose values are one short token (`value`, the timeline's `at`/`kind`). Worst label 31px. */
 export const DENSE_LABEL_COLUMN = "3.5rem";
 
-/** The agent sidebar's session rows, whose labels are one word. Worst label 49px. */
+/** The agent sidebar's session rows and an activity row's argument list. Worst label 49px. */
 export const SIDEBAR_LABEL_COLUMN = "4.5rem";
 
 /** The issue body in the canvas (details and provenance). Worst label 82px. */
