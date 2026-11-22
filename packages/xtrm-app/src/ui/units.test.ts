@@ -19,6 +19,8 @@ import {
   offenders,
   ownsSource,
   parkDrift,
+  parkSplit,
+  syntheticRuleIds,
   unpaidDirectories,
   walk,
 } from "../../scripts/units-gate.ts";
@@ -95,8 +97,14 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       for (const file of files) {
         const found = offenders(file);
         if (found.length === 0) continue;
-        console.log(`${file}: ${found.length} offender(s), ${PARKS[file] ? "parked" : "unparked"}`);
-        for (const offence of found) console.log(`  :${offence.line} ${offence.match} [${offence.rule}]`);
+        // XTRM-979: "parked" and "unparked" were the whole distinction, so work owed inside a parked
+        // file read exactly like work already accounted for. Each offence now says which it is.
+        const { parked, owed } = parkSplit(file, found);
+        console.log(`${file}: ${owed.length} owed, ${parked.length} parked`);
+        for (const offence of found) {
+          const label = parked.includes(offence) ? "parked" : "owed";
+          console.log(`  :${offence.line} ${offence.match} [${offence.rule}] ${label}`);
+        }
       }
     }
     expect(drifted, "no px or off-scale literal may stand outside the ladder").toEqual([]);
@@ -467,6 +475,66 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     const parkedMeta = PARKS[join("src", "issues", "meta.tsx")];
     expect(parkedMeta?.offences.length ?? 0, "the debt the gate parks must be named, not counted").toBeGreaterThan(0);
     expect(PARKS[join("src", "issues", "meta.tsx")]?.offences.map((offence) => offence.match), "a park must name the literal it holds").toContain("gap-[2px]");
+  });
+
+  it("answers every rule id, and throws on one it does not know", () => {
+    // XTRM-979: `advice()` ended `?? "unnamed rule"`, so a rule added without a remedy reported a
+    // placeholder and the run stayed green. The placeholder is gone; both halves are pinned here.
+    for (const rule of RULES) expect(advice(rule.id), `rule ${rule.id} has a remedy`).not.toBe("");
+    for (const rule of syntheticRuleIds) expect(advice(rule), `synthetic ${rule} has a remedy`).not.toBe("");
+    expect(() => advice("a-rule-nobody-wrote"), "an id with no remedy must crash, not print a placeholder").toThrow(
+      /no advice for rule "a-rule-nobody-wrote"/,
+    );
+  });
+
+  it("differs owed work from parked work inside one file", () => {
+    // XTRM-979: the report labelled a FILE, so a new offence inside a parked file printed like a
+    // parked one. The split is arithmetic, so it is asserted rather than eyeballed in the report.
+    const parkedFile = "src/issues/PullRequestsBlock.tsx";
+    const park = PARKS[parkedFile];
+    expect(park, "the fixture names a file that is actually parked").toBeDefined();
+    const parkedOnly = (park?.offences ?? []).map((offence, index) => ({ ...offence, line: 10 + index }));
+    expect(parkSplit(parkedFile, parkedOnly)).toEqual({ parked: parkedOnly, owed: [] });
+
+    const owedOffence = { rule: "px-font", match: "text-[11px]", line: 99 };
+    const mixed = [...parkedOnly, owedOffence];
+    const split = parkSplit(parkedFile, mixed);
+    expect(split.owed, "a new offence beside parked ones is work owed").toEqual([owedOffence]);
+    expect(split.parked, "the parked ones stay parked").toHaveLength(parkedOnly.length);
+
+    const unparked = "src/ui/primitives.tsx";
+    expect(PARKS[unparked], "the fixture names a file with no park").toBeUndefined();
+    expect(parkSplit(unparked, [owedOffence])).toEqual({ parked: [], owed: [owedOffence] });
+  });
+
+  it("cites the scroll declaration, not the line the block opens on", () => {
+    // XTRM-979: every CSS citation used `block.offset`, the block's opening line, so a declaration
+    // six lines down cited the selector. The temp file puts the declaration well below the selector.
+    const dir = mkdtempSync(join(tmpdir(), "units-cite-"));
+    try {
+      const file = join(dir, "block.css");
+      writeFileSync(
+        file,
+        [
+          "aside {",
+          "  color: var(--ink);",
+          "  margin: 0;",
+          "  overflow-y: scroll;",
+          "  scrollbar-width: thick;",
+          "}",
+          "",
+        ].join("\n"),
+      );
+      const found = offenders(file);
+      const container = found.find((offence) => offence.rule === "css-scroll-container");
+      const value = found.find((offence) => offence.rule === "css-scrollbar-value");
+      expect(container?.line, "the scroll container cites its own declaration").toBe(4);
+      expect(value?.line, "the scroll treatment cites its own declaration").toBe(5);
+      // the fixture opens on line 1, so a citation of 1 is the defect this test exists for
+      expect([container?.line, value?.line]).not.toContain(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("keeps every named hole owned", () => {

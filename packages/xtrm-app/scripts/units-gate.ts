@@ -16,10 +16,39 @@
 // XTRM-986: the content-sized grids are the one place the label sweep moved a visible pixel without a
 // named failing case. `src/issues/IssueJournal.tsx:86` floors on `PART_LABEL_COLUMN` and
 // `src/agent/Activity.tsx:124` on `SIDEBAR_LABEL_COLUMN`; those floors rose 6rem → 6.5rem and
-// 4rem → 4.5rem, which is +8px per grid, and it is visible only when every key in a block is shorter
+// 4rem → 4.5rem, which is +0.5rem per grid (+8px at a 16px root, +6px at the operator's 12px root),
+// and it is visible only when every key in a block is shorter
 // than the floor (measured during XTRM-971). It is recorded here because a merged PR body is not a
 // place a later reader of this file looks. The limit those grids carry is the `label-width-constant`
 // hole below: the gate proves a step is a constant, not that the constant is wide enough.
+//
+// XTRM-979: seven instruments stated a limit that nothing checked. Each is either enforced here or
+// deleted, and the disposition is written beside the thing it protects rather than in a PR body:
+//
+//   enforced  `advice()` threw `?? "unnamed rule"` for an id it did not know, so a rule added without
+//             a remedy passed in silence. It now throws, and `syntheticRuleIds` lets a test prove every
+//             id `offenders()` can emit — including the four that carry no `RULES` entry — answers.
+//   enforced  `GATE_REPORT=1` labelled a file `parked` or `unparked`, so a NEW offence inside a parked
+//             file printed exactly like a parked one. `parkSplit()` divides the same offences into
+//             owed and parked, and the report prints that division per offence.
+//   enforced  CSS citations pointed at the line the BLOCK opens on, so every declaration inside a
+//             multi-line block cited its selector. `scrollbarDeclarations` carries an absolute offset
+//             and `css-scroll-container` cites the `overflow` declaration itself.
+//   deleted   "`ownsSource()` is advertised but never called by `walk()`" — measured false: the walk
+//             does not call it because `unpaidDirectories()` does, and the directory tests exercise
+//             that path. A claim about unreachable code on a function that is reached is noise in a
+//             file whose job is to be trusted, so the claim is gone rather than answered.
+//   measured  "the walk excludes `host/` and `server/`" — they hold 4 and 7 files and **0 offences**
+//             between them, so widening `ROOT` today would change what the gate refuses by nothing.
+//             The walk stays on `src`; what it covers is stated, not implied.
+//   measured  "the reference table's cite names the file but not the table" — the one such comment is
+//             `src/project/jira/JiraRow.tsx`, which names `src/issues/IssuesSurface.tsx` for its own
+//             reason (row-size text) and cites no rule; there is nothing here to enforce.
+//   absent    `truthManifest` does not exist at any head in this repository, so there was nothing to
+//             delete: a finding cannot be closed by removing a symbol that was never added.
+//
+// The rule those seven produce, and the reason this block is here instead of in the PR body: a stated
+// limit is only worth the check attached to it, and a check that cannot be pointed at is a comment.
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -149,8 +178,9 @@ export const HOLES: readonly Hole[] = [
     owner: "XTRM-620",
     kind: "outside-walk",
     examplePath: join("src", "agent", "AgentSidebar.tsx"),
-    example: '<span className="text-[0.68rem]">{tokens}</span>',
-    why: "`src/agent` is in `OUT_OF_SCOPE`, so the rem ladder is not enforced there: 38 offences stand in that tree today (`text-[0.65rem]`, `text-[0.68rem]`, `text-[0.7rem]` and `text-[0.92rem]` across Activity, AgentSidebar and AgentSurface), and the operator's 12px root renders every one of them too large. The exclusion has an owner (the Agent epic) and a cost that is now measured rather than assumed; moving the tree inside the walk is that epic's change, not a rule's.",
+    example:
+      '<span className="min-w-0 truncate font-mono text-[0.68rem] text-ink-faint" title={state.settings.target}>{state.settings.target}</span>',
+    why: "`src/agent` is in `OUT_OF_SCOPE`, so the rem ladder is not enforced there: 38 offences stand in that tree today, in 6 distinct values (`text-[0.6rem]`, `text-[0.65rem]`, `text-[0.68rem]`, `text-[0.7rem]`, `text-[0.92rem]`, `text-[0.95rem]`) across 8 files (Activity, AgentSidebar, AgentSurface, Composer, DrawerPanels, HostConnection, NewSession, RefChip), and the operator's 12px root renders every one of them too large. The exclusion has an owner (the Agent epic) and a cost that is now measured rather than assumed; moving the tree inside the walk is that epic's change, not a rule's.",
   },
   {
     id: "label-width-constant",
@@ -479,11 +509,13 @@ export const CSS_TREATMENT = /scrollbar-width\s*:\s*thin\s*[;}]/;
 export const CSS_SCROLLBAR_DECLARATION = /(scrollbar-(?:width|color))\s*:\s*([^;{}]+)/g;
 
 /** Every `scrollbar-*` declaration in a block, with the pair that has to be on the closed list. */
-export const scrollbarDeclarations = (body: string) =>
+export const scrollbarDeclarations = (body: string, bodyOffset = 0) =>
   [...body.matchAll(CSS_SCROLLBAR_DECLARATION)].map((match) => ({
     property: (match[1] ?? "").trim(),
     value: (match[2] ?? "").trim(),
     literal: match[0].trim(),
+    /** Absolute offset in the file, so a citation lands on the declaration and not on its block. */
+    offset: bodyOffset + (match.index ?? 0),
   }));
 
 export const isKnownScrollbarTreatment = (declaration: { property: string; value: string }) =>
@@ -566,7 +598,50 @@ export const advice = (rule: string): string => {
   if (rule === "glued-class") {
     return "class built from a template fragment: interpolate a complete class (`TONE_CLASS[tone]`) or a whole value, never a piece of one";
   }
-  return RULES.find((candidate) => candidate.id === rule)?.why ?? "unnamed rule";
+  const known = RULES.find((candidate) => candidate.id === rule);
+  // XTRM-979: the `?? "unnamed rule"` that used to stand here meant a rule added without a remedy
+  // reported "unnamed rule" and passed — the reader learned nothing and the gate learned less. An
+  // unknown id is now a crash at the point of offence, which is the only place the missing remedy can
+  // be seen. `syntheticRuleIds` below names the ids that are not in `RULES` so a test can prove every
+  // one of them answers, and that this throw is reachable rather than decorative.
+  if (!known) {
+    throw new Error(
+      `no advice for rule "${rule}": every rule id an offence can carry needs a remedy, because a refusal that cannot say what to do is a refusal an operator routes around`,
+    );
+  }
+  return known.why;
+};
+
+/** Rule ids that `offenders` can emit without a `RULES` entry, so an exhaustiveness test can see them. */
+export const syntheticRuleIds = ["scroll-container", "glued-class", "css-scroll-container", "css-scrollbar-value"] as const;
+
+/**
+ * The offences in `found` that the park does not cover (work owed) against the ones it does (work
+ * done). XTRM-979: the report printed one line per file labelled by whether a park existed, so a new
+ * offence inside a parked file — the only kind that is actually work owed — read exactly like a parked
+ * one. The split is computed here so the report and any test read the same arithmetic.
+ */
+export const parkSplit = (file: string, found: Offence[]): { parked: Offence[]; owed: Offence[] } => {
+  const park = PARKS[file];
+  if (!park) return { parked: [], owed: [...found] };
+  const remaining = new Map<string, number>();
+  for (const offence of park.offences) {
+    const key = `${offence.rule} ${offence.match}`;
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
+  }
+  const parked: Offence[] = [];
+  const owed: Offence[] = [];
+  for (const offence of found) {
+    const key = `${offence.rule} ${offence.match}`;
+    const left = remaining.get(key) ?? 0;
+    if (left > 0) {
+      remaining.set(key, left - 1);
+      parked.push(offence);
+    } else {
+      owed.push(offence);
+    }
+  }
+  return { parked, owed };
 };
 
 /**
@@ -599,13 +674,20 @@ export const offenders = (file: string): Offence[] => {
 
   if (file.endsWith(".css")) {
     for (const block of cssBlocks(source)) {
-      for (const declaration of scrollbarDeclarations(block.body)) {
+      for (const declaration of scrollbarDeclarations(block.body, block.offset)) {
         if (isKnownScrollbarTreatment(declaration)) continue;
-        found.push({ rule: "css-scrollbar-value", match: declaration.literal, line: lineOf(source, block.offset) });
+        // XTRM-979: `block.offset` is the line the BLOCK opens on, so a multi-line block cited its
+        // selector for every declaration inside it. The declaration carries its own offset now.
+        found.push({ rule: "css-scrollbar-value", match: declaration.literal, line: lineOf(source, declaration.offset) });
       }
       if (!CSS_SCROLL.test(block.body) || CSS_TREATMENT.test(block.body)) continue;
       if (SCROLL_TREATMENT.test(block.selector)) continue;
-      found.push({ rule: "css-scroll-container", match: block.selector, line: lineOf(source, block.offset) });
+      const scrollDeclaration = CSS_SCROLL.exec(block.body);
+      found.push({
+        rule: "css-scroll-container",
+        match: block.selector,
+        line: lineOf(source, scrollDeclaration ? block.offset + scrollDeclaration.index : block.offset),
+      });
     }
   } else {
     // A className is written on one line in every call site here; a scroll container that splits its
