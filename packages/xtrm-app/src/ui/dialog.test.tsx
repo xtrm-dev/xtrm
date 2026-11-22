@@ -128,11 +128,16 @@ describe("DialogFrame", () => {
     expect(popup.style.top).toBe("8vh");
     expect(popup.style.maxHeight).toBe("84vh");
     // jsdom's CSSOM re-serialises the guard (`calc(100vw - 32px)` comes back as `-32px + 100vw`), so
-    // the width is asserted on the number the caller passed and the viewport term, not on the exact
-    // string: the exact string would pin the test to jsdom's arithmetic order rather than to the frame.
+    // the width is asserted on its three fragments, not on the exact string: pinning the string would
+    // pin jsdom's arithmetic order rather than the frame. All three are load-bearing and each one has
+    // a mutation: `760px` is the caller's width, `100vw` is the viewport term, and `-32px` is the
+    // gutter — delete the gutter and the width stops being a `min()` at all, which is the entire
+    // reason it is one: at a 360px viewport the dialog goes full-bleed and touches both edges
+    // (measured `{w:360, x:0}` against `{w:328, x:16}` on the shipped code).
+    expect(popup.style.width).toContain("min(");
     expect(popup.style.width).toContain("760px");
     expect(popup.style.width).toContain("100vw");
-    expect(popup.style.width).toContain("min(");
+    expect(popup.style.width).toContain("-32px");
   });
 });
 
@@ -167,7 +172,10 @@ describe("DialogFrame call sites", () => {
     const popup = (await screen.findByRole("dialog", { name: /^Normalize XTRM-302 contract$/ })) as HTMLElement;
     expect(popup.style.top).toBe("8vh");
     expect(popup.style.maxHeight).toBe("84vh");
+    expect(popup.style.width).toContain("min(");
     expect(popup.style.width).toContain("760px");
+    expect(popup.style.width).toContain("100vw");
+    expect(popup.style.width).toContain("-32px");
   });
 
   it("renders the command palette with its label and its hint footer", () => {
