@@ -61,6 +61,7 @@ function claimed(opts: { holder?: string; ttlMs?: number; leftMs?: number } = {}
       activationId: null,
       acquiredAt: T0 - (ttlMs - leftMs),
       expiresAt: T0 + leftMs,
+      live: leftMs > 0,
     },
     ...overrides,
   });
@@ -413,5 +414,46 @@ describe("advisories: snapshot and formatting against real services", () => {
     const formatted = formatAdvisory(a!);
     assert.match(formatted.user, /^Substrate · XTRM-1: work is happening without a claim$/);
     assert.match(formatted.agent, /^Substrate advisory \(claim_start\): .*`sb issue claim XTRM-1 --holder adopt-302/);
+  });
+});
+
+// XTRM-976: the snapshot used to read `getActiveClaim`, so a claim vanished from
+// every report the instant its TTL passed and `claim_expired` could never fire —
+// dead advice that read as coverage. The snapshot now carries the unreleased row
+// with a derived `live`, so the rule fires from a real snapshot in both
+// directions.
+describe("XTRM-976: a lapsed claim is reported as lapsed", () => {
+  it("fires claim_expired after the TTL and stays silent before it", () => {
+    const ctx = setup();
+    try {
+      const issue = ctx.svc.createIssue({
+        projectId: "prj_xtrm",
+        title: "lapsed",
+        kind: "task",
+        contract: contract(),
+        scrutiny: "HIGH",
+      });
+      ctx.svc.attestReadiness(issue.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
+      const journal = new JournalService(ctx.db, ctx.svc);
+      const claim = ctx.svc.claimIssue(issue.id, "console-c", { ttlMs: MIN, now: T0 });
+
+      const live = snapshotIssue(ctx.svc, journal, issue.id, T0 + 30_000);
+      assert.equal(live.claim?.holder, "console-c");
+      assert.equal(live.claim?.live, true);
+      assert.equal(evaluateIssue(live, { holder: "console-c", source: "env" }).some((a) => a.code === "claim_expired"), false);
+
+      const lapsed = snapshotIssue(ctx.svc, journal, issue.id, T0 + 5 * MIN);
+      assert.notEqual(lapsed.claim, null, "the row still exists, so the snapshot must say so");
+      assert.equal(lapsed.claim?.live, false);
+      const expired = evaluateIssue(lapsed, { holder: "console-c", source: "env" }).find((a) => a.code === "claim_expired");
+      assert.ok(expired, "claim_expired must fire from a real snapshot");
+      assert.match(expired.message, /claim by console-c expired 4 min ago/);
+      // The row is still the one that was taken; nothing was swept.
+      assert.equal(ctx.svc.listClaims(issue.id).at(-1)?.id, claim.id);
+      assert.equal(ctx.svc.listClaims(issue.id).at(-1)?.releasedAt, null);
+    } finally {
+      ctx.db.close();
+      rmSync(ctx.dir, { recursive: true, force: true });
+    }
   });
 });

@@ -4,6 +4,7 @@ import { openBlockerRefusal } from "./open-blocker-refusal.ts";
 import {
   ISSUE_KINDS,
   LIFECYCLE_STATES,
+  TERMINAL_STATES,
   formatHumanRef,
   newIssueId,
   parseHumanRef,
@@ -1851,6 +1852,7 @@ export class IssueService {
 
   renewClaim(issueId: string, holder: string, opts?: { activationId?: string; ttlMs?: number; now?: number }): IssueClaim {
     this.assertHolder(holder);
+    this.assertClaimNotStranded(issueId, "renew");
     return withTransaction(this.db, () => {
       const now = opts?.now ?? Date.now();
       const open = this.unclosedClaim(issueId);
@@ -1888,6 +1890,61 @@ export class IssueService {
   getActiveClaim(issueId: string, opts?: { now?: number }): IssueClaim | null {
     this.requireIssue(issueId);
     return this.openClaim(issueId, opts?.now ?? Date.now());
+  }
+
+  // XTRM-976: the unreleased row whether or not its lease is still live, so a
+  // lapsed claim can be reported as lapsed instead of vanishing from every
+  // surface. Liveness stays derived by the caller via isLiveClaim.
+  getUnreleasedClaim(issueId: string): IssueClaim | null {
+    this.requireIssue(issueId);
+    return this.unclosedClaim(issueId);
+  }
+
+  // XTRM-976: a claim cannot outlive the issue it was taken on. A terminal
+  // transition closes every unreleased row — live or lapsed — inside its own
+  // transaction, and the journal names the transition, never a holder who did
+  // not act. One write path, no compensating sweep that can fail later.
+  releaseClaimsForTransition(
+    issueId: string,
+    opts: { transition: "close" | "cancel" | LifecycleState; closureId?: string | null; now: number },
+  ): IssueClaim[] {
+    const unreleased = rows<Row>(
+      this.db,
+      "SELECT * FROM issue_claims WHERE issue_id = ? AND released_at IS NULL ORDER BY id",
+      issueId,
+    ).map((r) => this.toClaim(r));
+    const released: IssueClaim[] = [];
+    for (const claim of unreleased) {
+      this.closeClaimRow(claim.id, opts.now);
+      this.appendEvent(
+        issueId,
+        "claim.released",
+        {
+          claim: claim.id,
+          generation: claim.generation,
+          holder: claim.holder,
+          releasedBy: opts.transition,
+          ...(opts.closureId ? { closure: opts.closureId } : {}),
+        },
+        opts.now,
+      );
+      released.push({ ...claim, releasedAt: opts.now });
+    }
+    return released;
+  }
+
+  // XTRM-976: the claim routes that can only fail on a terminal issue say why in
+  // the same words. `release` is deliberately not one of them: the transition
+  // already released the row, so releasing again is the same idempotent no-op it
+  // is on an open issue, and `sb issue close … && sb issue release …` keeps
+  // working (measured: tests/skill-migration-gate.test.ts drives that sequence).
+  private assertClaimNotStranded(issueId: string, verb: "renew"): void {
+    const issue = this.requireIssue(issueId);
+    if ((TERMINAL_STATES as readonly string[]).includes(issue.lifecycleState)) {
+      throw new Error(
+        `no-claim: ${issueId} is terminal (${issue.lifecycleState}); a claim ends with the issue it was taken on, so there is nothing to ${verb}`,
+      );
+    }
   }
 
   listClaims(issueId: string): IssueClaim[] {
@@ -2121,6 +2178,11 @@ export class IssueService {
       const now = at ?? Date.now();
       this.db.prepare("UPDATE issues SET lifecycle_state = ?, updated_at = ? WHERE id = ?").run(state, now, issueId);
       this.appendEvent(issueId, "issue.lifecycle", { from: before.lifecycleState, to: state }, now);
+      // XTRM-976: every terminal transition releases what it strands, not only
+      // the Closure path — `issue state <ref> archived` had no other route out.
+      if ((TERMINAL_STATES as readonly string[]).includes(state) && before.lifecycleState !== state) {
+        this.releaseClaimsForTransition(issueId, { transition: state, now });
+      }
       return this.view(issueId);
     });
   }

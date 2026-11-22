@@ -591,7 +591,12 @@ describe("skill-migration-gate live: using-xtrm transcript", () => {
     assert.equal(closed.lifecycleState, "done");
     assert.equal(mut(dbPath, ["issue", "state", created.humanRef, "open"]).data.lifecycleState, "open");
     assert.equal(mut(dbPath, ["issue", "state", created.humanRef, "done"]).data.lifecycleState, "done");
-    assert.equal(mut(dbPath, ["issue", "release", created.humanRef, "--holder", "gate-holder"]).data.released, true);
+    // XTRM-976: the close released the claim the holder was working under, so
+    // the late release finds nothing left to release. This assertion used to
+    // read `true`; it asserted the orphan this contract removes.
+    assert.equal(mut(dbPath, ["issue", "release", created.humanRef, "--holder", "gate-holder"]).data.released, false);
+    const afterClose = cli(dbPath, ["issue", "show", created.humanRef, "--json"]).data;
+    assert.equal(afterClose.lifecycleState, "done");
 
     // Journal delta stays readable after close (continuity survives).
     const delta = cli(dbPath, ["journal", "since", created.humanRef, "0"]).data;

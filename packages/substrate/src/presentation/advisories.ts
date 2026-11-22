@@ -15,6 +15,7 @@ import type { IssueService } from "../service/issue-service.ts";
 import type { JournalService } from "../service/journal-service.ts";
 import { SUBSTRATE_HOLDER_ENV } from "../domain/execution-context.ts";
 import { displayRef } from "../domain/issue.ts";
+import { isLiveClaim } from "../domain/claim.ts";
 import { TERMINAL_LIFECYCLE } from "../domain/readiness.ts";
 
 export type AdvisoryCode =
@@ -53,7 +54,12 @@ export interface IssueSnapshot {
   label?: string;
   lifecycleState: string;
   readinessState: string | null;
-  claim: { holder: string; activationId: string | null; acquiredAt: number; expiresAt: number } | null;
+  /**
+   * The unreleased claim, whether or not its lease is still live (XTRM-976).
+   * `live` is derived from `expiresAt` here, never stored: a lapsed claim stays
+   * visible as lapsed instead of disappearing into "no claim at all".
+   */
+  claim: { holder: string; activationId: string | null; acquiredAt: number; expiresAt: number; live: boolean } | null;
   journalSeq: number;
   lastCheckpointSeq: number;
   latestKind: string | null;
@@ -265,7 +271,12 @@ export function selectAdvisory(list: Advisory[], cooldowns: AdvisoryCooldowns, n
 
 export function snapshotIssue(issues: IssueService, journal: JournalService, issueId: string, now: number = Date.now()): IssueSnapshot {
   const issue = issues.getIssue(issueId);
-  const claim = issues.getActiveClaim(issueId);
+  // XTRM-976: snapshot the unreleased row, not only the live one. With
+  // getActiveClaim the claim read as absent the moment the TTL passed, so
+  // `claim_expired` below could never fire: a dead warning that looked like
+  // coverage. Liveness is carried as data for the rules to read.
+  const unreleased = issues.getUnreleasedClaim(issueId);
+  const claim = unreleased === null ? null : { ...unreleased, live: isLiveClaim(unreleased, now) };
   const readiness = issues.getReadiness(issueId);
   const entries = journal.listEntries(issueId);
   const latest = entries.reduce<(typeof entries)[number] | null>((a, e) => (a === null || e.sequence > a.sequence ? e : a), null);
@@ -282,7 +293,9 @@ export function snapshotIssue(issues: IssueService, journal: JournalService, iss
     label: displayRef(issue.locator, issue.humanRef),
     lifecycleState: issue.lifecycleState,
     readinessState: readiness.state,
-    claim: claim ? { holder: claim.holder, activationId: claim.activationId, acquiredAt: claim.acquiredAt, expiresAt: claim.expiresAt } : null,
+    claim: claim
+      ? { holder: claim.holder, activationId: claim.activationId, acquiredAt: claim.acquiredAt, expiresAt: claim.expiresAt, live: claim.live }
+      : null,
     journalSeq: latest?.sequence ?? 0,
     lastCheckpointSeq,
     latestKind: latest?.kind ?? null,
