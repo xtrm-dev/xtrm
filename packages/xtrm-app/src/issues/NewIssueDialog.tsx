@@ -1,7 +1,7 @@
 import { Dialog, DialogFrame } from "../ui/dialog.tsx";
 import { useState } from "react";
 import type { Scrutiny } from "../adapters/index.tsx";
-import { SelectField } from "../ui/fields.tsx";
+import { FieldLabel, SelectField } from "../ui/fields.tsx";
 import { EditActions } from "../ui/markdown-editor.tsx";
 import { useCreateIssue } from "./actions.ts";
 import { KIND_ICON, priorityOptions, scrutinyOptions } from "./meta.tsx";
@@ -51,17 +51,21 @@ export function NewIssueDialog({ open, onOpenChange, projectId, onCreated }: { o
   };
 
   const input = "w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-border-strong";
+  /**
+   * A field is the shared label over its control: `FieldLabel` renders the same section heading the
+   * issue drawer uses, so the create dialog and every issue field cannot drift apart (XTRM-988) —
+   * this file used to write that heading itself as a local label span, one heading step away from
+   * the drawer's. The hint rides in the label's `aside`, which is why the control carries its own
+   * accessible name.
+   */
   const field = (label: string, node: React.ReactNode, hint?: string) => (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-ink-faint">
-        {label}
-        {hint && <span className="ml-1.5 font-normal">{hint}</span>}
-      </span>
+    <div className="flex flex-col">
+      <FieldLabel aside={hint ? <span className="text-xs text-ink-faint">{hint}</span> : undefined}>{label}</FieldLabel>
       {node}
-    </label>
+    </div>
   );
-  const area = (key: "problem" | "success" | "scope" | "nonGoals" | "constraints" | "validation" | "output", placeholder: string, rows = 3) => (
-    <textarea value={form[key]} onChange={(e) => set(key, e.target.value)} placeholder={placeholder} rows={rows} className={`${input} resize-y`} />
+  const area = (label: string, key: "problem" | "success" | "scope" | "nonGoals" | "constraints" | "validation" | "output", placeholder: string, rows = 3) => (
+    <textarea aria-label={label} value={form[key]} onChange={(e) => set(key, e.target.value)} placeholder={placeholder} rows={rows} className={`${input} resize-y`} />
   );
 
   return (
@@ -74,18 +78,18 @@ export function NewIssueDialog({ open, onOpenChange, projectId, onCreated }: { o
               {field("Priority", <SelectField label="Priority" value={form.priority} options={priorityOptions} canEdit onChange={async (v) => set("priority", v)} />)}
               {field("Scrutiny", <SelectField label="Scrutiny" value={form.scrutiny} options={scrutinyOptions} canEdit onChange={async (v) => set("scrutiny", v)} />)}
             </div>
-            {field("Summary", <input autoFocus value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="What needs to happen" className={input} />)}
-            {field("Parent", <input value={form.parent} onChange={(e) => set("parent", e.target.value)} placeholder="e.g. XTRM-252 (optional)" className={`${input} font-mono text-xs`} />)}
-            {field("Problem", area("problem", "Markdown supported", 4))}
-            {field("Success", area("success", "Observable outcome", 2))}
+            {field("Summary", <input aria-label="Summary" autoFocus value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="What needs to happen" className={input} />)}
+            {field("Parent", <input aria-label="Parent" value={form.parent} onChange={(e) => set("parent", e.target.value)} placeholder="e.g. XTRM-252 (optional)" className={`${input} font-mono text-xs`} />)}
+            {field("Problem", area("Problem", "problem", "Markdown supported", 4))}
+            {field("Success", area("Success", "success", "Observable outcome", 2))}
             <div className="grid grid-cols-2 gap-4">
-              {field("Scope", area("scope", "One item per line"), "one per line")}
-              {field("Non-goals", area("nonGoals", "One item per line"), "one per line")}
+              {field("Scope", area("Scope", "scope", "One item per line"), "one per line")}
+              {field("Non-goals", area("Non-goals", "nonGoals", "One item per line"), "one per line")}
             </div>
-            {field("Constraints", area("constraints", "One item per line"), "one per line")}
+            {field("Constraints", area("Constraints", "constraints", "One item per line"), "one per line")}
             <div className="grid grid-cols-2 gap-4">
-              {field("Validation", area("validation", "One check per line"), "one per line")}
-              {field("Output", area("output", "One artifact per line"), "one per line")}
+              {field("Validation", area("Validation", "validation", "One check per line"), "one per line")}
+              {field("Output", area("Output", "output", "One artifact per line"), "one per line")}
             </div>
           </div>
           <DialogFrame.Footer>
