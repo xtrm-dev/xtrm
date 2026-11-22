@@ -945,3 +945,30 @@ describe("Every Research field grid shares one label column (XTRM-948)", () => {
     ).toEqual([]);
   });
 });
+
+describe("XTRM-978: the clip belongs to the row with a fixed height", () => {
+  it("leaves a metric row free to grow and keeps the header clip XTRM-950 measured", async () => {
+    // A metric row is `min-h-8` and grows with its content, so `overflow-hidden` on it has no
+    // vertical work to do — and it clipped horizontally, hiding the row's own body text instead of
+    // letting the row grow. jsdom resolves no layout, so this asserts the rule; the measurement is
+    // in e2e/research-comparison-clip.spec.ts (0 clipped px at 440/420/400/380, both themes).
+    const summary = mapRunSummary(fixture.compareAB["run-a"]);
+    renderWithResearch("/research/compare?baseline=run-a&candidate=run-b", {
+      compare: async (runIds) => Object.fromEntries(runIds.map((id) => [id, summary])) as Record<string, RunSummary>,
+    });
+    await screen.findByRole("table", { name: "Metric comparison" });
+
+    const rows = screen.getAllByRole("row");
+    const header = rows.find((row) => row.querySelector('[role="columnheader"]') !== null)!;
+    const metric = rows.find((row) => row.querySelector('[role="cell"]') !== null)!;
+
+    // The header is fixed at `h-8`: a cell that wraps there paints over the next row (XTRM-950).
+    expect(header.className).toContain("h-8");
+    expect(header.className, "the fixed-height row still clips what a cell would wrap").toContain("overflow-hidden");
+
+    // The metric row may grow, so it must not clip: this is the assertion that fails if the clip
+    // comes back to the body row.
+    expect(metric.className).toContain("min-h-8");
+    expect(metric.className, "a row that can grow must not clip what grows").not.toContain("overflow-hidden");
+  });
+});

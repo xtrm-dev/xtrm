@@ -629,9 +629,13 @@ function delta(candidate: number | undefined, baseline: number | undefined): str
 // the row is what has a fixed height — a cell that wraps inside `h-8` paints over the next row even
 // if its own box is clipped (XTRM-950).
 const COMPARISON_CELL = "flex min-w-0 items-center px-2 py-1";
-/** The row's half of the same rule: the grid is a fixed `h-8` header plus `min-h-8` metric rows, so
- * anything taller than the row has to be clipped by the row, not by one column of it. */
-const COMPARISON_ROW = "grid items-center overflow-hidden border-b border-border-subtle";
+/** The clip is a property of a row WITH A FIXED HEIGHT, and of no other row (XTRM-978). The header is
+ * `h-8`, so a cell that wraps there would paint over the next row and the row has to clip it
+ * (XTRM-950). A metric row is `min-h-8` and is free to grow: a clip there has no vertical work and
+ * still clips horizontally, so the row hid its own body text instead of growing. Keep the clip on
+ * the header only. */
+const COMPARISON_ROW = "grid items-center border-b border-border-subtle";
+const COMPARISON_HEADER_ROW = `${COMPARISON_ROW} h-8 overflow-hidden`;
 
 function comparisonColumns(candidateCount: number): string {
   const columns = ["minmax(6rem, 1fr)", "minmax(0, 1.6fr)"];
@@ -672,7 +676,7 @@ export function RunComparisonSurface() {
     body = (
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto pb-4">
         <div role="table" aria-label="Metric comparison" className="flex flex-col">
-          <div role="row" className={cx(COMPARISON_ROW, "h-8 text-xs text-ink-faint")} style={{ gridTemplateColumns: grid }}>
+          <div role="row" className={cx(COMPARISON_HEADER_ROW, "text-xs text-ink-faint")} style={{ gridTemplateColumns: grid }}>
             <div role="columnheader" className={COMPARISON_CELL}>Metric</div>
             <div role="columnheader" className={COMPARISON_CELL}>
               <span className="min-w-0 truncate" title={baselineId}>
