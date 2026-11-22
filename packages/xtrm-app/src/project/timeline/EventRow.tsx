@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { ScheduleEvent } from "../../adapters/status-board/types.ts";
 import { Badge } from "../../ui/badge.tsx";
 import { Icon, type IconName } from "../../ui/icon.tsx";
-import { Fields } from "../../ui/drawer.tsx";
+import { DENSE_LABEL_COLUMN, Fields } from "../../ui/drawer.tsx";
 import { Row } from "../../ui/primitives.tsx";
 import { RowAction } from "../../ui/row-action.tsx";
 
@@ -92,7 +92,7 @@ export function EventRow({ event, timeLabel, endLabel, past, repoBase }: EventRo
       {open && (
         <div id={detailsId} data-testid={detailsId} className="min-w-0 border-l border-border-muted px-3 py-1.5 pl-5">
           <Fields
-            labelWidth="3.5rem"
+            labelWidth={DENSE_LABEL_COLUMN}
             size="xs"
             rows={[
               ["ref", <span key="ref" className="font-mono text-ink-muted">{event.ref ?? "—"}</span>],

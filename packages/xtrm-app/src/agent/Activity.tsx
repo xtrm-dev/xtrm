@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { Activity, CoordinationActivity, ExtensionUiRequest, ToolActivity } from "../adapters/index.tsx";
 import { Icon, type IconName } from "../ui/icon.tsx";
 import { ContentPanel, cx } from "../ui/primitives.tsx";
+import { SIDEBAR_LABEL_COLUMN } from "../ui/drawer.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
 import { duration } from "./meta.tsx";
 
@@ -114,8 +115,14 @@ function Running() {
 }
 
 function Fields({ args }: { args: Record<string, unknown> }) {
+  // Content-sized for the same reason as the issue journal's data blocks: the labels are whatever
+  // arguments the tool was called with, so the column follows the widest one and the ladder step is
+  // only its floor.
   return (
-    <dl className="grid grid-cols-[minmax(4rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+    <dl
+      className="grid gap-x-3 gap-y-1 text-xs"
+      style={{ gridTemplateColumns: `minmax(${SIDEBAR_LABEL_COLUMN}, auto) minmax(0, 1fr)` }}
+    >
       {Object.entries(args).map(([k, v]) => (
         <div key={k} className="contents">
           <dt className="text-ink-faint">{k}</dt>

@@ -4,6 +4,7 @@ import { parseProvenancePr } from "../github/pr.ts";
 import { ReferenceChip } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
+import { Fields, PART_LABEL_COLUMN } from "../ui/drawer.tsx";
 import { StatusDot, cx } from "../ui/primitives.tsx";
 import { IdValue, Timestamp } from "./IssueJournal.tsx";
 
@@ -20,20 +21,14 @@ function Group({ title, count, children }: { title: string; count?: number; chil
   );
 }
 
-/** Compact label/value grid; wraps inside a narrow inspector. */
+/**
+ * Compact label/value grid; wraps inside a narrow inspector. It is `Fields` with the issue part's
+ * step (XTRM-971): the local `<dl>` this replaced was a fifth hand-rolled copy of the same grid, and
+ * `IssueView` declared the same 6.5rem separately, so the two agreed by coincidence rather than by
+ * rule. The only visible difference is the primitive's `gap-y-1.5` in place of `gap-y-1`.
+ */
 function KV({ rows }: { rows: Array<[string, ReactNode] | false | null> }) {
-  return (
-    <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-      {rows
-        .filter((r): r is [string, ReactNode] => !!r)
-        .map(([k, v]) => (
-          <div key={k} className="contents">
-            <dt className="text-ink-faint">{k}</dt>
-            <dd className="min-w-0 break-words text-ink">{v}</dd>
-          </div>
-        ))}
-    </dl>
-  );
+  return <Fields labelWidth={PART_LABEL_COLUMN} rows={rows.filter((r): r is [string, ReactNode] => !!r)} />;
 }
 
 const Card = ({ children, className, ...props }: { children: ReactNode; className?: string } & Record<`data-${string}`, string>) => (

@@ -15,20 +15,58 @@ export function InspectorSection({ title, children, aside }: { title: ReactNode;
 }
 
 /**
+ * The label-column ladder (XTRM-971). One step per surface class, declared once and imported by
+ * every grid, so a column is a decision with a reason instead of a hand-picked number.
+ *
+ * Each step is the narrowest that fits the widest label its class actually renders, measured in the
+ * app at a 16px root (worst label, then the slack the step leaves). Import these; do not restate the
+ * literal. The values are `rem`, so they follow the operator's root size;
+ * `packages/xtrm-app/src/ui/units.test.ts` refuses either a two-column label grid written as a class
+ * or a literal `labelWidth`, which is what keeps this set closed instead of aspirational.
+ *
+ * A content-sized column is a different shape, not a different size: where the labels are data
+ * (a journal block's keys, a tool call's arguments) there is no inventory to fit, so the grid takes
+ * the widest label and no more — and its floor is still a step from this ladder.
+ *
+ * The gutter is not a knob: every grid uses `gap-x-3` (0.75rem), the value that `Fields` hardcodes,
+ * and the agent sidebar is the one exception at `gap-x-2`. A gutter that drifts per call site starts
+ * the same nominal column 4px apart, which is the defect this ladder replaced.
+ */
+
+/** Rows whose values are one short token (`value`, the timeline's `at`/`kind`). Worst label 31px. */
+export const DENSE_LABEL_COLUMN = "3.5rem";
+
+/** The agent sidebar's session rows and an activity row's argument list. Worst label 49px. */
+export const SIDEBAR_LABEL_COLUMN = "4.5rem";
+
+/** The issue body in the canvas (details and provenance). Worst label 82px. */
+export const PART_LABEL_COLUMN = "6.5rem";
+
+/** Drawer and inspector bodies. Worst label 105px, so the step leaves 15px of slack. */
+export const DRAWER_LABEL_COLUMN = "7.5rem";
+
+/**
+ * Page bodies. These choose the step for value room, not for label fit: the widest page label is
+ * 84px, and the extra column is what a page has that a 320px drawer does not.
+ */
+export const PAGE_LABEL_COLUMN = "10rem";
+
+/**
  * Label/value pairs; values keep their own ink (XTRM-934).
  *
- * The grid was re-implemented five times with five label widths (3.5rem / 6.5rem / 7.5rem /
- * 10rem / auto) and two value sizes, so the same drawer and the same page disagreed about where a
- * value starts. One implementation, two knobs: `labelWidth` for the column, `size` for the step.
- * Pass rem only — a px width does not follow the operator's root size.
+ * The grid was re-implemented five times with five label widths and two value sizes, so the same
+ * drawer and the same page disagreed about where a value starts. One implementation, two knobs:
+ * `labelWidth` for the column — always a step from the ladder above — and `size` for the value
+ * step. The default is `DRAWER_LABEL_COLUMN` because most call sites are drawer bodies; a page
+ * body passes `PAGE_LABEL_COLUMN` rather than its own number.
  */
 export function Fields({
   rows,
-  labelWidth = "7.5rem",
+  labelWidth = DRAWER_LABEL_COLUMN,
   size = "sm",
 }: {
   rows: Array<[ReactNode, ReactNode]>;
-  /** rem or ch length of the label column; timeline rows use 3.5rem, the drawer 7.5rem. */
+  /** A step from the ladder above; never a literal. */
   labelWidth?: `${number}rem` | `${number}ch`;
   /** Value step: `sm` is body copy, `xs` is dense metadata (timeline, integration facts). */
   size?: "xs" | "sm";

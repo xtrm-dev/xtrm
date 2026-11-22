@@ -3,6 +3,7 @@ import { useAdapters, type AgentRef } from "../adapters/index.tsx";
 import { useGo } from "../shell/ContextSidebar.tsx";
 import { ContentPanel, EmptyState, LoadingState, StatusDot, relativeTime } from "../ui/primitives.tsx";
 import { AgentRefChip } from "./RefChip.tsx";
+import { DRAWER_LABEL_COLUMN } from "../ui/drawer.tsx";
 import { ContextMeter, REF_LABEL, STATE_LABEL, STATE_TONE, contextLabel, modelLabel } from "./meta.tsx";
 import { findTarget } from "./message.ts";
 import { useAgentSession, useAgentSessions, useShownState } from "./queries.ts";
@@ -59,7 +60,14 @@ export function SessionPanel({ id: ref }: { id: string }) {
           ))}
         </ol>
       </div>
-      <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
+      {/* A drawer body takes the drawer step (XTRM-971). The rows are paths and ids rendered with
+          `title=`, so they were truncated at 5rem too: the column moved, nothing that was legible
+          became unreadable. `minmax(0,1fr)` stays because these values truncate rather than wrap. */}
+      <dl
+        className="grid gap-x-3 gap-y-1.5 text-xs"
+        style={{ gridTemplateColumns: `${DRAWER_LABEL_COLUMN} minmax(0,1fr)` }}
+        data-testid="session-details-facts"
+      >
         {[
           ["Repository", s.repo],
           ["Root", s.repositoryPath],

@@ -4,6 +4,7 @@ import { Icon } from "../ui/icon.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { MarkdownEditor } from "../ui/markdown-editor.tsx";
 import { LinkEvents } from "./PullRequestsBlock.tsx";
+import { PART_LABEL_COLUMN } from "../ui/drawer.tsx";
 import { ago, cx } from "../ui/primitives.tsx";
 
 const NOTE_KINDS = ["note", "finding", "decision", "blocker", "milestone", "handoff", "result"] as const;
@@ -75,7 +76,15 @@ export function DataBlock({ title, data }: { title: string; data: Record<string,
         {title}
         <span className="text-ink-faint tabular">{Object.keys(data).length} fields</span>
       </summary>
-      <dl className="grid grid-cols-[minmax(6rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-border-muted px-3 py-2 text-xs">
+      {/*
+        Content-sized, not fitted: the labels are the keys of whatever data was logged, so there is no
+        label inventory to fit when this file is written. The column takes the widest key and no more,
+        with the part step as its floor so a block of short keys does not start its values early.
+      */}
+      <dl
+        className="grid gap-x-3 gap-y-1 border-t border-border-muted px-3 py-2 text-xs"
+        style={{ gridTemplateColumns: `minmax(${PART_LABEL_COLUMN}, auto) minmax(0, 1fr)` }}
+      >
         {Object.entries(data).map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="text-ink-faint">{k}</dt>

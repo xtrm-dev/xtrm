@@ -1,6 +1,6 @@
 import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
 import { Dialog, DialogFrame } from "../ui/dialog.tsx";
-import { Fields } from "../ui/drawer.tsx";
+import { Fields, PART_LABEL_COLUMN } from "../ui/drawer.tsx";
 import { SectionHeader } from "../ui/section.tsx";
 import { ToolbarButton, ToolbarTabs } from "../ui/toolbar.tsx";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
@@ -159,9 +159,6 @@ function IssueBreadcrumb({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
   );
 }
 
-/** The label column of the details grid; `Fields` owns the rest of the geometry. */
-const DETAIL_LABEL = "6.5rem";
-
 /** The three activity tabs; `ToolbarTabs` reports ids as plain strings. */
 type Tab = "journal" | "lineage" | "provenance";
 
@@ -283,7 +280,7 @@ function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; ca
   return (
     <div className={cx("flex flex-col gap-1", !compact && "rounded-lg border border-border-muted p-4")}>
       {!compact && <FieldLabel>Details</FieldLabel>}
-      <Fields labelWidth={DETAIL_LABEL} rows={rows} />
+      <Fields labelWidth={PART_LABEL_COLUMN} rows={rows} />
       {!canWrite && <p className="mt-2 text-xs text-ink-faint">Read-only: Substrate writes are disabled for this source.</p>}
     </div>
   );
