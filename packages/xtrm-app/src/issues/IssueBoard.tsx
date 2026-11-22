@@ -104,12 +104,17 @@ export function IssueBoard({
               )}
             >
               {/* `inset="none"` inside a box of the card's own gutter, so the lane heading starts on
-               * the same x as the card titles below it (both 24px from the hairline). */}
+               * the same x as the card titles below it (both 24px from the hairline).
+               *
+               * Level 2, because a lane is a section of the page: the board is a mode of the Issues
+               * surface under its own toolbar, and until now the outline began at h3 with no h1 or h2
+               * above it (XTRM-954: the first heading on a page is level 1 or 2, and an omission is
+               * written where it lives). */}
               <div className="flex h-8 shrink-0 items-center px-3">
                 <SectionHeader
                   title={column.label}
                   count={cards.length}
-                  level={3}
+                  level={2}
                   inset="none"
                   // `auto` is the only word the hint explains, so the tip rides on the word itself.
                   aside={column.hint && <span className="text-xs text-ink-faint" title={column.hint}>auto</span>}

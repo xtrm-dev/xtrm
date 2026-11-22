@@ -79,13 +79,6 @@ export function CommandMenu({
                 {toolbar}
               </>
             }
-            footer={
-              <>
-                <span className="flex items-center gap-1"><Kbd>↵</Kbd> open</span>
-                <span className="flex items-center gap-1"><Kbd>&gt;</Kbd> commands</span>
-                <span className="ml-auto flex items-center gap-1"><Kbd>esc</Kbd> close</span>
-              </>
-            }
           >
             <Command.List className="thin-scrollbar max-h-[min(420px,56vh)] overflow-y-auto p-1.5">
               {loading && <Command.Loading><div className="px-3 py-2 text-sm text-ink-faint">Loading…</div></Command.Loading>}
@@ -119,6 +112,11 @@ export function CommandMenu({
                 ) : null,
               )}
             </Command.List>
+            <DialogFrame.Footer tone="palette">
+              <span className="flex items-center gap-1"><Kbd>↵</Kbd> open</span>
+              <span className="flex items-center gap-1"><Kbd>&gt;</Kbd> commands</span>
+              <span className="ml-auto flex items-center gap-1"><Kbd>esc</Kbd> close</span>
+            </DialogFrame.Footer>
           </DialogFrame>
         </Command>
       </Dialog.Portal>

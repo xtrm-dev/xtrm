@@ -26,8 +26,6 @@ export type DialogFrameProps = {
   title?: ReactNode;
   /** Replaces the title with a caller-owned header row (the palette's input). */
   header?: ReactNode;
-  /** A caller-owned footer row; the frame supplies the chrome. */
-  footer?: ReactNode;
   /**
    * Dialog width in px; the viewport guard keeps it inside a narrow window.
    * Named `frameWidth` rather than `width` on purpose: a `width` attribute carrying a bare number is
@@ -43,7 +41,7 @@ export type DialogFrameProps = {
   children: ReactNode;
 };
 
-export function DialogFrame({ label, title, header, footer, frameWidth, top, maxHeight, tone = "panel", children }: DialogFrameProps) {
+export function DialogFrame({ label, title, header, frameWidth, top, maxHeight, tone = "panel", children }: DialogFrameProps) {
   const palette = tone === "palette";
   return (
     <>
@@ -65,30 +63,31 @@ export function DialogFrame({ label, title, header, footer, frameWidth, top, max
           {header ?? <Dialog.Title className="text-base font-medium text-ink">{title}</Dialog.Title>}
         </div>
         {children}
-        {footer && (
-          <div
-            data-slot="dialog-footer"
-            className={
-              palette
-                ? "flex h-9 shrink-0 items-center gap-3 border-t border-border-muted px-4 text-xs text-ink-faint"
-                : "flex shrink-0 items-center gap-2 border-t border-border-muted px-5 py-3"
-            }
-          >
-            {footer}
-          </div>
-        )}
       </Dialog.Popup>
     </>
   );
 }
 
 /**
- * The frame's footer row as a child slot, for the cases where the actions are already nested in the
- * body's JSX (`EditActions` sits after a scrolling form). Same chrome as the `footer` prop.
+ * The frame's footer row, as a child slot.
+ *
+ * There is one way to give a frame a footer, not two: the row is a child of the frame, so the caller
+ * that has a scrolling form and the caller that has a command list both write the same element.
+ * A `footer` prop would be a second way to say it, and it would be the one no call site used.
+ * `tone` selects the chrome — the same two rows `DialogFrame` names — and the caller owns the
+ * contents. It is a prop rather than context because a footer is always written in the same JSX as
+ * the frame it belongs to; nothing nests frames.
  */
-DialogFrame.Footer = function DialogFrameFooter({ children }: { children: ReactNode }) {
+DialogFrame.Footer = function DialogFrameFooter({ tone = "panel", children }: { tone?: "panel" | "palette"; children: ReactNode }) {
   return (
-    <div data-slot="dialog-footer" className="flex shrink-0 items-center gap-2 border-t border-border-muted px-5 py-3">
+    <div
+      data-slot="dialog-footer"
+      className={
+        tone === "palette"
+          ? "flex h-9 shrink-0 items-center gap-3 border-t border-border-muted px-4 text-xs text-ink-faint"
+          : "flex shrink-0 items-center gap-2 border-t border-border-muted px-5 py-3"
+      }
+    >
       {children}
     </div>
   );

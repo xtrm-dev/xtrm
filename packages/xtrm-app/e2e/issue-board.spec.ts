@@ -32,7 +32,9 @@ function boardGeometry() {
   const columns = [...document.querySelectorAll('[data-testid^="board-column-"]')];
   const lane = columns[1] ?? columns[0] ?? null;
   const card = lane?.querySelector('[data-testid="board-card"]') ?? null;
-  const heading = lane?.querySelector("h3, h4") ?? null;
+  // A lane heading is a page section (level 2), so the selector names h2 first: the assertion below
+  // would otherwise measure nothing and still pass, because `null` styles read as "none".
+  const heading = lane?.querySelector("h2, h3, h4") ?? null;
   const title = card?.querySelector("p") ?? null;
   const first = columns[0] ?? null;
   const neighbour = columns[1] ?? null;
