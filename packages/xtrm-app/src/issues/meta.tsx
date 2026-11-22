@@ -30,7 +30,9 @@ export function PriorityGlyph({ priority }: { priority: number | null }) {
   return (
     <span className="inline-flex h-3 w-4 items-end gap-[2px]" aria-label={`P${priority} ${PRIORITIES[priority]}`} title={`P${priority} · ${PRIORITIES[priority]}`}>
       {[0, 1, 2].map((i) => (
-        <span key={i} className={cx("w-[3px] rounded-[1px]", i < filled ? "bg-ink-muted" : "bg-border-strong")} style={{ height: `${5 + i * 3}px` }} />
+        // Full-round caps, like every other dot and marker in the glyph scale (XTRM-987): a 3px bar has
+        // no corner to keep square, and `rounded-[1px]` was the last arbitrary radius literal.
+        <span key={i} className={cx("w-[3px] rounded-full", i < filled ? "bg-ink-muted" : "bg-border-strong")} style={{ height: `${5 + i * 3}px` }} />
       ))}
     </span>
   );

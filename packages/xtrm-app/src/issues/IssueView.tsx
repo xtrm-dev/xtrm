@@ -351,7 +351,8 @@ function NormalizeBanner({ plan, issue, canWrite, onApply }: { plan: Normalizati
 function PreviewBlock({ title, markdown }: { title: string; markdown: string }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-ink-faint">{title}</span>
+      {/* The dialog title is the h2, so a preview inside its body is an h3 (XTRM-987). */}
+      <SectionHeader title={title} inset="none" level={3} />
       <div className="thin-scrollbar max-h-56 overflow-y-auto rounded-md border border-border-muted px-3 py-2">
         <Markdown>{markdown}</Markdown>
       </div>

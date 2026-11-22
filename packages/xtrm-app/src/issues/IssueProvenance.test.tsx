@@ -19,6 +19,14 @@ describe("issue provenance surfaces", () => {
   it("links a receipt commit to GitHub and jumps from its checkpoint to the journal entry", async () => {
     renderIssue("XTRM-301");
     fireEvent.click(await screen.findByRole("tab", { name: /Provenance/ }));
+    // XTRM-987: the provenance groups are the shared SectionHeader at level 4, not a hand-written h4.
+    // The group must be one that carries a count: SectionHeader keeps the count in a sibling of the
+    // heading, so the heading's name is exactly the title. The hand-written `h4` this replaced folded
+    // the number into the heading (`Receipts 2`), which is the mutation that has to fail here — an
+    // assertion on `Attestation` cannot tell the two apart, because that group has no count at all.
+    const receipts = await screen.findByRole("heading", { name: /^Receipts$/, level: 4 });
+    expect(receipts.textContent, "the count sits beside the heading, not inside it").toBe("Receipts");
+    expect(receipts.parentElement?.textContent, "and the measured count still rides in the header").toBe("Receipts2");
     const [linked, unlinked] = await screen.findAllByTestId("receipt-row");
     expect(within(linked!).getByRole("link", { name: /abc1234567/ }).getAttribute("href")).toBe("https://github.com/xtrm-dev/xtrm/commit/abc1234567890def");
     expect(within(unlinked!).getAllByText("Not linked")).toHaveLength(2);

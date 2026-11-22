@@ -85,13 +85,6 @@ export type Offence = { rule: string; match: string; line: number };
 export type Park = { owner: string; offences: Array<{ rule: string; match: string }> };
 
 export const PARKS: Record<string, Park> = {
-  [join("src", "issues", "PullRequestsBlock.tsx")]: {
-    owner: "XTRM-941",
-    offences: [
-      { rule: "offscale-rem-font", match: "text-[0.68rem]" },
-      { rule: "offscale-rem-font", match: "text-[0.68rem]" },
-    ],
-  },
   [join("src", "issues", "meta.tsx")]: { owner: "XTRM-943", offences: [{ rule: "arbitrary-px-spacing", match: "gap-[2px]" }] },
 };
 
