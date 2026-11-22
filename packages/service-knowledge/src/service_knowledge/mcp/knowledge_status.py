@@ -43,7 +43,7 @@ UMBRELLA_NAMES = ("service-knowledge", "service-skills")
 
 def _version_tuple(text: str) -> tuple[int, ...] | None:
     parts = text.strip().split(".")
-    return tuple(int(p) for p in parts) if parts and all(p.isdigit() for p in parts) else None
+    return tuple(int(p) for p in parts) if parts and all(p.isascii() and p.isdigit() for p in parts) else None
 
 
 def _version_note(pack: str, cli: str) -> str:

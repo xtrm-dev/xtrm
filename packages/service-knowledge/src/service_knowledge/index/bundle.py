@@ -91,7 +91,6 @@ def _shrink_item_text(bundle: dict[str, Any]) -> None:
         stripped = {**bundle, "items": [{**i, "text": ""} for i in bundle["items"]]}
         if _over_budget(stripped):
             return
-        item.setdefault("text_chars", len(text))
         # ``excess`` is measured in JSON characters; the text is cut in raw characters, and a
         # text full of quotes or newlines is longer once escaped. Convert with its own ratio.
         ratio = max(1.0, len(json.dumps(text, ensure_ascii=False)) / max(1, len(text)))
@@ -102,6 +101,7 @@ def _shrink_item_text(bundle: dict[str, Any]) -> None:
         shrunk = text[:keep] + TEXT_TRUNCATED_MARK
         if len(shrunk) >= len(item["text"]):
             return  # nothing gained: do not mark a text as cut when it did not get shorter
+        item.setdefault("text_chars", len(text))
         item["text"] = shrunk
         item["text_truncated"] = True
 

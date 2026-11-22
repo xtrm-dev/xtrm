@@ -155,6 +155,10 @@ def test_sync_headings_parse_in_both_forms():
     assert sync_sections.parse_sync_heading("2026-08-17 updates (WS-008.31 — sync to 9756947)") == ("9756947", "2026-08-17")
     assert sync_sections.parse_sync_heading("Notifications") is None
     assert sync_sections.parse_sync_heading("Sync to stable abc") is None, "a date is required too"
+    # Forms seen in real packs that carry no "to <sha>": the date alone orders the section.
+    assert sync_sections.parse_sync_heading("Stable sync 8c0845b24cf4 (2026-11-13, after promotion P9)") == ("8c0845b24cf4", "2026-11-13")
+    assert sync_sections.parse_sync_heading("Sync to master (2026-11-04, after promotion 3)") == (None, "2026-11-04")
+    assert sync_sections.parse_sync_heading("Architecture overview (2026-11-04)") is None, "no sync word, no sync heading"
     assert sync_sections.parse_section_path("Service / Sync to stable abcdef1 (2026-01-02, x) / Detail") == ("abcdef1", "2026-01-02")
 
 
@@ -223,7 +227,8 @@ def test_an_error_from_a_stale_worktree_carries_the_hint_and_stays_error_only(al
     result = tool_registry()["knowledge_get"](item_id="section:nothing:here")
     assert set(result) == {"error"}, "the protocol layer needs the error to be the only key"
     assert result["error"].startswith("item not found: section:nothing:here")
-    assert f"consumer_root={alertmanager_consumer}" in result["error"] or "consumer_root=" in result["error"]
+    primary = alertmanager_consumer.resolve()
+    assert f"consumer_root={primary}" in result["error"] or f"consumer_root={alertmanager_consumer}" in result["error"]
 
 
 def test_an_error_from_the_primary_checkout_is_left_alone(alertmanager_consumer):
@@ -270,9 +275,9 @@ def test_text_is_left_alone_when_something_else_already_exceeds_the_budget():
 
 
 def test_sync_ref_rejects_dates_and_words_that_look_like_hex():
-    assert sync_sections.parse_sync_heading("Sync to master 20261106 (2026-11-06, x)") is None
-    assert sync_sections.parse_sync_heading("Sync to defaced (2026-11-06, x)") is None
-    assert sync_sections.parse_sync_heading("Sync to ABCDEF1 (2026-11-06, x)") is None, "refs are lowercase hex"
+    assert sync_sections.parse_sync_heading("Sync to master 20261106 (2026-11-06, x)") == (None, "2026-11-06")
+    assert sync_sections.parse_sync_heading("Sync to defaced (2026-11-06, x)") == (None, "2026-11-06")
+    assert sync_sections.parse_sync_heading("Sync to ABCDEF1 (2026-11-06, x)") == (None, "2026-11-06"), "refs are lowercase hex"
     assert sync_sections.parse_sync_heading("SYNC TO master abcdef1 (2026-11-06, x)") == ("abcdef1", "2026-11-06")
 
 
@@ -308,3 +313,42 @@ def test_a_git_failure_never_fails_the_report(alertmanager_consumer, monkeypatch
     info = describe_resolution()
     assert info["stale"] is False and info["linked_worktree"] is False
     assert "consumer_root_resolution" in tool_registry()["knowledge_status"]()
+
+
+def test_a_non_ascii_digit_in_the_pack_version_does_not_break_status(alertmanager_consumer):
+    status = _status_with_pack_version(alertmanager_consumer, "0.9.\u00b2")  # superscript two: isdigit() is True
+    assert status["version_mismatch"] is True
+    assert "cannot be ordered" in status["version_note"]
+
+
+def test_a_skipped_cut_leaves_no_text_chars():
+    caveats = [{"id": f"c{i}", "note": "n" * 400} for i in range(120)]
+    trimmed = bundle_mod._trim_to_budget({"items": [{"id": "section:svc:x", "text": "t" * 250}], "citations": [],
+                                          "verification": [], "probes": [], "conflicts_and_caveats": caveats})
+    assert "text_chars" not in trimmed["items"][0]
+
+
+def test_a_sync_section_without_a_sha_still_ages_its_older_siblings(alertmanager_consumer):
+    skill = alertmanager_consumer / ".xtrm/skills/infra/service-knowledge/services/alertmanager/SKILL.md"
+    skill.write_text(skill.read_text(encoding="utf-8") + """
+## Sync to master (2026-11-01, after promotion 1)
+The older sync says webhook retention is seven days.
+
+## Stable sync bbbbbbb2 (2026-11-10, after promotion 2)
+The newer sync says webhook retention is thirty days.
+""", encoding="utf-8")
+    result = tool_registry()["knowledge_search"](query="webhook retention", limit=7)
+    older = [i for i in result["items"] if i.get("section_date") == "2026-11-01"]
+    assert older and older[0]["section_sync_ref"] is None and older[0]["superseded_candidate"] is True
+
+
+def test_a_failing_report_says_so_instead_of_vanishing(alertmanager_consumer, monkeypatch):
+    from service_knowledge.mcp import _root
+
+    def boom(*_a, **_k):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr("service_knowledge.mcp.describe_resolution", boom)
+    status = tool_registry()["knowledge_status"]()
+    assert status["consumer_root_resolution"] == {"unavailable": "PermissionError: denied"}
+    assert status["registry_present"] is True, "the answer itself is unharmed"

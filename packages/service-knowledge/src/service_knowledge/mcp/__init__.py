@@ -45,7 +45,10 @@ def _with_resolution(run: Callable[..., Any]) -> Callable[..., Any]:
             return result
         try:
             resolution = describe_resolution(kwargs.get("consumer_root"))
-        except Exception:  # report-only: never turn a good answer into a failure
+        except Exception as exc:  # report-only: never turn a good answer into a failure
+            if "error" not in result:
+                # Say that the report is missing instead of silently dropping the field.
+                result["consumer_root_resolution"] = {"unavailable": f"{type(exc).__name__}: {exc}"}
             return result
         if "error" in result:
             # An {"error": ...} payload stays the only key (the protocol layer turns it into

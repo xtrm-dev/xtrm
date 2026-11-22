@@ -20,24 +20,34 @@ import datetime
 import re
 from typing import Any
 
-# "sync to" may be any case; the ref is a lowercase hex sha with at least one digit (so words such
-# as "defaced" never match) and is not an 8-digit date such as 20261106.
-_SYNC_REF = re.compile(r"(?i:\bsync\s+to)\s+(?:[A-Za-z][\w./-]*\s+)?((?=[0-9a-f]*\d)[0-9a-f]{7,40})\b")
+# A sync heading says "sync" and carries a date. The ref is optional: real packs also write
+# "Stable sync <sha> (<date>...)" and "Sync to master (<date>...)" (no sha). When present, the ref
+# is a lowercase hex sha with at least one digit (so words such as "defaced" never match) and not
+# an 8-digit date such as 20261106.
+_SYNC_WORD = re.compile(r"(?i)\bsync\b")
+_SYNC_REF = re.compile(r"(?i:\bsync(?:\s+to)?)\s+(?:[A-Za-z][\w./-]*\s+)?((?=[0-9a-f]*\d)[0-9a-f]{7,40})\b")
 _DATE_IN_PARENS = re.compile(r"\((\d{4}-\d{2}-\d{2})\b")
 _DATE_LEADING = re.compile(r"^\W*(\d{4}-\d{2}-\d{2})\b")
 
 
-def parse_sync_heading(heading: str) -> tuple[str, str] | None:
-    """Return ``(sync_ref, date)`` for a sync heading, else ``None`` (needs both)."""
-    ref = _SYNC_REF.search(heading or "")
-    date = _DATE_IN_PARENS.search(heading or "") or _DATE_LEADING.search(heading or "")
-    if not ref or not date or re.fullmatch(r"\d{8}", ref.group(1)):
+def parse_sync_heading(heading: str) -> tuple[str | None, str] | None:
+    """Return ``(sync_ref or None, date)`` for a sync heading, else ``None``.
+
+    A heading needs the word "sync" and a date. The date is what orders sections, so a heading
+    without a sha still counts; its ref is ``None``.
+    """
+    text = heading or ""
+    date = _DATE_IN_PARENS.search(text) or _DATE_LEADING.search(text)
+    if not date or not _SYNC_WORD.search(text):
         return None
-    return ref.group(1), date.group(1)
+    ref = _SYNC_REF.search(text)
+    if ref and re.fullmatch(r"\d{8}", ref.group(1)):
+        ref = None
+    return (ref.group(1) if ref else None), date.group(1)
 
 
-def parse_section_path(section_path: str) -> tuple[str, str] | None:
-    """Return the sync ref and date of the deepest sync heading in a ``"H1 / H2"`` breadcrumb."""
+def parse_section_path(section_path: str) -> tuple[str | None, str] | None:
+    """Return ``(ref or None, date)`` of the deepest sync heading in a ``"H1 / H2"`` breadcrumb."""
     for segment in reversed((section_path or "").split(" / ")):
         parsed = parse_sync_heading(segment)
         if parsed:
