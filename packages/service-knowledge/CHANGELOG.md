@@ -25,7 +25,8 @@ All notable changes to the `service-knowledge` package.
   where the 0.8.0 reports came from; a test now pins every version string to one value.
 - **Section age.** Each item carries `section_sync_ref`, `section_date` and `superseded_candidate`,
   read from "Sync to <ref> (<date>, ...)" headings at query time (no index schema change). A section
-  older than the newest sync section of the same service is a *candidate*, not a verdict.
+  older than the newest sync section of the same service is a *candidate*, not a verdict. A ref is a
+  lowercase hex sha with a digit (not an 8-digit date), and a future-dated section is ignored when finding the newest.
 - **Descriptions.** The five tool descriptions follow one template (PURPOSE, PARAMETERS, RETURNS,
   EMPTY OR STALE, EXAMPLE), pinned by a test; `tool-definitions.json` is regenerated.
 - Not changed: the index format, the packs' content, stacked sync sections (they are marked, not merged).

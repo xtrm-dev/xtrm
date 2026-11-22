@@ -16,10 +16,13 @@ hold the only description of a part of the service.
 """
 from __future__ import annotations
 
+import datetime
 import re
 from typing import Any
 
-_SYNC_REF = re.compile(r"\bsync\s+to\s+(?:[A-Za-z][\w./-]*\s+)?([0-9a-f]{7,40})\b", re.IGNORECASE)
+# "sync to" may be any case; the ref is a lowercase hex sha with at least one digit (so words such
+# as "defaced" never match) and is not an 8-digit date such as 20261106.
+_SYNC_REF = re.compile(r"(?i:\bsync\s+to)\s+(?:[A-Za-z][\w./-]*\s+)?((?=[0-9a-f]*\d)[0-9a-f]{7,40})\b")
 _DATE_IN_PARENS = re.compile(r"\((\d{4}-\d{2}-\d{2})\b")
 _DATE_LEADING = re.compile(r"^\W*(\d{4}-\d{2}-\d{2})\b")
 
@@ -28,9 +31,9 @@ def parse_sync_heading(heading: str) -> tuple[str, str] | None:
     """Return ``(sync_ref, date)`` for a sync heading, else ``None`` (needs both)."""
     ref = _SYNC_REF.search(heading or "")
     date = _DATE_IN_PARENS.search(heading or "") or _DATE_LEADING.search(heading or "")
-    if not ref or not date:
+    if not ref or not date or re.fullmatch(r"\d{8}", ref.group(1)):
         return None
-    return ref.group(1).lower(), date.group(1)
+    return ref.group(1), date.group(1)
 
 
 def parse_section_path(section_path: str) -> tuple[str, str] | None:
@@ -50,7 +53,9 @@ def newest_sync_date(conn: Any, service_id: str) -> str | None:
         "SELECT DISTINCT section_path FROM sk_items WHERE service_id=? AND section_path!=''",
         (service_id,),
     ).fetchall()
-    dates = [p[1] for p in (parse_section_path(row[0]) for row in rows) if p]
+    # A future date is a typo or a bad clock, and one of them would mark every real section older.
+    today = datetime.date.today().isoformat()
+    dates = [p[1] for p in (parse_section_path(row[0]) for row in rows) if p and p[1] <= today]
     return max(dates) if dates else None
 
 

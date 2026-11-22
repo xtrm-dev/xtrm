@@ -180,7 +180,19 @@ def test_every_tool_description_follows_the_template_and_names_no_ticket():
         assert all(p >= 0 for p in positions), (spec["name"], positions)
         assert positions == sorted(positions), f"{spec['name']}: sections out of order"
         assert not re.search(r"\b(?:MMD|XTRM|CORE|SPECIALISTS|SUBSTRATE)-\d+", text), spec["name"]
-        assert "EXAMPLE: " in text and spec["name"] in spec["name"]
+        assert "EXAMPLE: " in text
+
+
+def test_every_example_is_valid_json_that_fits_the_tool_parameters():
+    for spec in tool_specs():
+        example = spec["description"].split("EXAMPLE: ", 1)[1].strip()
+        arguments = json.loads(example)
+        properties = spec["parameters"].get("properties", {})
+        assert set(arguments) <= set(properties), (spec["name"], set(arguments) - set(properties))
+        assert set(spec["parameters"].get("required", [])) <= set(arguments), spec["name"]
+        for name, value in arguments.items():
+            limit = properties[name].get("maximum")
+            assert limit is None or value <= limit, (spec["name"], name)
 
 
 def test_a_single_oversized_item_text_is_cut_and_marked():
@@ -255,3 +267,44 @@ def test_text_is_left_alone_when_something_else_already_exceeds_the_budget():
     assert trimmed["items"][0]["text"] == "t" * 250
     assert "text_truncated" not in trimmed["items"][0]
     assert trimmed["truncated"] is False
+
+
+def test_sync_ref_rejects_dates_and_words_that_look_like_hex():
+    assert sync_sections.parse_sync_heading("Sync to master 20261106 (2026-11-06, x)") is None
+    assert sync_sections.parse_sync_heading("Sync to defaced (2026-11-06, x)") is None
+    assert sync_sections.parse_sync_heading("Sync to ABCDEF1 (2026-11-06, x)") is None, "refs are lowercase hex"
+    assert sync_sections.parse_sync_heading("SYNC TO master abcdef1 (2026-11-06, x)") == ("abcdef1", "2026-11-06")
+
+
+def test_a_future_dated_section_does_not_mark_every_other_section_superseded(alertmanager_consumer):
+    skill = alertmanager_consumer / ".xtrm/skills/infra/service-knowledge/services/alertmanager/SKILL.md"
+    skill.write_text(skill.read_text(encoding="utf-8") + _SYNC_SECTIONS + """
+## Sync to stable ccccccc3 (2099-01-01, a typo)
+The mistyped section says retention is forever.
+""", encoding="utf-8")
+    result = tool_registry()["knowledge_search"](query="webhook retention", limit=7)
+    by_ref = {i["section_sync_ref"]: i for i in result["items"] if i.get("section_sync_ref")}
+    assert by_ref["bbbbbbb2"]["superseded_candidate"] is False, "the real newest section must stay current"
+    assert by_ref["aaaaaaa1"]["superseded_candidate"] is True
+
+
+def test_the_hint_says_so_when_the_primary_checkout_cannot_be_passed(alertmanager_consumer, tmp_path, monkeypatch):
+    repo = alertmanager_consumer
+    outside = tmp_path / "elsewhere-wt"  # a sibling, so the primary is not an ancestor of the session root
+    _git(repo, "worktree", "add", "-q", str(outside), "-b", "wt2")
+    (repo / "newer.txt").write_text("newer\n", encoding="utf-8")
+    _git(repo, "add", "newer.txt")
+    _git(repo, "commit", "-qm", "newer")
+    monkeypatch.setenv("SERVICE_KNOWLEDGE_ROOT", str(outside))
+    info = describe_resolution()
+    assert info["stale"] is True
+    assert "cannot be passed as consumer_root" in str(info["hint"])
+
+
+def test_a_git_failure_never_fails_the_report(alertmanager_consumer, monkeypatch):
+    from service_knowledge.mcp import _root
+
+    monkeypatch.setattr(_root, "_git", lambda *a, **k: None)
+    info = describe_resolution()
+    assert info["stale"] is False and info["linked_worktree"] is False
+    assert "consumer_root_resolution" in tool_registry()["knowledge_status"]()
