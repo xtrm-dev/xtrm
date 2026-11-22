@@ -68,6 +68,8 @@ describe("top-bar account control", () => {
     fireEvent.click(await within(await topBar()).findByRole("button", { name: "Sign in with GitHub" }));
     const el = await screen.findByTestId("inspector-drawer");
     expect(within(el).getByRole("heading", { name: "Sign in with GitHub" })).toBeTruthy();
+    // XTRM-996: the start view's own control is pinned, not just the notice's.
+    expectToolbarControl(within(el).getByRole("button", { name: "Sign in with GitHub" }));
     expect(router.state.location.search).toMatchObject({ inspect: "github-auth:signin" });
   });
 
@@ -217,7 +219,34 @@ describe("inline GitHub notices", () => {
   it("asks to sign in again when expired", async () => {
     renderAt(pulls, { state: "expired", auth_source: "none" });
     const notice = await screen.findByText("GitHub sign-in expired.");
-    fireEvent.click(within(notice.closest("[data-testid=github-notice]")!).getByRole("button", { name: "Sign in again" }));
+    const signInAgain = within(notice.closest("[data-testid=github-notice]")!).getByRole("button", { name: "Sign in again" });
+    expectToolbarControl(signInAgain);
+    fireEvent.click(signInAgain);
+    expect(await screen.findByTestId("inspector-drawer")).toBeTruthy();
+  });
+
+  it("offers the device code from the pending notice", async () => {
+    renderAt(pulls, PENDING);
+    const notice = (await screen.findByText("Sign-in in progress.")).closest("[data-testid=github-notice]")!;
+    expect(notice.dataset.state).toBe("pending");
+    // The top bar's own entry point is `Enter GitHub code`, so the exact name scopes this one.
+    const enterCode = within(notice as HTMLElement).getByRole("button", { name: "Enter code" });
+    expectToolbarControl(enterCode);
+    fireEvent.click(enterCode);
+    expect(await screen.findByTestId("inspector-drawer")).toBeTruthy();
+  });
+
+  it("offers a retry from the error notice", async () => {
+    renderAt(pulls, {
+      state: "error",
+      auth_source: "none",
+      error: { code: "bad_gateway", message: "GitHub login is unavailable" },
+    });
+    const notice = (await screen.findByText(/GitHub sign-in failed: GitHub login is unavailable/)).closest("[data-testid=github-notice]")!;
+    expect(notice.dataset.state).toBe("error");
+    const retry = within(notice as HTMLElement).getByRole("button", { name: "Try again" });
+    expectToolbarControl(retry);
+    fireEvent.click(retry);
     expect(await screen.findByTestId("inspector-drawer")).toBeTruthy();
   });
 
