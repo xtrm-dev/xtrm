@@ -13,7 +13,11 @@ import { InspectorDock } from "./InspectorDock.tsx";
 import { ShellProvider, useShell } from "./context.tsx";
 import { SIDEBAR, isShortcutSuppressed, modShortcut } from "./layout.ts";
 
-/** Top bar of the main viewport: search, then the global options. */
+/**
+ * Top bar of the main viewport: search, then the global options.
+ * The shell has exactly two chrome heights: this bar (44px, h-11) and the drawer
+ * strip (48px, h-12, ui/drawer.tsx). The search pill is 32px, centred in the 44px bar.
+ */
 function TopBar() {
   const { theme, toggleTheme, openPalette, repo, layout, dispatch } = useShell();
   const navigate = useNavigate();
@@ -26,7 +30,7 @@ function TopBar() {
         type="button"
         onClick={() => openPalette("search")}
         aria-label="Search"
-        className="mx-auto flex h-8 w-full max-w-xl items-center gap-2 rounded-md bg-hover px-3 text-left text-sm text-ink-faint outline-none hover:bg-pressed hover:text-ink-muted focus-visible:bg-pressed"
+        className="mx-auto flex h-8 w-full max-w-xl items-center gap-2 rounded-md px-3 text-left text-sm text-ink-faint outline-none hover:bg-hover hover:text-ink-muted focus-visible:bg-hover focus-visible:text-ink-muted"
       >
         <Icon name="search" size="xs" />
         <span className="flex-1 truncate">Search issues and repositories in {repo.name} or the workspace…</span>

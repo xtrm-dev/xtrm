@@ -1,5 +1,5 @@
 import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
-import { Dialog } from "../ui/dialog.tsx";
+import { Dialog, DialogFrame } from "../ui/dialog.tsx";
 import { Fields } from "../ui/drawer.tsx";
 import { SectionHeader } from "../ui/section.tsx";
 import { ToolbarButton, ToolbarTabs } from "../ui/toolbar.tsx";
@@ -304,12 +304,8 @@ function NormalizeBanner({ plan, issue, canWrite, onApply }: { plan: Normalizati
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Trigger className="h-7 shrink-0 rounded-md border border-border px-2.5 text-sm text-ink outline-none hover:bg-hover focus-visible:bg-hover">Review mapping</Dialog.Trigger>
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/30 dark:bg-black/50" />
-          <Dialog.Popup className="thin-scrollbar fixed top-[8vh] left-1/2 z-50 flex max-h-[84vh] w-[min(760px,calc(100vw-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-lg bg-raised shadow-float outline-none">
-            <div className="flex h-12 shrink-0 items-center border-b border-border-muted px-5">
-              <Dialog.Title className="text-base font-medium text-ink">Normalize {issue.ref} contract</Dialog.Title>
-            </div>
-            <div className="thin-scrollbar flex flex-col gap-5 overflow-y-auto px-5 py-4">
+          <DialogFrame title={`Normalize ${issue.ref} contract`} frameWidth={760} top={8} maxHeight={84}>
+            <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
               <Dialog.Description className="text-sm text-ink-muted">
                 Saving writes one new contract revision. Sections move only into fields that are empty or still carry the import placeholder; readiness is re-evaluated by Substrate.
               </Dialog.Description>
@@ -329,7 +325,7 @@ function NormalizeBanner({ plan, issue, canWrite, onApply }: { plan: Normalizati
                 plan.patch[f]?.length ? <PreviewBlock key={f} title={FIELD_LABEL[f]!} markdown={plan.patch[f]!.map((x) => `- ${x.replace(/\n/g, "\n  ")}`).join("\n")} /> : null,
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-2 border-t border-border-muted px-5 py-3">
+            <DialogFrame.Footer>
               {canWrite ? (
                 <EditActions
                   saving={saving}
@@ -347,8 +343,8 @@ function NormalizeBanner({ plan, issue, canWrite, onApply }: { plan: Normalizati
               ) : (
                 <span className="text-sm text-ink-faint">Writes are disabled for this source.</span>
               )}
-            </div>
-          </Dialog.Popup>
+            </DialogFrame.Footer>
+          </DialogFrame>
         </Dialog.Portal>
       </Dialog.Root>
     </div>
