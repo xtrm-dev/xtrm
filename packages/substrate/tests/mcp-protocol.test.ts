@@ -7,6 +7,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { openSubstrate } from "../src/store/sqlite.ts";
 import { IssueService } from "../src/service/issue-service.ts";
+import { ClosureService } from "../src/service/closure-service.ts";
 import { contract, repoEnv, tempDir } from "./helpers.ts";
 import { buildServer, SUBSTRATE_PROTOCOL_REVISION, SUBSTRATE_SERVER_NAME } from "../integrations/claude-code/mcp-server.ts";
 
@@ -316,6 +317,65 @@ describe("MCP 2026-07-28 protocol (xtrm-iip.3)", () => {
     const closed = (await call("issue_close", { ref: s.humanRef, outcome: "completed", reason: "mcp e2e done", actor: "mcp-tester", project: "prj_xtrm" })) as Record<string, unknown>;
     assert.equal(closed["outcome"], "completed");
     assert.equal(closed["terminalState"], "done");
+  });
+
+  it("issue_close records a blocker override an agent could otherwise not supply (XTRM-959)", async () => {
+    // The schema had no blockerOverrideReason, so an agent-driven close over an
+    // open blocker could only ever be refused: the parameter would be decoration
+    // without this test. Both legs are pinned — refused without the reason,
+    // recorded with it — so dropping the parameter or the wiring fails here.
+    const db = openSubstrate(s.dbPath);
+    const blocker = new IssueService(db).createIssue({
+      projectId: "prj_xtrm",
+      title: "the blocker",
+      kind: "task",
+      contract: contract({ problem: "b", success: "b" }),
+      scrutiny: "LOW",
+      authoredBy: "tester",
+    });
+    const dependent = new IssueService(db).createIssue({
+      projectId: "prj_xtrm",
+      title: "the dependent",
+      kind: "task",
+      contract: contract({ problem: "d", success: "d" }),
+      scrutiny: "LOW",
+      authoredBy: "tester",
+    });
+    new IssueService(db).addEdge(blocker.id, dependent.id, "blocks");
+    db.close();
+
+    const close = (args: Record<string, unknown>) =>
+      wire.send("tools/call", {
+        name: "issue_close",
+        arguments: { dbPath: s.dbPath, project: "prj_xtrm", ref: dependent.humanRef, outcome: "completed", reason: "delivered", actor: "mcp-tester", ...args },
+        _meta: meta(),
+      });
+
+    // Without the reason the close is refused, and the refusal names the blocker.
+    const refused = await close({});
+    const refusedText = JSON.stringify(refused.error ?? refused.result);
+    assert.match(refusedText, /still open/);
+    assert.match(refusedText, new RegExp(blocker.humanRef));
+
+    // With it, the close lands and the row carries the reason.
+    const accepted = await close({ blockerOverrideReason: "the blocker gates only the follow-up" });
+    assert.ok(!accepted.error, JSON.stringify(accepted.error));
+    const acceptedBody = JSON.parse(
+      ((accepted.result as { content: Array<{ text: string }> }).content[0] as { text: string }).text,
+    ) as Record<string, unknown>;
+    assert.equal(acceptedBody["outcome"], "completed");
+    assert.equal(acceptedBody["terminalState"], "done");
+
+    const reread = openSubstrate(s.dbPath);
+    try {
+      const closure = new ClosureService(reread, new IssueService(reread)).getLatestClosure(dependent.id);
+      assert.deepEqual(closure?.blockerOverride, {
+        reason: "the blocker gates only the follow-up",
+        refs: [blocker.humanRef],
+      });
+    } finally {
+      reread.close();
+    }
   });
 
   it("issue_update repairs only a SUPPLIED contract and reports it (XTRM-786 review)", async () => {

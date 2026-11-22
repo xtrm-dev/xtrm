@@ -122,11 +122,20 @@ idempotency key, so a retried mutation may run twice.
   again, which records the new generation.
 - `issue state <ref> <open|deferred|done|cancelled|archived>` — set the
   lifecycle state; every transition emits a durable event.
-- `issue close <ref> [--outcome ... --reason ...] [--link-gate warn|enforce|off] [--gate-override <reason>]` —
+- `issue close <ref> [--outcome ... --reason ...] [--link-gate warn|enforce|off] [--gate-override <reason>] [--force-close-with-open-blocker <why>]` —
   the close gate reads T1/T2 links; warn (default) records
   `provenance.link_gate_warned` and proceeds, enforce refuses with
   `gate_*` codes, off skips; an override is a reason that writes a Journal
   decision. The same gate covers the bare close and `state done`.
+  A close is also refused while a declared blocking dependency is still open:
+  `--force-close-with-open-blocker <why>` records the stated reason and the
+  blocker refs on the Closure row and prints them in `issue show`, so a forced
+  close stays distinguishable from an ordered one. `superseded`, `duplicate`
+  and `cancelled` are exempt. A blocker is satisfied only by being itself
+  terminal (`done`/`archived`) — an open or merged PR is not evidence.
+  The same rule covers the bare `close`, which has no Closure row to record an
+  override and can therefore only refuse. `issue state <ref> done` does **not**
+  carry this guard yet (XTRM-967).
 - `issue close|reopen|cancel|archive <ref>` — lifecycle aliases:
   `issue close` (= state `done`), `issue reopen` (= `open`),
   `issue cancel` (= `cancelled`), `issue archive` (= `archived`);

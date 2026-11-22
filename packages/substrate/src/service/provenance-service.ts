@@ -1261,6 +1261,15 @@ export class ProvenanceService {
       source: source === "beads" ? "beads" : "sb",
       legacyState: (r["legacy_state"] as string | null) ?? null,
       closedAt: r["closed_at"] as number,
+      // The provenance projection is the surface an auditor is told to consult,
+      // so it must carry the same override the Closure row does. A forced close
+      // visible only through `getLatestClosure` is invisible where it matters
+      // (XTRM-959 review finding 4).
+      blockerOverride: (() => {
+        const why = r["blocker_override_reason"] as string | null | undefined;
+        if (why === null || why === undefined || why === "") return null;
+        return { reason: why, refs: list("blocker_override_refs_json") };
+      })(),
     };
   }
 

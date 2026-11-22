@@ -59,6 +59,13 @@ export interface Closure {
   source: ClosureSource;
   legacyState: string | null;
   closedAt: number;
+  /**
+   * XTRM-959: present only when the close was deliberately written past a
+   * blocking dependency that was still open. `reason` is the caller's stated
+   * justification, `refs` the human refs of the blockers that were open at the
+   * time. Absent (null) means the close was not forced — never a placeholder.
+   */
+  blockerOverride: { reason: string; refs: string[] } | null;
 }
 
 export type ClosureAttemptKind = "close" | "reopen" | "cancel";

@@ -498,7 +498,8 @@ const TOOL_DEFS: ToolDef[] = [
       "validation/receipt refs; a progress note or a contract edit must not be used in place of a result; the bounded result payload is required. " +
       "Automatic context: the Closure records actor, execution envelope (session, participant, run, workspace), " +
       "closed-at timestamp and provenance refs automatically; outcome must be one of " +
-      "completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned, and reason is required (it lives in the row, never only in git log).",
+      "completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned, and reason is required (it lives in the row, never only in git log). " +
+      "A close is refused while a declared blocking dependency is still open; to close anyway, pass blockerOverrideReason saying why that dependency no longer binds, which is recorded on the Closure row.",
     schema: z.object({
       ref: z.string().min(1),
       outcome: z.enum(CLOSURE_OUTCOMES),
@@ -512,12 +513,13 @@ const TOOL_DEFS: ToolDef[] = [
       participantId: z.string().optional(),
       activationId: z.string().optional(),
       runId: z.string().optional(),
+      blockerOverrideReason: z.string().optional(),
       project: z.string().optional(),
       dbPath: dbPathSchema,
     }),
     handler: async ({
       ref, outcome, reason, actor, validationRefs, journalResultRefs, receiptRefs, artifactRefs,
-      sessionId, participantId, activationId, runId, project, dbPath,
+      sessionId, participantId, activationId, runId, blockerOverrideReason, project, dbPath,
     }) => {
       const handles = openHandles(dbPath as string | undefined);
       try {
@@ -538,6 +540,9 @@ const TOOL_DEFS: ToolDef[] = [
           journalResultRefs: (journalResultRefs as string[] | undefined) ?? undefined,
           receiptRefs: (receiptRefs as string[] | undefined) ?? undefined,
           artifactRefs: (artifactRefs as string[] | undefined) ?? undefined,
+          // XTRM-959: without this an agent-driven close cannot record an
+          // override at all, so it could only ever be refused past a blocker.
+          blockerOverrideReason: (blockerOverrideReason as string | undefined) ?? null,
         });
         return textPayload({
           closureId: closure.closureId,
