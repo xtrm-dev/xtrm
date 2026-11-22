@@ -19,15 +19,43 @@ import { expect, test, type Page } from "@playwright/test";
 
 const REPO = "xtrm-dev/xtrm";
 
-/** The pair the review measured; the long one is what overflowed by 84px before the fix. */
+/**
+ * The pair the review measured; the long one is what overflowed by 84px before the fix.
+ *
+ * XTRM-966: the short pair used to be `good first issue + help wanted`, which filled its 144px cell
+ * exactly (77 + 63 + 4 gap = 144). Two CI runs at one head then disagreed — one passed, one failed
+ * with `the short pair fits` — because the pair had ZERO pixels of margin and the chip's text metric
+ * moves with the font: with Figtree's woff2 blocked (the state the #475 review measured) those chips
+ * measure 81 and 65 and report truncated. A control that flips on a subpixel of font resolution is not
+ * a control. `good first issue + docs` keeps 33px of margin with Figtree and 29px without it, and
+ * still fails if the primitive stops offering `shrink` — the behaviour this file exists to protect.
+ */
 const PAIRS = [
-  ["good first issue", "help wanted"],
+  ["good first issue", "docs"],
   ["area/platform-ui", "needs-triage-and-reproduction"],
 ] as const;
+
+/** The metric the assertions depend on, named so a future flip is diagnosed in one read. */
+const FONT_METRIC = "Figtree Variable";
+
+/**
+ * The margin the short pair must keep, in px of the cell. Not a tolerance around a tight fit — a floor
+ * that says "this control measures fit, not font resolution". `good first issue + docs` clears it at 33
+ * (Figtree) and 29 (fallback); the pair it replaced cleared it by 0.
+ */
+const MIN_SHORT_SLACK = 20;
 
 async function openGithubIssues(page: Page) {
   await page.goto(`/rep/${REPO}/code/issues`);
   await expect(page.locator('[data-testid="gh-issue-row"]').first()).toBeVisible();
+  // The geometry below is a TEXT metric, so it is only meaningful once the webfont has resolved.
+  // `document.fonts.ready` waits for the load; the check then fails loudly instead of silently
+  // measuring the fallback stack, which is the 2px shift that produced the disagreement (XTRM-966).
+  await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.evaluate((f: string) => document.fonts.check(`1em "${f}"`), FONT_METRIC),
+    `${FONT_METRIC} did not resolve, so the chip metrics below are the fallback stack: the numbers this file asserts are meaningless`,
+  ).toBe(true);
 }
 
 /** Replace the first row's labels with `labels`, reusing the chip's own classes and attributes. */
@@ -55,12 +83,24 @@ function labelGeometry() {
   const cell = chip?.closest("div");
   if (!row || !chip || !container || !cell) return null;
   const box = (el: Element) => el.getBoundingClientRect();
+  // A chip that FITS reports client == scroll, so per-chip slack is always 0 and cannot carry the
+  // margin claim. The margin is the cell's: what the chips would occupy unwrapped, against the width
+  // the cell actually gives them (XTRM-966).
+  const padding = (el: Element) => Number.parseFloat(getComputedStyle(el).paddingLeft) + Number.parseFloat(getComputedStyle(el).paddingRight);
+  const gap = Number.parseFloat(getComputedStyle(container).columnGap) || 0;
+  const want = [...container.children].reduce((n, el) => n + el.scrollWidth, 0) + gap * Math.max(0, container.children.length - 1);
   return {
+    want,
+    room: cell.clientWidth - padding(cell),
     overflow: Math.round(container.scrollWidth - container.clientWidth),
     cellRight: Math.round(box(cell).right),
     chips: [...container.children].map((el) => ({
       text: el.textContent ?? "",
       right: Math.round(box(el).right),
+      // Both numbers are reported, not just the boolean: `slack` is what the short pair asserts on,
+      // and a reader diagnosing a flip needs the pair that produced it.
+      client: el.clientWidth,
+      scroll: el.scrollWidth,
       // A truncated chip reports more text than it shows; that is the ellipsis engaging.
       truncated: el.scrollWidth > el.clientWidth,
       shrink: getComputedStyle(el).flexShrink,
@@ -100,14 +140,20 @@ for (const theme of ["light", "dark"] as const) {
         expect(chip.right, `${where}: ${chip.text} stays inside its cell`).toBeLessThanOrEqual(geometry.cellRight);
       }
       // Truncation is what keeps the text honest: the chip shows an ellipsis instead of painting over
-      // the next column. The long pair must clip. The short pair must NOT, and that is asserted rather
-      // than described: it fits with zero slack (77 + 63 + gap 4 = 144), so any metric change — a font
-      // revision, one more character, a border, a zoom step — flips it to clipping with no other signal,
-      // and an ellipsis inside the cell leaves the container assertion green.
+      // the next column. The long pair must clip. The short pair must NOT.
+      //
+      // XTRM-966: the short pair used to fit with zero slack, so it flipped between two CI runs at one
+      // head. It now carries margin, and the margin is ASSERTED rather than assumed — `slack` per chip
+      // is reported in the failure message, so a future flip says which chip lost how many pixels
+      // instead of only that a boolean turned over.
       if (pair === PAIRS[1]) {
         expect(geometry.chips.map((c) => c.truncated), `${where}: both long chips truncate`).toEqual([true, true]);
       } else {
-        expect(geometry.chips.map((c) => c.truncated), `${where}: the short pair fits`).toEqual([false, false]);
+        const numbers = `want ${geometry.want}px of ${geometry.room}px room (${geometry.chips.map((c) => `${c.text} ${c.client}/${c.scroll}`).join(", ")})`;
+        expect(geometry.chips.map((c) => c.truncated), `${where}: the short pair fits — ${numbers}`).toEqual([false, false]);
+        // Zero margin is what made this control a coin flip: 77 + 63 + 4 == 144 exactly. MIN_SHORT_SLACK
+        // is measured, not chosen.
+        expect(geometry.room - geometry.want, `${where}: the short pair keeps margin, not a knife edge — ${numbers}`).toBeGreaterThanOrEqual(MIN_SHORT_SLACK);
       }
     }
   });
