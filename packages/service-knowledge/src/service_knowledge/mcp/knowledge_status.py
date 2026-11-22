@@ -15,15 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from service_knowledge import __version__
+from service_knowledge.mcp._template import describe
 from service_knowledge.mcp._root import resolve_consumer_root
 
 TOOL_NAME = "knowledge_status"
-DESCRIPTION = (
-    "Report whether this repo's operational service knowledge is installed, indexed and current: "
-    "consumer root, installed machinery version, umbrella packs with their service counts, the "
-    "FTS5 index cache, git HEAD, and each service's last_sync_ref against HEAD. Use it to decide "
-    "whether knowledge_search results can be trusted in this checkout. Read-only; never writes "
-    "and never rebuilds."
+DESCRIPTION = describe(
+    purpose="Check whether this repo's service knowledge is installed, indexed and current, and which versions are involved. Call it when results look empty or stale. Read-only; never writes or rebuilds.",
+    parameters="consumer_root (string, optional): repo root to inspect; must be the session root or one of its ancestors, default: the session root.",
+    returns="consumer_root, registry_present, packs (name, umbrella, services), service_count, index_present, git_head, services_out_of_sync, usable, cli_version (the installed command), pack_version (the machinery vendored in this repo, null when absent), version_mismatch (true, false, or null when pack_version is absent) with version_note, plus consumer_root_resolution.",
+    empty_or_stale="registry_present=false means this repo has not adopted service-knowledge: the retrieval tools (knowledge_search, knowledge_get, knowledge_evidence_for_files) refuse here. version_mismatch=true means the repo's vendored machinery is older than the CLI: run `service-knowledge update` in the repo. services_out_of_sync lists services whose last_sync_ref differs from git_head. consumer_root_resolution.stale=true means the primary checkout is ahead of this worktree.",
+    example="{}",
 )
 PARAMETERS = {
     "type": "object",
@@ -125,10 +126,19 @@ def run(consumer_root: str | None = None, **_: Any) -> dict[str, Any]:
     head = _git_head(root)
     out_of_sync = sorted(sid for sid, ref in refs.items() if ref and head and ref != head)
 
+    # None when the consumer has no vendored VERSION file: there is nothing to compare.
+    mismatch = None if installed is None else installed != __version__
     return {
         "consumer_root": str(root),
-        "package_version": __version__,
-        "installed_version": installed,
+        "cli_version": __version__,
+        "pack_version": installed,
+        "version_mismatch": mismatch,
+        "version_note": (
+            f"The CLI is {__version__} but this repo's vendored machinery is {installed}; "
+            "run `service-knowledge update` in this repo."
+        ) if mismatch else None,
+        "package_version": __version__,    # alias of cli_version, kept for existing callers
+        "installed_version": installed,    # alias of pack_version, kept for existing callers
         "registry_present": bool(packs),
         "packs": [
             {"pack": name, "umbrella": umbrella, "services": count}

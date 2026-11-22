@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from service_knowledge.mcp._root import describe_resolution
 from service_knowledge.mcp import (
     knowledge_drift,
     knowledge_evidence_for_files,
@@ -34,8 +35,26 @@ TOOL_MODULES = (
 DEFERRED_TOOLS = ("knowledge_probes", "knowledge_conflicts")
 
 
+def _with_resolution(run: Callable[..., Any]) -> Callable[..., Any]:
+    """Attach ``consumer_root_resolution`` to every dict result: which checkout was read, and
+    whether it is behind the primary checkout. A failure to describe never fails the tool."""
+
+    def wrapped(**kwargs: Any) -> Any:
+        result = run(**kwargs)
+        # An {"error": ...} payload stays exactly that: the protocol layer turns it into isError.
+        if isinstance(result, dict) and "error" not in result:
+            try:
+                result["consumer_root_resolution"] = describe_resolution(kwargs.get("consumer_root"))
+            except Exception:  # report-only: never turn a good answer into a failure
+                pass
+        return result
+
+    wrapped.__name__ = getattr(run, "__name__", "run")
+    return wrapped
+
+
 def tool_registry() -> dict[str, Callable[..., Any]]:
-    return {module.TOOL_NAME: module.run for module in TOOL_MODULES}
+    return {module.TOOL_NAME: _with_resolution(module.run) for module in TOOL_MODULES}
 
 
 def tool_specs() -> list[dict[str, Any]]:

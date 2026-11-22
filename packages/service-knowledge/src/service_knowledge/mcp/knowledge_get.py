@@ -8,12 +8,16 @@ from __future__ import annotations
 from typing import Any
 
 from service_knowledge import index
+from service_knowledge.mcp._template import describe
 from service_knowledge.mcp._root import NoRegistry, resolve_registry_root
 
 TOOL_NAME = "knowledge_get"
-DESCRIPTION = (
-    "Fetch a single knowledge item by id (full text + citations + link to its skill) OR a full "
-    "SKILL.md by path. Read-only. Pass exactly one of item_id / skill_path."
+DESCRIPTION = describe(
+    purpose="Fetch one knowledge item by id, or one full SKILL.md by path, when a search hit needs its full text. Read-only.",
+    parameters="item_id (string): stable item id from a search hit, for example 'section:alertmanager:failure-modes'. skill_path (string): repo-relative SKILL.md path. Pass exactly one of the two. consumer_root (string, optional): repo root to read; must be the session root or one of its ancestors, default: the session root.",
+    returns="{item: {...}} with full text, citations and a link to its skill, or {skill: {...}} with the whole SKILL.md, plus consumer_root_resolution. Errors come back as {error: message}.",
+    empty_or_stale="'item not found' or 'skill not found' means the id or path is not in this checkout's index: search again for a current id. Check consumer_root_resolution.stale before concluding the item does not exist.",
+    example='{"item_id": "section:alertmanager:failure-modes"}',
 )
 PARAMETERS = {
     "type": "object",

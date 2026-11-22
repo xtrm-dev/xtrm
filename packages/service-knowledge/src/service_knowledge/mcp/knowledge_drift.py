@@ -19,15 +19,16 @@ import json
 from pathlib import Path
 from typing import Any
 
+from service_knowledge.mcp._template import describe
 from service_knowledge.mcp._root import resolve_consumer_root
 
 TOOL_NAME = "knowledge_drift"
-DESCRIPTION = (
-    "Report which services' operational knowledge has drifted from the code: the pending drift "
-    "marker (reason, services, commit range, timestamp), each service's recorded last_sync_ref "
-    "against git HEAD, and the services whose knowledge is stale. Call this before trusting "
-    "knowledge_search on a recently changed territory, and to decide whether to reconcile. "
-    "Read-only: it never writes the marker and never rebuilds the index."
+DESCRIPTION = describe(
+    purpose="Report which services' knowledge has drifted from the code they describe. Call it before trusting knowledge about recently changed code. Advisory; never blocks work. Read-only.",
+    parameters="consumer_root (string, optional): repo root to inspect; must be the session root or one of its ancestors, default: the session root.",
+    returns="git_head, marker_present and marker (reason, services, commit range, timestamp), service_count, services_behind_head (service_id, last_sync_ref), services_never_synced, drift_detected, suggested_action, plus consumer_root_resolution.",
+    empty_or_stale="drift_detected=false with empty lists means every service's last_sync_ref equals git_head and no drift marker is pending. services_never_synced lists services with no last_sync_ref: their knowledge has no verified baseline. Drift is judged against this checkout's HEAD, so check consumer_root_resolution.stale in a worktree.",
+    example="{}",
 )
 PARAMETERS = {
     "type": "object",
