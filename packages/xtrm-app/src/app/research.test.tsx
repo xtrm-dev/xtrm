@@ -513,6 +513,9 @@ describe("A metric renders value, interval and method together, whichever half i
     // the grid, and the addable combinations that would silently undo it. The rendered height is
     // measured in a browser by e2e/research-label-column.spec.ts.
     expect(span.className, "the value itself must ellipsise").toContain("truncate");
+    // Spelling-specific by nature: this catches `whitespace-normal` and not `whitespace-pre-wrap`
+    // or `break-words`, which also defeat truncate and leave this file green. The general claim is
+    // the browser spec's (it catches `whitespace-pre-wrap`: `id cells stay inside the row: 24, 40`).
     expect(span.className, "wrapping is the defect this guards: `whitespace-normal` undoes truncate").not.toContain("whitespace-normal");
     expect(header.className, "the cell lets its track shrink rather than widen the grid").toContain("min-w-0");
     // The clipping belongs to the ROW: the row is what has a fixed height, and a cell that wraps
@@ -920,5 +923,25 @@ describe("Every Research field grid shares one label column (XTRM-948)", () => {
     const manifest = gridsWithTerms().find((dl) => dl.querySelectorAll("dt").length === 6)!;
     expect(manifest, "the manifest grid is the six-row one (Experiment/Workload/Variant/Dataset/Accounting/Lineage)").toBeTruthy();
     expect(template(manifest), "8rem put a manifest value at 140px and a Definition value at 172px on the same console").toBe("10rem");
+  });
+
+  it("moves the chart row templates onto the same step, both shapes", async () => {
+    // The charts carried 8rem in `research-charts.tsx` before this slice — a measured row and a
+    // "not reported" row, two different templates — so a run id started 32px earlier than the value
+    // beside it (128px against 160px). Reverting either template to 8rem used to leave every suite
+    // green, because the census above counts `dl` field grids and these rows are spans: the map is
+    // complete only while both shapes are pinned. The experiment page is the route that renders both
+    // (a run with the metric and a run without it).
+    renderAt("/research/experiments/dup-detect-baseline");
+    await screen.findByText("Metric glossary");
+    await screen.findByText("Declared charts");
+    const rows = Array.from(document.querySelectorAll("div[style*='grid-template-columns']")).filter((el) => el.closest("[aria-label$='chart']") !== null);
+    const templates = rows.map((el) => (el as HTMLElement).style.gridTemplateColumns);
+    expect(templates, "the page renders a measured chart row and a not-reported chart row").toContain("10rem 1fr auto");
+    expect(templates, "the not-reported row is a second template and must take the step too").toContain("10rem 1fr");
+    expect(
+      templates.filter((t) => !t.startsWith(`${LABEL_COLUMN} `)),
+      "a chart row is a field list with a label column: 8rem here puts a run id 32px left of every value on the console",
+    ).toEqual([]);
   });
 });

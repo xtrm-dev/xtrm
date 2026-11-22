@@ -19,8 +19,12 @@ const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
  * field list. It is bounded by LABEL LENGTH, not by row density — an 8-character label is the limit,
  * and renaming those keys to `supported`/`unsupported` would overflow the fixed track.
  *
- * The 8rem column this replaces existed for the manifest grid alone; it is gone, and nothing should
- * reintroduce it — `LABEL_COLUMN` is the column for every field list. */
+ * The 8rem column this replaces was not the manifest grid's alone: `research-charts.tsx` carried
+ * `grid-cols-[8rem_1fr_auto]` and `grid-cols-[8rem_1fr]` on its two row templates, and both read
+ * `LABEL_COLUMN` now — so the chart's label column moved 128px -> 160px with the rest of the console
+ * and keeps it deliberately: 10rem is the step, and an 8rem chart was the exception that made a run
+ * id start 32px earlier than the value beside it. `research.test.tsx` pins the chart rows too, so
+ * returning either template to 8rem is a failing test rather than a silent width. */
 export const LABEL_COLUMN = "10rem";
 
 /** The sanctioned dense exception's column (see `LABEL_COLUMN`). */
