@@ -38,6 +38,7 @@ import {
   type ClosureOutcome,
 } from "../domain/closure.ts";
 import type { IssueService } from "./issue-service.ts";
+import { openBlockerRefusal } from "./open-blocker-refusal.ts";
 import { LinkGateService, type GateMode } from "./link-gate-service.ts";
 import { TERMINAL_STATES } from "../domain/issue.ts";
 
@@ -468,13 +469,18 @@ export class ClosureService {
     const issue = this.issues.getIssue(issueId);
     const reason = (overrideReason ?? "").trim();
     if (reason === "") {
+      // XTRM-980: the sentence comes from one builder, so this path and the
+      // terminal-state guard state the same rule in the same words. Only the
+      // remedy differs: this path writes a Closure row and can record why the
+      // blocker stopped binding.
       throw new Error(
-        `refusing to close ${issue.locator}: ${refs.length === 1 ? "blocker" : "blockers"} ${refs.join(", ")} ` +
-          `${refs.length === 1 ? "is" : "are"} still open. A blocker is satisfied only when it is itself terminal ` +
-          `(done or archived): an open PR is not evidence, and neither is a merged one — this guard reads the ` +
-          `blocker's lifecycle state, not its PRs. Close ${refs.join(", ")} first, or state why it no longer binds: ` +
-          `sb issue close ${issue.locator} --outcome ${outcome} --reason "<why this issue is finished>" ` +
-          `--force-close-with-open-blocker "<why ${refs.join(", ")} no longer binds>"`,
+        openBlockerRefusal({
+          mode: "close",
+          action: `close ${issue.locator}`,
+          blockers: refs,
+          locator: issue.locator,
+          outcome,
+        }).message,
       );
     }
     // The flag carries the reason, so it must read like one: a bare boolean (or
@@ -519,13 +525,17 @@ export class ClosureService {
     const refs = this.openBlockerRefs(issueId);
     if (refs.length === 0) return;
     const issue = this.issues.getIssue(issueId);
+    // Same vocabulary as the delivery close (XTRM-980); the difference is that
+    // this legacy verb has no Closure row, so the only way past a blocker is
+    // the outcome-carrying close the remedy names.
     throw new Error(
-      `refusing to close ${issue.locator}: ${refs.length === 1 ? "blocker" : "blockers"} ${refs.join(", ")} ` +
-        `${refs.length === 1 ? "is" : "are"} still open. A blocker is satisfied only when it is itself terminal ` +
-        `(done or archived): an open PR is not evidence, and neither is a merged one — this guard reads the ` +
-        `blocker's lifecycle state, not its PRs. To close deliberately, state why it no longer binds: ` +
-        `sb issue close ${issue.locator} --outcome completed --reason "<why this issue is finished>" ` +
-        `--force-close-with-open-blocker "<why ${refs.join(", ")} no longer binds>"`,
+      openBlockerRefusal({
+        mode: "close",
+        action: `close ${issue.locator}`,
+        blockers: refs,
+        locator: issue.locator,
+        outcome: "completed",
+      }).message,
     );
   }
 

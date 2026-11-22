@@ -1,5 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "../store/database.ts";
 import { LinkGateService, type GateExemption, type GateMode } from "./link-gate-service.ts";
+import { openBlockerRefusal } from "./open-blocker-refusal.ts";
 import {
   ISSUE_KINDS,
   LIFECYCLE_STATES,
@@ -2100,14 +2101,17 @@ export class IssueService {
       ) {
         const blockers = this.openBlockerLocators(issueId);
         if (blockers.length > 0) {
-          const refs = blockers.join(", ");
+          // XTRM-980: the same builder as the close path, so a caller learns one
+          // vocabulary. The remedy differs by construction, not by copy: this
+          // path has no Closure row, so it cannot offer the override flag and
+          // points at a close, which can.
           throw new Error(
-            `refusing to mark ${this.currentLocator(issueId)} ${state}: ${blockers.length === 1 ? "blocker" : "blockers"} ${refs} ` +
-              `${blockers.length === 1 ? "is" : "are"} still open. A blocker is satisfied only when it is itself ` +
-              `terminal (done or archived): an open PR is not evidence, and neither is a merged one — this guard ` +
-              `reads the blocker's lifecycle state, not its PRs. Close ${refs} first, or record the decision where it ` +
-              `can be read: sb issue close ${this.currentLocator(issueId)} --outcome <completed|wont_fix|invalid|abandoned> ` +
-              `--reason "<why this issue is finished>" --force-close-with-open-blocker "<why ${refs} no longer binds>"`,
+            openBlockerRefusal({
+              mode: "transition",
+              action: `mark ${this.currentLocator(issueId)} ${state}`,
+              blockers,
+              locator: this.currentLocator(issueId),
+            }).message,
           );
         }
       }
