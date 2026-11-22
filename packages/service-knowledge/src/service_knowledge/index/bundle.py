@@ -86,13 +86,23 @@ def _shrink_item_text(bundle: dict[str, Any]) -> None:
             return
         item = max(candidates, key=lambda i: len(i["text"]))
         text = item["text"]
+        # Cutting text is pointless when everything but the text already exceeds the budget
+        # (for example large conflicts_and_caveats, which are never trimmed).
+        stripped = {**bundle, "items": [{**i, "text": ""} for i in bundle["items"]]}
+        if _over_budget(stripped):
+            return
         item.setdefault("text_chars", len(text))
-        cut = excess * ranking.CHARS_PER_TOKEN + len(TEXT_TRUNCATED_MARK) + 64
-        keep = max(_MIN_TEXT_CHARS, len(text) - cut)
+        # ``excess`` is measured in JSON characters; the text is cut in raw characters, and a
+        # text full of quotes or newlines is longer once escaped. Convert with its own ratio.
+        ratio = max(1.0, len(json.dumps(text, ensure_ascii=False)) / max(1, len(text)))
+        cut = int((excess * ranking.CHARS_PER_TOKEN) / ratio) + len(TEXT_TRUNCATED_MARK) + 64
         if item.get("text_truncated"):
             text = text[: -len(TEXT_TRUNCATED_MARK)]
-            keep = max(_MIN_TEXT_CHARS, len(text) - cut)
-        item["text"] = text[:keep] + TEXT_TRUNCATED_MARK
+        keep = max(_MIN_TEXT_CHARS, len(text) - cut)
+        shrunk = text[:keep] + TEXT_TRUNCATED_MARK
+        if len(shrunk) >= len(item["text"]):
+            return  # nothing gained: do not mark a text as cut when it did not get shorter
+        item["text"] = shrunk
         item["text_truncated"] = True
 
 

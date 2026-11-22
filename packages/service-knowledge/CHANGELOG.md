@@ -11,15 +11,17 @@ All notable changes to the `service-knowledge` package.
   root, where it came from, whether it is a linked worktree, the primary checkout, how many
   commits the primary checkout's HEAD has that this root lacks (`behind_primary`), `stale`, and a
   `hint` naming the `consumer_root` to retry with. It is a report, never a silent redirect: the
-  call still reads the resolved root, as before. An `{"error": ...}` payload is unchanged.
+  call still reads the resolved root, as before. An `{"error": ...}` payload keeps `error` as its only
+  key (the protocol layer needs that) and, from a stale worktree, ends the message with the hint.
 - **Output bound.** `knowledge_search` and `knowledge_evidence_for_files` trim to the 8000-token
   budget in this order: lowest-ranked items (with their citations and verification rows), citation
   tail, probe tail, then the longest item text. The first item is never dropped. Results carry
   `truncated` and `totals` (item, citation and probe counts before trimming); a cut item text carries
   `text_truncated` and `text_chars`. Before, one item with 100+ citations returned ~64k characters.
 - **Versions.** `knowledge_status` reports `cli_version` and `pack_version` (the machinery vendored in
-  the repo, `null` when absent) with `version_mismatch` and a `version_note`. `package_version` and
-  `installed_version` stay as aliases. `src/service_knowledge/VERSION` still said 0.8.0 in 0.9.0, which is
+  the repo, `null` when absent) with `version_mismatch` and a `version_note` that says which side is older (`service-knowledge update`
+  stamps the CLI's version into the repo, so it is advised only when the pack is the older side).
+  `package_version` and `installed_version` stay as aliases. `src/service_knowledge/VERSION` still said 0.8.0 in 0.9.0, which is
   where the 0.8.0 reports came from; a test now pins every version string to one value.
 - **Section age.** Each item carries `section_sync_ref`, `section_date` and `superseded_candidate`,
   read from "Sync to <ref> (<date>, ...)" headings at query time (no index schema change). A section

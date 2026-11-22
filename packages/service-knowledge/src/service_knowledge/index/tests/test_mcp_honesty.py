@@ -192,3 +192,66 @@ def test_a_single_oversized_item_text_is_cut_and_marked():
     assert item["text_truncated"] is True and item["text_chars"] == 120_000
     assert item["text"].endswith(bundle_mod.TEXT_TRUNCATED_MARK)
     assert trimmed["truncated"] is True
+
+
+# --- review follow-ups ---------------------------------------------------------------------------
+
+def _stale_worktree(repo: Path) -> Path:
+    wt = repo / ".xtrm" / "worktrees" / "wt"
+    _git(repo, "worktree", "add", "-q", str(wt), "-b", "wt")
+    (repo / "newer.txt").write_text("newer\n", encoding="utf-8")
+    _git(repo, "add", "newer.txt")
+    _git(repo, "commit", "-qm", "newer")
+    return wt
+
+
+def test_an_error_from_a_stale_worktree_carries_the_hint_and_stays_error_only(alertmanager_consumer, monkeypatch):
+    wt = _stale_worktree(alertmanager_consumer)
+    monkeypatch.setenv("SERVICE_KNOWLEDGE_ROOT", str(wt))
+    result = tool_registry()["knowledge_get"](item_id="section:nothing:here")
+    assert set(result) == {"error"}, "the protocol layer needs the error to be the only key"
+    assert result["error"].startswith("item not found: section:nothing:here")
+    assert f"consumer_root={alertmanager_consumer}" in result["error"] or "consumer_root=" in result["error"]
+
+
+def test_an_error_from_the_primary_checkout_is_left_alone(alertmanager_consumer):
+    assert tool_registry()["knowledge_get"](item_id="section:nothing:here") == {"error": "item not found: section:nothing:here"}
+
+
+def _status_with_pack_version(repo: Path, version: str) -> dict:
+    version_file = repo / ".xtrm/skills/default/service-knowledge/VERSION"
+    version_file.parent.mkdir(parents=True, exist_ok=True)
+    version_file.write_text(f"{version}\n", encoding="utf-8")
+    return tool_registry()["knowledge_status"]()
+
+
+def test_a_pack_newer_than_the_cli_is_never_told_to_run_update(alertmanager_consumer):
+    status = _status_with_pack_version(alertmanager_consumer, "99.0.0")
+    assert status["version_mismatch"] is True
+    assert "NEWER than the CLI" in status["version_note"]
+    assert "Do not run `service-knowledge update`" in status["version_note"]
+
+
+def test_an_older_pack_is_told_to_update_and_an_unorderable_one_is_neutral(alertmanager_consumer):
+    assert "older than the CLI" in _status_with_pack_version(alertmanager_consumer, "0.1.0")["version_note"]
+    note = _status_with_pack_version(alertmanager_consumer, "weird-build")["version_note"]
+    assert "cannot be ordered" in note and "run `service-knowledge update`" not in note
+
+
+def test_escape_heavy_text_is_not_over_cut():
+    text = '"\n' * 60_000  # every character is two bytes once JSON-escaped
+    trimmed = bundle_mod._trim_to_budget({"items": [{"id": "section:svc:esc", "text": text}], "citations": [],
+                                          "verification": [], "probes": []})
+    kept = len(trimmed["items"][0]["text"])
+    assert trimmed["token_estimate"] <= ranking.BUNDLE_MAX_TOKENS
+    assert kept > 5_000, f"cut to {kept} chars although about 8000 would fit"
+
+
+def test_text_is_left_alone_when_something_else_already_exceeds_the_budget():
+    caveats = [{"id": f"c{i}", "note": "n" * 400} for i in range(120)]  # never trimmed, > budget alone
+    bundle = {"items": [{"id": "section:svc:x", "text": "t" * 250}], "citations": [], "verification": [],
+              "probes": [], "conflicts_and_caveats": caveats}
+    trimmed = bundle_mod._trim_to_budget(bundle)
+    assert trimmed["items"][0]["text"] == "t" * 250
+    assert "text_truncated" not in trimmed["items"][0]
+    assert trimmed["truncated"] is False

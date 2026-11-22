@@ -23,7 +23,7 @@ DESCRIPTION = describe(
     purpose="Check whether this repo's service knowledge is installed, indexed and current, and which versions are involved. Call it when results look empty or stale. Read-only; never writes or rebuilds.",
     parameters="consumer_root (string, optional): repo root to inspect; must be the session root or one of its ancestors, default: the session root.",
     returns="consumer_root, registry_present, packs (name, umbrella, services), service_count, index_present, git_head, services_out_of_sync, usable, cli_version (the installed command), pack_version (the machinery vendored in this repo, null when absent), version_mismatch (true, false, or null when pack_version is absent) with version_note, plus consumer_root_resolution.",
-    empty_or_stale="registry_present=false means this repo has not adopted service-knowledge: the retrieval tools (knowledge_search, knowledge_get, knowledge_evidence_for_files) refuse here. version_mismatch=true means the repo's vendored machinery is older than the CLI: run `service-knowledge update` in the repo. services_out_of_sync lists services whose last_sync_ref differs from git_head. consumer_root_resolution.stale=true means the primary checkout is ahead of this worktree.",
+    empty_or_stale="registry_present=false means this repo has not adopted service-knowledge: the retrieval tools (knowledge_search, knowledge_get, knowledge_evidence_for_files) refuse here. version_mismatch=true means the repo's vendored machinery and the CLI differ; version_note says which side is older and what to do (`service-knowledge update` only when the repo is the older side). services_out_of_sync lists services whose last_sync_ref differs from git_head. consumer_root_resolution.stale=true means the primary checkout is ahead of this worktree.",
     example="{}",
 )
 PARAMETERS = {
@@ -39,6 +39,26 @@ CACHE_REL = Path(".xtrm") / "cache" / "service-knowledge.sqlite"
 VERSION_REL = MACHINERY_REL / "VERSION"
 RESERVED_PACK_NAMES = {"default", "optional", "user", "active", "local-legacy"}
 UMBRELLA_NAMES = ("service-knowledge", "service-skills")
+
+
+def _version_tuple(text: str) -> tuple[int, ...] | None:
+    parts = text.strip().split(".")
+    return tuple(int(p) for p in parts) if parts and all(p.isdigit() for p in parts) else None
+
+
+def _version_note(pack: str, cli: str) -> str:
+    """Advice that depends on which side is older: ``service-knowledge update`` stamps the
+    running CLI's version into the repo, so on an older CLI it would downgrade the repo."""
+    a, b = _version_tuple(pack), _version_tuple(cli)
+    if a is not None and b is not None and a < b:
+        return (f"This repo's vendored machinery ({pack}) is older than the CLI ({cli}); "
+                "run `service-knowledge update` in this repo.")
+    if a is not None and b is not None and a > b:
+        return (f"This repo's vendored machinery ({pack}) is NEWER than the CLI ({cli}); "
+                "upgrade the CLI (git pull in the xtrm checkout). Do not run `service-knowledge update`: "
+                "it would stamp the older CLI's version into the repo.")
+    return (f"This repo's vendored machinery ({pack}) differs from the CLI ({cli}) and the versions "
+            "cannot be ordered; upgrade whichever side is older.")
 
 
 def _umbrella_packs(root: Path) -> list[tuple[str, str, int]]:
@@ -133,10 +153,7 @@ def run(consumer_root: str | None = None, **_: Any) -> dict[str, Any]:
         "cli_version": __version__,
         "pack_version": installed,
         "version_mismatch": mismatch,
-        "version_note": (
-            f"The CLI is {__version__} but this repo's vendored machinery is {installed}; "
-            "run `service-knowledge update` in this repo."
-        ) if mismatch else None,
+        "version_note": _version_note(installed, __version__) if mismatch else None,
         "package_version": __version__,    # alias of cli_version, kept for existing callers
         "installed_version": installed,    # alias of pack_version, kept for existing callers
         "registry_present": bool(packs),

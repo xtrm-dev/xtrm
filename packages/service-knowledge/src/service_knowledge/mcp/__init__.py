@@ -41,12 +41,20 @@ def _with_resolution(run: Callable[..., Any]) -> Callable[..., Any]:
 
     def wrapped(**kwargs: Any) -> Any:
         result = run(**kwargs)
-        # An {"error": ...} payload stays exactly that: the protocol layer turns it into isError.
-        if isinstance(result, dict) and "error" not in result:
-            try:
-                result["consumer_root_resolution"] = describe_resolution(kwargs.get("consumer_root"))
-            except Exception:  # report-only: never turn a good answer into a failure
-                pass
+        if not isinstance(result, dict):
+            return result
+        try:
+            resolution = describe_resolution(kwargs.get("consumer_root"))
+        except Exception:  # report-only: never turn a good answer into a failure
+            return result
+        if "error" in result:
+            # An {"error": ...} payload stays the only key (the protocol layer turns it into
+            # isError), so the staleness rides inside the message: "item not found" from a stale
+            # worktree is exactly the case the hint exists for.
+            if resolution.get("stale") and resolution.get("hint"):
+                result["error"] = f"{result['error']} [{resolution['hint']}]"
+        else:
+            result["consumer_root_resolution"] = resolution
         return result
 
     wrapped.__name__ = getattr(run, "__name__", "run")
