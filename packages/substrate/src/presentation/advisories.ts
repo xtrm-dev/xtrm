@@ -129,12 +129,20 @@ function holderArg(identity: Identity): string {
  *
  * - with no ambient holder the command carries no `--holder` at all;
  * - with an ambient holder it names that holder;
- * - when the claim belongs to someone else there is no command: re-claiming or
- *   renewing under another holder's lease contradicts holder_mismatch.
+ * - when a LIVE claim belongs to someone else there is no command: renewing
+ *   under another holder's lease contradicts holder_mismatch.
+ *
+ * A lapsed lease is the exception (XTRM-983 e): claimIssue closes the expired
+ * generation and takes a new one, so the command is offered through
+ * claimCommandText rather than withheld.
  */
 function claimCommand(identity: Identity, s: IssueSnapshot, verb: "claim" | "renew"): string | null {
   const claimHolder = s.claim?.holder;
   if (claimHolder && identity.holder && identity.holder !== claimHolder) return null;
+  return claimCommandText(identity, s, verb);
+}
+
+function claimCommandText(identity: Identity, s: IssueSnapshot, verb: "claim" | "renew"): string {
   const holderFlag = identity.holder ? ` --holder ${identity.holder}` : "";
   return `sb issue ${verb} ${s.ref}${holderFlag} --ttl-ms <ms>`;
 }
@@ -180,14 +188,20 @@ export function evaluateIssue(s: IssueSnapshot, identity: Identity, opts: { phas
 
   const left = s.claim.expiresAt - s.now;
   const ttl = s.claim.expiresAt - s.claim.acquiredAt;
-  if (left <= 0) {
-    const cmd = claimCommand(identity, s, "claim");
+  // XTRM-983 (c): liveness is read from the projection's `live`, computed once as
+  // isLiveClaim(claim, now) in snapshotIssue. `left` is wording and renew-floor
+  // arithmetic only — it is not a second liveness test.
+  if (!s.claim.live) {
+    // XTRM-983 (e): a lapsed lease is reclaimable by any holder, so the advice is
+    // the command that does it, worded for the takeover it performs.
+    const cmd = claimCommandText(identity, s, "claim");
+    const foreign = identity.holder !== null && identity.holder !== s.claim.holder;
     add(
       "claim_expired",
       "warning",
       `${tag}: claim by ${s.claim.holder} expired ${minutes(-left)} min ago`,
-      cmd === null
-        ? `Do not re-claim under ${s.claim.holder}'s lease: coordinate with ${s.claim.holder}, or claim work of your own.`
+      foreign
+        ? `Re-claim now (the lease lapsed; reclaiming supersedes ${s.claim.holder}'s row): \`${cmd}\`.`
         : `Re-claim now: \`${cmd}\`.`,
     );
   } else if (left < Math.max(ADVISORY_TUNING.renewFloorMs, ttl * ADVISORY_TUNING.renewFraction)) {
