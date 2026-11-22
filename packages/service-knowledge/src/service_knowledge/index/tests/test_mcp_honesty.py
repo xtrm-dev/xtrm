@@ -307,12 +307,19 @@ def test_the_hint_says_so_when_the_primary_checkout_cannot_be_passed(alertmanage
 
 
 def test_a_git_failure_never_fails_the_report(alertmanager_consumer, monkeypatch):
+    """A real subprocess failure (git missing, or hanging past the timeout) inside the report."""
+    import subprocess as sp
+
     from service_knowledge.mcp import _root
 
-    monkeypatch.setattr(_root, "_git", lambda *a, **k: None)
-    info = describe_resolution()
-    assert info["stale"] is False and info["linked_worktree"] is False
-    assert "consumer_root_resolution" in tool_registry()["knowledge_status"]()
+    for failure in (OSError("git not found"), sp.TimeoutExpired(cmd="git", timeout=5)):
+        def boom(*_a, _failure=failure, **_k):
+            raise _failure
+
+        monkeypatch.setattr(_root.subprocess, "run", boom)
+        info = describe_resolution()
+        assert info["stale"] is False and info["linked_worktree"] is False
+        assert "consumer_root_resolution" in tool_registry()["knowledge_status"]()
 
 
 def test_a_non_ascii_digit_in_the_pack_version_does_not_break_status(alertmanager_consumer):
