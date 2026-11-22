@@ -1647,6 +1647,21 @@ export class IssueService {
     });
   }
 
+  /**
+   * Human refs of this issue's unsatisfied blockers, for a refusal a caller can
+   * act on. Falls back to the raw id when a blocker row cannot be read, which is
+   * the fail-closed direction: an unreadable blocker is not a satisfied one.
+   */
+  private openBlockerLocators(issueId: string): string[] {
+    return this.unsatisfiedBlockers(issueId).map((id) => {
+      try {
+        return this.currentLocator(id);
+      } catch {
+        return id;
+      }
+    });
+  }
+
   // Single shared readiness projection (PRD §5). Pass `now` in tests to
   // control deferral without wall-clock coupling.
   /** Derived dispatchability from state, structure, attestation currency and blockers; computed live, never stored. */
@@ -2064,6 +2079,37 @@ export class IssueService {
           override: gate?.gateOverride ?? null,
           now: at,
         });
+      }
+      // XTRM-967: the same reason the link gate lives here applies to the
+      // blocker rule. `ClosureService` writes the lifecycle row directly and
+      // decides blockers itself (it exempts superseded|duplicate|cancelled and
+      // records the override on the Closure row), so a rule placed here covers
+      // exactly the paths that bypass it: `sb issue state|archive`,
+      // `sb issue cancel`'s alias, MCP and the integrations. Those paths have
+      // nowhere to record a reason, so like the legacy bare close they can only
+      // refuse — the remedy is a close with an outcome, or closing the blocker.
+      //
+      // `cancelled` is exempt for the reason XTRM-959 exempts it: a cancel does
+      // not claim the work was delivered. `archived` is NOT exempt, because a
+      // blocker becomes satisfied by an archived blocker (`isBlockerSatisfied`),
+      // so archiving would otherwise be the quiet way past the rule.
+      if (
+        (state === "done" || state === "archived") &&
+        before.lifecycleState !== state &&
+        gate?.exemption === undefined
+      ) {
+        const blockers = this.openBlockerLocators(issueId);
+        if (blockers.length > 0) {
+          const refs = blockers.join(", ");
+          throw new Error(
+            `refusing to mark ${this.currentLocator(issueId)} ${state}: ${blockers.length === 1 ? "blocker" : "blockers"} ${refs} ` +
+              `${blockers.length === 1 ? "is" : "are"} still open. A blocker is satisfied only when it is itself ` +
+              `terminal (done or archived): an open PR is not evidence, and neither is a merged one — this guard ` +
+              `reads the blocker's lifecycle state, not its PRs. Close ${refs} first, or record the decision where it ` +
+              `can be read: sb issue close ${this.currentLocator(issueId)} --outcome <completed|wont_fix|invalid|abandoned> ` +
+              `--reason "<why this issue is finished>" --force-close-with-open-blocker "<why ${refs} no longer binds>"`,
+          );
+        }
       }
       // `at` lets the import path land a terminal transition on source time, so
       // the lifecycle event agrees with the Closure row rather than

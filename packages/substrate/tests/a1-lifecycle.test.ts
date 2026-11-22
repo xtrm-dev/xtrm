@@ -111,6 +111,36 @@ describe("A1 CLI journal + lifecycle", () => {
     assert.match(mutFail(db, ["issue", "state", a, "bogus"]), /unknown lifecycle state/);
   });
 
+  it("XTRM-967: a terminal state refuses while a declared blocker is open, on the paths that bypass a close", () => {
+    const db = setupDb();
+    const { a, b } = seed(db);
+    // a blocks b, so b carries an unsatisfied blocker.
+    mut(db, ["issue", "relate", "--from", a, "--to", b, "--kind", "blocks"]);
+
+    // The path the issue was filed for: `state done` wrote the terminal row
+    // without consulting the blocker graph.
+    const refused = mutFail(db, ["issue", "state", b, "done"]);
+    assert.match(refused, new RegExp(`${b} done`), "names the issue and the target state");
+    assert.match(refused, new RegExp(`blocker ${a} is still open`), "names the open blocker by human ref");
+    assert.match(refused, /sb issue close/);
+    assert.match(refused, /--force-close-with-open-blocker/);
+    assert.equal((cli(db, ["issue", "show", b]) as { lifecycleState: string }).lifecycleState, "open");
+
+    // archive is terminal too, and it is the quiet way past the rule: an
+    // archived blocker satisfies the dependency, so archiving must refuse.
+    assert.match(mutFail(db, ["issue", "archive", b]), /still open/);
+    // cancel does not claim delivery, so it stays open to a caller (XTRM-959).
+    assert.equal((mut(db, ["issue", "cancel", b]) as { lifecycleState: string }).lifecycleState, "cancelled");
+    assert.equal((mut(db, ["issue", "reopen", b]) as { lifecycleState: string }).lifecycleState, "open");
+
+    // `--gate-override` belongs to the link gate; it must not open this one.
+    assert.match(mutFail(db, ["issue", "state", b, "done", "--gate-override", "because"]), /still open/);
+
+    // Resolving the blocker is the ordinary way through.
+    mut(db, ["issue", "close", a, "--outcome", "wont_fix", "--reason", "not needed"]);
+    assert.equal((mut(db, ["issue", "state", b, "done"]) as { lifecycleState: string }).lifecycleState, "done");
+  });
+
   it("§27: relate + unrelate typed edges; parent_child stays structural", () => {
     const db = setupDb();
     const { a, b } = seed(db);
