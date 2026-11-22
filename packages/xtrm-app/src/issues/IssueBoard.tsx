@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type DragEvent } from "react";
 import { useAdapters, type IssueSummary, type Lifecycle } from "../adapters/index.tsx";
+import { Card } from "../ui/card.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { cx, relativeTime } from "../ui/primitives.tsx";
@@ -173,7 +174,7 @@ function BoardCard({
 }) {
   const terminal = TERMINAL.has(issue.lifecycle);
   return (
-    <div
+    <Card
       role="button"
       tabIndex={0}
       aria-label={`${issue.ref} ${issue.title}`}
@@ -197,10 +198,9 @@ function BoardCard({
         }
       }}
       className={cx(
-        // The console's one card dialect, byte for byte: `IssueProvenance.tsx`'s local `Card`
-        // (`rounded-md border border-border-muted px-3 py-2.5`) and `IssueView.tsx`'s `PreviewBlock`.
-        // A third copy is the duplication, not the board's frame.
-        "group/card flex flex-col gap-2 rounded-md border border-border-muted px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+        // The frame is the shared `Card` (XTRM-989); these are only the board's own states on it —
+        // the selection border, the hover, the focus ring, and `group/card` for the move menu.
+        "group/card text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
         selected ? "border-accent/60" : "hover:border-border",
         canWrite && "cursor-grab active:cursor-grabbing",
         pending && "opacity-50",
@@ -235,6 +235,6 @@ function BoardCard({
         )}
         <span className="ml-auto shrink-0 tabular">{relativeTime(issue.updatedAt)}</span>
       </div>
-    </div>
+    </Card>
   );
 }

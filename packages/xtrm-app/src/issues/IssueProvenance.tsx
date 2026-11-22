@@ -3,6 +3,7 @@ import type { ArtifactRecord, Closure, IssueDetail } from "../adapters/index.tsx
 import { parseProvenancePr } from "../github/pr.ts";
 import { ReferenceChip } from "../refs/references.tsx";
 import { useShell } from "../shell/context.tsx";
+import { Card } from "../ui/card.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { Fields, PART_LABEL_COLUMN } from "../ui/drawer.tsx";
 import { SectionHeader } from "../ui/section.tsx";
@@ -30,12 +31,6 @@ function Group({ title, count, children }: { title: string; count?: number; chil
 function KV({ rows }: { rows: Array<[string, ReactNode] | false | null> }) {
   return <Fields labelWidth={PART_LABEL_COLUMN} rows={rows.filter((r): r is [string, ReactNode] => !!r)} />;
 }
-
-const Card = ({ children, className, ...props }: { children: ReactNode; className?: string } & Record<`data-${string}`, string>) => (
-  <div {...props} className={cx("flex flex-col gap-2 rounded-md border border-border-muted px-3 py-2.5", className)}>
-    {children}
-  </div>
-);
 
 const id = (label: string, value: string | null) => (value ? <IdValue label={label} value={value} /> : <None>Not recorded</None>);
 const hash = (value: string | null) => (value ? <IdValue label="contract hash" value={value.slice(0, 12)} /> : <None>Not recorded</None>);
