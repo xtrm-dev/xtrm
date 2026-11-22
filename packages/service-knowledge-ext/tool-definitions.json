@@ -1,6 +1,6 @@
 {
   "server": "service-knowledge",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "protocol_versions": [
     "2025-11-25",
     "2025-06-18",
@@ -10,7 +10,7 @@
   "tools": [
     {
       "name": "knowledge_search",
-      "description": "Search operational service knowledge (per-repo FTS5 index). Returns an evidence bundle: routing header, top 3-7 ranked items (service/section/claim/probe) with interpretable T/L/I/A/F signals, citations, verification + freshness, applicable read-only probes, and links to the full skills. Read-only; returns evidence, never conclusions.",
+      "description": "PURPOSE: Search this repo's operational service knowledge (architecture, failure modes, runbooks, probes). Call it before grep when the symptom-to-service mapping is unclear. Read-only; returns evidence, never conclusions.\nPARAMETERS: query (string, required): symptom, alert, metric or concept. service_id (string): restrict or boost one service. paths (string[]): file paths for territory routing. limit (integer 1-7, default 7): maximum items. consumer_root (string, optional): repo root to read; must be the session root or one of its ancestors, default: the session root.\nRETURNS: An evidence bundle: routing, items (id, service_id, title, section_path, text, score, signals, status, risk, section_sync_ref, section_date, superseded_candidate), citations, verification, probes, skill_links, truncated and totals, consumer_root_resolution. Items, citations, probes and item text are trimmed to fit about 8000 tokens (conflicts_and_caveats is never trimmed): truncated=true means something was cut, and totals holds the counts before trimming (items counted after the 7-item cap).\nEMPTY OR STALE: items=[] means nothing in this checkout's index matched; it is not proof the knowledge base has no answer, so read consumer_root_resolution first: stale=true means a newer primary checkout exists (retry with the consumer_root in its hint). superseded_candidate=true means a newer sync section of the same service exists, so this section may be superseded: check the newer section. stale_served=true means the index could not be refreshed within its time budget and an older cache was served because the refresh exceeded its time budget, failed, or freshness could not be verified; routing.freshness_notice says so.\nEXAMPLE: {\"query\": \"bar backfill swap\", \"service_id\": \"ingest\", \"limit\": 5}",
       "parameters": {
         "type": "object",
         "properties": {
@@ -47,7 +47,7 @@
     },
     {
       "name": "knowledge_get",
-      "description": "Fetch a single knowledge item by id (full text + citations + link to its skill) OR a full SKILL.md by path. Read-only. Pass exactly one of item_id / skill_path.",
+      "description": "PURPOSE: Fetch one knowledge item by id, or one full SKILL.md by path, when a search hit needs its full text. Read-only.\nPARAMETERS: item_id (string): stable item id from a search hit, for example 'section:alertmanager:failure-modes'. skill_path (string): repo-relative SKILL.md path. Pass exactly one of the two. consumer_root (string, optional): repo root to read; must be the session root or one of its ancestors, default: the session root.\nRETURNS: {item: {...}} with full text, citations and a link to its skill, or {skill: {...}} with the whole SKILL.md, plus consumer_root_resolution. Errors come back as {error: message} alone; there is no consumer_root_resolution field on an error.\nEMPTY OR STALE: 'item not found' or 'skill not found' means the id or path is not in this checkout's index: search again for a current id. When this checkout is a worktree behind the primary checkout, the error message ends with a bracketed hint naming the consumer_root to retry with.\nEXAMPLE: {\"item_id\": \"section:alertmanager:failure-modes\"}",
       "parameters": {
         "type": "object",
         "properties": {
@@ -67,7 +67,7 @@
     },
     {
       "name": "knowledge_evidence_for_files",
-      "description": "Produce a §3.2 evidence bundle for a list of file paths. Routes by service territory ownership and returns routing header, top items, citations, verification + freshness, applicable read-only probes and full-skill links. Read-only.",
+      "description": "PURPOSE: Find the service knowledge that owns a set of files, before reading their source. Routes by service territory ownership. Read-only.\nPARAMETERS: paths (string[], required): repo-relative file paths. limit (integer 1-7, default 7): maximum items. consumer_root (string, optional): repo root to read; must be the session root or one of its ancestors, default: the session root.\nRETURNS: An evidence bundle: routing, items (with section_sync_ref, section_date, superseded_candidate), citations, verification, probes, skill_links, truncated and totals, consumer_root_resolution. Items, citations, probes and item text are trimmed to fit about 8000 tokens (conflicts_and_caveats is never trimmed), so a service with many citations returns the first ones: truncated=true and totals give the counts before trimming (items counted after the 7-item cap).\nEMPTY OR STALE: items=[] means no registered service territory covers these paths, or this checkout's index is older than the primary checkout: read consumer_root_resolution.stale before treating the files as unowned. superseded_candidate=true marks a section older than the newest sync section of that service; it may be superseded, so check the newer one.\nEXAMPLE: {\"paths\": [\"src/market_data/backfill/swap.py\"], \"limit\": 3}",
       "parameters": {
         "type": "object",
         "properties": {
@@ -95,7 +95,7 @@
     },
     {
       "name": "knowledge_status",
-      "description": "Report whether this repo's operational service knowledge is installed, indexed and current: consumer root, installed machinery version, umbrella packs with their service counts, the FTS5 index cache, git HEAD, and each service's last_sync_ref against HEAD. Use it to decide whether knowledge_search results can be trusted in this checkout. Read-only; never writes and never rebuilds.",
+      "description": "PURPOSE: Check whether this repo's service knowledge is installed, indexed and current, and which versions are involved. Call it when results look empty or stale. Read-only; never writes or rebuilds.\nPARAMETERS: consumer_root (string, optional): repo root to inspect; must be the session root or one of its ancestors, default: the session root.\nRETURNS: consumer_root, registry_present, packs (name, umbrella, services), service_count, index_present, git_head, services_out_of_sync, usable, cli_version (the installed command), pack_version (the machinery vendored in this repo, null when absent), version_mismatch (true, false, or null when pack_version is absent) with version_note, plus consumer_root_resolution.\nEMPTY OR STALE: registry_present=false means this repo has not adopted service-knowledge: the retrieval tools (knowledge_search, knowledge_get, knowledge_evidence_for_files) refuse here. version_mismatch=true means the repo's vendored machinery and the CLI differ; version_note says which side is older and what to do (`service-knowledge update` only when the repo is the older side). services_out_of_sync lists services whose last_sync_ref differs from git_head. consumer_root_resolution.stale=true means the primary checkout is ahead of this worktree.\nEXAMPLE: {}",
       "parameters": {
         "type": "object",
         "properties": {
@@ -108,7 +108,7 @@
     },
     {
       "name": "knowledge_drift",
-      "description": "Report which services' operational knowledge has drifted from the code: the pending drift marker (reason, services, commit range, timestamp), each service's recorded last_sync_ref against git HEAD, and the services whose knowledge is stale. Call this before trusting knowledge_search on a recently changed territory, and to decide whether to reconcile. Read-only: it never writes the marker and never rebuilds the index.",
+      "description": "PURPOSE: Report which services' knowledge has drifted from the code they describe. Call it before trusting knowledge about recently changed code. Advisory; never blocks work. Read-only.\nPARAMETERS: consumer_root (string, optional): repo root to inspect; must be the session root or one of its ancestors, default: the session root.\nRETURNS: git_head, marker_present and marker (reason, services, commit range, timestamp), service_count, services_behind_head (service_id, last_sync_ref), services_never_synced, drift_detected, suggested_action, plus consumer_root_resolution.\nEMPTY OR STALE: drift_detected=false with empty lists means every service's last_sync_ref equals git_head and no drift marker is pending. services_never_synced lists services with no last_sync_ref: their knowledge has no verified baseline. Drift is judged against this checkout's HEAD, so check consumer_root_resolution.stale in a worktree.\nEXAMPLE: {}",
       "parameters": {
         "type": "object",
         "properties": {

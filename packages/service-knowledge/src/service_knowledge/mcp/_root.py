@@ -58,19 +58,23 @@ def candidate_roots(base: Path) -> list[Path]:
     return out
 
 
-def _base_root() -> Path:
+def _base_root_with_source() -> tuple[Path, str]:
     for env in ("SERVICE_KNOWLEDGE_ROOT", "CLAUDE_PROJECT_DIR"):
         value = os.environ.get(env)
         if value:
-            return Path(value).expanduser().resolve()
+            return Path(value).expanduser().resolve(), env
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True, text=True, check=True, timeout=5,
         )
-        return Path(result.stdout.strip()).resolve()
+        return Path(result.stdout.strip()).resolve(), "git-toplevel"
     except (subprocess.SubprocessError, OSError):
-        return Path.cwd().resolve()
+        return Path.cwd().resolve(), "cwd"
+
+
+def _base_root() -> Path:
+    return _base_root_with_source()[0]
 
 
 def resolve_consumer_root(explicit: str | None = None) -> Path:
@@ -128,3 +132,65 @@ def resolve_registry_root(explicit: str | None = None) -> Path:
     if _has_registry(root):
         return root
     raise NoRegistry(base)
+
+
+def _git(root: Path, *args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True, text=True, check=True, timeout=5,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+    return result.stdout.strip() or None
+
+
+def describe_resolution(explicit: str | None = None) -> dict[str, object]:
+    """Say which checkout a tool call read, and whether it is behind the primary checkout.
+
+    A linked worktree carries its own committed copy of the registry, so a call from a stale
+    worktree used to index that old copy and answer "0 hits" with no sign that another checkout
+    had newer knowledge. This stays a REPORT, never a silent redirect: the caller reads from the
+    resolved root, and ``stale`` plus ``hint`` say when a different root would answer better.
+
+    ``behind_primary`` counts commits reachable from the primary checkout's HEAD that the
+    resolved root's HEAD lacks. It is ``None`` when the root is the primary checkout itself, or
+    when git cannot answer (the report must never fail a tool call).
+    """
+    base, source = _base_root_with_source()
+    root = resolve_consumer_root(explicit)
+    info: dict[str, object] = {
+        "root": str(root),
+        "source": "argument" if explicit else source,
+        "linked_worktree": False,
+        "primary_checkout": None,
+        "behind_primary": None,
+        "stale": False,
+        "hint": None,
+    }
+    git_dir = _git(root, "rev-parse", "--path-format=absolute", "--git-dir")
+    common_dir = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if not git_dir or not common_dir or Path(git_dir) == Path(common_dir):
+        return info
+    primary = Path(common_dir).parent if Path(common_dir).name == ".git" else None
+    info["linked_worktree"] = True
+    if primary is None or not primary.is_dir():
+        return info
+    info["primary_checkout"] = str(primary)
+    primary_head = _git(primary, "rev-parse", "HEAD")
+    behind = _git(root, "rev-list", "--count", f"HEAD..{primary_head}") if primary_head else None
+    if behind is None or not behind.isdigit():
+        return info
+    info["behind_primary"] = int(behind)
+    if int(behind) > 0 and _has_registry(primary):
+        info["stale"] = True
+        usable = primary.resolve() in candidate_roots(base)
+        info["hint"] = (
+            f"This worktree's HEAD lacks {behind} commit(s) present on the primary checkout "
+            f"{primary}, so the knowledge read here can be older than the primary checkout's. "
+            + (f"Retry with consumer_root={primary} to read the primary checkout."
+               if usable else
+               "The primary checkout is not an ancestor of this session root, so it cannot be "
+               "passed as consumer_root; start the session there to read it.")
+        )
+    return info

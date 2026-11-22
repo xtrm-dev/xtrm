@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from service_knowledge.index import gate as gate_mod
-from service_knowledge.index import ranking, schema
+from service_knowledge.index import ranking, schema, sync_sections
 
 
 def _estimate_tokens(text: str) -> int:
@@ -65,15 +65,79 @@ def _caveats_for_services(conn, service_ids: list[str]) -> list[dict[str, Any]]:
     return caveats
 
 
+def _over_budget(bundle: dict[str, Any]) -> bool:
+    return _estimate_tokens(json.dumps(bundle, ensure_ascii=False)) > ranking.BUNDLE_MAX_TOKENS
+
+
+TEXT_TRUNCATED_MARK = " …[truncated; call knowledge_get with this item's id for the full text]"
+_MIN_TEXT_CHARS = 200
+
+
+def _shrink_item_text(bundle: dict[str, Any]) -> None:
+    """Last resort: the first item alone can exceed the budget (one section holding every sync
+    block of a service). Cut the longest item text, mark it, and keep ``text_chars`` so the
+    reader knows how much exists."""
+    for _ in range(8):
+        excess = _estimate_tokens(json.dumps(bundle, ensure_ascii=False)) - ranking.BUNDLE_MAX_TOKENS
+        if excess <= 0:
+            return
+        candidates = [i for i in bundle["items"] if len(i.get("text") or "") > _MIN_TEXT_CHARS]
+        if not candidates:
+            return
+        item = max(candidates, key=lambda i: len(i["text"]))
+        text = item["text"]
+        # Cutting text is pointless when everything but the text already exceeds the budget
+        # (for example large conflicts_and_caveats, which are never trimmed).
+        stripped = {**bundle, "items": [{**i, "text": ""} for i in bundle["items"]]}
+        if _over_budget(stripped):
+            return
+        # ``excess`` is measured in JSON characters; the text is cut in raw characters, and a
+        # text full of quotes or newlines is longer once escaped. Convert with its own ratio.
+        ratio = max(1.0, len(json.dumps(text, ensure_ascii=False)) / max(1, len(text)))
+        cut = int((excess * ranking.CHARS_PER_TOKEN) / ratio) + len(TEXT_TRUNCATED_MARK) + 64
+        if item.get("text_truncated"):
+            text = text[: -len(TEXT_TRUNCATED_MARK)]
+        keep = max(_MIN_TEXT_CHARS, len(text) - cut)
+        shrunk = text[:keep] + TEXT_TRUNCATED_MARK
+        if len(shrunk) >= len(item["text"]):
+            return  # nothing gained: do not mark a text as cut when it did not get shorter
+        item.setdefault("text_chars", len(text))
+        item["text"] = shrunk
+        item["text_truncated"] = True
+
+
 def _trim_to_budget(bundle: dict[str, Any]) -> dict[str, Any]:
-    """Drop lowest-ranked items until the serialized bundle fits BUNDLE_MAX_TOKENS."""
-    while bundle["items"]:
-        serialized = json.dumps(bundle, ensure_ascii=False)
-        if _estimate_tokens(serialized) <= ranking.BUNDLE_MAX_TOKENS:
-            break
-        if len(bundle["items"]) <= 1:
-            break
-        bundle["items"].pop()  # results are pre-sorted desc; tail is lowest-ranked
+    """Fit the bundle to BUNDLE_MAX_TOKENS and say what was cut.
+
+    Order: lowest-ranked items first (with the citations and verification rows that belong to
+    them), then the citation tail, then the probe tail, then the longest item text. The first item
+    is never dropped, but its citations and text can be cut: one item alone was enough to return
+    ~64k chars. A cut text carries ``text_truncated`` and ``text_chars``.
+    ``totals`` always holds the counts before trimming; ``truncated`` is true when anything went.
+    """
+    totals = {
+        "items": len(bundle["items"]),
+        "citations": len(bundle["citations"]),
+        "probes": len(bundle["probes"]),
+    }
+    # The report keys count toward the size they describe, so they go in before the first measure.
+    bundle["totals"] = totals
+    bundle["truncated"] = False
+    while len(bundle["items"]) > 1 and _over_budget(bundle):
+        dropped = bundle["items"].pop()["id"]  # results are pre-sorted desc; tail is lowest-ranked
+        bundle["citations"] = [c for c in bundle["citations"] if c.get("item_id") != dropped]
+        bundle["verification"] = [v for v in bundle["verification"] if v.get("item_id") != dropped]
+    while bundle["citations"] and _over_budget(bundle):
+        bundle["citations"].pop()
+    while bundle["probes"] and _over_budget(bundle):
+        bundle["probes"].pop()
+    _shrink_item_text(bundle)
+    bundle["truncated"] = (
+        any(i.get("text_truncated") for i in bundle["items"])
+        or len(bundle["items"]) < totals["items"]
+        or len(bundle["citations"]) < totals["citations"]
+        or len(bundle["probes"]) < totals["probes"]
+    )
     bundle["token_estimate"] = _estimate_tokens(json.dumps(bundle, ensure_ascii=False))
     return bundle
 
@@ -88,6 +152,12 @@ def build_bundle(search_result: dict[str, Any], consumer_root: Path) -> dict[str
 
     top = results[: ranking.BUNDLE_MAX_ITEMS]
     service_ids = sorted({r["item"].get("service_id", "") for r in top if r["item"].get("service_id")})
+
+    conn = schema.connect(consumer_root)
+    try:
+        newest_by_service = {sid: sync_sections.newest_sync_date(conn, sid) for sid in service_ids}
+    finally:
+        conn.close()
 
     items = []
     skill_links: dict[str, str] = {}
@@ -108,6 +178,9 @@ def build_bundle(search_result: dict[str, Any], consumer_root: Path) -> dict[str
             "advisories": r.get("advisories"),
             "status": item.get("status"),
             "risk": item.get("risk"),
+            **sync_sections.section_fields(
+                item.get("section_path") or "", newest_by_service.get(item.get("service_id", "")),
+            ),
         })
         if item.get("skill_rel_path"):
             skill_links[item.get("service_id", "")] = item.get("skill_rel_path")
