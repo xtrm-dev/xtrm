@@ -113,7 +113,7 @@ const OFFSCALE_REM = new RegExp(`text-\\[(?!${REM_TOKENS.map((r) => r.replace(".
  * physical ones, in every form the review found (numeric, multiplier, quoted, and the Tailwind
  * `ps-`/`me-` classes beside `pl-`/`mr-`).
  */
-const RULES: Array<{ id: string; pattern: RegExp; why: string }> = [
+const RULES: Array<{ id: string; pattern: RegExp; why: string; prose?: boolean }> = [
   { id: "px-font", pattern: /text-\[\d*\.?\d+px\]/g, why: "px font size: name a text token (text-2xs, text-xs, text-sm)" },
   { id: "offscale-rem-font", pattern: OFFSCALE_REM, why: `off-scale rem font size: ${REM_TOKENS.join(" / ")} are the only steps` },
   { id: "px-glyph", pattern: /size-\[\d*\.?\d+px\]/g, why: "px glyph size: use an ICON_CLASS step or a rem value" },
@@ -157,6 +157,25 @@ const RULES: Array<{ id: string; pattern: RegExp; why: string }> = [
   // The stylesheet and an inline style are the two forms a className cannot reach around.
   { id: "css-px-font-size", pattern: /font-size:\s*\d*\.?\d+px/g, why: "px font-size in CSS: use var(--text-*)" },
   { id: "px-font-style-string", pattern: /fontSize:\s*["'`]\d*\.?\d+px["'`]/g, why: "px font style: use var(--text-*)" },
+  // XTRM-971: five surface classes each hand-picked their label column and two of them wrote the
+  // grid themselves, so "where a value starts" was a per-file decision. The steps now live in
+  // `src/ui/drawer.tsx` and a call site names one; both rules below are what keeps that set closed.
+  // The class form is the wider hole: a hand-rolled `<dl>` never touches `labelWidth`, so a rule on
+  // the prop alone would have sat green over the four grids the sweep had to convert by hand.
+  // `prose: true` spares a comment that quotes the shape it refuses — the two comments recording
+  // this drift (`src/surfaces/research-format.tsx`) name `grid-cols-[8rem_1fr]` on purpose.
+  {
+    id: "label-grid-class",
+    prose: true,
+    pattern: /grid-cols-\[[\d.]+(?:rem|ch)_(?:minmax\(0,\s*1fr\)|1fr)\]/g,
+    why: "hand-rolled label grid: a two-column <step>_minmax(0,1fr) grid names its column instead of the ladder — use Fields (or the step from src/ui/drawer.tsx in a style prop)",
+  },
+  {
+    id: "label-width-literal",
+    prose: true,
+    pattern: /labelWidth="[\d.]+(?:rem|ch)"/g,
+    why: "literal label column: import the step (DENSE/SIDEBAR/PART/DRAWER/PAGE_LABEL_COLUMN) so the column is a decision, not a number",
+  },
 ];
 
 /** A scroll container must name `.thin-scrollbar` or `.no-scrollbar` on the same element. */
@@ -229,6 +248,13 @@ const ownsSource = (dir: string): boolean =>
   );
 
 const lineOf = (source: string, index: number) => source.slice(0, index).split("\n").length;
+
+/**
+ * A comment line. A rule that describes a shape it refuses has to spare the prose that names that
+ * shape, or the gate starts demanding edits to evidence — this repo keeps its drift records in
+ * comments on purpose (XTRM-971 spent a paragraph on `grid-cols-[8rem_1fr]`).
+ */
+const isProseLine = (text: string) => /^\s*(?:\/\/|\*|\/\*|\{\/\*)/.test(text);
 
 /** Every directory under `dir`, in the walk's own shape, so the directory the walk skipped is the one reported. */
 const directories = (dir: string): string[] =>
@@ -327,9 +353,12 @@ const offenders = (file: string): Offence[] => {
     });
   }
 
+  const lines = source.split("\n");
   for (const rule of RULES) {
     for (const match of source.matchAll(rule.pattern)) {
-      found.push({ rule: rule.id, match: match[0], line: lineOf(source, match.index ?? 0) });
+      const line = lineOf(source, match.index ?? 0);
+      if (rule.prose && isProseLine(lines[line - 1] ?? "")) continue;
+      found.push({ rule: rule.id, match: match[0], line });
     }
   }
   return found;
@@ -535,6 +564,8 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "const m = { marginBlockStart: 8 };",
       'const n = "ps-[2px]";',
       "const o = { fontSize: 11 };",
+      'const p = <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3">;',
+      'const q = <Fields labelWidth="10rem" rows={rows} />;',
       "h1 { font-size: 11px; }",
       ".a { padding-inline: 8px; }",
     ].join("\n");
@@ -563,6 +594,8 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       ["arbitrary-px-spacing", "gap-[2px]"],
       ["css-px-font-size", "font-size: 11px"],
       ["px-font-style-string", 'fontSize: "11px"'],
+      ["label-grid-class", "grid-cols-[6.5rem_minmax(0,1fr)]"],
+      ["label-width-literal", 'labelWidth="10rem"'],
     ] as const) {
       expect(hit(id, sample), `rule ${id} must catch ${literal}`).toContain(literal);
     }
@@ -579,6 +612,11 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       "margin: 1.1rem 0 0.4rem",
       "padding: 0.05rem 0.3rem",
       "paddingLeft: depth * INDENT_REM",
+      // A table's column template is not a label column: it only looks like one when it starts with
+      // a rem step. XTRM-971's contract names these three as legal and they must stay legal.
+      "grid grid-cols-[7.5rem_minmax(0,1fr)_7rem_7rem_6.5rem_7rem_1.25rem] items-center gap-3",
+      "grid shrink-0 grid-cols-[6.5rem_7rem_3.5rem_2.5rem_6rem] items-center gap-2",
+      "gridTemplateColumns: `${LABEL_COLUMN} 1fr auto`",
     ]) {
       const caught = RULES.flatMap((rule) => [...legal.matchAll(rule.pattern)].map((match) => match[0]));
       expect(caught, `legal shape refused: ${legal}`).toEqual([]);
@@ -632,6 +670,35 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       rmSync(mediaRoot, { recursive: true, force: true });
     }
     expect(cssBlocks(css).map((block) => block.selector)).not.toContain("@layer utilities");
+  });
+
+  it("refuses a planted hand-rolled label grid and spares the comment that records the drift", () => {
+    // XTRM-971: the gate has to fail on the shape the sweep removed, in the form a future author
+    // would actually write it (a `<dl>` with the class), and it has to stay quiet on the two
+    // comments that quote that same shape as evidence of what was fixed.
+    const root = mkdtempSync(join(tmpdir(), "units-label-"));
+    const file = join(root, "planted.tsx");
+    writeFileSync(
+      file,
+      [
+        'const planted = () => (',
+        '  <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">',
+        "    <dt>State</dt>",
+        "  </dl>",
+        ");",
+        "// The 8rem column this replaced kept `grid-cols-[8rem_1fr]` on both templates.",
+        " * and a doc comment quoting `grid-cols-[8rem_1fr_auto]` is prose, not code.",
+        'const ok = <Fields rows={rows} labelWidth={PART_LABEL_COLUMN} />;',
+        "",
+      ].join("\n"),
+    );
+    try {
+      const found = offenders(file);
+      expect(found.map((offence) => offence.rule), "the planted grid is the only offence").toEqual(["label-grid-class"]);
+      expect(found[0]?.line, "and it names the line it is on").toBe(2);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("tells a missing model from an empty one: the walk must evaluate what it is given", () => {

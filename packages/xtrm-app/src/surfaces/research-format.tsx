@@ -3,7 +3,7 @@
 // metric or a usage row always renders the same way wherever it appears (rev 10 item 2/3: value
 // never appears without its interval and method; a null value never appears without its reason).
 import type { Metric, UsageRecord } from "../adapters/research/types.ts";
-import { Fields } from "../ui/drawer.tsx";
+import { DENSE_LABEL_COLUMN, Fields, PAGE_LABEL_COLUMN as LABEL_COLUMN } from "../ui/drawer.tsx";
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
 
@@ -24,11 +24,12 @@ const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(3));
  * `LABEL_COLUMN` now — so the chart's label column moved 128px -> 160px with the rest of the console
  * and keeps it deliberately: 10rem is the step, and an 8rem chart was the exception that made a run
  * id start 32px earlier than the value beside it. `research.test.tsx` pins the chart rows too, so
- * returning either template to 8rem is a failing test rather than a silent width. */
-export const LABEL_COLUMN = "10rem";
-
-/** The sanctioned dense exception's column (see `LABEL_COLUMN`). */
-export const DENSE_LABEL_COLUMN = "3.5rem";
+ * returning either template to 8rem is a failing test rather than a silent width.
+ *
+ * The two names are re-exports of the console ladder (XTRM-971), so Research keeps its vocabulary
+ * (`LABEL_COLUMN`, `DENSE_LABEL_COLUMN`) while the value has one definition, in `src/ui/drawer.tsx`,
+ * beside the other three steps. A page body that declares its own 10rem restates the ladder. */
+export { DENSE_LABEL_COLUMN, LABEL_COLUMN };
 
 /** One renderer, two layouts: `fields` is the drawer's label/value list, `inline` is the compact
  * single line shared by the run analysis metrics table and the comparison metric cell. */

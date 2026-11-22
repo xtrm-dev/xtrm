@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FieldLabel } from "./fields.tsx";
-import { Fields, InspectorSection } from "./drawer.tsx";
+import { DENSE_LABEL_COLUMN, Fields, InspectorSection } from "./drawer.tsx";
 import { Badge } from "./badge.tsx";
 import { EmptyState } from "./primitives.tsx";
 import { Kbd } from "./primitives.tsx";
@@ -133,7 +133,7 @@ describe("the micro scale", () => {
     expect(dl.className).toContain("text-sm");
     expect(dl.className).not.toMatch(/text-\[/);
 
-    rerender(<Fields rows={[["State", "open"]]} labelWidth="3.5rem" size="xs" />);
+    rerender(<Fields rows={[["State", "open"]]} labelWidth={DENSE_LABEL_COLUMN} size="xs" />);
     const dense = container.querySelector("dl") as HTMLElement;
     // A timeline fact is metadata, not body copy: the column narrows and the step drops one.
     expect(dense.style.gridTemplateColumns).toBe("3.5rem 1fr");

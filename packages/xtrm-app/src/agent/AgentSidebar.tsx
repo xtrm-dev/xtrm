@@ -6,6 +6,7 @@ import type { AgentSessionSummary } from "../adapters/index.tsx";
 import { useGo } from "../shell/ContextSidebar.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
+import { SIDEBAR_LABEL_COLUMN } from "../ui/drawer.tsx";
 import { Row, StatusDot, cx, relativeTime } from "../ui/primitives.tsx";
 import { HostConnectionPanel, HostConnectionToggle } from "./HostConnection.tsx";
 import { ContextMeter, STATE_LABEL, STATE_TONE, contextLabel, modelLabel, modelProvider } from "./meta.tsx";
@@ -151,7 +152,18 @@ function SessionDetails({ id }: { id: string }) {
         <Icon name="chevronDown" size="xs" className={cx("ml-auto transition", !open && "-rotate-90")} />
       </button>
       {open && (
-        <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 px-2 pt-0.5 pb-2 text-xs" data-testid="session-details">
+        <dl
+          className="grid gap-x-2 gap-y-1 px-2 pt-0.5 pb-2 text-xs"
+          style={{ gridTemplateColumns: `${SIDEBAR_LABEL_COLUMN} minmax(0,1fr)` }}
+          data-testid="session-details"
+        >
+          {/* The sidebar class, and the one label grid that does not use `Fields`: its rows mix
+              wrapping and truncating values, and every value carries `title=`, which `Fields` has no
+              knob for. It takes the sidebar step from the ladder and the tighter `gap-x-2` gutter
+              (the label gutter is `gap-x-3` everywhere else); at 264px the 4px goes to the value.
+              Failing case for a wider column: "Provider" (49px) is the widest label here, so 4.5rem
+              fits it with 23px of slack, and a 7.5rem step would spend 48px of the sidebar's 264px
+              on empty space in rows that truncate. */}
           <Detail label="Agent" value={PROVIDER_LABEL[s.provider]} />
           <Detail label="State" value={STATE_LABEL[state]} wrap />
           <Detail label="Accepts" value={acceptsLabel(s)} wrap />

@@ -4,7 +4,7 @@ import type { BoardGap, ProjectBinding, ProjectHealth, StatusBoardAdapter, UnitP
 import { useAdapters } from "../../adapters/index.tsx";
 import { useShell } from "../../shell/context.tsx";
 import { ErrorState, LoadingState, ago } from "../../ui/primitives.tsx";
-import { Fields } from "../../ui/drawer.tsx";
+import { Fields, PAGE_LABEL_COLUMN } from "../../ui/drawer.tsx";
 import { SectionHeader } from "../../ui/section.tsx";
 import { ProjectShell } from "../ProjectShell.tsx";
 
@@ -102,7 +102,7 @@ function Group({ title, rows, children, testId }: { title: string; rows?: FieldR
     <section aria-label={title} data-testid={testId} className="flex min-w-0 flex-col">
       <SectionHeader title={title} inset="list" level={3} className="border-b border-border-muted" />
       <div className="px-3 py-1">
-        {rows ? <Fields rows={rows} labelWidth="10rem" size="xs" /> : null}
+        {rows ? <Fields rows={rows} labelWidth={PAGE_LABEL_COLUMN} size="xs" /> : null}
         {children}
       </div>
     </section>
@@ -201,7 +201,7 @@ function GapFacts({ report }: { report: IntegrationGaps }) {
           {report.gaps.map((gap, index) => (
             <li key={`${gap.path}:${gap.field}:${index}`} data-testid="integration-gap">
               <Fields
-                labelWidth="10rem"
+                labelWidth={PAGE_LABEL_COLUMN}
                 size="xs"
                 rows={[
                   [
@@ -220,7 +220,7 @@ function GapFacts({ report }: { report: IntegrationGaps }) {
       ) : null}
       {report.truncated.length > 0 || report.failed.length > 0 ? (
         <Fields
-          labelWidth="10rem"
+          labelWidth={PAGE_LABEL_COLUMN}
           size="xs"
           rows={[
             ...(report.truncated.length > 0
