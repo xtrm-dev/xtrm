@@ -36,10 +36,24 @@ export function InspectorSection({ title, children, aside }: { title: ReactNode;
 /** Rows whose values are one short token (`value`, the timeline's `at`/`kind`). Worst label 31px. */
 export const DENSE_LABEL_COLUMN = "3.5rem";
 
-/** The agent sidebar's session rows and an activity row's argument list. Worst label 49px. */
+/**
+ * The agent sidebar's session rows, and an activity row's argument list.
+ *
+ * Both are content-sized: `Activity` floors on this step and lets the track take the widest label
+ * above it, because a tool call's argument names are data and there is no inventory to fit at
+ * authoring time. Worst label 49px; the sweep that introduced the floor moved 4rem → 4.5rem, which
+ * is **+0.5rem (+8px at a 16px root, +6px at the operator's 12px root)**. The floor is visible only
+ * when every key in a block is shorter than it — one long key hides it (measured on XTRM-971).
+ * Nothing pins that figure: the gate proves the floor is a step, not that the step fits short keys.
+ */
 export const SIDEBAR_LABEL_COLUMN = "4.5rem";
 
-/** The issue body in the canvas (details and provenance). Worst label 82px. */
+/**
+ * The issue body in the canvas (details and provenance), and `IssueJournal`'s block keys.
+ *
+ * `IssueJournal` is the other content-sized grid: same shape as `SIDEBAR_LABEL_COLUMN`, floored on
+ * this step. Worst label 82px; the sweep moved 6rem → 6.5rem, i.e. **+0.5rem (+8px at 16px)**.
+ */
 export const PART_LABEL_COLUMN = "6.5rem";
 
 /** Drawer and inspector bodies. Worst label 105px, so the step leaves 15px of slack. */
@@ -50,17 +64,6 @@ export const DRAWER_LABEL_COLUMN = "7.5rem";
  * 84px, and the extra column is what a page has that a 320px drawer does not.
  */
 export const PAGE_LABEL_COLUMN = "10rem";
-
-/**
- * The two content-sized grids (`IssueJournal`'s block keys, `Activity`'s argument list) floor on
- * `PART_LABEL_COLUMN` / `SIDEBAR_LABEL_COLUMN` and let the track take the widest label above that
- * floor, because their labels are data and there is no inventory to fit at authoring time.
- *
- * The floor is a visible pixel: the sweep that introduced it moved 6rem → 6.5rem and 4rem → 4.5rem,
- * which is **+8px per grid**, and it shows only when every key in a block is shorter than the floor
- * (measured on XTRM-971; a block with one long key hides it). Nothing pins that figure — the gate
- * can prove the floor is a step, not that the step fits a block of short keys.
- */
 
 /**
  * Label/value pairs; values keep their own ink (XTRM-934).
