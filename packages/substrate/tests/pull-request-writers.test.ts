@@ -303,9 +303,9 @@ describe("pull-request writers", () => {
   });
 
   // XTRM-953: the merge queue's commits name their issue in the subject suffix,
-  // so a trailer-only reader attached nothing at all. A suffix is weaker
-  // evidence than a trailer, and the weakness is recorded rather than hidden.
-  it("a subject suffix names the issue and cannot attest a delivery", () => {
+  // so a trailer-only reader attached nothing at all. A suffix without a receipt
+  // is weaker evidence than a trailer, and the weakness is recorded rather than hidden.
+  it("a receipt-less subject suffix names the issue and cannot attest a delivery", () => {
     // The fixture project is prj_xtrm, so the suffix must name that prefix.
     const message = `feat(console): one section header (${w.issue.humanRef}) (#466)`;
     const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "9".repeat(40), message }] });
@@ -321,6 +321,65 @@ describe("pull-request writers", () => {
     assert.deepEqual(rows, []);
     assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "manual" }).codes, [GATE_CODES.mentioned]);
     assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["subject_receipt_missing"]);
+  });
+
+  // XTRM-953 round 4: the suffix route is how `xt` writes every commit, so a
+  // route that can never attest would have meant 35 of the last 40 commits on
+  // main filing a finding and attesting nothing. A receipt the commit carries is
+  // evidence wherever the issue was named.
+  it("a subject suffix that carries a receipt attests, and the relation follows", () => {
+    const { receipt } = dispatchWithClaim(w);
+    const message = `feat(console): one section header (${w.issue.humanRef}) (#466)\nXTRM-Receipt: ${receipt.id}`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "a".repeat(40), message }] });
+    assert.deepEqual(result, { created: 1, mentioned: 0, findings: 0 });
+    const view = w.links.listForIssue(w.issue.id)[0]!;
+    // The source vocabulary describes how the link was observed, not which line
+    // named the issue; what the link is worth is its relation.
+    assert.deepEqual(view.sources, ["trailer"]);
+    assert.equal(view.relation, "created_from");
+    const rows = w.db.prepare("SELECT sha FROM issue_pr_commits WHERE issue_id = ?").all(w.issue.id) as Array<{ sha: string }>;
+    assert.deepEqual(rows.map((r) => r.sha), ["a".repeat(40)]);
+    // The gate asks for a `trailer`-sourced `created_from` with commits behind it,
+    // which a subject-plus-receipt link now is.
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "manual" }).codes, []);
+    assert.deepEqual(w.links.listFindings("prj_xtrm"), []);
+    // Idempotent on a re-run, as the trailer route is.
+    assert.deepEqual(w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "a".repeat(40), message }] }), { created: 0, mentioned: 0, findings: 0 });
+  });
+
+  it("a subject suffix whose receipt is ambiguous, unknown or foreign stays a mention", () => {
+    const { receipt } = dispatchWithClaim(w);
+    const subject = `feat(console): one section header (${w.issue.humanRef}) (#466)`;
+    const run = (sha: string, message: string) =>
+      w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha, message }] });
+
+    // The first case creates the mention row; the later ones find it and report
+    // `mentioned: 0`, because the counter counts what this run did and the row is
+    // the claim about the world. Read them together, not as three zeroes.
+    const ambiguous = `${subject}\nXTRM-Receipt: ${receipt.id}\nXTRM-Receipt: rec_second`;
+    assert.deepEqual(run("e".repeat(40), ambiguous), { created: 0, mentioned: 1, findings: 1 });
+    const unknown = `${subject}\nXTRM-Receipt: rec_does_not_exist`;
+    assert.deepEqual(run("f".repeat(40), unknown), { created: 0, mentioned: 0, findings: 1 });
+
+    // A receipt minted for another issue: the subject names this one, so the
+    // finding says which half failed rather than linking on half the evidence.
+    const sibling = w.svc.createIssue({ projectId: "prj_xtrm", title: "sibling receipt", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    w.svc.attestReadiness(sibling.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
+    const claim = w.svc.claimIssue(sibling.id, "w", { ttlMs: 60_000 });
+    const binding = w.prov.dispatch(sibling.id, { workspace: "/tmp/ws-foreign", participantId: "w", claimId: claim.id });
+    const foreign = w.prov.allocateReceipt(binding.id);
+    const foreignSubject = `${subject}\nXTRM-Receipt: ${foreign.id}`;
+    assert.deepEqual(run("9".repeat(40), foreignSubject), { created: 0, mentioned: 0, findings: 1 });
+
+    // One namespace per route, so a finding says which one filed it.
+    assert.deepEqual(
+      w.links.listFindings("prj_xtrm").map((f) => f.code).sort(),
+      ["subject_receipt_ambiguous", "subject_receipt_foreign_issue", "subject_receipt_unknown"],
+    );
+    const view = w.links.listForIssue(w.issue.id).filter((v) => v.repository === "o/r");
+    assert.equal(view.length, 1);
+    assert.equal(view[0]!.relation, "mentioned");
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "manual" }).codes, [GATE_CODES.mentioned]);
   });
 
   it("a subject suffix naming a sibling issue is reported once, and attaches nothing", () => {
@@ -644,8 +703,10 @@ describe("pull-request writers", () => {
       assert.equal(res.code, 0, res.stderr);
       const data = (JSON.parse(res.stdout) as { data: { created: number; mentioned: number } }).data;
       // No receipt, so the honest outcome is a mention, not a delivery, and no
-      // commit row: see the gate assertion in "a subject suffix names the issue
-      // and cannot attest a delivery" for why a row would not buy T2 anyway.
+      // commit row: see the gate assertion in "a receipt-less subject suffix
+      // names the issue and cannot attest a delivery" for why a row would not buy
+      // T2 anyway. A suffix that carries a receipt does attest — see "a subject
+      // suffix that carries a receipt attests, and the relation follows".
       assert.deepEqual(data, { created: 0, mentioned: 1, findings: 1 });
       const rows = w.db.prepare("SELECT sha FROM issue_pr_commits").all() as Array<{ sha: string }>;
       assert.deepEqual(rows, []);

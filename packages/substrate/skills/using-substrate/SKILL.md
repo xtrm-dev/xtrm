@@ -135,13 +135,17 @@ sb provenance attach <ref> pr <owner/repo#n|url|#n> [--receipt <id>]
 ```
 
 - `links check` lists T2 candidates — PR commits that name an Issue in this project, either
-  in an `XTRM-Issue:` trailer or in the `(XTRM-nnn)` subject suffix `xt` writes. The two
-  are not equal: a trailer plus an `XTRM-Receipt:` attests a delivery (`created_from`), a
-  subject suffix only names the Issue (`mentioned`, with a `subject_receipt_missing`
-  finding), and a trailer always wins when both are present. That difference lives in the
-  link's relation and its finding, **not** in its `source`: a suffix-sourced mention is
-  stored `source: "trailer"` because the source vocabulary describes how the link was
-  observed, and `mentioned` already tells you what it is worth. A subject naming several
+  in an `XTRM-Issue:` trailer or in the `(XTRM-nnn)` subject suffix `xt` writes. What the
+  commit *carries* decides what the link is worth, not which line named the Issue: a
+  `XTRM-Receipt:` attests a delivery (`created_from`), and without one the commit only
+  names the Issue (`mentioned`, with a `subject_receipt_missing` finding on the suffix
+  route and `trailer_receipt_missing` on the trailer route). A trailer always wins when
+  both are present. That difference lives in the link's relation and its finding, **not**
+  in its `source`: both routes are stored `source: "trailer"` because the source
+  vocabulary describes how the link was observed, and `mentioned` already tells you what it
+  is worth. A receipt the commit carries is judged the same way on either route, so the
+  finding codes are namespaced by route (`subject_receipt_ambiguous` vs
+  `trailer_receipt_ambiguous`) and `receipt_stale_revision` is shared. A subject naming several
   Issues links the one it names and records `commit_multi_issue_named`; one naming several
   others attaches nothing and records `commit_multi_issue`. With `--issue` it prints the
   manual and auto verdicts and their codes; the default check adds verdicts and exits 1

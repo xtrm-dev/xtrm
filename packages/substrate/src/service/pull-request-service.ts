@@ -2,8 +2,11 @@
 //
 // Writers never delete: a mention is a row, an unlink sets `superseded_at`,
 // and every read filters superseded rows out. A T2 row is evidence that a
-// commit carries the trailer (or, since XTRM-953, names the issue in its
-// `(XTRM-938)` subject suffix, which is how `xt` writes one); a finding is an
+// commit carries an `XTRM-Receipt:` and names the issue, either in an
+// `XTRM-Issue:` trailer or (since XTRM-953) in the `(XTRM-938)` subject suffix
+// `xt` writes — the receipt is the evidence and the route is only how the issue
+// was named, so both routes reach `created_from`. A commit that names the issue
+// without a receipt is a mention plus a finding, never a row. A finding is an
 // `issue_events` row of type `provenance.link_finding` and is reported, never
 // thrown.
 
@@ -326,20 +329,61 @@ export class PullRequestService {
           if (resolved.length > 1 && mine.length === 1) {
             finding("commit_multi_issue_named", commit.sha, `subject names ${resolved.map((r) => r.ref).join(", ")}; this issue is named too`);
           }
-          // A subject ref carries no receipt, so it can name the issue but not
-          // attest a delivery: the link is a mention, as a receipt-less trailer
-          // already is. No commit row is written, and that is not an omission:
-          // `LinkGateService.evaluate` filters `created_from` links and asks for
-          // `sources.includes("trailer") && commits > 0`, so a `mentioned` row
-          // never reaches the filter with any commit count. Measured, not
-          // reasoned - a subject-only link reports `gate_mentioned_only` with
-          // and without the row (XTRM-953).
-          if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-          // A finding is an event, and `links check` re-derives it from the
-          // `issue_events` row, so a re-run reports nothing new without the
-          // finding becoming false. The counter stays idempotent because it
-          // counts what this run did (XTRM-953).
-          finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
+          // A subject suffix with no `XTRM-Receipt:` trailer names the issue and
+          // cannot attest a delivery: the link is a mention, as a receipt-less
+          // trailer already is, and no commit row is written. `LinkGateService`
+          // then reports `gate_mentioned_only`, measured with and without the row
+          // (XTRM-953). This is the one limit of the suffix route and it is
+          // written here rather than implied: `xt` writes the issue in the
+          // subject and no trailer, so on a merge-queue branch every commit
+          // takes this branch and none of them can attest until it also carries
+          // a receipt.
+          if (trailers.receipts.length === 0) {
+            if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
+            // A finding is an event, and `links check` re-derives it from the
+            // `issue_events` row, so a re-run reports nothing new without the
+            // finding becoming false. The counter stays idempotent because it
+            // counts what this run did (XTRM-953).
+            finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
+            continue;
+          }
+          // A receipt the commit carries is evidence wherever the issue was read:
+          // the subject names the issue, the receipt attests the delivery, so the
+          // suffix route reaches `created_from` by the same path a trailer does
+          // (XTRM-953). The source stays `trailer` because the source vocabulary
+          // describes how the link was observed, not which line named the issue.
+          if (trailers.receipts.length > 1) {
+            if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
+            finding("subject_receipt_ambiguous", commit.sha, `receipts: ${trailers.receipts.join(", ")}`);
+            continue;
+          }
+          const receiptId = trailers.receipts[0]!;
+          const verdict = this.classifyReceipt(receiptId, input.issueId);
+          if (!verdict.ok) {
+            if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
+            finding(this.receiptFindingCode(verdict.code, "subject"), commit.sha, verdict.detail);
+            continue;
+          }
+          const claimed = this.db
+            .prepare("SELECT issue_id FROM issue_pr_commits WHERE repository = ? AND number = ? AND sha = ?")
+            .get(input.repository, input.number, commit.sha) as { issue_id: string } | undefined;
+          if (claimed && claimed.issue_id !== input.issueId) {
+            finding("commit_claimed_twice", commit.sha, `already claimed by ${claimed.issue_id}`);
+            continue;
+          }
+          if (this.insertCommit(input.issueId, input.repository, input.number, commit.sha, null)) {
+            if (this.insertLink(input.issueId, input.repository, input.number, "created_from", "trailer", null, input.actor, now)) {
+              created += 1;
+              issues.appendEvent(input.issueId, "provenance.link_created", {
+                repository: input.repository,
+                number: input.number,
+                receipt: receiptId,
+                relation: "created_from",
+                sha: commit.sha,
+                actor: input.actor,
+              }, now);
+            }
+          }
           continue;
         }
         // Two distinct trailer names are a multi-issue commit even when one
@@ -378,15 +422,7 @@ export class PullRequestService {
         const verdict = this.classifyReceipt(receiptId!, input.issueId);
         if (!verdict.ok) {
           if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-          // Trailer path keeps its own code namespace; stale stays shared.
-          const code = verdict.code === "receipt_unknown"
-            ? "trailer_receipt_unknown"
-            : verdict.code === "receipt_foreign_issue"
-              ? "trailer_receipt_foreign_issue"
-              : verdict.code === "receipt_superseded"
-                ? "trailer_receipt_superseded"
-                : verdict.code;
-          finding(code, commit.sha, verdict.detail);
+          finding(this.receiptFindingCode(verdict.code, "trailer"), commit.sha, verdict.detail);
           continue;
         }
         const existing = this.db
@@ -508,6 +544,14 @@ export class PullRequestService {
       }, now);
     }
     return created;
+  }
+
+  /** Each branch keeps its own receipt-code namespace (`trailer_receipt_unknown`,
+   * `subject_receipt_unknown`) so a finding says which route filed it; a stale
+   * receipt stays shared, because it is stale whichever route found it. */
+  private receiptFindingCode(code: string, branch: "trailer" | "subject"): string {
+    if (code === "receipt_stale_revision") return code;
+    return `${branch}_${code}`;
   }
 
   private classifyReceipt(receiptId: string, issueId: string): { ok: true; receipt: WorkReceipt } | { ok: false; code: string; detail: string } {

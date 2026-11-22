@@ -104,6 +104,24 @@ describe("refsInGroup is linear (XTRM-953)", () => {
     assert.ok(big < small * 40 + 200, `8x the input took ${(big / Math.max(small, 0.001)).toFixed(0)}x the time (${small.toFixed(0)}ms -> ${big.toFixed(0)}ms)`);
   });
 
+  it("scans a 32k run with one trailing dash in the same regime", () => {
+    // The two overflow points are separate: the no-dash branch fails to advance past
+    // an uppercase run, and the dash-with-no-digits branch fails to advance past a
+    // dash. `("A" * n)` exercises only the first, so a budget over it alone would
+    // say "the scanner is linear on the input I happened to time".
+    const scanDash = (n: number): number => {
+      const subject = `feat: x (${"A".repeat(n)}-)`;
+      const started = performance.now();
+      subjectIssueRefs(subject);
+      return performance.now() - started;
+    };
+    scanDash(2000); // warm the JIT, as the no-dash budget does
+    const small = scanDash(4000);
+    const big = scanDash(32000);
+    assert.ok(big < 2000, `a 32k run with a trailing dash took ${big.toFixed(0)}ms; it must stay in the linear regime`);
+    assert.ok(big < small * 40 + 200, `8x the input took ${(big / Math.max(small, 0.001)).toFixed(0)}x the time (${small.toFixed(0)}ms -> ${big.toFixed(0)}ms)`);
+  });
+
   it("still returns exactly what the regex returned, so the budget is not bought by scanning less", () => {
     // These pin BEHAVIOUR, not approval: the scanner is permissive by design (a prefix is any
     // uppercase/digit run, so `(ABXTRM-9)` is a ref and `(XTRM-9AB)` reads as `XTRM-9`), and
