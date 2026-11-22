@@ -105,6 +105,16 @@ inside an xt session the argument is optional, and an explicit holder is only fo
 claiming on someone else's behalf. With neither set the claim fails closed; there
 is no implicit unix-user holder. The CLI `sb issue claim <ref>` follows the same
 rule.
+The binding is per session and it follows the lane: `substrate_issue_claim` on
+another Issue moves it, and it does not expire when the Issue it names closes. A
+session that finished on a closed Issue is refused at its next write, with the
+Issue's human ref, its lifecycle state and the two ways out — claim the Issue the
+session is actually working on, or stop. A closed Issue never becomes claimable
+again for a rebind; claim the live lane's Issue instead. The gate covers the
+terminal states only: a binding to a draft Issue, or to one whose claim is
+blocked, still reports the ordinary `claim first` refusal, and the store will
+refuse that claim. Treat that message as `this binding cannot be claimable` and
+rebind to the live lane.
 Substrate provides no workspace-exclusion guarantee (XTRM-414): per-issue claim
 fencing is the only mutation authority here; workspace exclusion is owned by
 the specialists activation layer. Unbound sessions are not implicitly bound to

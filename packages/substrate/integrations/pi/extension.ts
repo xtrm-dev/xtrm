@@ -102,7 +102,7 @@ export default function registerSubstrate(pi: ExtensionAPI, options: { openBacki
     defineTool({
       name: "substrate_issue_claim",
       label: "Substrate issue claim",
-      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume. holder defaults to SUBSTRATE_HOLDER, so a launched session claims as itself. Successful mutations include structured feedback.",
+      description: "Claim a dispatchable Substrate issue for a holder. Binds the Pi session to the issue for checkpoints and resume, and rebinds it when it was already bound to another issue — a claim is how a session moves to the issue it is working on. holder defaults to SUBSTRATE_HOLDER, so a launched session claims as itself. Successful mutations include structured feedback.",
       parameters: Type.Object({ ref: Type.String({ description: "Issue ref" }), holder: Type.Optional(Type.String({ description: "Claim holder (defaults to SUBSTRATE_HOLDER)" })), activationId: Type.Optional(Type.String({ description: "Activation id" })), sessionId: Type.Optional(Type.String({ description: "Pi session id" })) }),
       async execute(
         _id: string,

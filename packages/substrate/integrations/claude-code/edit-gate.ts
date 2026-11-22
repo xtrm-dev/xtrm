@@ -10,9 +10,10 @@
 // must not brick the session); fail-closed when a resolved Issue lacks the
 // current claim holder + activation authority.
 
-import { discoverIssueRef, openHandles, resolveIssueId } from "./runtime.ts";
+import { discoverIssueRef, openHandles } from "./runtime.ts";
 import { armPipeDrain } from "../write-and-exit.ts";
 import { sameHolder } from "../../src/domain/claim.ts";
+import { TERMINAL_STATES, isMachineIssueId, type LifecycleState } from "../../src/domain/issue.ts";
 
 export interface EditGateInput {
   tool_name?: string;
@@ -38,21 +39,50 @@ export interface EditGateResult {
 // inherits holder A's claim, and the same holder under a different
 // activation is a different execution. A live claim with no current holder
 // is fail-closed — without WHO the gate cannot authorize the mutation.
+// XTRM-969: the discovered ref outlives the issue — a checkout that finished on a
+// closed issue must be told so, not told to claim the closed issue again.
 export function evaluateEditState(state: {
   issueRef: string | null;
   claim?: { holder: string; activationId: string | null } | null;
   claimed?: boolean;
   holder?: string | null;
   activationId?: string | null;
+  /** The bound issue's lifecycle state, when the caller resolved it. */
+  lifecycleState?: LifecycleState | null;
+  /** Operator-facing ref (XTRM-123), used instead of a machine id when known. */
+  displayRef?: string | null;
 }): EditGateResult {
   if (!state.issueRef) return { allow: true, issueRef: null, reason: "no bound issue; nothing to gate" };
+  // One subject for every message, and one rendering for the command: a machine id
+  // is never shown, and `this issue` in prose must not leak into a command the
+  // operator is meant to paste (`sb issue claim this issue` claims nothing).
+  const ref = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "this issue" : state.issueRef);
+  const commandRef = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "<ref>" : state.issueRef);
+  // A closed issue authorises nothing, and the remedy is not a claim on it:
+  // that claim is refused as terminal, which is how a lane gets pushed into
+  // claiming unrelated work just to move the binding.
+  if (state.lifecycleState && TERMINAL_STATES.includes(state.lifecycleState)) {
+    // Never substitute a machine id for a reference the operator can use.
+    const named = state.displayRef ?? (isMachineIssueId(state.issueRef) ? null : state.issueRef);
+    const subject = named
+      ? `the bound issue ${named} is ${state.lifecycleState}`
+      : `the bound issue is ${state.lifecycleState}`;
+    return {
+      allow: false,
+      issueRef: state.issueRef,
+      reason:
+        `${subject}: no write is authorised under a closed issue. ` +
+        `Bind to the issue this checkout is working on — \`sb issue claim ${named ?? "<ref>"} --holder <name>\` ` +
+        `rebinds it — or stop here: the work you finished stays closed.`,
+    };
+  }
   const claim = state.claim ?? null;
   const claimed = claim !== null || state.claimed === true;
   if (!claimed) {
     return {
       allow: false,
       issueRef: state.issueRef,
-      reason: `no live claim on ${state.issueRef}; run \`sb issue claim ${state.issueRef} --holder <name>\` first`,
+      reason: `no live claim on ${ref}; run \`sb issue claim ${commandRef} --holder <name>\` first`,
     };
   }
   if (claim) {
@@ -60,14 +90,14 @@ export function evaluateEditState(state: {
       return {
         allow: false,
         issueRef: state.issueRef,
-        reason: `live claim on ${state.issueRef} held by ${claim.holder}; no current holder supplied, refusing without WHO`,
+        reason: `live claim on ${ref} held by ${claim.holder}; no current holder supplied, refusing without WHO`,
       };
     }
     if (!sameHolder(claim, state.holder, state.activationId ?? null)) {
       return {
         allow: false,
         issueRef: state.issueRef,
-        reason: `live claim on ${state.issueRef} held by ${claim.holder}${claim.activationId ? ` (activation ${claim.activationId})` : ""}; holder ${state.holder} may not mutate`,
+        reason: `live claim on ${ref} held by ${claim.holder}${claim.activationId ? ` (activation ${claim.activationId})` : ""}; holder ${state.holder} may not mutate`,
       };
     }
   }
@@ -81,10 +111,12 @@ export function handleEditGate(input: EditGateInput = {}): EditGateResult {
   let handles: ReturnType<typeof openHandles> | null = null;
   try {
     handles = openHandles(input.dbPath);
-    const issueId = resolveIssueId(handles.svc, issueRef);
-    const claim = handles.svc.getActiveClaim(issueId);
+    const issue = handles.svc.resolveRef(issueRef);
+    const claim = handles.svc.getActiveClaim(issue.id);
     return evaluateEditState({
       issueRef,
+      displayRef: issue.humanRef,
+      lifecycleState: issue.lifecycleState,
       claim: claim ? { holder: claim.holder, activationId: claim.activationId } : null,
       claimed: claim !== null,
       holder: input.holder ?? null,

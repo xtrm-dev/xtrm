@@ -193,6 +193,76 @@ describe("§54 hook parity", () => {
       false,
       "Pi gate: same holder different activation blocked",
     );
+    // XTRM-969: a closed binding is not a missing claim, and neither gate may
+    // answer a closed issue with "claim it". Both name the ref, the state and
+    // the command that rebinds — the two surfaces must not diverge here. One
+    // structural input type covers both gates, so the loop needs no cast.
+    type GateInput = {
+      issueRef: string | null;
+      lifecycleState?: "done" | "cancelled" | "archived" | null;
+      displayRef?: string | null;
+      claim?: { holder: string; activationId: string | null } | null;
+      claimed?: boolean;
+      holder?: string | null;
+      activationId?: string | null;
+    };
+    const gates: Array<[string, (state: GateInput) => { allow: boolean; reason?: string | null }]> = [
+      ["Pi", piEditGate],
+      ["Claude", evaluateEditState],
+    ];
+    for (const [name, gate] of gates) {
+      const dead = gate({ issueRef: s.issueId, displayRef: s.humanRef, lifecycleState: "done", claimed: false });
+      assert.equal(dead.allow, false, `${name} gate refuses a closed binding without a claim`);
+      const reason = dead.reason ?? "";
+      assert.match(reason, new RegExp(s.humanRef), `${name} gate names the human ref`);
+      assert.doesNotMatch(reason, /iss_/, `${name} gate never shows a machine id alone`);
+      assert.match(reason, /\bdone\b/, `${name} gate names the lifecycle state`);
+      assert.match(reason, /sb issue claim/, `${name} gate names the command that rebinds`);
+      const claimedDead = gate({ issueRef: s.issueId, displayRef: s.humanRef, lifecycleState: "done", claim: { holder: "op", activationId: null }, claimed: true, holder: "op" });
+      assert.equal(claimedDead.allow, false, `${name} gate: a live claim cannot authorise a closed issue`);
+      // No human ref supplied: the machine id must not become the message.
+      const bare = gate({ issueRef: s.issueId, lifecycleState: "done", claimed: false });
+      const bareReason = bare.reason ?? "";
+      assert.equal(bare.allow, false, `${name} gate still refuses a closed binding with no display ref`);
+      assert.doesNotMatch(bareReason, /iss_/, `${name} gate: no machine id when the human ref is unknown`);
+      assert.match(bareReason, /\bdone\b/, `${name} gate: the state still carries the meaning`);
+      assert.match(bareReason, /sb issue claim/, `${name} gate: the remedy survives a missing ref`);
+      // The command the operator is meant to paste must stay a placeholder: with
+      // only a machine id, `sb issue claim this issue` claims nothing.
+      assert.match(bareReason, /sb issue claim <ref>/, `${name} gate: the remedy keeps a <ref> placeholder`);
+      assert.doesNotMatch(bareReason, /claim this issue/, `${name} gate: prose must not leak into the command`);
+      // A non-machine issueRef is its own display: the human ref reaches the message
+      // even when no displayRef was supplied, so dropping that fallback is visible.
+      const humanOnly = gate({ issueRef: s.humanRef, lifecycleState: "done", claimed: false });
+      assert.match(humanOnly.reason ?? "", new RegExp(s.humanRef), `${name} gate: a human ref needs no displayRef`);
+
+      // XTRM-969 rev 2, SUCCESS: the ordering is settled by the case where the two
+      // orderings differ observably — a live claim held by ANOTHER holder under a
+      // closed issue. Shipped order answers with the state; claim-first would answer
+      // `holder … may not mutate`.
+      const foreignLive = gate({
+        issueRef: s.issueId,
+        displayRef: s.humanRef,
+        lifecycleState: "done",
+        claim: { holder: "other", activationId: null },
+        claimed: true,
+        holder: "op",
+      });
+      assert.equal(foreignLive.allow, false, `${name} gate: a foreign live claim cannot authorise a closed issue`);
+      assert.match(foreignLive.reason ?? "", /\bdone\b/, `${name} gate: the closed-issue reason precedes the holder check`);
+      assert.doesNotMatch(foreignLive.reason ?? "", /may not mutate/, `${name} gate: the claim check does not answer first`);
+
+      // The same state with no human ref: neither gate may print the machine id it
+      // holds, which is what the two surfaces diverged on.
+      const foreignBare = gate({ issueRef: s.issueId, claim: { holder: "other", activationId: null }, claimed: true, holder: "op" });
+      assert.equal(foreignBare.allow, false, `${name} gate refuses a foreign claim with no display ref`);
+      assert.doesNotMatch(foreignBare.reason ?? "", /iss_/, `${name} gate: no machine id on the holder path`);
+      assert.match(foreignBare.reason ?? "", /may not mutate/, `${name} gate: the holder refusal still reads as one`);
+
+      const unclaimedBare = gate({ issueRef: s.issueId, claimed: false });
+      assert.doesNotMatch(unclaimedBare.reason ?? "", /iss_/, `${name} gate: no machine id on the unclaimed path`);
+      assert.match(unclaimedBare.reason ?? "", /sb issue claim <ref>/, `${name} gate: the unclaimed remedy is pasteable`);
+    }
     const cont = piStop({ issueRef: s.humanRef, claimed: true, holder: "op", checkpointsSinceClaim: 0, blockers: 1, handoffs: 0 });
     assert.equal(cont.needsCheckpoint, true);
     assert.ok(cont.continuity?.includes("sb issue resume"));

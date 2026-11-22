@@ -12,7 +12,7 @@ import { isTransportFailure } from "../../src/service/operations.ts";
 import { JOURNAL_SUMMARY_MAX, isJournalKind, type SemanticCheckpoint } from "../../src/domain/journal.ts";
 import { resolveClaimHolder, sameHolder } from "../../src/domain/claim.ts";
 import { currentExecutionContext, enrichExecutionContext, type ExecutionContext } from "../../src/domain/execution-context.ts";
-import type { ResolvedIssue } from "../../src/domain/issue.ts";
+import { TERMINAL_STATES, isMachineIssueId, type LifecycleState, type ResolvedIssue } from "../../src/domain/issue.ts";
 // Type-only: erased at compile time, so this module stays free of runtime Pi imports.
 import type { Usage } from "@earendil-works/pi-ai";
 
@@ -467,17 +467,51 @@ export interface EditGateState {
   claimed?: boolean;
   holder?: string | null;
   activationId?: string | null;
+  /** The bound issue's lifecycle state, when the caller resolved it. */
+  lifecycleState?: LifecycleState | null;
+  /** Operator-facing ref (XTRM-123), used instead of a machine id when known. */
+  displayRef?: string | null;
+}
+
+// The binding outlives the issue (XTRM-969): a session that ended its work on a
+// closed issue kept a dead binding and learned about it at its next write, as
+// `no live claim on iss_01a1fdd3`. Name the thing, the state and the way out —
+// and never print a machine id in place of a reference the reader can use.
+//
+// Limit, stated where the omission lives: "not claimable" is WIDER than
+// "terminal" (a draft has no current attestation, a claim may be blocked), and
+// the gate covers only the terminal part. A draft binding still answers "claim
+// first" for a command the store refuses. Honouring the wider clause needs
+// dispatchability on the resolved issue, which is a service change.
+export function deadBindingReason(state: EditGateState): string | null {
+  if (!state.lifecycleState || !TERMINAL_STATES.includes(state.lifecycleState)) return null;
+  const named = state.displayRef ?? (isMachineIssueId(state.issueRef) ? null : state.issueRef);
+  const subject = named
+    ? `this session's edit binding names ${named}, which is ${state.lifecycleState}`
+    : `this session's edit binding points at an issue that is ${state.lifecycleState}`;
+  return (
+    `${subject}: no write is authorised under a closed issue. Bind this session to the issue it is working on — ` +
+    `\`sb issue claim ${named ?? "<ref>"} --holder <name>\` rebinds it — or stop here: the work you finished ` +
+    `stays closed.`
+  );
 }
 
 export function evaluateEditGate(state: EditGateState): { allow: boolean; reason?: string } {
   if (!state.issueRef) return { allow: true };
+  const dead = deadBindingReason(state);
+  if (dead) return { allow: false, reason: dead };
+  // One subject for every message, and one rendering for the command: a machine id
+  // is never shown, and `this issue` in prose must not leak into a command the
+  // operator is meant to paste (`sb issue claim this issue` claims nothing).
+  const ref = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "this issue" : state.issueRef);
+  const commandRef = state.displayRef ?? (isMachineIssueId(state.issueRef) ? "<ref>" : state.issueRef);
   const claim = state.claim ?? null;
   const claimed = claim !== null || state.claimed === true;
-  if (!claimed) return { allow: false, reason: `no live claim on ${state.issueRef}; claim first` };
+  if (!claimed) return { allow: false, reason: `no live claim on ${ref}; run \`sb issue claim ${commandRef} --holder <name>\` first` };
   if (claim) {
-    if (!state.holder) return { allow: false, reason: `live claim on ${state.issueRef} held by ${claim.holder}; no current holder supplied` };
+    if (!state.holder) return { allow: false, reason: `live claim on ${ref} held by ${claim.holder}; no current holder supplied` };
     if (!sameHolder(claim, state.holder, state.activationId ?? null)) {
-      return { allow: false, reason: `live claim on ${state.issueRef} held by ${claim.holder}; holder ${state.holder} may not mutate` };
+      return { allow: false, reason: `live claim on ${ref} held by ${claim.holder}; holder ${state.holder} may not mutate` };
     }
   }
   return { allow: true };
@@ -491,18 +525,21 @@ export async function decidePiEditCall(
   try {
     const identity = bindings.identityFor(opts.sessionId);
     if (!identity) return { allow: true, issueRef: null };
-    let issueId: string;
+    let resolved: ResolvedIssue;
     try {
-      issueId = (await backing.call<{ id: string }>("issue.resolveRef", { ref: identity.ref })).id;
+      resolved = await backing.call<ResolvedIssue>("issue.resolveRef", { ref: identity.ref });
     } catch (error) {
       // The store answered "no such ref" -> allow, as before. The store could not
       // be reached at all -> the caller must block (XTRM-712).
       if (isTransportFailure(error)) throw error;
       return { allow: true, issueRef: identity.ref };
     }
+    const issueId = resolved.id;
     const claim = await backing.call<{ holder: string; activationId: string | null } | null>("issue.getActiveClaim", { issueId });
     const decision = evaluateEditGate({
       issueRef: identity.ref,
+      displayRef: resolved.humanRef,
+      lifecycleState: resolved.lifecycleState,
       claim: claim ? { holder: claim.holder, activationId: claim.activationId } : null,
       claimed: claim !== null,
       holder: identity.holder,
