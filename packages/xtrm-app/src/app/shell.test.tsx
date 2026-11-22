@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { fixtureAdapters } from "../adapters/index.tsx";
 import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
 import { createAppRouter } from "./router.tsx";
+import { CARD_FRAME } from "../ui/card.tsx";
 
 function renderAt(url: string) {
   const history = createMemoryHistory({ initialEntries: [url] });
@@ -326,5 +327,16 @@ describe("Issues board", () => {
     const ref = card.getAttribute("aria-label")!.split(" ")[0]!;
     fireEvent.click(card);
     await waitFor(() => expect(search(router).inspect).toBe(`issue:${ref}`));
+  });
+
+  it("draws its cards on the one shared frame (XTRM-989)", async () => {
+    renderAt("/rep/xtrm-dev/xtrm/work/issues");
+    await openBoard();
+    const card = within(await screen.findByTestId("board-column-todo")).getAllByTestId("board-card")[0]!;
+    // Same frame as the provenance records and the page's details card, one component away.
+    expect(card.className).toContain(CARD_FRAME);
+    // The board's own states ride on the frame; they do not replace it.
+    expect(card.className).toContain("group/card");
+    expect(card.className).toContain("focus-visible:ring-2");
   });
 });

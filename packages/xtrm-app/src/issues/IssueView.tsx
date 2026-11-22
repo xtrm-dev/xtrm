@@ -1,4 +1,5 @@
 import { Breadcrumbs } from "../ui/breadcrumbs.tsx";
+import { Card } from "../ui/card.tsx";
 import { Dialog, DialogFrame } from "../ui/dialog.tsx";
 import { Fields, PART_LABEL_COLUMN } from "../ui/drawer.tsx";
 import { SectionHeader } from "../ui/section.tsx";
@@ -277,13 +278,17 @@ function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; ca
           ...(issue.closure.closed ? [["Closed", issue.closure.closedAt ? ago(issue.closure.closedAt) : (issue.closure.outcome ?? "closed")]] : []),
         ] as Array<[ReactNode, ReactNode]>)),
   ];
-  return (
-    <div className={cx("flex flex-col gap-1", !compact && "rounded-lg border border-border-muted p-4")}>
+  // The page's details block is a card like every other record box (XTRM-989). The drawer's
+  // `compact` mode is not a card: the drawer section owns the frame there, so it keeps the bare
+  // stack it had.
+  const body = (
+    <>
       {!compact && <FieldLabel>Details</FieldLabel>}
       <Fields labelWidth={PART_LABEL_COLUMN} rows={rows} />
       {!canWrite && <p className="mt-2 text-xs text-ink-faint">Read-only: Substrate writes are disabled for this source.</p>}
-    </div>
+    </>
   );
+  return compact ? <div className="flex flex-col gap-1">{body}</div> : <Card data-testid="details-card">{body}</Card>;
 }
 
 function NormalizeBanner({ plan, issue, canWrite, onApply }: { plan: NormalizationPlan; issue: IssueDetail; canWrite: boolean; onApply: () => Promise<void> }) {
