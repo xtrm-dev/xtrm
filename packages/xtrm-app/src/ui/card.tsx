@@ -23,6 +23,17 @@ import { cx } from "./primitives.tsx";
  * What a call site may add is state the card cannot know: the board's selection border, hover and
  * focus ring, a recessed fill (`bg-deep/40` on a closure card), a `group` hook for a row action.
  * What it may not do is re-declare the frame.
+ *
+ * **Visible change #502 did not list** (XTRM-998): `IssueView.tsx`'s `DetailsGrid` wrapped its rows in
+ * `flex flex-col gap-1` and is now the card, so the issue details block's rows sit `gap-2` — 4px
+ * apart became 8px apart on the panel — beside the radius (10px `rounded-lg` → 8px `rounded-md`) and
+ * the padding (16px `p-4` → `px-3 py-2.5`) that #502 did disclose. The compact variant keeps
+ * `gap-1`: it renders a bare stack rather than this card.
+ *
+ * A caller that passes `p-4` or `rounded-lg` does not lose to this frame — `cx` is a plain join, so
+ * both declarations survive and the stylesheet's order picks the winner. `card.test.tsx` therefore
+ * holds every rendered card element, and every call site in `src`, to one value per axis: a frame
+ * that can be overridden invisibly is a frame that is not shared.
  */
 export const CARD_FRAME = "flex flex-col gap-2 rounded-md border border-border-muted px-3 py-2.5";
 
