@@ -171,4 +171,12 @@ describe("subjectIssueRefs (XTRM-953)", () => {
   it("returns nothing for a message with no suffix", () => {
     assert.deepEqual(subjectIssueRefs("just a subject"), []);
   });
+
+  it("takes only a trailing suffix, not a parenthesised group mid-subject", () => {
+    // Before this, the scanner matched every parenthesised group, so prose that
+    // named a ref ("keep (XTRM-500) ordering intact") claimed the commit for an
+    // issue it only talks about. A widened scanner turns both rows red.
+    assert.deepEqual(subjectIssueRefs("fix: keep (XTRM-500) ordering intact (XTRM-123)"), ["XTRM-123"]);
+    assert.deepEqual(subjectIssueRefs("fix: keep (XTRM-500) ordering intact"), []);
+  });
 });

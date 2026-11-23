@@ -8,7 +8,7 @@
 import { execFileSync } from "node:child_process";
 import type { DatabaseSync } from "../store/database.ts";
 import { withTransaction } from "../store/transactions.ts";
-import { parseAllTrailers } from "../domain/provenance.ts";
+import { commitIssueRefs } from "../domain/provenance.ts";
 import {
   issueRefsIn,
   parseGhInclude,
@@ -168,10 +168,13 @@ export class PullRequestSyncService {
     try {
       withTransaction(this.db, () => {
         // Trailer path: group the PR's commits by the issue each one names and
-        // let 727 decide created_from versus mention+findings.
+        // let 727 decide created_from versus mention+findings. A commit that
+        // names its issue only in the `(XTRM-938)` subject suffix names it just
+        // as well: reading trailers alone left `links check` listing commits
+        // that `links sync` never fed to the writer (XTRM-953).
         const byIssue = new Map<string, PullRequestCommit[]>();
         for (const commit of commits) {
-          for (const ref of new Set(parseAllTrailers(commit.message).issues.map((i) => i.issueId))) {
+          for (const ref of new Set(commitIssueRefs(commit.message))) {
             let issueId: string;
             try {
               issueId = this.issues.resolveRefInProject(ref, input.projectId).id;
@@ -290,7 +293,9 @@ export class PullRequestSyncService {
   private plannedTrailers(commits: PullRequestCommit[], projectId: string): number {
     let count = 0;
     for (const commit of commits) {
-      for (const ref of new Set(parseAllTrailers(commit.message).issues.map((i) => i.issueId))) {
+      // Same refs as the write path, or the dry run disagrees with the run it
+      // is supposed to predict (XTRM-953).
+      for (const ref of new Set(commitIssueRefs(commit.message))) {
         try {
           this.issues.resolveRefInProject(ref, projectId);
           count += 1;

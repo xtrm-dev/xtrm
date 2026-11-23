@@ -352,32 +352,10 @@ export class PullRequestService {
           // `CHECK (source IN (…))` and a new value is a schema migration; the
           // distinction is carried by `relation` and by the namespaced finding
           // codes, never by `source` on its own.
-          if (trailers.receipts.length === 0) {
-            if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-            // A finding is an event, and `links check` re-derives it from the
-            // `issue_events` row, so a re-run reports nothing new without the
-            // finding becoming false. The counter stays idempotent because it
-            // counts what this run did (XTRM-953).
-            finding("subject_receipt_missing", commit.sha, "names the issue by subject suffix, carries no XTRM-Receipt trailer");
-            continue;
-          }
-          // A receipt the commit carries is evidence wherever the issue was read:
-          // the subject names the issue, the receipt attests the delivery, so the
-          // suffix route reaches `created_from` by the same path a trailer does
-          // (XTRM-953). The source stays `trailer` because the source vocabulary
-          // describes how the link was observed, not which line named the issue.
-          if (trailers.receipts.length > 1) {
-            if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-            finding("subject_receipt_ambiguous", commit.sha, `receipts: ${trailers.receipts.join(", ")}`);
-            continue;
-          }
-          const receiptId = trailers.receipts[0]!;
-          const verdict = this.classifyReceipt(receiptId, input.issueId);
-          if (!verdict.ok) {
-            if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-            finding(this.receiptFindingCode(verdict.code, "subject"), commit.sha, verdict.detail);
-            continue;
-          }
+          //
+          // The claim is checked before the receipt on this route, exactly as it
+          // was before the two routes shared their tail: a suffix commit claimed
+          // by another issue is that fact, not a receipt problem (XTRM-953).
           const claimed = this.db
             .prepare("SELECT issue_id FROM issue_pr_commits WHERE repository = ? AND number = ? AND sha = ?")
             .get(input.repository, input.number, commit.sha) as { issue_id: string } | undefined;
@@ -385,19 +363,18 @@ export class PullRequestService {
             finding("commit_claimed_twice", commit.sha, `already claimed by ${claimed.issue_id}`);
             continue;
           }
-          if (this.insertCommit(input.issueId, input.repository, input.number, commit.sha, null)) {
-            if (this.insertLink(input.issueId, input.repository, input.number, "created_from", "trailer", null, input.actor, now)) {
-              created += 1;
-              issues.appendEvent(input.issueId, "provenance.link_created", {
-                repository: input.repository,
-                number: input.number,
-                receipt: receiptId,
-                relation: "created_from",
-                sha: commit.sha,
-                actor: input.actor,
-              }, now);
-            }
+          // A receipt the commit carries is evidence wherever the issue was read:
+          // the subject names the issue, the receipt attests the delivery, so the
+          // suffix route reaches `created_from` by the same path a trailer does.
+          // The source stays `trailer` because the source vocabulary describes
+          // how the link was observed, not which line named the issue (XTRM-953).
+          const evidence = this.receiptEvidence(input, commit, "subject");
+          if (evidence.kind === "mention") {
+            if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
+            finding(evidence.code, commit.sha, evidence.detail);
+            continue;
           }
+          if (this.linkAttestedCommit(input, commit, evidence.receiptId, null, now, finding)) created += 1;
           continue;
         }
         // Two distinct trailer names are a multi-issue commit even when one
@@ -422,43 +399,13 @@ export class PullRequestService {
           continue;
         }
         const revision = trailers.issues[0]?.issueRevision ?? null;
-        const receiptId = trailers.receipts[0] ?? null;
-        if (trailers.receipts.length === 0) {
+        const evidence = this.receiptEvidence(input, commit, "trailer");
+        if (evidence.kind === "mention") {
           if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-          finding("trailer_receipt_missing", commit.sha, "no XTRM-Receipt trailer");
+          finding(evidence.code, commit.sha, evidence.detail);
           continue;
         }
-        if (trailers.receipts.length > 1) {
-          if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-          finding("trailer_receipt_ambiguous", commit.sha, `receipts: ${trailers.receipts.join(", ")}`);
-          continue;
-        }
-        const verdict = this.classifyReceipt(receiptId!, input.issueId);
-        if (!verdict.ok) {
-          if (this.mentionFromTrailer(input, now, commit.sha)) mentioned += 1;
-          finding(this.receiptFindingCode(verdict.code, "trailer"), commit.sha, verdict.detail);
-          continue;
-        }
-        const existing = this.db
-          .prepare("SELECT issue_id FROM issue_pr_commits WHERE repository = ? AND number = ? AND sha = ?")
-          .get(input.repository, input.number, commit.sha) as { issue_id: string } | undefined;
-        if (existing && existing.issue_id !== input.issueId) {
-          finding("commit_claimed_twice", commit.sha, `already claimed by ${existing.issue_id}`);
-          continue;
-        }
-        if (this.insertCommit(input.issueId, input.repository, input.number, commit.sha, revision)) {
-          if (this.insertLink(input.issueId, input.repository, input.number, "created_from", "trailer", null, input.actor, now)) {
-            created += 1;
-            issues.appendEvent(input.issueId, "provenance.link_created", {
-              repository: input.repository,
-              number: input.number,
-              receipt: receiptId,
-              relation: "created_from",
-              sha: commit.sha,
-              actor: input.actor,
-            }, now);
-          }
-        }
+        if (this.linkAttestedCommit(input, commit, evidence.receiptId, revision, now, finding)) created += 1;
       }
     });
     return { created, mentioned, findings };
@@ -539,6 +486,73 @@ export class PullRequestService {
       )
       .run(issueId, repository, number, sha, revision);
     return Number(info.changes ?? 0) > 0;
+  }
+
+  /**
+   * The receipt evidence a commit carries. The trailer route and the subject
+   * route name the issue differently and nothing else: the receipt, its guards
+   * and its limit are the same line, so they are read in one place and only the
+   * finding prefix says which route saw them (XTRM-953). A commit that names the
+   * issue without a usable receipt is a mention plus that finding; a commit whose
+   * receipt passes may attest.
+   */
+  private receiptEvidence(
+    input: CommitLinkInput,
+    commit: CommitEvidence,
+    route: "trailer" | "subject",
+  ): { kind: "attest"; receiptId: string } | { kind: "mention"; code: string; detail: string } {
+    const trailers = parseAllTrailers(commit.message);
+    if (trailers.receipts.length === 0) {
+      return {
+        kind: "mention",
+        code: `${route}_receipt_missing`,
+        detail: route === "trailer"
+          ? "no XTRM-Receipt trailer"
+          : "names the issue by subject suffix, carries no XTRM-Receipt trailer",
+      };
+    }
+    if (trailers.receipts.length > 1) {
+      return { kind: "mention", code: `${route}_receipt_ambiguous`, detail: `receipts: ${trailers.receipts.join(", ")}` };
+    }
+    const receiptId = trailers.receipts[0]!;
+    const verdict = this.classifyReceipt(receiptId, input.issueId);
+    if (!verdict.ok) {
+      return { kind: "mention", code: this.receiptFindingCode(verdict.code, route), detail: verdict.detail };
+    }
+    return { kind: "attest", receiptId };
+  }
+
+  /**
+   * The attested tail both routes share: one commit row, one `created_from`
+   * link, one event. `revision` comes from the trailer that named the issue; a
+   * subject suffix carries no revision, so it passes null (XTRM-953).
+   */
+  private linkAttestedCommit(
+    input: CommitLinkInput,
+    commit: CommitEvidence,
+    receiptId: string,
+    revision: number | null,
+    now: number,
+    finding: (code: string, sha: string, detail: string) => void,
+  ): boolean {
+    const existing = this.db
+      .prepare("SELECT issue_id FROM issue_pr_commits WHERE repository = ? AND number = ? AND sha = ?")
+      .get(input.repository, input.number, commit.sha) as { issue_id: string } | undefined;
+    if (existing && existing.issue_id !== input.issueId) {
+      finding("commit_claimed_twice", commit.sha, `already claimed by ${existing.issue_id}`);
+      return false;
+    }
+    if (!this.insertCommit(input.issueId, input.repository, input.number, commit.sha, revision)) return false;
+    if (!this.insertLink(input.issueId, input.repository, input.number, "created_from", "trailer", null, input.actor, now)) return false;
+    this.issues!.appendEvent(input.issueId, "provenance.link_created", {
+      repository: input.repository,
+      number: input.number,
+      receipt: receiptId,
+      relation: "created_from",
+      sha: commit.sha,
+      actor: input.actor,
+    }, now);
+    return true;
   }
 
   /**

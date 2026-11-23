@@ -145,16 +145,51 @@ export interface AllTrailers {
  * describes what the commit talks about, which is what `prose` links are for.
  */
 export function subjectIssueRefs(message: string): string[] {
-  const subject = message.split("\n", 1)[0] ?? "";
+  const subject = (message.split("\n", 1)[0] ?? "").replace(/\s+$/, "");
+  const groups: string[] = [];
+  // Only the trailing run of parenthesised groups is a suffix. A group in the
+  // middle of the subject is prose — `keep (XTRM-500) ordering intact` names a
+  // ref the commit talks about, not the issue the commit belongs to — so the
+  // scan starts at the closing paren and walks left over nothing but whitespace
+  // and further groups.
+  let end = subject.length;
+  while (subject[end - 1] === ")") {
+    const open = subject.lastIndexOf("(", end - 1);
+    if (open < 0) break;
+    const group = subject.slice(open + 1, end - 1);
+    // A nested paren is not the `(XTRM-938)` shape; stop rather than read half of it.
+    if (group.includes("(") || group.includes(")")) break;
+    groups.unshift(group);
+    end = open;
+    while (end > 0 && (subject[end - 1] === " " || subject[end - 1] === "\t")) end -= 1;
+  }
   const out: string[] = [];
   // The parenthesised group, not one ref: a lane commit names several issues
   // in one suffix, `chore: two lanes (XTRM-949, XTRM-958)`.
-  for (const group of subject.matchAll(/\(([^()]*)\)/g)) {
-    for (const ref of refsInGroup(group[1] ?? "")) {
+  for (const group of groups) {
+    for (const ref of refsInGroup(group)) {
       if (!out.includes(ref)) out.push(ref);
     }
   }
   return out;
+}
+
+/**
+ * Every issue a commit names, in the order the link paths read it: the
+ * `XTRM-Issue:` trailer first, then the `(XTRM-938)` subject suffix `xt`
+ * writes. `sb links check` and `sb links sync` both need this one answer; when
+ * they derived it separately, a suffix-only commit was listed by check and
+ * dropped by sync (XTRM-953).
+ *
+ * The trailer does not suppress the suffix: a commit carrying both names both
+ * issues, and the link writers decide what that contradiction is worth.
+ */
+export function commitIssueRefs(message: string): string[] {
+  const refs = parseAllTrailers(message).issues.map((i) => i.issueId);
+  for (const ref of subjectIssueRefs(message)) {
+    if (!refs.includes(ref)) refs.push(ref);
+  }
+  return refs;
 }
 
 /**
