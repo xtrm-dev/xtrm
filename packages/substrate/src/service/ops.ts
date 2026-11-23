@@ -457,6 +457,13 @@ export function classifyError(error: unknown): { code: ServiceErrorCode; message
   if (/no active claim|holds no claim|claim is held/i.test(message)) {
     return { code: "conflict", message };
   }
+  // The claim-refusal vocabulary answers `conflict` in full (XTRM-993). `claim-held:`,
+  // `claim-expired:` and `not-claimable:` already did; `no-claim:` (a renew with no
+  // open row) fell through to `internal`, so an ordinary refusal reached a client as
+  // a server fault. A lease the caller can take is a conflict, not a fault.
+  if (/^no-claim\b/i.test(message)) {
+    return { code: "conflict", message };
+  }
   if (/unresolvable|not resolvable|cannot resolve|unknown (ref|project|issue ref)/i.test(message)) {
     return { code: "not_found", message };
   }

@@ -1035,6 +1035,9 @@ describe("identity, refusals and the transport's own edges", () => {
     const cases: Array<[string, string]> = [
       ["issue ABC-1 is not-claimable while a claim is active", "conflict"],
       ["session ABC-1 cannot be claimed in this state", "conflict"],
+      // XTRM-993: the fourth claim refusal. `claim-held:` and `claim-expired:` reach
+      // the `^(claim|…)` rule; `no-claim:` reached nothing and answered `internal`.
+      ["no-claim: iss_abc has no open claim to renew", "conflict"],
       ["unknown journal kind: mechanical", "bad_request"],
       ["invalid sessionId \"nope\": session identity must be a canonical lowercase UUID", "bad_request"],
       ["store is locked", "internal"],

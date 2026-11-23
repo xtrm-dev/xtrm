@@ -168,7 +168,12 @@ export function evaluateIssue(s: IssueSnapshot, identity: Identity, opts: { phas
       // it to impersonate whoever owns the lease.
       `Set the holder this session acts as before writing: \`export SUBSTRATE_HOLDER=${holderArg(identity)}\`.`,
     );
-  } else if (s.claim && identity.holder && identity.holder !== s.claim.holder) {
+  } else if (s.claim && s.claim.live && identity.holder && identity.holder !== s.claim.holder) {
+    // XTRM-993: a mismatch is a LIVE-lease fact. On a lapsed lease the claim is
+    // reclaimable by any holder (claimTx), so "do not edit under X's claim" and
+    // "Re-claim now" described the same state in opposite directions. The expiry
+    // rule below owns that state and says which command takes it; a match that
+    // no longer holds never leads.
     add(
       "holder_mismatch",
       "warning",
