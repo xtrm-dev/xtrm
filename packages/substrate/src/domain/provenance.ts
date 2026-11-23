@@ -145,7 +145,7 @@ export interface AllTrailers {
  * describes what the commit talks about, which is what `prose` links are for.
  */
 export function subjectIssueRefs(message: string): string[] {
-  const subject = (message.split("\n", 1)[0] ?? "").replace(/\s+$/, "");
+  const subject = (message.split("\n", 1)[0] ?? "").trimEnd();
   const groups: string[] = [];
   // Only the trailing run of parenthesised groups is a suffix. A group in the
   // middle of the subject is prose — `keep (XTRM-500) ordering intact` names a
@@ -256,7 +256,11 @@ export function parseAllTrailers(message: string): AllTrailers {
   const receipts: string[] = [];
   let current: TrailerIssue | null = null;
   for (const line of message.split("\n")) {
-    const m = /^([A-Za-z-]+):\s*(.*?)\s*$/.exec(line);
+    // `\s*(.*?)\s*$` is a polynomial-ReDoS shape on a long whitespace run
+    // (CodeQL js/polynomial-redos, PR #482). `[\s\S]*` is one greedy pass and
+    // the per-value `trim()` below removes exactly the whitespace the old
+    // leading and trailing runs did, so the parsed values are unchanged.
+    const m = /^([A-Za-z-]+):([\s\S]*)$/.exec(line);
     if (!m) continue;
     if (m[1] === TRAILER_ISSUE) {
       const issueId = m[2]!.trim();
