@@ -8,6 +8,7 @@ import { Icon } from "../ui/icon.tsx";
 import { Markdown } from "../ui/markdown.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, SurfaceToolbar, ago, cx } from "../ui/primitives.tsx";
+import { SectionHeader } from "../ui/section.tsx";
 
 /** The backend serves only these two repository paths; anything else is rejected there. */
 const DOCS = [
@@ -118,9 +119,7 @@ export function ContentSurface() {
             ))}
           </div>
           <div className="flex min-h-0 flex-1 flex-col border-t border-border-muted">
-            <span className="px-3 pt-2 pb-1 text-xs font-medium text-ink-faint">
-              Reports {reportRows.length > 0 && <span className="tabular">{reportRows.length}</span>}
-            </span>
+            <SectionHeader title="Reports" count={reportRows.length > 0 ? reportRows.length : undefined} level={3} />
             <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-1.5 pt-0">
               {reports.isPending && <span className="px-2 text-xs text-ink-faint">Loading…</span>}
               {reports.isError && <span className="px-2 text-xs text-ink-faint">Reports unavailable</span>}

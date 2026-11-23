@@ -32,7 +32,7 @@ export function GithubIssuePanel({ refValue, follow }: { refValue: string; follo
         </div>
         <div className="flex items-start gap-3">
           <h2 className="min-w-0 flex-1 text-base leading-snug font-medium text-pretty text-ink">{i.title}</h2>
-          <GithubPill href={i.url} size="sm" />
+          <GithubPill href={i.url} size="sm" variant="ghost" />
         </div>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-ink-faint">
           <AuthorInline login={i.author} />
