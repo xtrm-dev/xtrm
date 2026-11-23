@@ -134,14 +134,34 @@ sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation created_fr
 sb provenance attach <ref> pr <owner/repo#n|url|#n> [--receipt <id>]
 ```
 
-- `links check` lists T2 candidates — PR commits whose `XTRM-Issue` trailer names an Issue
-  in this project. With `--issue` it prints the manual and auto verdicts and their codes;
-  the default check adds verdicts and exits 1 only under `enforce`. `--dry-run` writes
-  nothing.
+- `links check` lists T2 candidates — PR commits that name an Issue in this project, either
+  in an `XTRM-Issue:` trailer or in the `(XTRM-nnn)` subject suffix `xt` writes. What the
+  commit *carries* decides what the link is worth, not which line named the Issue: a
+  `XTRM-Receipt:` attests a delivery (`created_from`), and without one the commit only
+  names the Issue (`mentioned`, with a `subject_receipt_missing` finding on the suffix
+  route and `trailer_receipt_missing` on the trailer route). A trailer always wins when
+  both are present. That difference lives in the link's relation and its finding, **not**
+  in its `source`: both routes are stored `source: "trailer"`, and that is an
+  acknowledged inaccuracy rather than a rule. `source` records the observation route —
+  `provenance`, `explicit`, `trailer`, `title`, `branch`, `prose`, `backfill` — so on the
+  suffix route it names a trailer that was never seen. The route is deliberately not given
+  its own value because the column is `CHECK (source IN (…))`, so a new value is a schema
+  migration; read `relation` for what the link is worth, and the finding code for how it
+  was found. A receipt the commit carries is judged the same way on either route, so the
+  finding codes are namespaced by route (`subject_receipt_ambiguous` vs
+  `trailer_receipt_ambiguous`) and `receipt_stale_revision` is shared. A subject naming several
+  Issues links the one it names and records `commit_multi_issue_named`; one naming several
+  others attaches nothing and records `commit_multi_issue`. With `--issue` it prints the
+  manual and auto verdicts and their codes; the default check adds verdicts and exits 1
+  only under `enforce`. `--dry-run` writes nothing. `--limit` bounds PRs scanned, not
+  commits, so a small value often lists no candidate at all.
 - `links sync` is the one-shot reconciler: conditional `gh` reads, PR state, trailer-first
   links, then title/branch/body mentions. `--since` records `source=backfill`.
 - `provenance attach` is the T1 outcome link: the PR is the Issue's work. `issue link pr`
-  writes an explicit mention or, with commits, the T2 evidence from their trailers.
+  writes an explicit mention or, with commits, the T2 evidence from their trailers and
+  subject suffixes. Git commands run in the checkout the CLI is executing in — the registry
+  server's in remote mode — so a `--commit` that exists only in the caller's worktree is
+  genuinely invisible, and the refusal names that directory rather than saying "bad object".
   `unlink` supersedes rows; evidence is never deleted.
 - The `gh` shim runs attach then link after `gh pr create`, from the PR body's
   `<!-- xtrm issue=<REF> ... -->` marker. It is fail-open: two different refs or none warn

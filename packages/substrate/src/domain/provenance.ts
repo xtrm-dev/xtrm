@@ -135,6 +135,118 @@ export interface AllTrailers {
 }
 
 /**
+ * Issue refs named by the conventional `(XTRM-938)` subject suffix (XTRM-953).
+ * `xt` commits name their issue in the subject, not in a trailer, so the T2
+ * link path has to read both: a branch written by `xt` is linkable without a
+ * message rewrite, and a commit carrying the real `XTRM-Issue:` trailer stays
+ * authoritative because callers try trailers first.
+ *
+ * Only the subject line is read. A ref in the body prose is not evidence: it
+ * describes what the commit talks about, which is what `prose` links are for.
+ */
+export function subjectIssueRefs(message: string): string[] {
+  const subject = (message.split("\n", 1)[0] ?? "").trimEnd();
+  const groups: string[] = [];
+  // Only the trailing run of parenthesised groups is a suffix. A group in the
+  // middle of the subject is prose — `keep (XTRM-500) ordering intact` names a
+  // ref the commit talks about, not the issue the commit belongs to — so the
+  // scan starts at the closing paren and walks left over nothing but whitespace
+  // and further groups.
+  let end = subject.length;
+  while (subject[end - 1] === ")") {
+    const open = subject.lastIndexOf("(", end - 1);
+    if (open < 0) break;
+    const group = subject.slice(open + 1, end - 1);
+    // A nested paren is not the `(XTRM-938)` shape; stop rather than read half of it.
+    if (group.includes("(") || group.includes(")")) break;
+    groups.unshift(group);
+    end = open;
+    while (end > 0 && (subject[end - 1] === " " || subject[end - 1] === "\t")) end -= 1;
+  }
+  const out: string[] = [];
+  // The parenthesised group, not one ref: a lane commit names several issues
+  // in one suffix, `chore: two lanes (XTRM-949, XTRM-958)`.
+  for (const group of groups) {
+    for (const ref of refsInGroup(group)) {
+      if (!out.includes(ref)) out.push(ref);
+    }
+  }
+  return out;
+}
+
+/**
+ * Every issue a commit names, in the order the link paths read it: the
+ * `XTRM-Issue:` trailer first, then the `(XTRM-938)` subject suffix `xt`
+ * writes. `sb links check` and `sb links sync` both need this one answer; when
+ * they derived it separately, a suffix-only commit was listed by check and
+ * dropped by sync (XTRM-953).
+ *
+ * The trailer does not suppress the suffix: a commit carrying both names both
+ * issues, and the link writers decide what that contradiction is worth.
+ */
+export function commitIssueRefs(message: string): string[] {
+  const refs = parseAllTrailers(message).issues.map((i) => i.issueId);
+  for (const ref of subjectIssueRefs(message)) {
+    if (!refs.includes(ref)) refs.push(ref);
+  }
+  return refs;
+}
+
+/**
+ * Refs inside one parenthesised group, scanned by index rather than by regex.
+ * The regex form (`[A-Z][A-Z0-9]*-\d+(?:\.\d+)*`) is a nested quantifier over
+ * commit-message text, which CodeQL reports as js/polynomial-redos (PR #482);
+ * a ref is at most `PREFIX-1.2.3`, so a single left-to-right pass is both
+ * linear by construction and easier to read than the pattern it replaces.
+ *
+ * "Linear" is a claim about this code, so it is a claim a test can hold: every
+ * advance below is `i + 1` or further, never a reset to an earlier offset. A
+ * rescan from `start + 1` looks linear on real commit subjects and is quadratic
+ * on `("A" * 32000)`, which is exactly the shape the regex was flagged for.
+ */
+function refsInGroup(group: string): string[] {
+  const refs: string[] = [];
+  const isUpper = (c: string | undefined): boolean => c !== undefined && c >= "A" && c <= "Z";
+  const isDigit = (c: string | undefined): boolean => c !== undefined && c >= "0" && c <= "9";
+  const isBody = (c: string | undefined): boolean => isUpper(c) || isDigit(c);
+  const scanDigits = (from: number): number => {
+    let i = from;
+    while (isDigit(group[i])) i += 1;
+    return i;
+  };
+  let i = 0;
+  while (i < group.length) {
+    if (!isUpper(group[i])) {
+      i += 1;
+      continue;
+    }
+    const start = i;
+    while (isBody(group[i])) i += 1;
+    if (group[i] !== "-") {
+      // Resume where the scan stopped, not at `start + 1`: rescanning an uppercase run
+      // that carries no dash is quadratic, and the comment below already promised a
+      // single left-to-right pass (XTRM-953, measured by reviewer-472 on #482).
+      i += 1;
+      continue;
+    }
+    const afterDigits = scanDigits(i + 1);
+    if (afterDigits === i + 1) {
+      i += 1;
+      continue;
+    }
+    i = afterDigits;
+    // Dotted children: `XTRM-811.23`, `XTRM-184.2.3`.
+    while (group[i] === ".") {
+      const next = scanDigits(i + 1);
+      if (next === i + 1) break;
+      i = next;
+    }
+    refs.push(group.slice(start, i));
+  }
+  return refs;
+}
+
+/**
  * Read every issue trailer, not only the last. T2 link writing and the
  * trailer guard need all values: a commit may name one issue and a
  * coordinator a second, or a squash commit may carry several issues.
@@ -144,7 +256,11 @@ export function parseAllTrailers(message: string): AllTrailers {
   const receipts: string[] = [];
   let current: TrailerIssue | null = null;
   for (const line of message.split("\n")) {
-    const m = /^([A-Za-z-]+):\s*(.*?)\s*$/.exec(line);
+    // `\s*(.*?)\s*$` is a polynomial-ReDoS shape on a long whitespace run
+    // (CodeQL js/polynomial-redos, PR #482). `[\s\S]*` is one greedy pass and
+    // the per-value `trim()` below removes exactly the whitespace the old
+    // leading and trailing runs did, so the parsed values are unchanged.
+    const m = /^([A-Za-z-]+):([\s\S]*)$/.exec(line);
     if (!m) continue;
     if (m[1] === TRAILER_ISSUE) {
       const issueId = m[2]!.trim();

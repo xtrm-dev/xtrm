@@ -210,6 +210,30 @@ describe("pull-request reconciler", () => {
     assert.equal(w.svc.listEvents(w.issue.id).length, events);
   });
 
+  it("links a commit that names its issue only in the subject suffix (XTRM-953)", () => {
+    // `xt` writes the issue as the `(XTRM-nnn)` subject suffix and no
+    // `XTRM-Issue:` trailer, and the receipt attests the delivery. Grouping by
+    // trailers alone fed neither the write path nor the dry run for such a
+    // commit, so `links check` listed what `links sync` silently dropped.
+    const receipt = receiptFor(w);
+    const sha = "57".repeat(20);
+    const message = `feat(console): one section header (${w.issue.humanRef})\n\nXTRM-Receipt: ${receipt.id}`;
+    w.source.put(observation(), [{ sha, message }]);
+
+    const dry = run(w, { dryRun: true });
+    assert.equal(dry.created, 1);
+    assert.equal((w.db.prepare("SELECT COUNT(*) AS n FROM issue_pull_requests").get() as { n: number }).n, 0);
+
+    const report = run(w);
+    assert.equal(report.created, 1);
+    const view = w.links.listForIssue(w.issue.id)[0]!;
+    assert.equal(view.relation, "created_from");
+    assert.deepEqual(view.sources, ["trailer"]);
+    assert.equal((w.db.prepare("SELECT sha FROM issue_pr_commits WHERE issue_id = ?").get(w.issue.id) as { sha: string }).sha, sha);
+
+    assert.equal(run(w).created, 0);
+  });
+
   it("--dry-run writes nothing", () => {
     const receipt = receiptFor(w);
     w.source.put(observation({ title: "work XTRM-1" }), [{ sha: "1".repeat(40), message: `XTRM-Issue: ${w.issue.humanRef}\nXTRM-Receipt: ${receipt.id}` }]);

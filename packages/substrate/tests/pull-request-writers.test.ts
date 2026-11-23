@@ -4,7 +4,7 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { contract, setup, tempDir } from "./helpers.ts";
@@ -12,6 +12,7 @@ import { JournalService } from "../src/service/journal-service.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
 import { canonicalPullReference } from "../src/domain/pull-request.ts";
+import { GATE_CODES, LinkGateService } from "../src/service/link-gate-service.ts";
 import { runCli } from "../cli/sb.ts";
 
 function world() {
@@ -27,7 +28,8 @@ function world() {
   const journal = new JournalService(ctx.db, ctx.svc);
   const prov = new ProvenanceService(ctx.db, ctx.svc, journal);
   const links = new PullRequestService(ctx.db, ctx.svc, prov);
-  return { ...ctx, issue, prov, links };
+  const gate = new LinkGateService(ctx.db, ctx.svc, { state: () => null, defaultBranch: () => "main" });
+  return { ...ctx, issue, prov, links, gate };
 }
 
 function dispatchWithClaim(w: ReturnType<typeof world>, holder = "w") {
@@ -300,6 +302,150 @@ describe("pull-request writers", () => {
     assert.deepEqual(findings.map((f) => [f.code, f.number]).sort(), [["trailer_receipt_missing", 7], ["trailer_receipt_missing", 8]]);
   });
 
+  // XTRM-953: the merge queue's commits name their issue in the subject suffix,
+  // so a trailer-only reader attached nothing at all. A suffix without a receipt
+  // is weaker evidence than a trailer, and the weakness is recorded rather than hidden.
+  it("a receipt-less subject suffix names the issue and cannot attest a delivery", () => {
+    // The fixture project is prj_xtrm, so the suffix must name that prefix.
+    const message = `feat(console): one section header (${w.issue.humanRef}) (#466)`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "9".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 1, findings: 1 });
+    const view = w.links.listForIssue(w.issue.id)[0]!;
+    assert.deepEqual(view.sources, ["trailer"]);
+    assert.equal(view.relation, "mentioned");
+    // No commit row, and the gate is the reason it would not help: `evaluate`
+    // filters `created_from` links and asks for `trailer` plus commits > 0, and
+    // a mention reaches neither half. Measured, so the comment in the service
+    // does not have to be believed (XTRM-953).
+    const rows = w.db.prepare("SELECT sha FROM issue_pr_commits WHERE issue_id = ?").all(w.issue.id) as Array<{ sha: string }>;
+    assert.deepEqual(rows, []);
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "manual" }).codes, [GATE_CODES.mentioned]);
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["subject_receipt_missing"]);
+  });
+
+  // XTRM-953 round 4: the suffix route is how `xt` writes every commit, so a
+  // route that can never attest would have meant 35 of the last 40 commits on
+  // main filing a finding and attesting nothing. A receipt the commit carries is
+  // evidence wherever the issue was named.
+  it("a subject suffix that carries a receipt attests, and the relation follows", () => {
+    const { receipt } = dispatchWithClaim(w);
+    const message = `feat(console): one section header (${w.issue.humanRef}) (#466)\nXTRM-Receipt: ${receipt.id}`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "a".repeat(40), message }] });
+    assert.deepEqual(result, { created: 1, mentioned: 0, findings: 0 });
+    const view = w.links.listForIssue(w.issue.id)[0]!;
+    // The source vocabulary describes how the link was observed, not which line
+    // named the issue; what the link is worth is its relation.
+    assert.deepEqual(view.sources, ["trailer"]);
+    assert.equal(view.relation, "created_from");
+    const rows = w.db.prepare("SELECT sha FROM issue_pr_commits WHERE issue_id = ?").all(w.issue.id) as Array<{ sha: string }>;
+    assert.deepEqual(rows.map((r) => r.sha), ["a".repeat(40)]);
+    // The gate asks for a `trailer`-sourced `created_from` with commits behind it,
+    // which a subject-plus-receipt link now is.
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "manual" }).codes, []);
+    assert.deepEqual(w.links.listFindings("prj_xtrm"), []);
+    // Idempotent on a re-run, as the trailer route is.
+    assert.deepEqual(w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "a".repeat(40), message }] }), { created: 0, mentioned: 0, findings: 0 });
+  });
+
+  it("a subject suffix whose receipt is ambiguous, unknown or foreign stays a mention", () => {
+    const { receipt } = dispatchWithClaim(w);
+    const subject = `feat(console): one section header (${w.issue.humanRef}) (#466)`;
+    const run = (sha: string, message: string) =>
+      w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha, message }] });
+
+    // The first case creates the mention row; the later ones find it and report
+    // `mentioned: 0`, because the counter counts what this run did and the row is
+    // the claim about the world. Read them together, not as three zeroes.
+    const ambiguous = `${subject}\nXTRM-Receipt: ${receipt.id}\nXTRM-Receipt: rec_second`;
+    assert.deepEqual(run("e".repeat(40), ambiguous), { created: 0, mentioned: 1, findings: 1 });
+    const unknown = `${subject}\nXTRM-Receipt: rec_does_not_exist`;
+    assert.deepEqual(run("f".repeat(40), unknown), { created: 0, mentioned: 0, findings: 1 });
+
+    // A receipt minted for another issue: the subject names this one, so the
+    // finding says which half failed rather than linking on half the evidence.
+    const sibling = w.svc.createIssue({ projectId: "prj_xtrm", title: "sibling receipt", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    w.svc.attestReadiness(sibling.id, { outcome: "ready", policy: "default", attestedBy: "tester" });
+    const claim = w.svc.claimIssue(sibling.id, "w", { ttlMs: 60_000 });
+    const binding = w.prov.dispatch(sibling.id, { workspace: "/tmp/ws-foreign", participantId: "w", claimId: claim.id });
+    const foreign = w.prov.allocateReceipt(binding.id);
+    const foreignSubject = `${subject}\nXTRM-Receipt: ${foreign.id}`;
+    assert.deepEqual(run("9".repeat(40), foreignSubject), { created: 0, mentioned: 0, findings: 1 });
+
+    // One namespace per route, so a finding says which one filed it.
+    assert.deepEqual(
+      w.links.listFindings("prj_xtrm").map((f) => f.code).sort(),
+      ["subject_receipt_ambiguous", "subject_receipt_foreign_issue", "subject_receipt_unknown"],
+    );
+    const view = w.links.listForIssue(w.issue.id).filter((v) => v.repository === "o/r");
+    assert.equal(view.length, 1);
+    assert.equal(view[0]!.relation, "mentioned");
+    assert.deepEqual(w.gate.evaluate(w.issue.id, { mode: "manual" }).codes, [GATE_CODES.mentioned]);
+  });
+
+  it("a subject suffix naming a sibling issue is reported once, and attaches nothing", () => {
+    const sibling = w.svc.createIssue({ projectId: "prj_xtrm", title: "sibling", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    const message = `feat(console): one section header (${sibling.humanRef}) (#466)`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "8".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 1 });
+    assert.equal(w.links.listForIssue(w.issue.id).length, 0);
+    // A real sibling ref is a fact this issue's reader cannot otherwise see; an
+    // unknown ref is a typo and stays silent, which the next case pins.
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["commit_claimed_elsewhere"]);
+  });
+
+  // XTRM-953 round 2, all three found by reading the reader instead of the writer.
+  it("a subject that names this issue and a sibling attaches the mention, not a multi-issue drop", () => {
+    const sibling = w.svc.createIssue({ projectId: "prj_xtrm", title: "sibling", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    // The form `links check` enumerates happily. A single-ref rule dropped the
+    // commit while the check listed it: a reader disagreement.
+    const message = `chore: two lanes (${w.issue.humanRef}, ${sibling.humanRef}) (#500)`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "c".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 1, findings: 2 });
+    assert.equal(w.links.listForIssue(w.issue.id)[0]!.relation, "mentioned");
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code).sort(), ["commit_multi_issue_named", "subject_receipt_missing"]);
+  });
+
+  it("a subject that names only siblings is one multi-issue finding, and links nothing", () => {
+    const a = w.svc.createIssue({ projectId: "prj_xtrm", title: "a", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    const b = w.svc.createIssue({ projectId: "prj_xtrm", title: "b", kind: "task", contract: contract(), scrutiny: "MEDIUM" });
+    const message = `chore: two lanes (${a.humanRef}, ${b.humanRef}) (#501)`;
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "d".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 1 });
+    assert.equal(w.links.listForIssue(w.issue.id).length, 0);
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), ["commit_multi_issue"]);
+  });
+
+  it("reports a subject suffix once per commit, however often the observation runs", () => {
+    // The `gh` shim re-runs the same observation. A counter that adds for an
+    // already-present row reports a delta that did not happen, and the receipt
+    // finding is a fact about the commit, not about this run.
+    const sha = "e".repeat(40);
+    const message = `feat(console): one section header (${w.issue.humanRef}) (#466)`;
+    const input = { issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha, message }] };
+    assert.deepEqual(w.links.linkCommits(input), { created: 0, mentioned: 1, findings: 1 });
+    assert.deepEqual(w.links.linkCommits(input), { created: 0, mentioned: 0, findings: 0 });
+    assert.equal(w.links.listFindings("prj_xtrm").length, 1);
+  });
+
+  it("a subject suffix that resolves to nothing is skipped silently", () => {
+    const message = "feat: unknown lane (XTRM-424242) (#999)";
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "5".repeat(40), message }] });
+    assert.deepEqual(result, { created: 0, mentioned: 0, findings: 0 });
+    assert.deepEqual(w.links.listFindings("prj_xtrm").map((f) => f.code), []);
+  });
+
+  it("a trailer wins over a conflicting subject suffix", () => {
+    const { receipt } = dispatchWithClaim(w);
+    const message = [
+      "feat: work (XTRM-999)",
+      "",
+      `XTRM-Issue: ${w.issue.humanRef}`,
+      `XTRM-Receipt: ${receipt.id}`,
+    ].join("\n");
+    const result = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "4".repeat(40), message }] });
+    assert.deepEqual(result, { created: 1, mentioned: 0, findings: 0 });
+  });
+
   it("mention is persisted, idempotent, and unlink supersedes without deleting", () => {
     w.links.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
     w.links.linkMention({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w" });
@@ -386,12 +532,13 @@ describe("pull-request writers", () => {
     const foreignTrailer = `XTRM-Issue: ${other.humanRef}\nXTRM-Receipt: ${receipt.id}`;
     const before = w.links.listForIssue(w.issue.id).length;
     const r3 = w.links.linkCommits({ issueId: w.issue.id, repository: "o/r", number: 7, actor: "w", commits: [{ sha: "2".repeat(40), message: foreignTrailer }] });
-    assert.deepEqual({ created: r3.created, mentioned: r3.mentioned, findings: r3.findings }, { created: 0, mentioned: 0, findings: 0 });
-    // A foreign trailer is skipped entirely: no new row appears for the target.
+    // A trailer naming a sibling is one finding, the same shape a subject suffix gets: it is
+    // evidence this issue's reader cannot otherwise see. It is still not a link for us.
+    assert.deepEqual({ created: r3.created, mentioned: r3.mentioned, findings: r3.findings }, { created: 0, mentioned: 0, findings: 1 });
     assert.equal(w.links.listForIssue(w.issue.id).length, before);
     assert.deepEqual(
       w.links.listFindings("prj_xtrm").map((f) => f.code).sort(),
-      ["trailer_issue_unknown", "trailer_receipt_ambiguous"],
+      ["commit_claimed_elsewhere", "trailer_issue_unknown", "trailer_receipt_ambiguous"],
     );
   });
 
@@ -528,6 +675,150 @@ describe("pull-request writers", () => {
     } finally {
       process.chdir(saved);
       rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: --commits-range links a branch whose commits name the issue in the subject suffix", () => {
+    // The XTRM-953 shape: `xt` writes `feat(console): … (XTRM-938) (#471)`, so a
+    // trailer-only reader reported zero linkable commits for a whole merge queue.
+    const repo = tempDir("sb-pr-cli-");
+    const saved = process.cwd();
+    try {
+      const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+      git(["init", "-q"]);
+      git(["config", "user.email", "t@example.com"]);
+      git(["config", "user.name", "t"]);
+      writeFileSync(join(repo, "a.txt"), "a");
+      git(["add", "a.txt"]);
+      git(["commit", "-q", "-m", "init"]);
+      writeFileSync(join(repo, "b.txt"), "b");
+      git(["add", "b.txt"]);
+      git(["commit", "-q", "-m", `feat(console): one section header (${w.issue.humanRef}) (#466)`]);
+      process.chdir(repo);
+      const res = runCli([
+        "--db", join(w.dir, "state.db"), "--json",
+        "issue", "link", "pr", w.issue.humanRef, "--project", "prj_xtrm", "--repo", "o/r", "--number", "7",
+        "--commits-range", "HEAD~1..HEAD",
+      ]);
+      assert.equal(res.code, 0, res.stderr);
+      const data = (JSON.parse(res.stdout) as { data: { created: number; mentioned: number } }).data;
+      // No receipt, so the honest outcome is a mention, not a delivery, and no
+      // commit row: see the gate assertion in "a receipt-less subject suffix
+      // names the issue and cannot attest a delivery" for why a row would not buy
+      // T2 anyway. A suffix that carries a receipt does attest — see "a subject
+      // suffix that carries a receipt attests, and the relation follows".
+      assert.deepEqual(data, { created: 0, mentioned: 1, findings: 1 });
+      const rows = w.db.prepare("SELECT sha FROM issue_pr_commits").all() as Array<{ sha: string }>;
+      assert.deepEqual(rows, []);
+    } finally {
+      process.chdir(saved);
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: --commits-range refuses a range with no separator", () => {
+    // The separator was `\.` instead of `\.\.` for three commits because no test
+    // passed a range that a loosened validator would accept: `abc.def` reaches git
+    // and dies on `fatal: ambiguous argument`, which looks like a repository fault
+    // rather than a refused flag. A range test using only HEAD~1..HEAD cannot see a
+    // separator bug, so both halves are pinned here.
+    const repo = tempDir("sb-pr-cli-");
+    const saved = process.cwd();
+    try {
+      const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+      git(["init", "-q"]);
+      git(["config", "user.email", "t@example.com"]);
+      git(["config", "user.name", "t"]);
+      writeFileSync(join(repo, "a.txt"), "a");
+      git(["add", "a.txt"]);
+      git(["commit", "-q", "-m", "init"]);
+      process.chdir(repo);
+      for (const range of ["abc.def", "HEAD~1.HEAD", "a.b.c"]) {
+        const res = runCli([
+          "--db", join(w.dir, "state.db"), "--json",
+          "issue", "link", "pr", w.issue.humanRef, "--project", "prj_xtrm", "--repo", "o/r", "--number", "7",
+          "--commits-range", range,
+        ]);
+        assert.notEqual(res.code, 0, `${range} must be refused`);
+        assert.match(res.stderr + res.stdout, /--commits-range must be <base>\.\.<head>/, range);
+        // Refused by the flag, before any git call: the message names the shape,
+        // not a repository fact.
+        assert.doesNotMatch(res.stderr + res.stdout, /ambiguous argument|fatal:/, range);
+      }
+    } finally {
+      process.chdir(saved);
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: --commit names the checkout it looked in when the object is absent", () => {
+    const repo = tempDir("sb-pr-cli-");
+    const saved = process.cwd();
+    try {
+      const git = (args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+      git(["init", "-q"]);
+      git(["config", "user.email", "t@example.com"]);
+      git(["config", "user.name", "t"]);
+      writeFileSync(join(repo, "a.txt"), "a");
+      git(["add", "a.txt"]);
+      git(["commit", "-q", "-m", "init"]);
+      process.chdir(repo);
+      const res = runCli([
+        "--db", join(w.dir, "state.db"), "--json",
+        "issue", "link", "pr", w.issue.humanRef, "--project", "prj_xtrm", "--repo", "o/r", "--number", "7",
+        "--commit", "0".repeat(40),
+      ]);
+      assert.notEqual(res.code, 0);
+      // The message must name the directory, not only git's opinion of the SHA:
+      // "unknown revision" and "bad object" for one SHA are two different lies.
+      // --json puts it in the error envelope; the text mode puts it on stderr.
+      const envelope = JSON.parse(res.stdout) as { ok: boolean; error: string };
+      assert.equal(envelope.ok, false);
+      assert.match(envelope.error, /0{40}: git show failed in /);
+      assert.match(envelope.error, /object store/);
+    } finally {
+      process.chdir(saved);
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("CLI: links check finds a commit that names the issue in the subject suffix", () => {
+    // The whole point of XTRM-953: before this, a branch written by `xt` reported
+    // zero linkable commits because every one of them named its issue in the
+    // subject instead of a trailer. A stub `gh` keeps the test off the network.
+    const home = tempDir("sb-gh-stub-");
+    const bin = join(home, "bin");
+    mkdirSync(bin, { recursive: true });
+    const commit = (headline: string) => ({
+      oid: "ab".repeat(20),
+      messageHeadline: headline,
+      messageBody: "",
+      authoredDate: "",
+      committedDate: "",
+      authors: [],
+    });
+    const pr = { number: 477, title: "research outline", url: "https://github.com/xtrm-dev/xtrm/pull/477", commits: [commit(`feat(console): research pages (${w.issue.humanRef}) (#477)`), commit("chore: no ref at all")] };
+    writeFileSync(
+      join(bin, "gh"),
+      `#!/usr/bin/env node\nconst a = process.argv.slice(2);\n` +
+        `if (a[0] === "pr" && a[1] === "list") console.log(JSON.stringify([{ number: ${pr.number}, title: ${JSON.stringify(pr.title)}, url: ${JSON.stringify(pr.url)} }]));\n` +
+        `else if (a[0] === "pr" && a[1] === "view") console.log(JSON.stringify(${JSON.stringify({ url: pr.url, commits: pr.commits })}));\n` +
+        `else process.exit(1);\n`,
+      { mode: 0o755 },
+    );
+    const savedPath = process.env["PATH"] ?? "";
+    process.env["PATH"] = `${bin}:${savedPath}`;
+    try {
+      const res = runCli([
+        "--db", join(w.dir, "state.db"), "--json",
+        "links", "check", "--project", "prj_xtrm", "--repo", "xtrm-dev/xtrm", "--limit", "5",
+      ]);
+      assert.equal(res.code, 0, res.stderr);
+      const data = (JSON.parse(res.stdout) as { data: { candidates: Array<{ issue: string; number: number; sha: string }> } }).data;
+      assert.deepEqual(data.candidates.map((c) => [c.issue, c.number, c.sha]), [[w.issue.humanRef, 477, "ab".repeat(20)]]);
+    } finally {
+      process.env["PATH"] = savedPath;
+      rmSync(home, { recursive: true, force: true });
     }
   });
 
