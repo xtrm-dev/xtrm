@@ -218,9 +218,10 @@ is also why a deferred sidebar destination cannot use it (2.74:1 on the light si
 | `--x-shadow-float` | `shadow-float` | see file | every floating layer: popover, menu, tooltip, dialog, sidebar strip |
 | `--x-shadow-panel` | `shadow-panel` | see file | the inspector panel only, because it carries no border |
 
-No surface names a `shadow-[…]` literal. Measured 2026-11-23: one survives,
-`src/shell/GlobalSearch.tsx` (`shadow-[0_0_0_1px_var(--x-border-muted)]`, the search-scope pill);
-its removal belongs with the segmented-control follow-up in §15.
+No surface names a `shadow-[…]` literal. Measured 2026-11-23: the last one outside `src/agent`
+survives in `src/shell/GlobalSearch.tsx` (`shadow-[0_0_0_1px_var(--x-border-muted)]`, the search-scope
+pill), and the Agent half carries three more (`src/agent/AgentSidebar.tsx`, `src/agent/Composer.tsx`,
+`src/agent/NewSession.tsx`); their removal belongs with the segmented-control follow-up in §15.
 
 ### 3.3 Type ladder
 
@@ -439,7 +440,8 @@ the box grows, the gutter does not move.
 - `Section({ title, count?, aside?, level = 3 })` — one hairline **above**
   (`border-t border-border-muted`, suppressed on `first:`), `px-5 py-4`, header at `inset="drawer"`.
   This is the drawer body's unit and a page's detail unit. `InspectorSection`
-  (`src/ui/drawer.tsx`) is an alias, not a second implementation, so the 28 call sites keep one import.
+  (`src/ui/drawer.tsx`) is an alias, not a second implementation, so the 27 production call sites (28
+  with the test usage in `ui/section.test.tsx`) keep one import.
 - `ListSection({ title, count?, aside?, bordered = true })` — a hairline **below**
   (`border-b border-border-muted`), no padding of its own, header at `inset="list"`. For stacked
   lists on a page.
@@ -563,7 +565,8 @@ may add state the frame cannot know (selection border, hover, focus ring, a `bg-
   well for long text; it may not wrap one in the other.
 - a **control** may carry a border because it needs one: an input (`border-border`), `Kbd`, the
   dashed `SourceBadge` provenance chip, the dashed deferred `StatusDot`. A bordered *button* is not
-  sanctioned — `ToolbarButton` is a ghost control (§5.1) — and the surviving one is listed in §15.2.
+  sanctioned — `ToolbarButton` is a ghost control (§5.1) — and the three surviving ones are listed in
+  §15.2 item 6.
 
 Measured 2026-11-23 (bordered containers per surface): Research 0, Settings 0 (one `rounded-full`
 dot), Pull drawer 0, GitHub issue panel 0, Content 0, Integration 0. The Issue **page** exceeds the
@@ -754,10 +757,13 @@ are listed here with a proposed scope and reported to the coordinator.
    units-gate rule for the raw utility.
 6. **`IssueView` duplicates `ContentPanel`** as a hand-rolled bordered scroll well
    (`max-h-56` vs the panel's `max-h-72`), and `IssueJournal` keeps a bordered `<details>` and a
-   bordered compose button. `IssueView` also keeps one bordered `Dialog.Trigger` (`Review mapping`),
-   the last bordered button in `src/`. Proposed scope: adopt `ContentPanel` and `ToolbarButton`, or
-   record a per-site exception.
-7. **`GlobalSearch` `shadow-[…]` literal** — the last arbitrary shadow in `src/`; belongs with item 3.
+   bordered compose button. Three bordered buttons survive outside `src/agent`: `Review mapping`
+   (`src/issues/IssueView.tsx`), the Journal compose button (`src/issues/IssueJournal.tsx`, "Add a
+   journal entry…"), and the GitHub sign-in button (`src/github/auth.tsx`). Proposed scope: adopt
+   `ContentPanel` and `ToolbarButton`, or record a per-site exception.
+7. **`GlobalSearch` `shadow-[…]` literal** — the last arbitrary shadow outside `src/agent`; the Agent
+   half carries three more (`src/agent/AgentSidebar.tsx`, `src/agent/Composer.tsx`,
+   `src/agent/NewSession.tsx`); belongs with item 3.
 8. **`Row` densities and toolbar heights are unmetered** — no unit test renders each density or the
    40px toolbar; only surfaces that happen to be measured are covered. Proposed scope: one
    `Row`/`SurfaceToolbar` geometry test.
