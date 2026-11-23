@@ -13,7 +13,7 @@ from service_knowledge.mcp._root import NoRegistry, resolve_registry_root
 
 TOOL_NAME = "knowledge_evidence_for_files"
 DESCRIPTION = describe(
-    purpose="Find the service knowledge that owns a set of files, before reading their source. Routes by service territory ownership. Read-only.",
+    purpose="Find the service knowledge that owns a set of files. Call it as soon as you are about to read or search a service's source, before you open it: it routes by service territory ownership. Read-only.",
     parameters="paths (string[], required): repo-relative file paths. limit (integer 1-7, default 7): maximum items. consumer_root (string, optional): repo root to read; must be the session root or one of its ancestors, default: the session root.",
     returns="An evidence bundle: routing, items (with section_sync_ref, section_date, superseded_candidate), citations, verification, probes, skill_links, truncated and totals, consumer_root_resolution. Items, citations, probes and item text are trimmed to fit about 8000 tokens (conflicts_and_caveats is never trimmed), so a service with many citations returns the first ones: truncated=true and totals give the counts before trimming (items counted after the 7-item cap).",
     empty_or_stale="items=[] means no registered service territory covers these paths, or this checkout's index is older than the primary checkout: read consumer_root_resolution.stale before treating the files as unowned. superseded_candidate=true marks a section older than the newest sync section of that service; it may be superseded, so check the newer one.",

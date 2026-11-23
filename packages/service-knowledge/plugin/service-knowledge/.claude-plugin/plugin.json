@@ -3,5 +3,6 @@
   "version": "0.9.1",
   "description": "Operational service knowledge for Claude Code: five read-only MCP tools (knowledge_search, knowledge_get, knowledge_evidence_for_files, knowledge_status, knowledge_drift) over the per-repo FTS5 evidence index. Returns evidence with citations, never conclusions.",
   "author": { "name": "XTRM" },
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json"
 }

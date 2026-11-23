@@ -1,5 +1,5 @@
 /**
- * service-knowledge ext v1.1 (CORE-2714)
+ * service-knowledge ext v1.2 (CORE-2714, XTRM-997)
  *
  * Replaces the stale `service-skills` extension. Self-gating registration:
  * at init it scans the session cwd for a service registry using the exact
@@ -24,6 +24,11 @@
  *   (c) FIVE registered tools at parity with the Python MCP server (v1.1,
  *       CORE-2714): knowledge_search, knowledge_get, knowledge_evidence_for_files,
  *       knowledge_status, knowledge_drift
+ *   (d) a tool_result nudge (v1.2, XTRM-997): when a read, grep, find or a
+ *       read-shaped bash command touches a registered territory, one short
+ *       advisory block is appended to that tool result, naming at most three
+ *       services with the exact next call. Once per service per session;
+ *       advisory only, and fail-open on every path.
  *
  * Tool parity mechanism: `tool-definitions.json` is generated from the Python
  * single source of truth (`service-knowledge mcp specs --json`) and pinned by a
@@ -37,7 +42,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { execFile, execFileSync } from "node:child_process";
 
@@ -49,6 +54,7 @@ const DRIFT_MARKER_REL = join(".xtrm", ".service-knowledge-drift-pending");
 // name wins when both are present (xtrm-6z6.2 coordinator finding).
 const LEGACY_DRIFT_MARKER_REL = join(".xtrm", ".service-skills-drift-pending");
 const RECONCILE_COMMAND = "/updating-service-knowledge";
+const NUDGE_TOOLS = new Set(["read", "grep", "find", "bash"]);
 
 /** Executable that serves the shared tool implementations (the Python CLI). */
 const CLI_BIN = "service-knowledge";
@@ -205,9 +211,234 @@ function buildContextNote(cwd: string, packs: ServiceRegistryPack[]): string {
 			? `drift: PENDING marker present (${driftMarkerPath(cwd)}) — reconcile with ${RECONCILE_COMMAND}`
 			: "drift: none detected",
 		"tools: knowledge_search · knowledge_get · knowledge_evidence_for_files · knowledge_status · knowledge_drift",
+		"call order: knowledge_evidence_for_files before reading service source; knowledge_search before grep; knowledge_status when results look stale; knowledge_drift before trusting recently changed code",
 		"</service_knowledge_context>",
 	];
 	return lines.join("\n");
+}
+
+function normalizePath(value: string): string {
+	return value.replaceAll("\\\\", "/").replace(/^\.\//, "");
+}
+
+/** Python `fnmatch.fnmatch` as a RegExp: `*` matches any run (including `/`), `?` one char. */
+function fnmatchRegex(pattern: string): RegExp {
+	const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(`^${escaped.replace(/\\\*/g, ".*").replace(/\\\?/g, ".")}$`);
+}
+
+/**
+ * Mirror of `match_territory` in
+ * `packages/service-knowledge/src/service_knowledge/scripts/skill_activator.py` (the Python source
+ * of truth), so both hosts resolve the same territory. That function is fnmatch, plus a `**`
+ * split, plus a directory-prefix fallback; a plain glob conversion answers differently for the
+ * common double-star python-file territory. The 14-case parity test in
+ * `tests/service-knowledge.test.ts` pins this against the Python behaviour.
+ */
+function patternMatches(rel: string, raw: string): boolean {
+	const pattern = normalizePath(raw);
+	try {
+		if (pattern.includes("**")) {
+			const parts = pattern.split("**/");
+			if (parts.length === 2) {
+				const [prefix, suffix] = parts;
+				const relCheck = rel.startsWith(prefix) ? rel.slice(prefix.length) : rel;
+				if (fnmatchRegex(suffix).test(relCheck) || fnmatchRegex(`${prefix}*/${suffix}`).test(rel)) return true;
+				if (prefix && rel.startsWith(prefix.replace(/\/+$/, ""))) return true;
+			}
+		} else if (fnmatchRegex(pattern).test(rel)) {
+			return true;
+		}
+		const base = pattern.split("/*")[0].split("/**")[0];
+		return Boolean(base) && (rel.startsWith(`${base}/`) || rel === base);
+	} catch {
+		return false;
+	}
+}
+
+function relativeTo(filePath: string, root: string): string {
+	let rel = normalizePath(filePath);
+	const norm = normalizePath(root);
+	if (rel.startsWith(`${norm}/`)) rel = rel.slice(norm.length + 1);
+	return rel;
+}
+
+/** Exclusive boolean parity with the Python activator, quirks included. */
+export function territoryMatch(filePath: string, territory: unknown, cwd: string): boolean {
+	if (typeof filePath !== "string" || !Array.isArray(territory)) return false;
+	const rel = relativeTo(filePath, resolveSessionRoot(cwd));
+	return territory.some((raw) => typeof raw === "string" && raw !== "" && patternMatches(rel, raw));
+}
+
+/**
+ * How specific a matched pattern is: an exact path (3) beats a named file (2) beats a directory or
+ * wildcard family (1). A literal path is a better answer than a broad file family such as the
+ * python-file territory, and naming the better answer keeps the nudge short when territories
+ * overlap.
+ */
+function strictScore(rel: string, raw: string): number {
+	const pattern = normalizePath(raw);
+	if (!pattern.includes("*") && !pattern.includes("?")) return rel === pattern ? 3 : 0;
+	const basename = pattern.split("/").pop() ?? "";
+	const named = basename.replace(/[*?]/g, "") !== "";
+	let owned = false;
+	const parts = pattern.split("**/");
+	if (pattern.includes("**") && parts.length === 2) {
+		const [prefix, suffix] = parts;
+		if (prefix === "") owned = fnmatchRegex(`*/${suffix}`).test(rel);
+		else {
+			if (rel.startsWith(prefix)) owned = fnmatchRegex(suffix).test(rel.slice(prefix.length));
+			if (!owned) owned = fnmatchRegex(`${prefix}*/${suffix}`).test(rel);
+		}
+	} else if (fnmatchRegex(pattern).test(rel)) {
+		owned = true;
+	}
+	const base = pattern.split("/*")[0].split("/**")[0];
+	if (!owned && base !== "" && (rel === base || rel.startsWith(`${base}/`))) owned = true;
+	if (!owned) return 0;
+	return named ? 2 : 1;
+}
+
+/**
+ * Ownership, not merely "the Python matcher said yes": a double-star trailing-wildcard pattern
+ * also matches a path outside its own directory through the suffix branch of `match_territory`.
+ * That branch is the write gate's business, not the nudge's, so a nudge names only a service
+ * whose pattern really covers the path.
+ */
+export function territoryScore(filePath: string, territory: unknown, root: string): number {
+	if (typeof filePath !== "string" || !Array.isArray(territory)) return 0;
+	const rel = relativeTo(filePath, root);
+	let best = 0;
+	for (const raw of territory) {
+		if (typeof raw !== "string" || raw === "") continue;
+		best = Math.max(best, strictScore(rel, raw));
+	}
+	return best;
+}
+
+const READ_COMMAND = /\b(?:cat|head|tail|sed|awk|rg|grep|find|fd|ls)\b/;
+
+/** A sed script is not a path: `1,5p`, `$d` and `s/a/b/g` must not reach the territory matcher. */
+const SED_SCRIPT = /^(?:\d+(?:,\d+)?[a-zA-Z]?|[0-9$][0-9,$]*[a-zA-Z]{1,2}|s([/#|]).*\1.*)$/;
+
+function bashPaths(command: string): string[] {
+	if (!READ_COMMAND.test(command.trim())) return [];
+	return command.match(/(?:'[^']*'|"[^"]*"|[^\s;&|]+)/g)
+		?.slice(1)
+		.map((token) => token.replace(/^['"]|['"]$/g, ""))
+		.filter((token) => token !== "" && !token.startsWith("-") && !SED_SCRIPT.test(token)) ?? [];
+}
+
+/** The paths a tool call touches. A grep pattern is not a path and is never matched. */
+export function nudgePaths(toolName: string, input: Record<string, unknown>): string[] {
+	const stringAt = (key: string): string | null => (typeof input[key] === "string" ? (input[key] as string) : null);
+	if (toolName === "read") return [stringAt("file_path"), stringAt("path")].filter((value): value is string => value !== null);
+	if (toolName === "grep" || toolName === "find") return [stringAt("path"), stringAt("file_path")].filter((value): value is string => value !== null);
+	if (toolName === "bash") return bashPaths(String(input.command ?? ""));
+	return [];
+}
+
+/** One injection names a few services, not a wall of territory. */
+const MAX_SERVICES = 3;
+
+interface NudgeService {
+	id: string;
+	info: Record<string, unknown>;
+	score: number;
+	/** The root-relative paths of this call that this service owns. */
+	files: string[];
+}
+
+/**
+ * A Grep or Glob path can be a directory. A service then owns the call when its territory lies
+ * under that directory, even though no single pattern matches the bare directory name.
+ */
+function directoryOwned(rel: string, territory: unknown): boolean {
+	const dir = rel.replace(/\/+$/, "");
+	for (const raw of Array.isArray(territory) ? territory : []) {
+		if (typeof raw !== "string" || raw === "") continue;
+		const base = normalizePath(raw).split("/*")[0].split("/**")[0];
+		// Only a pattern with a literal base inside the directory is ownership. The parity matcher's
+		// suffix branch would also match here, and that is the noise this rule exists to stop.
+		if (base !== "" && base.startsWith(`${dir}/`)) return true;
+	}
+	return false;
+}
+
+/** True when the token names a directory, so a territory underneath it counts as owned. */
+function looksLikeDirectory(rel: string, root: string): boolean {
+	const base = rel.split("/").pop() ?? "";
+	if (!base.includes(".")) return true;
+	try {
+		return statSync(join(root, rel)).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The most specific un-nudged services for these paths, at most MAX_SERVICES. A tie keeps every
+ * co-owner, so the message never pretends one service owns territory that two services share.
+ */
+function bestMatches(packs: ServiceRegistryPack[], paths: string[], root: string, seen: Set<string>): NudgeService[] {
+	const scored: NudgeService[] = [];
+	for (const pack of packs) {
+		const services = loadRegistry(pack.registryPath)?.services ?? {};
+		for (const [id, info] of Object.entries(services)) {
+			if (seen.has(id)) continue;
+			const bucket = new Set<string>();
+			let score = 0;
+			for (const path of paths) {
+				const rel = relativeTo(path, root);
+				const own = territoryScore(path, info.territory, root);
+				if (own > 0) {
+					score = Math.max(score, own);
+					bucket.add(rel);
+				} else if (looksLikeDirectory(rel, root) && directoryOwned(rel, info.territory)) {
+					score = Math.max(score, 1);
+					bucket.add(rel);
+				}
+			}
+			if (score > 0) scored.push({ id, info: info as unknown as Record<string, unknown>, score, files: [...bucket] });
+		}
+	}
+	if (scored.length === 0) return [];
+	scored.sort((left, right) => right.score - left.score);
+	return scored.filter((service) => service.score === scored[0].score).slice(0, MAX_SERVICES);
+}
+
+/** The exact next call for one service. Keep byte-identical to the Claude plugin hook's text. */
+function nextCall(service: NudgeService): string {
+	const payload = JSON.stringify({ paths: service.files });
+	const skill = typeof service.info.skill_path === "string" ? service.info.skill_path : null;
+	return skill
+		? `Next: knowledge_evidence_for_files ${payload}, or knowledge_get with skill_path ${skill}.`
+		: `Next: knowledge_evidence_for_files ${payload}, or knowledge_get ${service.id}.`;
+}
+
+/** The advisory text. Byte-identical to `buildMessage` in the plugin's PreToolUse hook. */
+function buildNudge(selected: NudgeService[], cwd: string): string {
+	const drift = driftMarkerPath(cwd) ? "Drift is pending: run knowledge_drift before trusting this knowledge." : "";
+	if (selected.length === 1) {
+		const owner = `${selected[0].id} owns ${selected[0].files.join(", ")}. ${nextCall(selected[0])}`;
+		return `[service-knowledge] ${owner}${drift ? ` ${drift}` : ""}`;
+	}
+	const lines = [`[service-knowledge] ${selected.length} services own these paths:`];
+	for (const service of selected) lines.push(`- ${service.id} owns ${service.files.join(", ")}. ${nextCall(service)}`);
+	if (drift) lines.push(drift);
+	return lines.join("\n");
+}
+
+/** Return one advisory per service/session. This function never reads file contents. */
+export function nudgeForToolCall(cwd: string, packs: ServiceRegistryPack[], toolName: string, input: Record<string, unknown>, seen: Set<string>): string | null {
+	if (!NUDGE_TOOLS.has(toolName)) return null;
+	const paths = nudgePaths(toolName, input);
+	if (paths.length === 0) return null;
+	const root = resolveSessionRoot(cwd);
+	const selected = bestMatches(packs, paths, root, seen);
+	if (selected.length === 0) return null;
+	for (const { id } of selected) seen.add(id);
+	return buildNudge(selected, cwd);
 }
 
 /**
@@ -264,6 +495,30 @@ export default function serviceKnowledgeExtension(pi: ExtensionAPI, opts: Servic
 				display: false,
 			},
 		};
+	});
+
+	// Advisory only, and delivered where the model actually reads it: a `tool_call` result cannot
+	// inject context (ToolCallEventResult is block/reason/terminate), while a `tool_result` handler
+	// may return replacement content. The nudge therefore appends one short block to the triggering
+	// result, in the same turn — the convention pi-gitnexus uses. Fail-open: any error returns
+	// undefined, so the tool result reaches the model untouched.
+	const nudgedServices = new Set<string>();
+	pi.on("tool_result", async (event: any, ctx: any) => {
+		try {
+			const content = Array.isArray(event?.content) ? event.content : null;
+			if (content === null) return;
+			const message = nudgeForToolCall(getCwd(ctx), packs, String(event?.toolName ?? ""), event?.input ?? {}, nudgedServices);
+			if (message === null) return;
+			const replaced: Record<string, unknown> = {
+				content: [...content, { type: "text", text: `\n\n---\n${message}\n---` }],
+			};
+			// Replacing `content` alone would drop a machine-readable result; carry it through.
+			if (event?.structuredContent !== undefined) replaced.structuredContent = event.structuredContent;
+			return replaced;
+		} catch {
+			// A nudge must never affect a tool result.
+			return;
+		}
 	});
 
 	// (b) /service-knowledge:status command
