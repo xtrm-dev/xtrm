@@ -1787,6 +1787,10 @@ export class IssueService {
     if (expectedRevision !== undefined && issue.currentRevision !== expectedRevision) {
       throw new Error(`revision conflict on ${issueId}: expected ${expectedRevision}, current ${issue.currentRevision}`);
     }
+    // XTRM-983 (d): terminal is one rule with one sentence on every claim route.
+    // Checked before the row walk, so a refused claim on a terminal issue writes
+    // nothing — the transition that ended the issue owns the release.
+    this.assertClaimNotStranded(issue, "claim");
     const open = this.openClaim(issueId, now);
     const unclosed = open ?? this.unclosedClaim(issueId);
     if (unclosed) {
@@ -1852,7 +1856,7 @@ export class IssueService {
 
   renewClaim(issueId: string, holder: string, opts?: { activationId?: string; ttlMs?: number; now?: number }): IssueClaim {
     this.assertHolder(holder);
-    this.assertClaimNotStranded(issueId, "renew");
+    this.assertClaimNotStranded(this.requireIssue(issueId), "renew");
     return withTransaction(this.db, () => {
       const now = opts?.now ?? Date.now();
       const open = this.unclosedClaim(issueId);
@@ -1882,7 +1886,16 @@ export class IssueService {
         throw new Error(`claim-held: ${issueId} is held by ${open.holder}; only the holder releases (anti-steal)`);
       }
       this.closeClaimRow(open.id, now);
-      this.appendEvent(issueId, "claim.released", { claim: open.id, generation: open.generation });
+      this.appendEvent(issueId, "claim.released", {
+        claim: open.id,
+        generation: open.generation,
+        holder: open.holder,
+        // XTRM-983 (f): one payload shape for every claim.released. `releasedBy`
+        // names the route that ended the row — "holder" here; the closure verb
+        // ("close"/"cancel") or the lifecycle state ("done"/"archived") on the
+        // transition path, which also carries `closure`.
+        releasedBy: "holder",
+      });
       return { ...open, releasedAt: now };
     });
   }
@@ -1938,11 +1951,14 @@ export class IssueService {
   // already released the row, so releasing again is the same idempotent no-op it
   // is on an open issue, and `sb issue close … && sb issue release …` keeps
   // working (measured: tests/skill-migration-gate.test.ts drives that sequence).
-  private assertClaimNotStranded(issueId: string, verb: "renew"): void {
-    const issue = this.requireIssue(issueId);
+  // XTRM-983 (d): one rule, one sentence, every route. `claim` and `renew` refuse
+  // a terminal issue in the same words and under the route-neutral
+  // `not-claimable:` prefix, so the reader does not need to know which route the
+  // refusal came through.
+  private assertClaimNotStranded(issue: Issue, verb: "claim" | "renew"): void {
     if ((TERMINAL_STATES as readonly string[]).includes(issue.lifecycleState)) {
       throw new Error(
-        `no-claim: ${issueId} is terminal (${issue.lifecycleState}); a claim ends with the issue it was taken on, so there is nothing to ${verb}`,
+        `not-claimable: ${issue.id} is terminal (${issue.lifecycleState}); a claim ends with the issue it was taken on, so there is nothing to ${verb}`,
       );
     }
   }

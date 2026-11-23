@@ -170,19 +170,27 @@ describe("advisories: claim rules sit on their boundaries", () => {
 describe("advisories: an instruction never names another holder", () => {
   const mismatched = (opts: { ttlMs?: number; leftMs?: number } = {}) => claimed({ holder: "other", ...opts });
 
-  it("a mismatched session gets no re-claim command and no --holder", () => {
+  it("a mismatched session is offered its own re-claim only after the lease lapses", () => {
     const expired = evaluateIssue(mismatched({ leftMs: -60_000 }), ME);
     const renew = evaluateIssue(mismatched({ ttlMs: 10 * MIN, leftMs: 4 * MIN }), ME);
     assert.equal(expired[0]?.code, "holder_mismatch", "a mismatch leads, not a missing holder");
     assert.ok(expired.find((a) => a.code === "claim_expired"), "the expiry is still reported");
     for (const a of [...expired, ...renew]) {
       assert.ok(!a.instruction.includes("--holder other"), `no instruction may name the claim holder: ${a.instruction}`);
-      assert.ok(!/sb issue (claim|renew) /.test(a.instruction) || !a.instruction.includes("other"), `no command under another lease: ${a.instruction}`);
     }
-    const expiredAdvisory = expired.find((a) => a.code === "claim_expired");
-    assert.ok(expiredAdvisory, "the expiry is still reported");
-    assert.doesNotMatch(expiredAdvisory!.instruction, /sb issue claim/, "re-claiming another holder's lease is not proposed");
-    assert.match(expiredAdvisory!.instruction, /coordinate with other/);
+    const expiredAdvisory = expired.find((a) => a.code === "claim_expired")!;
+    // XTRM-983 (e): a lapsed lease is reclaimable. `sb issue claim --holder
+    // adopt-302` closes the expired generation and takes a new one (measured on
+    // XTRM-976 in both trees), so the advice proposes exactly that command for
+    // the SESSION's holder and names the row it supersedes. The previous text
+    // ("do not re-claim under other's lease; coordinate with other") told the
+    // session not to do a thing the rule allows — the advice contradicted the
+    // behaviour it described.
+    assert.match(expiredAdvisory.instruction, /Re-claim now \(the lease lapsed; reclaiming supersedes other's row\)/);
+    assert.match(expiredAdvisory.instruction, /sb issue claim XTRM-1 --holder adopt-302 --ttl-ms <ms>/);
+    const renewAdvisory = renew.find((a) => a.code === "claim_renew")!;
+    assert.doesNotMatch(renewAdvisory.instruction, /sb issue renew/, "a live lease is still not renewed across holders");
+    assert.match(renewAdvisory.instruction, /coordinate with other/);
   });
 
   it("a session with no holder gets the command without any --holder argument", () => {
@@ -202,6 +210,23 @@ describe("advisories: an instruction never names another holder", () => {
     assert.match(expired!.instruction, /--holder adopt-302/);
     const renew = evaluateIssue(claimed({ ttlMs: 10 * MIN, leftMs: 4 * MIN }), ME).find((a) => a.code === "claim_renew");
     assert.match(renew!.instruction, /--holder adopt-302/);
+  });
+});
+
+describe("advisories: liveness is read from the flag, once", () => {
+  // XTRM-983 (c): the rule branches on `s.claim.live`, which snapshotIssue
+  // computes as isLiveClaim(claim, now), so liveness is defined once and the
+  // carried field has a reader. The projector cannot produce the two snapshots
+  // below; they exist to pin which input the rule trusts — the flag, not a
+  // second clock comparison beside it.
+  const claimAt = (over: Partial<NonNullable<IssueSnapshot["claim"]>> = {}) =>
+    snap({
+      claim: { holder: "adopt-302", activationId: null, acquiredAt: T0 - HOUR, expiresAt: T0 + HOUR, live: true, ...over },
+    });
+
+  it("a live flag with a future expiry fires, a dead flag with a past expiry stays silent", () => {
+    assert.ok(codes(evaluateIssue(claimAt({ live: false }), ME)).includes("claim_expired"), "the flag decides, not expiresAt");
+    assert.ok(!codes(evaluateIssue(claimAt({ expiresAt: T0 - HOUR, live: true }), ME)).includes("claim_expired"));
   });
 });
 
