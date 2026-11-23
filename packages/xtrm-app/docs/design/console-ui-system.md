@@ -801,7 +801,8 @@ Carried from `scripts/units-gate.ts` `HOLES`, because a document that hides them
 - The restraint rulings are the operator's 2026-11-18 text, verbatim; the five rulings R1–R5 are
   recorded as resolved (§2.4) rather than as open questions.
 - The migration table (§17) traces each removed idiom to the closed child that removed it.
-- Doc-only change: `cd packages/xtrm-app && npx vitest run src/ui` is green and unchanged.
+- Doc-only change: `cd packages/xtrm-app && npx vitest run src/ui` is green and unchanged (17 files,
+  147 tests at `3f0cb76d`).
 
 ### Supersession of the XTRM-853 design page (dated ruling, 2026-11-23)
 
