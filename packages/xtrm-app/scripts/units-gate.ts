@@ -616,14 +616,20 @@ export const advice = (rule: string): string => {
 export const syntheticRuleIds = ["scroll-container", "glued-class", "css-scroll-container", "css-scrollbar-value"] as const;
 
 /**
- * The offences in `found` that the park does not cover (work owed) against the ones it does (work
- * done). XTRM-979: the report printed one line per file labelled by whether a park existed, so a new
- * offence inside a parked file — the only kind that is actually work owed — read exactly like a parked
- * one. The split is computed here so the report and any test read the same arithmetic.
+ * The offences in `found` that a park covers (work already accounted for) against the ones it does
+ * not (work owed). XTRM-979: the report printed one line per file labelled by whether a park existed,
+ * so a new offence inside a parked file — the only kind that is actually work owed — read exactly like
+ * a parked one.
+ *
+ * The arithmetic takes the park as an argument instead of reading `PARKS`, so a test can state a park
+ * of its own: a fixture that reads the live map breaks the day a slice pays its last park down, and a
+ * gate test that fails for that reason teaches the next reader to edit the fixture rather than the
+ * gate. `parkSplit` is the production entry point and adds nothing but the lookup.
  */
-export const parkSplit = (file: string, found: Offence[]): { parked: Offence[]; owed: Offence[] } => {
-  const park = PARKS[file];
-  if (!park) return { parked: [], owed: [...found] };
+export type ParkLike = { offences: Array<{ rule: string; match: string }> };
+export type ParkSplit = { parked: Offence[]; owed: Offence[] };
+
+export const splitByPark = (park: ParkLike, found: Offence[]): ParkSplit => {
   const remaining = new Map<string, number>();
   for (const offence of park.offences) {
     const key = `${offence.rule} ${offence.match}`;
@@ -642,6 +648,25 @@ export const parkSplit = (file: string, found: Offence[]): { parked: Offence[]; 
     }
   }
   return { parked, owed };
+};
+
+export const parkSplit = (file: string, found: Offence[]): ParkSplit => splitByPark(PARKS[file] ?? { offences: [] }, found);
+
+/**
+ * The lines `GATE_REPORT=1` prints for one file: a header with the two counts, then one line per
+ * offence carrying the label that matters — `owed` for an offence no park covers, `parked` for one it
+ * does. The label lives here rather than in the report block so a test can read the same string the
+ * operator reads; a constant label leaves every count right and every line wrong.
+ */
+export const reportLines = (file: string, found: Offence[], park: ParkLike = PARKS[file] ?? { offences: [] }): string[] => {
+  const { parked, owed } = splitByPark(park, found);
+  const accounted = new Set(parked);
+  const lines = [`${file}: ${owed.length} owed, ${parked.length} parked`];
+  for (const offence of found) {
+    const label = accounted.has(offence) ? "parked" : "owed";
+    lines.push(`  :${offence.line} ${offence.match} [${offence.rule}] ${label}`);
+  }
+  return lines;
 };
 
 /**
