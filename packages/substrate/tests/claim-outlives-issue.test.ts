@@ -19,6 +19,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { contract, setup } from "./helpers.ts";
 import { ClosureService } from "../src/service/closure-service.ts";
+import { classifyError } from "../src/service/ops.ts";
 
 const T0 = 1_786_000_000_000;
 const MINUTE = 60_000;
@@ -119,19 +120,35 @@ describe("a claim cannot outlive the issue it was taken on (XTRM-976)", () => {
     assert.equal(payload["releasedBy"], "archived");
   });
 
-  it("every claim route on a terminal issue answers in one vocabulary", () => {
+  it("claim, claimReady and renew refuse a terminal issue in one sentence; release is the silent null", () => {
     const [issue] = readyIssue(ctx);
     ctx.svc.claimIssue(issue.id, "holder-a", { ttlMs: 60 * MINUTE, now: T0 });
     closures.closeIssue(issue.id, { outcome: "completed", reason: "shipped", actor: "holder-a", now: T0 + MINUTE });
+    const revision = ctx.svc.getIssue(issue.id).currentRevision;
 
     // XTRM-983 (d): the test used to pin two different sentences for one rule —
     // `not-claimable: … is terminal: lifecycle is terminal (done)` on the claim
-    // route and `no-claim: … is terminal (done); a claim ends…` on renew. Both
-    // routes now answer in the same words; only the verb differs, and that is
-    // asserted as an equality rather than as two regexes that could drift apart.
+    // route and `no-claim: … is terminal (done); a claim ends…` on renew. Every
+    // route into `claimTx` now answers with the claim route's sentence; only the
+    // verb differs, and that is asserted as an equality rather than as two
+    // regexes that could drift apart.
     const claimRefusal = refusal(() => ctx.svc.claimIssue(issue.id, "holder-b", { now: T0 + 2 * MINUTE }));
-    const renewRefusal = refusal(() => ctx.svc.renewClaim(issue.id, "holder-a", { now: T0 + 2 * MINUTE }));
     assert.match(claimRefusal, /^not-claimable: .* is terminal \(done\); a claim ends with the issue it was taken on, so there is nothing to claim$/);
+    // claimReady is the third route into `claimTx`: it attests and claims in one
+    // transaction, so it answers in the claim route's own words and its rollback
+    // leaves no attestation behind.
+    const claimReadyRefusal = refusal(() =>
+      ctx.svc.claimReady(
+        issue.id,
+        "holder-b",
+        { outcome: "ready", policy: "default", attestedBy: "holder-b" },
+        { now: T0 + 2 * MINUTE },
+      ),
+    );
+    assert.equal(claimReadyRefusal, claimRefusal, "attest-and-claim refuses in the claim route's own words");
+    assert.equal(ctx.svc.getIssue(issue.id).currentRevision, revision, "a refused claimReady writes no attestation");
+    assert.equal(ctx.svc.listClaims(issue.id).length, 1, "a refused route appends no claim row");
+    const renewRefusal = refusal(() => ctx.svc.renewClaim(issue.id, "holder-a", { now: T0 + 2 * MINUTE }));
     assert.equal(
       claimRefusal.replace(/to claim$/, "to <verb>"),
       renewRefusal.replace(/to renew$/, "to <verb>"),
@@ -139,9 +156,18 @@ describe("a claim cannot outlive the issue it was taken on (XTRM-976)", () => {
     );
     // release: no-op, because the transition already released the row. Failing
     // here would break `sb issue close … && sb issue release …`, which real
-    // callers (and tests/skill-migration-gate.test.ts) drive.
+    // callers (and tests/skill-migration-gate.test.ts) drive. The documented
+    // silence is pinned as `null` for a foreign and for the former holder.
     assert.equal(ctx.svc.releaseClaim(issue.id, "holder-b", { now: T0 + 2 * MINUTE }), null);
     assert.equal(ctx.svc.releaseClaim(issue.id, "holder-a", { now: T0 + 2 * MINUTE }), null);
+    assert.equal(ctx.svc.listClaims(issue.id).length, 1, "a silent release appends no row");
+
+    // XTRM-983 (d): the vocabulary has a wire code, not only prose. `classifyError`
+    // is what a client branches on; the old renew sentence (`no-claim: … is
+    // terminal`) fell through to `internal`, a refusal reported as a server fault.
+    for (const message of [claimRefusal, claimReadyRefusal, renewRefusal]) {
+      assert.equal(classifyError(new Error(message)).code, "conflict", message);
+    }
   });
 
   it("an open issue keeps the anti-steal rule and the idempotent no-op", () => {
