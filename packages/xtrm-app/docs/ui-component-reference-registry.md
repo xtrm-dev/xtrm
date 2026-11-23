@@ -1,7 +1,15 @@
 # UI component reference registry
 
-**Status:** canonical index of UI and agent-UI references for `packages/xtrm-app` (created 2026-09-16).
+**Status:** canonical index of **external** UI and agent-UI references for `packages/xtrm-app`
+(created 2026-09-16; boundary stated 2026-11-23).
 **Purpose:** one durable place that lists every external UI source an implementation agent must consult before building a component. Dispositions follow `adoption-audit.md` §2 (`DEPEND` / `ADAPT` / `REFERENCE` / `REJECT`). Audit evidence for each entry stays in the linked audit file.
+
+**This file is not the console's component registry.** It indexes sources outside the repository. The
+as-built catalogue of the console's own components — their props, geometry, tokens, the one component
+per concept, and the migration table of removed idioms — is
+[`design/console-ui-system.md`](design/console-ui-system.md) (XTRM-940). A question of the form "which
+component renders this?" is answered there; a question of the form "which external kit may I consult?"
+is answered here.
 
 ## How agents use this registry
 
