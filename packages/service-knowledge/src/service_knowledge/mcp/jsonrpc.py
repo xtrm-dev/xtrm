@@ -39,9 +39,11 @@ SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26")
 SERVER_INSTRUCTIONS = (
     "Operational service knowledge for this repository. Call knowledge_evidence_for_files before "
     "reading service source, and knowledge_search before grep, whenever the symptom-to-service "
-    "mapping is unclear. Call knowledge_status when results look stale or empty, and "
-    "knowledge_drift before trusting knowledge about recently changed code. These tools return "
-    "evidence with citations, never conclusions."
+    "mapping is unclear. Call knowledge_get instead of opening a service skill file directly. Call "
+    "knowledge_status when results look stale or empty, and knowledge_drift before trusting "
+    "knowledge about recently changed code. These tools return evidence with citations, never "
+    "conclusions. A nudge that names a service just before you read its source lists the exact "
+    "call to make; the nudge is advisory and never blocks a tool call."
 )
 
 JSONRPC_PARSE_ERROR = -32700

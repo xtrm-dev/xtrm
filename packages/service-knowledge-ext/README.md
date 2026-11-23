@@ -1,8 +1,8 @@
 # service-knowledge extension
 
 Self-gating service-knowledge surface for repos that carry a service registry: five read-only
-knowledge tools, a registry/drift context note, and a `/service-knowledge:status` command.
-Replaces the retired `service-skills` extension (which was blind to the canonical layout).
+knowledge tools, a registry/drift context note, a path nudge, and a `/service-knowledge:status`
+command. Replaces the retired `service-skills` extension (which was blind to the canonical layout).
 
 ## Tools (v1.1, CORE-2714)
 
@@ -92,6 +92,50 @@ With a pending drift marker — either the canonical
 
 ```
 drift: PENDING marker present (.xtrm/.service-knowledge-drift-pending) — reconcile with /updating-service-knowledge
+```
+
+### Path nudge (`tool_result`)
+
+When a `read`, `grep`, `find` or `bash` tool call touches a path inside a registered service
+territory, the extension appends one advisory block to that tool result, in the same turn, framed
+as `--- ... ---`:
+
+```
+[service-knowledge] api owns api/mcp_server.py. Next: knowledge_evidence_for_files {"paths":["api/mcp_server.py"]}, or knowledge_get with skill_path .xtrm/skills/<pack>/service-knowledge/services/api/SKILL.md.
+```
+
+The block is appended rather than queued because a `tool_call` result cannot inject context, while a
+`tool_result` handler may replace content. The text is byte-identical to the Claude plugin's hook,
+so both hosts give one answer. One injection names at most three services, one line each; services
+that share a territory are all named, because picking one would be wrong:
+
+```
+[service-knowledge] 2 services own these paths:
+- store owns docker-compose.yml. Next: knowledge_evidence_for_files {"paths":["docker-compose.yml"]}, or knowledge_get store.
+- platform owns docker-compose.yml. Next: knowledge_evidence_for_files {"paths":["docker-compose.yml"]}, or knowledge_get platform.
+```
+
+- one nudge per service per session; a second read in the same territory stays silent
+- the matcher mirrors the Python `match_territory`, so the nudge never names a service the write
+  gate would not also match for that path
+- the nudge names the most specific territory (exact path over named file family over directory
+  pattern); a path that only matches a neighbour through the matcher's suffix branch is not
+  ownership, so the nudge stays silent rather than naming the wrong service
+- a pending drift marker (`.xtrm/.service-knowledge-drift-pending` or the legacy
+  `.xtrm/.service-skills-drift-pending`) adds `knowledge_drift` to the message
+- bash is inspected only for read-shaped commands (`cat`, `head`, `tail`, `sed`, `awk`, `rg`,
+  `grep`, `find`, `fd`, `ls`); a mutating command is never nudged
+- a `Grep`/`Glob` path that names a directory resolves to every service whose territory lies
+  under it
+- delivery repeats a `structuredContent` result unchanged, and every failure is swallowed: the
+  nudge never blocks, alters, or fails the tool call it enriches
+
+The context note also states the call order directly, so a fresh session sees it without waiting
+for a nudge:
+
+```
+call order: knowledge_evidence_for_files before reading service source; knowledge_search before
+grep; knowledge_status when results look stale; knowledge_drift before trusting recently changed code
 ```
 
 ### `/service-knowledge:status` command

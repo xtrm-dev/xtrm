@@ -528,3 +528,364 @@ describe("service-knowledge ext v1.1 tool surface (CORE-2714)", () => {
     }
   });
 });
+
+describe("service-knowledge ext v1.2 path nudge (XTRM-997)", () => {
+  const REGISTRY = {
+    "api": { description: "API service", territory: ["api/**/*.py", "api/app.py"] },
+    "web": { description: "Web service", territory: ["web/src/**"] },
+    "blue": { description: "Single-file service", territory: ["blue?.py"] },
+  };
+
+  function nudgePi() {
+    return { pi: toolsPi() };
+  }
+
+  test("territoryMatch mirrors the Python matcher, including its broad-prefix behaviour", () => {
+    // Expectations here were produced by running skill_activator.match_territory on the same
+    // table; the two must answer identically or the plugin nudges a different service than the
+    // Python activator gates.
+    const fx = tmpBase();
+    try {
+      expect(extension.territoryMatch("api/app.py", ["api/app.py"], fx.dir)).toBe(true);
+      expect(extension.territoryMatch("api/app.py", ["api/**/*.py"], fx.dir)).toBe(true);
+      expect(extension.territoryMatch("api/nested/deep.py", ["api/**/*.py"], fx.dir)).toBe(true);
+      // A directory-prefix pattern claims everything below it, exactly as Python does.
+      expect(extension.territoryMatch("api/app.txt", ["api/**/*.py"], fx.dir)).toBe(true);
+      expect(extension.territoryMatch("web/src/ui/App.tsx", ["web/src/**"], fx.dir)).toBe(true);
+      // Python checks the suffix against the whole path when the prefix does not match.
+      expect(extension.territoryMatch("other/app.py", ["api/**/*.py"], fx.dir)).toBe(true);
+      expect(extension.territoryMatch("other/app.txt", ["api/**/*.py"], fx.dir)).toBe(false);
+      expect(extension.territoryMatch("blue1.py", ["blue?.py"], fx.dir)).toBe(true);
+      expect(extension.territoryMatch("blue12.py", ["blue?.py"], fx.dir)).toBe(false);
+      expect(extension.territoryMatch("README.md", ["api/app.py"], fx.dir)).toBe(false);
+      expect(extension.territoryMatch("api/app.py", [], fx.dir)).toBe(false);
+      // A registry entry with no territory, or a malformed one, never throws.
+      expect(extension.territoryMatch("api/app.py", undefined, fx.dir)).toBe(false);
+      expect(extension.territoryMatch("api/app.py", [42], fx.dir)).toBe(false);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("territoryMatch: an absolute path inside the session root is made relative first", () => {
+    const fx = tmpBase();
+    try {
+      expect(extension.territoryMatch(join(fx.dir, "api", "app.py"), ["api/app.py"], fx.dir)).toBe(true);
+      expect(extension.territoryMatch("/elsewhere/api/app.py", ["api/app.py"], fx.dir)).toBe(false);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("nudgeForToolCall names the next knowledge call for an owned path", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      const seen = new Set<string>();
+      const message = extension.nudgeForToolCall(fx.dir, packs, "read", { path: "api/app.py" }, seen);
+      expect(message).toContain("api");
+      expect(message).toContain("knowledge_evidence_for_files");
+      expect(message).toContain("knowledge_get");
+      // Exact shape, shared with the Claude plugin hook: owner, then the exact next call.
+      expect(message).toBe(
+        '[service-knowledge] api owns api/app.py. Next: knowledge_evidence_for_files {"paths":["api/app.py"]}, or knowledge_get api.',
+      );
+      expect(seen.has("api")).toBe(true);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("nudgeForToolCall is once per service per session", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      const seen = new Set<string>();
+      expect(extension.nudgeForToolCall(fx.dir, packs, "read", { path: "api/app.py" }, seen)).not.toBeNull();
+      expect(extension.nudgeForToolCall(fx.dir, packs, "read", { path: "api/other.py" }, seen)).toBeNull();
+      // A different service is still nudged once.
+      expect(extension.nudgeForToolCall(fx.dir, packs, "read", { path: "web/src/a.ts" }, seen)).toContain("web");
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("nudgeForToolCall stays silent for unowned paths and unhooked tools", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      const seen = new Set<string>();
+      expect(extension.nudgeForToolCall(fx.dir, packs, "read", { path: "README.md" }, seen)).toBeNull();
+      expect(extension.nudgeForToolCall(fx.dir, packs, "edit", { path: "api/app.py" }, seen)).toBeNull();
+      expect(extension.nudgeForToolCall(fx.dir, packs, "write", { path: "api/app.py" }, seen)).toBeNull();
+      expect(seen.size).toBe(0);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("nudgeForToolCall reads a file path out of a shell read command only", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      expect(
+        extension.nudgeForToolCall(fx.dir, packs, "bash", { command: "sed -n '1,40p' api/app.py" }, new Set()),
+      ).toContain("api");
+      // Not a read: a mutating or VCS command must not trigger the nudge.
+      expect(extension.nudgeForToolCall(fx.dir, packs, "bash", { command: "git status" }, new Set())).toBeNull();
+      expect(extension.nudgeForToolCall(fx.dir, packs, "bash", { command: "rm -f api/app.py" }, new Set())).toBeNull();
+      // A sed script is not a path; only the file argument is.
+      expect(extension.nudgePaths("bash", { command: "sed -n 1,5p api/app.py" })).toEqual(["api/app.py"]);
+      expect(extension.nudgePaths("bash", { command: "sed -i s/a/b/g api/app.py" })).toEqual(["api/app.py"]);
+      expect(extension.nudgePaths("bash", { command: "sed -n 1,5p" })).toEqual([]);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("nudgeForToolCall adds the drift hint when a pending marker exists", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      mkdirSync(join(fx.dir, ".xtrm"), { recursive: true });
+      writeFileSync(join(fx.dir, ".xtrm", ".service-knowledge-drift-pending"), "");
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      expect(extension.nudgeForToolCall(fx.dir, packs, "read", { path: "api/app.py" }, new Set())).toContain(
+        "knowledge_drift",
+      );
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("territoryScore ranks an exact path above a file family above a directory", () => {
+    const fx = tmpBase();
+    try {
+      expect(extension.territoryScore("api/app.py", ["api/app.py"], fx.dir)).toBe(3);
+      expect(extension.territoryScore("api/nested/deep.py", ["api/**/*.py"], fx.dir)).toBe(2);
+      expect(extension.territoryScore("web/src/a.ts", ["web/src/**"], fx.dir)).toBe(1);
+      // The matcher's suffix branch also matches outside the pattern's own directory. That is the
+      // write gate's business, not the nudge's: it is not ownership and must not score.
+      expect(extension.territoryScore("api/app.py", ["alembic/**/*"], fx.dir)).toBe(0);
+      // A leading double star is real ownership of that file family anywhere in the repo.
+      expect(extension.territoryScore("db/migrations/001.py", ["**/migrations/*.py"], fx.dir)).toBe(2);
+      expect(extension.territoryScore("README.md", ["api/app.py"], fx.dir)).toBe(0);
+      expect(extension.territoryScore("api/app.py", undefined, fx.dir)).toBe(0);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("nudgeForToolCall names the most specific owner, never a directory-grabbing neighbour", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), {
+        api: {
+          description: "API service",
+          territory: ["api/mcp_server.py", "api/docstrings/**/*"],
+          skill_path: ".xtrm/skills/infra/service-knowledge/services/api/SKILL.md",
+        },
+        schema: { description: "Schema service", territory: ["alembic/**/*", "scripts/data/migrations.py"] },
+      });
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      const seen = new Set<string>();
+      const message = extension.nudgeForToolCall(fx.dir, packs, "read", { path: "api/mcp_server.py" }, seen);
+      expect(message).toContain("[service-knowledge] api owns api/mcp_server.py.");
+      expect(message).not.toContain("schema");
+      expect(message).toContain("knowledge_get with skill_path .xtrm/skills/infra/service-knowledge/services/api/SKILL.md");
+      // The neighbour was never named, so its own territory is still free to nudge later.
+      expect(seen.has("schema")).toBe(false);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("nudgeForToolCall reports co-owners of shared territory instead of picking one", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), {
+        store: { description: "Store", territory: ["docker-compose.yml"] },
+        platform: { description: "Platform", territory: ["docker-compose.yml"] },
+      });
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      const seen = new Set<string>();
+      const message = extension.nudgeForToolCall(fx.dir, packs, "read", { path: "docker-compose.yml" }, seen);
+      // Shared territory lists every owner, each with its own next call, in one injection.
+      expect(message).toContain("[service-knowledge] 2 services own these paths:");
+      expect(message).toContain('- store owns docker-compose.yml. Next: knowledge_evidence_for_files {"paths":["docker-compose.yml"]}');
+      expect(message).toContain("- platform owns docker-compose.yml.");
+      expect(seen.has("store")).toBe(true);
+      expect(seen.has("platform")).toBe(true);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("a bash read is anchored per command segment, as on the Claude hook", () => {
+    // `rm -f api/x.py && ls` and `git log --grep api` are not reads: the read command must BE the
+    // segment's command, not merely appear in the line. `echo hi > api/x.py; cat` is not a read either.
+    expect(extension.nudgePaths("bash", { command: "rm -f api/x.py && ls" })).toEqual([]);
+    expect(extension.nudgePaths("bash", { command: "git log --grep api" })).toEqual([]);
+    expect(extension.nudgePaths("bash", { command: "echo hi > api/x.py; cat" })).toEqual([]);
+    // A genuine read behind a mutating segment still counts for that segment only.
+    expect(extension.nudgePaths("bash", { command: "cd api && cat x.py" })).toEqual(["x.py"]);
+    expect(extension.nudgePaths("bash", { command: "cat a.py | head -3" })).toEqual(["a.py"]);
+    expect(extension.nudgePaths("bash", { command: "FOO=1 cat api/x.py" })).toEqual(["api/x.py"]);
+  });
+
+  test("a grep or rg pattern argument is not a path", () => {
+    // The first non-flag token is the PATTERN: `grep -rn lib .` must name no owner of `lib`.
+    expect(extension.nudgePaths("bash", { command: "grep -rn lib ." })).toEqual(["."]);
+    expect(extension.nudgePaths("bash", { command: "grep -rn api/app.py api" })).toEqual(["api"]);
+    expect(extension.nudgePaths("bash", { command: "rg toon api/" })).toEqual(["api/"]);
+  });
+
+  test("nudgePaths never treats a grep pattern as a path", () => {
+    expect(extension.nudgePaths("grep", { pattern: "api/app.py", path: "lib" })).toEqual(["lib"]);
+    expect(extension.nudgePaths("find", { pattern: "**/*.py", path: "api" })).toEqual(["api"]);
+    expect(extension.nudgePaths("read", { file_path: "api/app.py" })).toEqual(["api/app.py"]);
+    expect(extension.nudgePaths("bash", { command: "git status" })).toEqual([]);
+    expect(extension.nudgePaths("edit", { path: "api/app.py" })).toEqual([]);
+  });
+
+  test("a directory grep resolves to every service whose territory lies under it", () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), {
+        api: { description: "API", territory: ["api/mcp_server.py"] },
+        store: { description: "Store", territory: ["storage/repo.py"] },
+      });
+      mkdirSync(join(fx.dir, "api"), { recursive: true });
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      const seen = new Set<string>();
+      const message = extension.nudgeForToolCall(fx.dir, packs, "grep", { pattern: "TODO", path: "api" }, seen);
+      expect(message).toContain("api owns api");
+      expect(message).not.toContain("storage");
+      expect(seen.has("api")).toBe(true);
+      expect(seen.has("store")).toBe(false);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("one injection names at most three services", () => {
+    const fx = tmpBase();
+    try {
+      const services: Record<string, unknown> = {};
+      for (const id of ["a01", "a02", "a03", "a04", "a05"]) {
+        services[id] = { description: id, territory: ["api/**/*.py"] };
+      }
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), services);
+      const packs = extension.findUmbrellaPacks(fx.dir);
+      const seen = new Set<string>();
+      const message = extension.nudgeForToolCall(fx.dir, packs, "read", { path: "api/app.py" }, seen)!;
+      expect(message).toContain("3 services own these paths:");
+      expect(seen.size).toBe(3);
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("the tool_result handler appends one advisory block to the triggering result", async () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      const { pi } = nudgePi();
+      extension.default(pi as any, { cwd: fx.dir });
+      const handler = pi.listeners.get("tool_result")![0];
+      const result: any = await handler(
+        { toolName: "read", input: { path: "api/app.py" }, content: [{ type: "text", text: "print(1)" }], isError: false },
+        { cwd: fx.dir },
+      );
+      expect(result.content).toHaveLength(2);
+      expect(result.content[0]).toEqual({ type: "text", text: "print(1)" });
+      expect(result.content[1].text).toContain("[service-knowledge] api owns api/app.py.");
+      expect(result.content[1].text).toContain("knowledge_evidence_for_files");
+      // Second read of the same service adds nothing: the service was announced.
+      const repeat = await handler(
+        { toolName: "read", input: { path: "api/other.py" }, content: [{ type: "text", text: "x" }], isError: false },
+        { cwd: fx.dir },
+      );
+      expect(repeat).toBeUndefined();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("the tool_result handler carries a structured result through untouched", async () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      const { pi } = nudgePi();
+      extension.default(pi as any, { cwd: fx.dir });
+      const handler = pi.listeners.get("tool_result")![0];
+      const result: any = await handler(
+        {
+          toolName: "read",
+          input: { path: "api/app.py" },
+          content: [{ type: "text", text: "x" }],
+          structuredContent: { lines: 1 },
+          isError: false,
+        },
+        { cwd: fx.dir },
+      );
+      expect(result.structuredContent).toEqual({ lines: 1 });
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("the tool_result handler returns undefined when there is nothing to add", async () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      const { pi } = nudgePi();
+      extension.default(pi as any, { cwd: fx.dir });
+      const handler = pi.listeners.get("tool_result")![0];
+      const content = [{ type: "text", text: "x" }];
+      // Unowned path, unhooked tool, and a result with no content array.
+      await expect(handler({ toolName: "read", input: { path: "README.md" }, content }, { cwd: fx.dir })).resolves.toBeUndefined();
+      await expect(handler({ toolName: "edit", input: { path: "api/app.py" }, content }, { cwd: fx.dir })).resolves.toBeUndefined();
+      await expect(handler({ toolName: "read", input: { path: "api/app.py" } }, { cwd: fx.dir })).resolves.toBeUndefined();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("the tool_result handler fails open when the registry read throws", async () => {
+    const fx = tmpBase();
+    try {
+      writeRegistry(canonicalPackDir(fx.dir, "infra"), REGISTRY);
+      // A registry path that is a directory makes every read throw; the handler must stay silent.
+      const broken = [{ registryPath: join(fx.dir, "api"), packDir: fx.dir, umbrellaName: "service-knowledge" }];
+      const { pi } = nudgePi();
+      extension.default(pi as any, { cwd: fx.dir });
+      const handler = pi.listeners.get("tool_result")![0];
+      const result = await handler(
+        { toolName: "read", input: { path: "api/app.py" }, content: [{ type: "text", text: "x" }], isError: false },
+        { cwd: fx.dir },
+      );
+      // Whatever happened, the handler must not throw and must not corrupt the result.
+      expect(result === undefined || Array.isArray(result.content)).toBe(true);
+      expect(extension.nudgeForToolCall(fx.dir, broken as any, "read", { path: "api/app.py" }, new Set())).toBeNull();
+    } finally {
+      fx.cleanup();
+    }
+  });
+
+  test("no registry means no tool_result handler at all", () => {
+    const fx = tmpBase();
+    try {
+      const { pi } = nudgePi();
+      extension.default(pi as any, { cwd: fx.dir });
+      expect(pi.listeners.get("tool_result")).toBeUndefined();
+      expect(pi.listeners.get("tool_call")).toBeUndefined();
+    } finally {
+      fx.cleanup();
+    }
+  });
+});

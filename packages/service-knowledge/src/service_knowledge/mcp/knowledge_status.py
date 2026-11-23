@@ -20,7 +20,7 @@ from service_knowledge.mcp._root import resolve_consumer_root
 
 TOOL_NAME = "knowledge_status"
 DESCRIPTION = describe(
-    purpose="Check whether this repo's service knowledge is installed, indexed and current, and which versions are involved. Call it when results look empty or stale. Read-only; never writes or rebuilds.",
+    purpose="Check whether this repo's service knowledge is installed, indexed and current, and which versions are involved. Call it when results look empty or stale, or when you are unsure whether this repo has adopted service-knowledge. Read-only; never writes or rebuilds.",
     parameters="consumer_root (string, optional): repo root to inspect; must be the session root or one of its ancestors, default: the session root.",
     returns="consumer_root, registry_present, packs (name, umbrella, services), service_count, index_present, git_head, services_out_of_sync, usable, cli_version (the installed command), pack_version (the machinery vendored in this repo, null when absent), version_mismatch (true, false, or null when pack_version is absent) with version_note, plus consumer_root_resolution.",
     empty_or_stale="registry_present=false means this repo has not adopted service-knowledge: the retrieval tools (knowledge_search, knowledge_get, knowledge_evidence_for_files) refuse here. version_mismatch=true means the repo's vendored machinery and the CLI differ; version_note says which side is older and what to do (`service-knowledge update` only when the repo is the older side). services_out_of_sync lists services whose last_sync_ref differs from git_head. consumer_root_resolution.stale=true means the primary checkout is ahead of this worktree.",

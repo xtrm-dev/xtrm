@@ -1,6 +1,6 @@
 {
   "name": "@jaggerxtrm/pi-service-knowledge",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Pi extension: five read-only service-knowledge tools (knowledge_search, knowledge_get, knowledge_evidence_for_files, knowledge_status, knowledge_drift) at parity with the Claude Code plugin, plus a registry/drift context note and status command. Self-gating: zero surface without a registry.",
   "type": "module",
   "exports": {
