@@ -19,6 +19,10 @@ import {
   offenders,
   ownsSource,
   parkDrift,
+  parkSplit,
+  reportLines,
+  splitByPark,
+  syntheticRuleIds,
   unpaidDirectories,
   walk,
 } from "../../scripts/units-gate.ts";
@@ -38,6 +42,11 @@ import {
  * two sides as a `(rule, match)` multiset per file, measures every parked file with `offenders()`
  * from `units-gate.ts`, drops what the files no longer hold, and prints the map with the measured
  * count beside each offence. Run it, read the numbers, paste the map.
+ * **A fixture in this file states its own park; it never reads `PARKS`.** #497 paid
+ * `src/issues/PullRequestsBlock.tsx` down to zero, and a test that took its fixture from that entry
+ * failed on the merge ref for the only reason a gate test must never fail — someone finished the work.
+ * `splitByPark(park, found)` takes the park as an argument for exactly this; `parkSplit(file, found)`
+ * is the production lookup and belongs in the report, not in a fixture.
  *
  * It runs in the state it exists for. The gate holds the markers and the gate is what the helper
  * imports to measure, so it loads one complete side of the conflicted file as its reader while both
@@ -95,8 +104,10 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       for (const file of files) {
         const found = offenders(file);
         if (found.length === 0) continue;
-        console.log(`${file}: ${found.length} offender(s), ${PARKS[file] ? "parked" : "unparked"}`);
-        for (const offence of found) console.log(`  :${offence.line} ${offence.match} [${offence.rule}]`);
+        // XTRM-979: "parked" and "unparked" were the whole distinction, so work owed inside a parked
+        // file read exactly like work already accounted for. The label is built in `reportLines` so
+        // the string an operator reads is the string a test can read.
+        for (const line of reportLines(file, found)) console.log(line);
       }
     }
     expect(drifted, "no px or off-scale literal may stand outside the ladder").toEqual([]);
@@ -467,6 +478,119 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     const parkedMeta = PARKS[join("src", "issues", "meta.tsx")];
     expect(parkedMeta?.offences.length ?? 0, "the debt the gate parks must be named, not counted").toBeGreaterThan(0);
     expect(PARKS[join("src", "issues", "meta.tsx")]?.offences.map((offence) => offence.match), "a park must name the literal it holds").toContain("gap-[2px]");
+  });
+
+  it("answers every rule id, and throws on one it does not know", () => {
+    // XTRM-979: `advice()` ended `?? "unnamed rule"`, so a rule added without a remedy reported a
+    // placeholder and the run stayed green. The placeholder is gone; both halves are pinned here.
+    for (const rule of RULES) expect(advice(rule.id), `rule ${rule.id} has a remedy`).not.toBe("");
+    for (const rule of syntheticRuleIds) expect(advice(rule), `synthetic ${rule} has a remedy`).not.toBe("");
+    expect(() => advice("a-rule-nobody-wrote"), "an id with no remedy must crash, not print a placeholder").toThrow(
+      /no advice for rule "a-rule-nobody-wrote"/,
+    );
+  });
+
+  it("differs owed work from parked work inside one file", () => {
+    // XTRM-979: the report labelled a FILE, so a new offence inside a parked file printed like a
+    // parked one. The split is arithmetic, so it is asserted rather than eyeballed in the report.
+    //
+    // The park is stated here, not read from `PARKS`: #497 paid `PullRequestsBlock.tsx` down to zero
+    // on main, and a fixture that named it failed on the merge ref for the only reason a gate test
+    // must never fail — someone finished the work. A gate fixture never reads the live park map.
+    const park = { offences: [{ rule: "offscale-rem-font", match: "text-[0.68rem]" }] };
+    const parkedOnly = [{ rule: "offscale-rem-font", match: "text-[0.68rem]", line: 10 }];
+    expect(splitByPark(park, parkedOnly)).toEqual({ parked: parkedOnly, owed: [] });
+
+    const owedOffence = { rule: "px-font", match: "text-[11px]", line: 99 };
+    const split = splitByPark(park, [...parkedOnly, owedOffence]);
+    expect(split.owed, "a new offence beside parked ones is work owed").toEqual([owedOffence]);
+    expect(split.parked, "the parked ones stay parked").toHaveLength(1);
+
+    // A park that covers two copies of one literal covers two, not one: the split is a multiset.
+    const twice = { offences: [...park.offences, ...park.offences] };
+    const three = [0, 1, 2].map((index) => ({ ...parkedOnly[0]!, line: 10 + index }));
+    const counted = splitByPark(twice, three);
+    expect(counted.parked, "a park of two covers exactly two").toHaveLength(2);
+    expect(counted.owed, "the third is owed, not parked").toEqual([three[2]]);
+
+    expect(splitByPark({ offences: [] }, [owedOffence])).toEqual({ parked: [], owed: [owedOffence] });
+  });
+
+  it("labels each offence owed or parked, and a constant label is refused", () => {
+    // XTRM-979 finding 2, pinned: replacing the per-offence label with a constant left the suite
+    // green, because the report's text was never asserted — only the counts around it were.
+    const park = { offences: [{ rule: "offscale-rem-font", match: "text-[0.68rem]" }] };
+    const found = [
+      { rule: "offscale-rem-font", match: "text-[0.68rem]", line: 10 },
+      { rule: "px-font", match: "text-[11px]", line: 99 },
+    ];
+    const lines = reportLines("synthetic/probe.tsx", found, park);
+    expect(lines[0], "the header counts both kinds").toBe("synthetic/probe.tsx: 1 owed, 1 parked");
+    expect(lines[1], "a parked offence says so").toBe("  :10 text-[0.68rem] [offscale-rem-font] parked");
+    expect(lines[2], "the offence that is work says owed, not parked").toBe("  :99 text-[11px] [px-font] owed");
+    expect(new Set(lines.slice(1).map((line) => line.split(" ").at(-1))), "both labels are reachable").toEqual(
+      new Set(["parked", "owed"]),
+    );
+  });
+
+  it("names every rule id offenders can emit, so an unexplained id cannot appear", () => {
+    // XTRM-979 finding 3, pinned: dropping an id from `syntheticRuleIds` stayed green, so the list
+    // was decoration. It is now compared with what `offenders()` actually emits on a probe tree.
+    const dir = mkdtempSync(join(tmpdir(), "units-ids-"));
+    try {
+      const component = join(dir, "probe.tsx");
+      writeFileSync(
+        component,
+        [
+          'export const A = () => <div className="overflow-y-auto" />;',
+          "export const B = ({ tone }: { tone: string }) => <div className={`text-${tone} p-1`} />;",
+          "",
+        ].join("\n"),
+      );
+      const sheet = join(dir, "probe.css");
+      writeFileSync(sheet, ["aside {", "  overflow-y: scroll;", "  scrollbar-width: thick;", "}", ""].join("\n"));
+
+      const emitted = [...offenders(component), ...offenders(sheet)].map((offence) => offence.rule);
+      const withoutRule = [...new Set(emitted.filter((id) => !RULES.some((rule) => rule.id === id)))].sort();
+      expect(withoutRule, "every id that carries no RULES entry is named in syntheticRuleIds").toEqual(
+        [...syntheticRuleIds].sort(),
+      );
+      for (const id of syntheticRuleIds) {
+        expect(RULES.some((rule) => rule.id === id), `${id} is synthetic, so no RULES entry may claim it`).toBe(false);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("cites the scroll declaration, not the line the block opens on", () => {
+    // XTRM-979: every CSS citation used `block.offset`, the block's opening line, so a declaration
+    // six lines down cited the selector. The temp file puts the declaration well below the selector.
+    const dir = mkdtempSync(join(tmpdir(), "units-cite-"));
+    try {
+      const file = join(dir, "block.css");
+      writeFileSync(
+        file,
+        [
+          "aside {",
+          "  color: var(--ink);",
+          "  margin: 0;",
+          "  overflow-y: scroll;",
+          "  scrollbar-width: thick;",
+          "}",
+          "",
+        ].join("\n"),
+      );
+      const found = offenders(file);
+      const container = found.find((offence) => offence.rule === "css-scroll-container");
+      const value = found.find((offence) => offence.rule === "css-scrollbar-value");
+      expect(container?.line, "the scroll container cites its own declaration").toBe(4);
+      expect(value?.line, "the scroll treatment cites its own declaration").toBe(5);
+      // the fixture opens on line 1, so a citation of 1 is the defect this test exists for
+      expect([container?.line, value?.line]).not.toContain(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("keeps every named hole owned", () => {
