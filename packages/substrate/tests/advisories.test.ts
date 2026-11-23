@@ -173,8 +173,16 @@ describe("advisories: an instruction never names another holder", () => {
   it("a mismatched session is offered its own re-claim only after the lease lapses", () => {
     const expired = evaluateIssue(mismatched({ leftMs: -60_000 }), ME);
     const renew = evaluateIssue(mismatched({ ttlMs: 10 * MIN, leftMs: 4 * MIN }), ME);
-    assert.equal(expired[0]?.code, "holder_mismatch", "a mismatch leads, not a missing holder");
-    assert.ok(expired.find((a) => a.code === "claim_expired"), "the expiry is still reported");
+    // XTRM-993: a mismatch is a LIVE-lease fact. On a lapsed lease the previous
+    // order led with "Do not edit under other's claim" and then told the same
+    // session to "Re-claim now" — two rules describing one state in opposite
+    // directions, although claimTx lets any holder take an expired generation.
+    // The expiry rule owns a lapsed lease, so holder_mismatch is suppressed and
+    // claim_expired leads with the command that actually resolves it.
+    assert.equal(expired[0]?.code, "claim_expired", "the reclaim advice leads a lapsed lease");
+    assert.ok(!expired.some((a) => a.code === "holder_mismatch"), "a lapsed lease is not someone's live claim");
+    // A live lease is the opposite case and keeps the mismatch first.
+    assert.equal(renew[0]?.code, "holder_mismatch", "a live foreign lease still leads with the mismatch");
     for (const a of [...expired, ...renew]) {
       assert.ok(!a.instruction.includes("--holder other"), `no instruction may name the claim holder: ${a.instruction}`);
     }

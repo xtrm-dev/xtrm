@@ -170,6 +170,43 @@ describe("a claim cannot outlive the issue it was taken on (XTRM-976)", () => {
     }
   });
 
+  it("every claim refusal on a live issue has a wire code a client can branch on", () => {
+    // XTRM-993: only the terminal-issue sentences were pinned. The live-issue
+    // refusals were not, and `no-claim: … has no open claim to renew` fell through
+    // `classifyError` to `internal` — an ordinary refusal (a lease that is not
+    // there) reported to the client as a server fault. Each route is pinned here
+    // as the code it answers, so a new sentence that regresses to `internal`
+    // turns red.
+    const [issue] = readyIssue(ctx);
+    // A one-minute lease, so the same issue serves the live and the lapsed case.
+    ctx.svc.claimIssue(issue.id, "holder-a", { ttlMs: MINUTE, now: T0 });
+
+    // claim: a live foreign lease is an anti-steal conflict.
+    const heldRefusal = refusal(() => ctx.svc.claimIssue(issue.id, "holder-b", { now: T0 + 30_000 }));
+    assert.match(heldRefusal, /^claim-held: /);
+    // renew: the same live foreign lease, on the renew route.
+    const renewHeldRefusal = refusal(() => ctx.svc.renewClaim(issue.id, "holder-b", { now: T0 + 30_000 }));
+    assert.match(renewHeldRefusal, /^claim-held: /);
+    // renew: the row exists but its lease lapsed — reclaim, do not renew.
+    const renewExpiredRefusal = refusal(() => ctx.svc.renewClaim(issue.id, "holder-a", { now: T0 + 2 * MINUTE }));
+    assert.match(renewExpiredRefusal, /^claim-expired: /);
+    // renew: the row is gone entirely (the holder surrendered it). This is the
+    // sentence XTRM-993 was filed for: `no-claim:` must not be an internal error.
+    assert.notEqual(ctx.svc.releaseClaim(issue.id, "holder-a", { now: T0 + 2 * MINUTE }), null);
+    const noClaimRefusal = refusal(() => ctx.svc.renewClaim(issue.id, "holder-a", { now: T0 + 3 * MINUTE }));
+    assert.match(noClaimRefusal, /^no-claim: .* has no open claim to renew$/);
+
+    const cases: Array<[string, string]> = [
+      ["claim on a live foreign lease", heldRefusal],
+      ["renew under a live foreign lease", renewHeldRefusal],
+      ["renew a lapsed lease", renewExpiredRefusal],
+      ["renew with no open claim", noClaimRefusal],
+    ];
+    for (const [what, message] of cases) {
+      assert.equal(classifyError(new Error(message)).code, "conflict", `${what}: ${message}`);
+    }
+  });
+
   it("an open issue keeps the anti-steal rule and the idempotent no-op", () => {
     const [issue] = readyIssue(ctx);
     ctx.svc.claimIssue(issue.id, "holder-a", { ttlMs: 60 * MINUTE, now: T0 });
