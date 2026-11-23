@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -559,6 +559,20 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     expect(owed.slice(1).map((line) => line.split(" ").at(-1)), "nothing is parked without a park").toEqual(
       parked.map(() => "owed"),
     );
+  });
+
+  it("keeps one live-map lookup in the module, so the docblock names the path a reader walks", () => {
+    // XTRM-1001 finding 1, pinned: `parkSplit` was described as "the production entry point" and had
+    // no caller, because the report reached the live map by its own copy of the expression. The type
+    // checker catches deleting either name; only a source assertion catches the report growing a
+    // second copy of the lookup while both names still exist, which is how the docblock went wrong.
+    const gate = readFileSync(join("scripts", "units-gate.ts"), "utf8");
+    const start = gate.indexOf("export const reportLines =");
+    expect(start, "the report is where XTRM-1001's second finding lived").toBeGreaterThan(0);
+    const body = gate.slice(start, gate.indexOf("\n};", start));
+
+    expect(body, "the report delegates the live-map lookup").toContain("parkSplit(file, found)");
+    expect(body, "and does not grow a second copy of the lookup").not.toContain("PARKS[file]");
   });
 
   it("counts the files it was handed, so a quoted number is a measurement and not a memory", () => {
