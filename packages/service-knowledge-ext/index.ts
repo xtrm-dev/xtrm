@@ -316,17 +316,38 @@ export function territoryScore(filePath: string, territory: unknown, root: strin
 	return best;
 }
 
-const READ_COMMAND = /\b(?:cat|head|tail|sed|awk|rg|grep|find|fd|ls)\b/;
+// Anchored, exactly as the Claude plugin hook anchors it: the read command must BE the segment's
+// command, not merely appear in the line (`rm -f api/x.py && ls`, `git log --grep api`).
+const READ_COMMAND = /^(?:cat|head|tail|sed|awk|rg|grep|find|fd|ls)(?:\s|$)/;
 
 /** A sed script is not a path: `1,5p`, `$d` and `s/a/b/g` must not reach the territory matcher. */
 const SED_SCRIPT = /^(?:\d+(?:,\d+)?[a-zA-Z]?|[0-9$][0-9,$]*[a-zA-Z]{1,2}|s([/#|]).*\1.*)$/;
+/** Commands whose first non-flag argument is a pattern or program, never a path. */
+const SCRIPT_FIRST = new Set(["grep", "rg", "awk", "sed"]);
+/** Redirections and their fused forms are not paths. */
+const REDIRECT = /^\d?[<>]+&?\d*$/;
 
+/**
+ * The path-like arguments of a read-shaped bash command, per command segment. Conservative by
+ * design: anything unparsed yields nothing, because a wrong path names a wrong service.
+ */
 function bashPaths(command: string): string[] {
-	if (!READ_COMMAND.test(command.trim())) return [];
-	return command.match(/(?:'[^']*'|"[^"]*"|[^\s;&|]+)/g)
-		?.slice(1)
-		.map((token) => token.replace(/^['"]|['"]$/g, ""))
-		.filter((token) => token !== "" && !token.startsWith("-") && !SED_SCRIPT.test(token)) ?? [];
+	const text = command.trim();
+	if (text === "") return [];
+	const found: string[] = [];
+	for (const segment of text.split(/&&|\|\||[;|\n]/)) {
+		const tokens = (segment.match(/(?:'[^']*'|"[^"]*"|[^\s;&|]+)/g) ?? [])
+			.map((token) => token.replace(/^['"]|['"]$/g, ""))
+			.filter((token) => token !== "" && !/^[A-Za-z_]\w*=/.test(token));
+		if (tokens.length === 0 || !READ_COMMAND.test(tokens[0])) continue;
+		let args = tokens
+			.slice(1)
+			.filter((token) => !token.startsWith("-") && !REDIRECT.test(token) && !SED_SCRIPT.test(token));
+		// `grep -rn lib .`, `rg pattern api/`, `sed 1,5p f`, `awk '{print}' f`: the first is not a path.
+		if (SCRIPT_FIRST.has(tokens[0]) && args.length > 1) args = args.slice(1);
+		found.push(...args);
+	}
+	return found;
 }
 
 /** The paths a tool call touches. A grep pattern is not a path and is never matched. */
@@ -336,6 +357,17 @@ export function nudgePaths(toolName: string, input: Record<string, unknown>): st
 	if (toolName === "grep" || toolName === "find") return [stringAt("path"), stringAt("file_path")].filter((value): value is string => value !== null);
 	if (toolName === "bash") return bashPaths(String(input.command ?? ""));
 	return [];
+}
+
+/** Services per registry path, read once per process and warmed at init. */
+const SERVICES_BY_PATH = new Map<string, Record<string, Record<string, unknown>>>();
+
+function servicesFor(pack: ServiceRegistryPack): Record<string, Record<string, unknown>> {
+	const cached = SERVICES_BY_PATH.get(pack.registryPath);
+	if (cached !== undefined) return cached;
+	const services = (loadRegistry(pack.registryPath)?.services ?? {}) as Record<string, Record<string, unknown>>;
+	SERVICES_BY_PATH.set(pack.registryPath, services);
+	return services;
 }
 
 /** One injection names a few services, not a wall of territory. */
@@ -383,8 +415,7 @@ function looksLikeDirectory(rel: string, root: string): boolean {
 function bestMatches(packs: ServiceRegistryPack[], paths: string[], root: string, seen: Set<string>): NudgeService[] {
 	const scored: NudgeService[] = [];
 	for (const pack of packs) {
-		const services = loadRegistry(pack.registryPath)?.services ?? {};
-		for (const [id, info] of Object.entries(services)) {
+		for (const [id, info] of Object.entries(servicesFor(pack))) {
 			if (seen.has(id)) continue;
 			const bucket = new Set<string>();
 			let score = 0;
@@ -483,6 +514,8 @@ export default function serviceKnowledgeExtension(pi: ExtensionAPI, opts: Servic
 	if (packs.length === 0) {
 		return; // zero surface
 	}
+	// Read each registry once here, not on every tool result.
+	for (const pack of packs) servicesFor(pack);
 
 	// (a) per-turn context note. before_agent_start is the documented injection
 	// point for a custom message into the LLM context (session_start return

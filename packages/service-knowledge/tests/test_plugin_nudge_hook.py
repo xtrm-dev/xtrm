@@ -15,6 +15,8 @@ and each can break silently:
 from __future__ import annotations
 
 import json
+import tempfile
+import pathlib
 import shutil
 import subprocess
 import sys
@@ -123,8 +125,11 @@ def test_hook_is_registered_by_the_plugin_and_travels_inside_it():
     relative = command.removeprefix("node ${CLAUDE_PLUGIN_ROOT}/")
     assert not relative.startswith(".."), "the hook must live inside the plugin folder"
     assert (PLUGIN_ROOT / relative).exists()
-    # A hook budget, not a script budget: this runs before every matched tool call.
-    assert entries[0]["hooks"][0]["timeout"] <= 100
+    # Claude Code reads this field in SECONDS, not milliseconds: a 100 here would stall a tool
+    # call for 100 s behind a hung hook. Two seconds is a ceiling, not the script's running cost.
+    timeout = entries[0]["hooks"][0]["timeout"]
+    assert isinstance(timeout, int)
+    assert 0 < timeout <= 2, f"hook timeout is seconds; {timeout} is not a tool-call budget"
 
 
 def test_read_inside_a_territory_names_the_next_knowledge_call(repo: Path):
@@ -173,8 +178,105 @@ def test_grep_and_bash_reads_are_nudged_but_writes_and_mutations_are_not(repo: P
     bash_mutation = payload_for(repo, "Bash", {"command": "rm -f api/app.py"})
     assert run_hook(bash_mutation)[0].strip() == ""
 
+    # The read command must BE the segment's command, not merely appear in the line. Both hosts
+    # must agree on all three of these (Pi parity is asserted in the extension suite).
+    for command in ("rm -f api/app.py && ls", "git log --grep api", "echo hi > api/app.py; cat"):
+        anchored = payload_for(repo, "Bash", {"command": command})
+        assert run_hook(anchored)[0].strip() == "", command
+
+    # A genuine read behind another segment still counts, for that segment only. A `cd`-relative
+    # path cannot be resolved against the hook's cwd, so it stays silent rather than guessing.
+    behind_other = payload_for(repo, "Bash", {"command": "echo start && cat api/app.py"})
+    assert "api/app.py" in context_of(run_hook(behind_other)[0])
+    assert run_hook(payload_for(repo, "Bash", {"command": "cd api && cat app.py"}))[0].strip() == ""
+
+    # The first non-flag token of grep/rg is the PATTERN: `grep -rn api .` must not name the
+    # owner of `api`, and `grep -rn session api` must name the directory actually searched.
+    pattern_is_not_a_path = payload_for(repo, "Bash", {"command": "grep -rn api ."})
+    assert run_hook(pattern_is_not_a_path)[0].strip() == ""
+    pattern_then_dir = payload_for(repo, "Bash", {"command": "grep -rn session api"})
+    assert "[service-knowledge] api" in context_of(run_hook(pattern_then_dir)[0])
+
     write = payload_for(repo, "Write", {"file_path": str(repo / "api" / "app.py")})
     assert run_hook(write)[0].strip() == ""
+
+
+def test_the_session_throttle_needs_a_session_id(repo: Path):
+    """No session id means no throttle key: silence, never one throttle shared by every session."""
+    payload = payload_for(repo, "Read", {"file_path": str(repo / "api" / "app.py")})
+    del payload["session_id"]
+    assert run_hook(payload)[0].strip() == ""
+    assert run_hook({**payload, "session_id": ""})[0].strip() == ""
+    # A real session still gets its nudge, so the guard is not over-broad.
+    assert "api" in context_of(run_hook(payload_for(repo, "Read", {"file_path": str(repo / "api" / "app.py")}))[0])
+
+
+def test_the_session_cache_key_uses_the_whole_checkout_path(tmp_path: Path):
+    """Two sibling checkouts that share a long prefix must not share one state cache.
+
+    The key used to keep 32 base64url characters, so `mercury-market-data` and
+    `mercury-economic-data` collided: the second read the first's registry cache.
+    """
+    session = f"collide-{uuid.uuid4().hex}"
+    specs = [("mercury-market-data", "svc-mmd", "market/file.py"), ("mercury-economic-data", "svc-med", "econ/file.py")]
+    payloads = []
+    for name, service_id, owned in specs:
+        root = tmp_path / "xtrm-xt-pi-probe-long-prefix-parent" / name
+        umbrella = root / ".xtrm" / "skills" / "acme" / "service-knowledge"
+        umbrella.mkdir(parents=True)
+        (umbrella / "service-registry.json").write_text(
+            json.dumps(_registry({service_id: {"description": name, "territory": [owned]}})), encoding="utf-8"
+        )
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True, capture_output=True)
+        owned_path = root / owned
+        owned_path.parent.mkdir(parents=True, exist_ok=True)
+        owned_path.write_text("x\n", encoding="utf-8")
+        payloads.append(
+            {"hook_event_name": "PreToolUse", "session_id": session, "cwd": str(root),
+             "tool_name": "Read", "tool_input": {"file_path": str(owned_path)}}
+        )
+    # Same session id, two checkouts: a shared key would either silence the second or name the
+    # first checkout's service for the second checkout's file. Both must answer with their own.
+    first_out, _, _ = run_hook(payloads[0])
+    second_out, _, _ = run_hook(payloads[1])
+    assert "[service-knowledge] svc-mmd" in context_of(first_out)
+    assert "[service-knowledge] svc-med" in context_of(second_out)
+
+
+def test_parallel_tool_calls_do_not_lose_each_others_nudges(repo: Path):
+    """Eight hooks racing on one session: the seen set is append-only, so no announcement is lost."""
+    session = f"race-{uuid.uuid4().hex}"
+    # Eight services, each owning its own file, announced by eight concurrent tool calls.
+    services = {
+        f"svc{index}": {"description": f"Service {index}", "territory": [f"dir{index}/file{index}.py"]}
+        for index in range(8)
+    }
+    umbrella = repo / ".xtrm" / "skills" / "acme" / "service-knowledge"
+    (umbrella / "services").mkdir(parents=True, exist_ok=True)
+    for index in range(8):
+        (repo / f"dir{index}").mkdir()
+        (repo / f"dir{index}" / f"file{index}.py").write_text("x\n", encoding="utf-8")
+    (umbrella / "service-registry.json").write_text(json.dumps(_registry(services)), encoding="utf-8")
+
+    payloads = [
+        {"hook_event_name": "PreToolUse", "session_id": session, "cwd": str(repo), "tool_name": "Read",
+         "tool_input": {"file_path": str(repo / f"dir{index}" / f"file{index}.py")}}
+        for index in range(8)
+    ]
+    procs = [
+        subprocess.Popen(
+            [NODE, str(HOOK)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, env={"PATH": "/usr/bin:/bin", "HOME": "/tmp"},
+        )
+        for _ in payloads
+    ]
+    for proc, payload in zip(procs, payloads):
+        proc.communicate(json.dumps(payload), timeout=30)
+    seen_path = pathlib.Path(tempfile.gettempdir()) / f"service-knowledge-nudge-seen-{session}"
+    announced = [line for line in seen_path.read_text(encoding="utf-8").split("\n") if line]
+    assert sorted(set(announced)) == sorted(services), f"lost announcements: {announced}"
+    # Append-only: one line per service, no temp files left behind.
+    assert not list(pathlib.Path(tempfile.gettempdir()).glob(f"service-knowledge-nudge-seen-{session}*.tmp"))
 
 
 def test_unowned_paths_and_other_tools_stay_silent(repo: Path):
@@ -376,7 +478,7 @@ def test_hook_nudge_agrees_with_the_python_activator_and_prefers_the_owner(repo:
 def test_hook_stays_far_below_the_tool_call_budget(repo: Path):
     """Measured cold-start cost of the whole hook process, not just the registry lookup.
 
-    The declared hook timeout is 100 ms. Node's own start-up dominates and is outside this
+    The declared hook timeout is 2 s (Claude Code reads the field in seconds). Node's own start-up dominates and is outside this
     script's control, so the assertion bounds what the script adds on top: the median of five
     runs must stay under one second on this host, and a warm run is checked separately below.
     """

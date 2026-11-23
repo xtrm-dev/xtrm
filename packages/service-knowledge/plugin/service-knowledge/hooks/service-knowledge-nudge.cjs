@@ -11,6 +11,7 @@
  */
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -70,8 +71,10 @@ function findPacks(cwd) {
  * cache file keeps the hook inside its wall-clock budget and keeps a settings read off the hot path.
  */
 function loadState(cwd, sessionId) {
-  const id = String(sessionId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const key = `${id}-${Buffer.from(path.resolve(cwd || process.cwd())).toString('base64url').slice(0, 32)}`;
+  const id = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  // sha256 of the whole checkout path: a truncated base64url prefix made long sibling names collide.
+  const checkout = crypto.createHash('sha256').update(path.resolve(cwd || process.cwd())).digest('hex').slice(0, 32);
+  const key = `${id}-${checkout}`;
   const cachePath = path.join(os.tmpdir(), `service-knowledge-nudge-${key}.json`);
   try {
     const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
@@ -212,13 +215,32 @@ function matches(filePath, territory, cwd) {
 }
 // A sed script is not a path: `1,5p`, `$d` and `s/a/b/g` must not reach the territory matcher.
 const SED_SCRIPT = /^(?:\d+(?:,\d+)?[a-zA-Z]?|[0-9$][0-9,$]*[a-zA-Z]{1,2}|s([/#|]).*\1.*)$/;
+/** Commands whose first non-flag argument is a pattern or program, never a path. */
+const SCRIPT_FIRST = new Set(['grep', 'rg', 'awk', 'sed']);
+/** Redirections and their fused forms are not paths. */
+const REDIRECT = /^\d?[<>]+&?\d*$/;
+
+/**
+ * The path-like arguments of a read-shaped bash command, per command segment. A segment is one
+ * simple command: `cd api && cat x` is two segments, so the leading command must be anchored, not
+ * merely present somewhere in the line. Conservative by design — anything unparsed yields nothing.
+ */
 function commandPaths(command) {
-  if (!READ_COMMAND.test(String(command || '').trim())) return [];
-  const tokens = String(command).match(/(?:'[^']*'|"[^"]*"|[^\s;&|]+)/g) || [];
-  return tokens
-    .slice(1)
-    .map((token) => token.replace(/^['"]|['"]$/g, ''))
-    .filter((token) => token && !token.startsWith('-') && !SED_SCRIPT.test(token));
+  const text = String(command || '').trim();
+  if (!text) return [];
+  const found = [];
+  for (const segment of text.split(/&&|\|\||[;|\n]/)) {
+    const tokens = (segment.match(/(?:'[^']*'|"[^"]*"|[^\s;&|]+)/g) || [])
+      .map((token) => token.replace(/^['"]|['"]$/g, ''))
+      .filter((token) => token && !/^[A-Za-z_]\w*=/.test(token));
+    if (!tokens.length || !READ_COMMAND.test(tokens[0])) continue;
+    const commandName = tokens[0];
+    let args = tokens.slice(1).filter((token) => !token.startsWith('-') && !REDIRECT.test(token) && !SED_SCRIPT.test(token));
+    // `grep -rn lib .`, `rg pattern api/`, `sed 1,5p f`, `awk '{print}' f`: the first is not a path.
+    if (SCRIPT_FIRST.has(commandName) && args.length > 1) args = args.slice(1);
+    found.push(...args);
+  }
+  return found;
 }
 function pathsFor(input) {
   const tool = input.tool_name;
@@ -272,23 +294,36 @@ function buildMessage(selected, cwd) {
   if (drift) lines.push(drift);
   return lines.join('\n');
 }
+/**
+ * The session's announced services. Append-only, one line per service, because parallel tool calls
+ * in one session would otherwise lose each other's additions (read-then-overwrite). O_APPEND is
+ * atomic for these small writes, and a service never un-announces inside a session.
+ */
+function readSeen(seenPath) {
+  try { return new Set(fs.readFileSync(seenPath, 'utf8').split('\n').filter(Boolean)); } catch { return new Set(); }
+}
+function appendSeen(seenPath, ids) {
+  if (!ids.length) return;
+  try { fs.appendFileSync(seenPath, `${ids.join('\n')}\n`, { mode: 0o600 }); } catch { /* fail open */ }
+}
 function nudge(input) {
   if (!input || input.hook_event_name !== 'PreToolUse' || !TOOLS.has(input.tool_name)) return '';
+  // No session id means no throttle key: stay silent rather than share one throttle across sessions.
+  if (typeof input.session_id !== 'string' || !input.session_id) return '';
   const cwd = input.cwd || process.cwd();
   const state = loadState(cwd, input.session_id);
   if (!state.packs.length) return '';
   if (state.activator) return '';
   const paths = pathsFor(input);
   if (!paths.length) return '';
-  const sessionKey = String(input.session_id || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const sessionKey = input.session_id.replace(/[^a-zA-Z0-9_-]/g, '_');
   const seenPath = path.join(os.tmpdir(), `service-knowledge-nudge-seen-${sessionKey}`);
-  let seen = new Set();
-  try { seen = new Set(fs.readFileSync(seenPath, 'utf8').split('\n').filter(Boolean)); } catch { /* first call */ }
-  const root = rootFor(cwd);
-  const selected = bestMatches(state.packs, paths, root, seen);
+  const seen = readSeen(seenPath);
+  const selected = bestMatches(state.packs, paths, rootFor(cwd), seen);
   if (!selected.length) return '';
-  for (const service of selected) seen.add(service.id);
-  try { fs.writeFileSync(seenPath, `${[...seen].join('\n')}\n`, { mode: 0o600 }); } catch { /* fail open */ }
+  const announced = selected.map((service) => service.id).filter((id) => !seen.has(id));
+  for (const id of announced) seen.add(id);
+  appendSeen(seenPath, announced);
   return buildMessage(selected, cwd);
 }
 function main() {

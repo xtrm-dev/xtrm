@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/service-knowledge-nudge.cjs",
-            "timeout": 100
+            "timeout": 2
           }
         ]
       }

@@ -725,6 +725,25 @@ describe("service-knowledge ext v1.2 path nudge (XTRM-997)", () => {
     }
   });
 
+  test("a bash read is anchored per command segment, as on the Claude hook", () => {
+    // `rm -f api/x.py && ls` and `git log --grep api` are not reads: the read command must BE the
+    // segment's command, not merely appear in the line. `echo hi > api/x.py; cat` is not a read either.
+    expect(extension.nudgePaths("bash", { command: "rm -f api/x.py && ls" })).toEqual([]);
+    expect(extension.nudgePaths("bash", { command: "git log --grep api" })).toEqual([]);
+    expect(extension.nudgePaths("bash", { command: "echo hi > api/x.py; cat" })).toEqual([]);
+    // A genuine read behind a mutating segment still counts for that segment only.
+    expect(extension.nudgePaths("bash", { command: "cd api && cat x.py" })).toEqual(["x.py"]);
+    expect(extension.nudgePaths("bash", { command: "cat a.py | head -3" })).toEqual(["a.py"]);
+    expect(extension.nudgePaths("bash", { command: "FOO=1 cat api/x.py" })).toEqual(["api/x.py"]);
+  });
+
+  test("a grep or rg pattern argument is not a path", () => {
+    // The first non-flag token is the PATTERN: `grep -rn lib .` must name no owner of `lib`.
+    expect(extension.nudgePaths("bash", { command: "grep -rn lib ." })).toEqual(["."]);
+    expect(extension.nudgePaths("bash", { command: "grep -rn api/app.py api" })).toEqual(["api"]);
+    expect(extension.nudgePaths("bash", { command: "rg toon api/" })).toEqual(["api/"]);
+  });
+
   test("nudgePaths never treats a grep pattern as a path", () => {
     expect(extension.nudgePaths("grep", { pattern: "api/app.py", path: "lib" })).toEqual(["lib"]);
     expect(extension.nudgePaths("find", { pattern: "**/*.py", path: "api" })).toEqual(["api"]);
