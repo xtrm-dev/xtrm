@@ -624,7 +624,8 @@ export const syntheticRuleIds = ["scroll-container", "glued-class", "css-scroll-
  * The arithmetic takes the park as an argument instead of reading `PARKS`, so a test can state a park
  * of its own: a fixture that reads the live map breaks the day a slice pays its last park down, and a
  * gate test that fails for that reason teaches the next reader to edit the fixture rather than the
- * gate. `parkSplit` is the production entry point and adds nothing but the lookup.
+ * gate. `parkSplit` is the production entry point and adds nothing but the lookup — `reportLines`
+ * below calls it, so this sentence names the function a reader will actually find on the path.
  */
 export type ParkLike = { offences: Array<{ rule: string; match: string }> };
 export type ParkSplit = { parked: Offence[]; owed: Offence[] };
@@ -653,13 +654,37 @@ export const splitByPark = (park: ParkLike, found: Offence[]): ParkSplit => {
 export const parkSplit = (file: string, found: Offence[]): ParkSplit => splitByPark(PARKS[file] ?? { offences: [] }, found);
 
 /**
+ * The first line of a report: how much the walk read, and how much it found.
+ *
+ * XTRM-1001 finding 3 — a PR body quoted "135 files walked" while the merge ref the reader would
+ * check had 136, because main gained a file between the branch base and the squash. A count typed
+ * into prose is true for the commit it was typed on and unverifiable everywhere else, so the number
+ * is now produced by the walk it describes and printed beside the offences it counts. `reportSummary`
+ * takes the file list rather than reading `walk()` itself, so a caller can hand it the files it is
+ * actually reporting on.
+ */
+export const reportSummary = (files: string[]): string => {
+  const found = files.reduce((total, file) => total + offenders(file).length, 0);
+  // Pluralised because the first real reading was `walk: 136 files, 1 offences`, and a report line
+  // that reads as machine output invites a reader to trust it without reading it.
+  const offences = found === 1 ? "offence" : "offences";
+  return `walk: ${files.length} files, ${found} ${offences}`;
+};
+
+/**
  * The lines `GATE_REPORT=1` prints for one file: a header with the two counts, then one line per
  * offence carrying the label that matters — `owed` for an offence no park covers, `parked` for one it
  * does. The label lives here rather than in the report block so a test can read the same string the
  * operator reads; a constant label leaves every count right and every line wrong.
+ *
+ * `park` is optional and the omitted form is the one production uses: it delegates to `parkSplit`,
+ * which is the live-map lookup. A default parameter here (`PARKS[file] ?? { offences: [] }`) was
+ * XTRM-1001's second finding — a lookup nothing exercised, so replacing it with an empty park left
+ * every test green. Delegating keeps one lookup in the module and gives the report a caller a test
+ * can reach it through.
  */
-export const reportLines = (file: string, found: Offence[], park: ParkLike = PARKS[file] ?? { offences: [] }): string[] => {
-  const { parked, owed } = splitByPark(park, found);
+export const reportLines = (file: string, found: Offence[], park?: ParkLike): string[] => {
+  const { parked, owed } = park ? splitByPark(park, found) : parkSplit(file, found);
   const accounted = new Set(parked);
   const lines = [`${file}: ${owed.length} owed, ${parked.length} parked`];
   for (const offence of found) {

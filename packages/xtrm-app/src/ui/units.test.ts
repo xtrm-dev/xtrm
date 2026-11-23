@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -21,6 +21,7 @@ import {
   parkDrift,
   parkSplit,
   reportLines,
+  reportSummary,
   splitByPark,
   syntheticRuleIds,
   unpaidDirectories,
@@ -101,6 +102,9 @@ describe("the console has no px font size or glyph size outside the ladder", () 
       drifted.push(...parkDrift(file, found));
     }
     if (process.env.GATE_REPORT === "1") {
+      // XTRM-1001 finding 3: the count a PR body quotes is the count this line prints, so it is
+      // measured at the ref being read rather than typed into prose.
+      console.log(reportSummary(files));
       for (const file of files) {
         const found = offenders(file);
         if (found.length === 0) continue;
@@ -531,6 +535,66 @@ describe("the console has no px font size or glyph size outside the ladder", () 
     expect(new Set(lines.slice(1).map((line) => line.split(" ").at(-1))), "both labels are reachable").toEqual(
       new Set(["parked", "owed"]),
     );
+  });
+
+  it("looks up the live park when the report is given no park, and says so when one is passed", () => {
+    // XTRM-1001 finding 2, pinned: every test passed an explicit park, so the default lookup was a
+    // path that existed only in the source — replacing it with an empty park kept the suite green.
+    // The two branches are now distinguishable, so a lookup that stops looking (or a report that
+    // ignores the park it was handed) reddens here rather than in a report nobody diffs.
+    const parkedFile = join("src", "issues", "meta.tsx");
+    const parked = offenders(parkedFile);
+    expect(parked.length, "the probe needs a file the live park actually covers").toBeGreaterThan(0);
+
+    const live = reportLines(parkedFile, parked);
+    expect(live[0], "the omitted park is the live one").toBe(`${parkedFile}: 0 owed, ${parked.length} parked`);
+    expect(live.slice(1).map((line) => line.split(" ").at(-1)), "the live lookup parks what it finds").toEqual(
+      parked.map(() => "parked"),
+    );
+
+    // The same offences handed an explicitly empty park are owed work. If `reportLines` ignored its
+    // third argument these two calls would agree, which is exactly what the default used to do.
+    const owed = reportLines(parkedFile, parked, { offences: [] });
+    expect(owed[0], "an empty park owes every offence").toBe(`${parkedFile}: ${parked.length} owed, 0 parked`);
+    expect(owed.slice(1).map((line) => line.split(" ").at(-1)), "nothing is parked without a park").toEqual(
+      parked.map(() => "owed"),
+    );
+  });
+
+  it("keeps one live-map lookup in the module, so the docblock names the path a reader walks", () => {
+    // XTRM-1001 finding 1, pinned: `parkSplit` was described as "the production entry point" and had
+    // no caller, because the report reached the live map by its own copy of the expression. The type
+    // checker catches deleting either name; only a source assertion catches the report growing a
+    // second copy of the lookup while both names still exist, which is how the docblock went wrong.
+    const gate = readFileSync(join("scripts", "units-gate.ts"), "utf8");
+    const start = gate.indexOf("export const reportLines =");
+    expect(start, "the report is where XTRM-1001's second finding lived").toBeGreaterThan(0);
+    const body = gate.slice(start, gate.indexOf("\n};", start));
+
+    expect(body, "the report delegates the live-map lookup").toContain("parkSplit(file, found)");
+    expect(body, "and does not grow a second copy of the lookup").not.toContain("PARKS[file]");
+  });
+
+  it("counts the files it was handed, so a quoted number is a measurement and not a memory", () => {
+    // XTRM-1001 finding 3, pinned: #501's body said "135 files walked" and the merge ref had 136.
+    // The number a reader can check is the one the walk printed at the ref they check, so the summary
+    // is a function of a file list rather than a literal, and a literal here reddens.
+    const parkedFile = join("src", "issues", "meta.tsx");
+    const quiet = join("src", "ui", "badge.tsx");
+    const parkedCount = offenders(parkedFile).length;
+    const one = reportSummary([parkedFile]);
+    expect(one, "one measured file is not a remembered total").toBe(
+      `walk: 1 files, ${parkedCount} ${parkedCount === 1 ? "offence" : "offences"}`,
+    );
+
+    // Adding a quiet file changes the file count and leaves the offence count alone: a summary that
+    // printed a constant would pass neither this nor the line above.
+    const two = reportSummary([parkedFile, quiet]);
+    expect(two.split(", ")[0], "the file count follows the list").toBe("walk: 2 files");
+    expect(two.split(", ")[1], "a clean file adds no offence").toBe(
+      `${parkedCount} ${parkedCount === 1 ? "offence" : "offences"}`,
+    );
+    expect(reportSummary([]), "an empty list is an empty measurement").toBe("walk: 0 files, 0 offences");
   });
 
   it("names every rule id offenders can emit, so an unexplained id cannot appear", () => {
