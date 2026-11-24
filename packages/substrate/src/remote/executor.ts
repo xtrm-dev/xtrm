@@ -198,6 +198,10 @@ function withLocalCommitEvidence(argv: string[], repoRoot: string): { argv: stri
   const commits = flagList(flags, "commit") ?? [];
   if (range === undefined && commits.length === 0) return { argv, evidencePath: null };
   const evidence = readLocalCommitEvidence({ range, commits }, repoRoot);
+  // An empty answer is not evidence: nothing is appended, the far side runs its
+  // own git as it always did, and the link degrades to a mention exactly like a
+  // local invocation of the same command (an empty range or an empty message).
+  if (evidence.length === 0) return { argv, evidencePath: null };
   // A file, not an argv value: the document channel exists for exactly this,
   // and a PR's worth of commit messages can outgrow a command line.
   const path = join(tmpdir(), "sb-" + COMMIT_EVIDENCE_FLAG + "-" + process.pid + "-" + Date.now() + ".json");
@@ -421,13 +425,17 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
   }
   if (session === null) return null;
   // CORE-2787: evidence for `issue link pr` is read here, before anything is
-  // sent, and rides as a document. A caller whose own repository cannot produce
-  // it learns that here rather than from the far side's object store.
+  // sent, and rides as a document. A caller-side failure is NOT authoritative:
+  // a shallow fetch-depth:1 clone, a commit that exists only on the remote, or a
+  // path outside a repository all leave the far side better placed to answer, so
+  // the invocation travels unchanged and behaves exactly as it did before this
+  // mechanism existed. Only a failure of the whole link (the far side's own
+  // error) is reported to the caller.
   let linked: { argv: string[]; evidencePath: string | null };
   try {
     linked = withLocalCommitEvidence(argv, process.cwd());
-  } catch (err) {
-    return failure(argv, err, schema);
+  } catch {
+    linked = { argv, evidencePath: null };
   }
   try {
     const prepared = prepareFiles(linked.argv);

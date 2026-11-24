@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tempDir } from "./helpers.ts";
@@ -1531,6 +1532,14 @@ describe("issue link evidence read in the caller's repository", () => {
     "issue", "link", "pr", "XTRM-1", "--project", project, "--repo", "o/r", "--number", "7", "--commits-range", "HEAD~1..HEAD",
   ];
 
+  // Files this side writes for the document channel. The far side's copy lives
+  // under its own tmpdir with a substituted name, so a leftover here is always
+  // the caller's.
+  const clientEvidenceFiles = () =>
+    readdirSync(tmpdir()).filter((name) => /^sb-commit-evidence-\d+-\d+\.json$/.test(name)).sort();
+
+  const leftovers = (before: string[]) => clientEvidenceFiles().filter((name) => !before.includes(name));
+
   it("sends the evidence the caller read, and removes its temporary document", () => {
     const receive = join(tempDir("sb-evidence-receive-"), "document.json");
     const fake = makeFake({ mode: "file", fileFlag: "--commit-evidence", receive });
@@ -1540,6 +1549,7 @@ describe("issue link evidence read in the caller's repository", () => {
     const saved = process.cwd();
     try {
       process.chdir(repo);
+      const before = clientEvidenceFiles();
       const outcome = forwardCli(LINK("prj_x"), { env, transport: localTransport() });
       assert.ok(outcome, "the invocation is forwarded");
       assert.equal(outcome.code, 0, outcome.stderr);
@@ -1552,7 +1562,42 @@ describe("issue link evidence read in the caller's repository", () => {
       assert.equal(document.length, 1);
       assert.equal(document[0]!.sha, head);
       assert.match(document[0]!.message, /XTRM-Receipt: r1/);
-      assert.equal(existsSync(call!.argv[index + 1]!), false, "the caller's temporary document does not outlive the run");
+      // The caller's document is the one this side wrote: the path the far side
+      // reports is its own substituted copy, so the client temp file is checked
+      // by name. Deleting the cleanup in `forwardCli` leaves two files here.
+      assert.deepEqual(
+        leftovers(before),
+        [],
+        "the caller's temporary documents do not outlive the run",
+      );
+    } finally {
+      process.chdir(saved);
+    }
+  });
+
+  it("forwards the plain argv when the caller cannot read the evidence", () => {
+    const fake = makeFake({ mode: "echo" });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    const before = clientEvidenceFiles();
+    try {
+      process.chdir(repo);
+      // A base this repository has never seen: a fetch-depth:1 CI clone, or a
+      // commit that exists only on origin. The caller's object store is not the
+      // authority, so the invocation travels unchanged and the far side decides.
+      const outcome = forwardCli(
+        ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7",
+          "--commits-range", "0123456789abcdef0123456789abcdef01234567..HEAD"],
+        { env, transport: localTransport() },
+      );
+      assert.ok(outcome, "the invocation is still forwarded");
+      assert.equal(outcome.code, 0, outcome.stderr);
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.ok(call, "the link reached the server");
+      assert.equal(call!.argv.includes("--commit-evidence"), false, "no document: the far side runs its own git");
+      assert.deepEqual(leftovers(before), [], "no partial document is left behind");
     } finally {
       process.chdir(saved);
     }
