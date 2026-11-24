@@ -27,6 +27,7 @@ import { RepositoryService } from "../src/service/repository-service.ts";
 import { discoverGitRoot, discoverRepository, type RepositoryDiscovery } from "../src/domain/repository-discovery.ts";
 import { BOOLEAN_FLAGS, type FlagValue, type Flags, flag, flagList, parseArgs } from "../src/domain/argv.ts";
 import { forwardCli, localStoreRequested } from "../src/remote/executor.ts";
+import { COMMIT_EVIDENCE_FLAG, readCommitEvidenceDocument } from "../src/remote/commit-evidence.ts";
 import { serveStdio } from "../src/service/serve.ts";
 import type { RemoteTransport } from "../src/remote/ssh.ts";
 import { remoteDoctor, type RemoteDoctorReport } from "../src/remote/doctor.ts";
@@ -414,9 +415,9 @@ const COMMAND_HELP: Record<string, string> = {
   "links.sync": `usage: sb links sync [<pr>] [--project <id>] [--repo <owner/name>] [--limit <n>] [--since <ISO>] [--dry-run] [--holder <name>]
 
   One-shot reconciler: conditional gh reads, pull_requests state, trailer-first links (727 writers), title/branch/body mentions. --since records source=backfill. Writes nothing with --dry-run. --holder defaults to SUBSTRATE_HOLDER and is the actor recorded on what the run changes.`,
-  "issue.link": `usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <base>..<head>] [--holder <name>]
+  "issue.link": `usage: sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <base>..<head>] [--commit-evidence <file|json>] [--holder <name>]
 
-  Writes a persisted mention (source=explicit) or, with --commit/--commits-range, the T2 evidence from the commits' XTRM-Issue trailers. Never deletes; never claims created_from without a valid receipt.`,
+  Writes a persisted mention (source=explicit) or, with --commit/--commits-range, the T2 evidence from the commits' XTRM-Issue trailers. --commit-evidence supplies that evidence as data (a JSON array of {sha,message}) and is read instead of git, which is what a caller sends when its commit is not in this repository's object store. Never deletes; never claims created_from without a valid receipt.`,
   "issue.unlink": `usage: sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <created_from|mentioned>] [--actor <name>]
 
   Sets superseded_at on the matching live row(s). The evidence row stays.`,
@@ -1559,7 +1560,7 @@ export const FLAG_ALLOWLIST: Record<string, string[]> = {
   "issue.query": ["project", "limit", "cursor", "lifecycle", "kind", "readiness", "search"],
   "issue.tree": ["project", "root"],
   "issue.children": [],
-  "issue.link": ["project", "repo", "number", "url", "commit", "commits-range", "holder"],
+  "issue.link": ["project", "repo", "number", "url", "commit", "commits-range", "commit-evidence", "holder"],
   "issue.unlink": ["project", "repo", "number", "relation", "actor"],
   "issue.relate": ["project", "from", "to", "kind"],
   "issue.unrelate": ["project", "from", "to", "kind"],
@@ -1932,9 +1933,14 @@ function ambientRepository(db: ReturnType<typeof openSubstrate>, projectId: stri
 
 // The git commands below run on whichever host executes this CLI: in remote
 // mode `forwardCli` has already re-executed them on the registry host with the
-// verified server checkout as cwd, so `process.cwd()` IS the object store the
-// evidence must come from.
+// verified server checkout as cwd, so `process.cwd()` is the object store this
+// branch reads. That is exactly why `--commit-evidence` exists (CORE-2787): the
+// caller's own repository is the one place the caller's commit provably exists,
+// and the forwarder sends it as data instead of asking the far side for it. The
+// two branches are exclusive -- supplied evidence never touches git here.
 function readCommitEvidence(flags: Flags): Array<{ sha: string; message: string }> {
+  const supplied = flag(flags, COMMIT_EVIDENCE_FLAG);
+  if (supplied !== undefined) return readCommitEvidenceDocument(supplied);
   const repoRoot = process.cwd();
   const out: Array<{ sha: string; message: string }> = [];
   // The object store lives on the registry checkout over `substrate.remote`,

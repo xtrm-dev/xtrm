@@ -1504,3 +1504,93 @@ describe("closure review", () => {
     assert.match(envelope.error, /ended early/);
   });
 });
+
+// CORE-2787: `issue link pr` reads T2 evidence from the repository it runs in. In
+// remote mode that repository is the server's checkout, so a commit pushed from
+// this machine seconds ago is missing there and the link loses its evidence. The
+// forwarder reads the caller's own repository instead and sends the evidence as
+// the document the command already accepts.
+describe("issue link evidence read in the caller's repository", () => {
+  function clientRepo(): { repo: string; head: string } {
+    const repo = tempDir("sb-evidence-client-");
+    const git = (args: string[]) => spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+    git(["init", "-q"]);
+    git(["config", "user.email", "t@example.com"]);
+    git(["config", "user.name", "t"]);
+    writeFileSync(join(repo, "a.txt"), "a");
+    git(["add", "a.txt"]);
+    git(["commit", "-q", "-m", "init"]);
+    writeFileSync(join(repo, "b.txt"), "b");
+    git(["add", "b.txt"]);
+    git(["commit", "-q", "-m", "feat: work\n\nXTRM-Issue: XTRM-1\nXTRM-Receipt: r1"]);
+    const head = spawnSync("git", ["-C", repo, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+    return { repo, head };
+  }
+
+  const LINK = (project: string) => [
+    "issue", "link", "pr", "XTRM-1", "--project", project, "--repo", "o/r", "--number", "7", "--commits-range", "HEAD~1..HEAD",
+  ];
+
+  it("sends the evidence the caller read, and removes its temporary document", () => {
+    const receive = join(tempDir("sb-evidence-receive-"), "document.json");
+    const fake = makeFake({ mode: "file", fileFlag: "--commit-evidence", receive });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo, head } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    try {
+      process.chdir(repo);
+      const outcome = forwardCli(LINK("prj_x"), { env, transport: localTransport() });
+      assert.ok(outcome, "the invocation is forwarded");
+      assert.equal(outcome.code, 0, outcome.stderr);
+      // The first forwarded command is the session's own `project links` probe.
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.ok(call, "the link reached the server");
+      const index = call!.argv.indexOf("--commit-evidence");
+      assert.ok(index > 0, "the forwarded argv carries the evidence document: " + call!.argv.join(" "));
+      const document = JSON.parse(readFileSync(receive, "utf8")) as Array<{ sha: string; message: string }>;
+      assert.equal(document.length, 1);
+      assert.equal(document[0]!.sha, head);
+      assert.match(document[0]!.message, /XTRM-Receipt: r1/);
+      assert.equal(existsSync(call!.argv[index + 1]!), false, "the caller's temporary document does not outlive the run");
+    } finally {
+      process.chdir(saved);
+    }
+  });
+
+  it("retries with the plain argv when the server does not know the flag", () => {
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    const inner = localTransport();
+    const taken: string[] = [];
+    let refused = false;
+    const transport: RemoteTransport = {
+      run(request) {
+        if (!refused && request.command.includes("--commit-evidence")) {
+          refused = true;
+          taken.push(request.command);
+          // The wording assertKnownFlags produces on a server that predates the flag.
+          return { code: 1, stdout: "", stderr: "sb: unknown flag --commit-evidence\n" };
+        }
+        if (request.command.includes("'--commits-range'")) taken.push(request.command);
+        return inner.run(request);
+      },
+    };
+    try {
+      process.chdir(repo);
+      const outcome = forwardCli(LINK("prj_x"), { env, transport });
+      assert.ok(outcome);
+      assert.equal(outcome.code, 0, outcome.stderr);
+      assert.equal(taken.length, 2, "one refused attempt, one plain retry: " + JSON.stringify(taken));
+      assert.ok(!taken[1]!.includes("--commit-evidence"), "the retry carries the argv the older server understands");
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.ok(call, "the retry reached the server");
+      assert.ok(call!.argv.includes("--commits-range"), "the retry still asks the server to read the range itself");
+    } finally {
+      process.chdir(saved);
+    }
+  });
+});
