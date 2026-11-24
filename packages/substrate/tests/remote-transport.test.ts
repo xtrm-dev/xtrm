@@ -1651,7 +1651,7 @@ describe("issue link evidence read in the caller's repository", () => {
         ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commits-range", "HEAD", "--json"],
         ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commit", "not-a-sha", "--json"],
       ]) {
-        let outcome;
+        let outcome: ReturnType<typeof forwardCli> = null;
         assert.doesNotThrow(() => {
           outcome = forwardCli(argv, { env, transport: localTransport() });
         }, "a malformed flag must not escape forwardCli: " + argv.join(" "));
