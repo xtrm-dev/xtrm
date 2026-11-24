@@ -1598,6 +1598,38 @@ describe("issue link evidence read in the caller's repository", () => {
       assert.ok(call, "the link reached the server");
       assert.equal(call!.argv.includes("--commit-evidence"), false, "no document: the far side runs its own git");
       assert.deepEqual(leftovers(before), [], "no partial document is left behind");
+      // The skip is operable, not silent: the caller sees why the evidence was
+      // not sent, on stderr, while stdout and the exit code are untouched.
+      assert.match(outcome.stderr, /git log failed in the calling repository/);
+      assert.match(outcome.stderr, /the far side will run its own git, so this link may record a mention instead of commit evidence/);
+      assert.equal(outcome.stdout.includes("the far side will run its own git"), false, "stderr only: the warning never reaches stdout");
+    } finally {
+      process.chdir(saved);
+    }
+  });
+
+  it("sends no document for a range that resolves to no commits", () => {
+    const fake = makeFake({ mode: "echo" });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    const before = clientEvidenceFiles();
+    try {
+      process.chdir(repo);
+      // An empty range is not an error in either mode: local `issue link pr`
+      // records a mention, and the forwarder must not turn that into a refusal.
+      const outcome = forwardCli(
+        ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commits-range", "HEAD..HEAD"],
+        { env, transport: localTransport() },
+      );
+      assert.ok(outcome, "the invocation is forwarded");
+      assert.equal(outcome.code, 0, outcome.stderr);
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.ok(call, "the link reached the server");
+      assert.equal(call!.argv.includes("--commit-evidence"), false, "an empty range carries no document");
+      assert.equal(outcome.stderr, "", "nothing to warn about: this is the local behaviour too");
+      assert.deepEqual(leftovers(before), []);
     } finally {
       process.chdir(saved);
     }

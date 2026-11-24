@@ -151,6 +151,17 @@ Two further refusals belong to the same class. A repository authority may not sm
 
 `--file` in the **write** direction is the opposite case: `sb export project --file <path>` writes on the machine the command runs on, so the transport refuses it rather than leaving the operator with an exit code and no file. Downloading the export is a follow-up; refusing is the Stage 2 answer.
 
+Commit evidence for `issue link pr` is the one document whose content the caller
+asserts rather than copies: the sha list and the commit messages behind
+`--commits-range`/`--commit` come from the client's own object store, because that
+is the only place the caller's commit provably exists. The trust stays where the
+evidence model already put it — the server still parses every trailer itself,
+still classifies `XTRM-Receipt`, still resolves the Issue and still applies the
+claim and receipt guards — so a caller can claim a protocol shape but cannot mint
+one. What it can do is assert a sha it already possesses, which is exactly what
+the local `--commit` path has always accepted from anyone who can run `sb` on the
+host that holds the object.
+
 ### stdout
 Machine-clean. `--json` output is byte-identical to the same invocation run locally on the server; no shell banner, no progress line, no rewritten payload. Transport metadata appears only in `sb doctor`.
 
@@ -210,7 +221,6 @@ requirement. Remote mode is therefore opt-in, per client, and reversible:
 
 `sb remote status` is the way to see which of the two modes is in effect
 before assuming either.
-
 ## Stage 2 shape (the PR)
 
 `packages/substrate/src/remote/`: config read, host/version resolution, encoder, executor (argv + stdin + streams + exit code), repository-key → server-cwd mapping, error model, `doctor` transport report. `cli/sb.ts` dispatches at the top of `runCli` before `ctx.dbPath` is resolved and before `openSubstrate`. Hooks (`hooks/*.ts`) route through the same executor. Tests use a fake transport (no network): byte-identical argv round-trip, exit-code and stdin passthrough, stdout equality against a local `--json` run, cwd mapping by origin URL, missing mapping error, `--contract` behaviour, offline error with no store created.

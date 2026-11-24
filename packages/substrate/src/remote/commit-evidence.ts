@@ -71,6 +71,11 @@ export function readCommitEvidenceDocument(value: string): CommitEvidence[] {
   return out;
 }
 
+// A read the CALLER's repository could not perform. It is not an error for the
+// link: the far side may still resolve the same range in its own checkout, so the
+// forwarder treats this as a reason to send the original argv and say why.
+export class CommitEvidenceUnavailable extends Error {}
+
 // The evidence a caller can produce from its own repository. `git log` writes
 // each commit as <sha>\x1f<body>\x1e, the same framing the server reads, and
 // `git show -s --format=%B` gives one message for a single SHA.
@@ -87,7 +92,7 @@ export function readLocalCommitEvidence(
     if (!RANGE_PATTERN.test(input.range)) throw new Error(`--commits-range must be <base>..<head>, not ` + JSON.stringify(input.range));
     const res = git(["log", "--format=%H%x1f%B%x1e", input.range]);
     if (res.status !== 0) {
-      throw new Error(
+      throw new CommitEvidenceUnavailable(
         `--commits-range ${input.range}: git log failed in the calling repository ${repoRoot} (${res.stderr.trim()}); ` +
           "fetch the range or pass --commit <sha> for each commit",
       );
@@ -103,19 +108,15 @@ export function readLocalCommitEvidence(
     if (!SHA_PATTERN.test(sha)) throw new Error(`--commit is not a SHA: ${sha}`);
     const res = git(["show", "-s", "--format=%B", sha]);
     if (res.status !== 0) {
-      throw new Error(
+      throw new CommitEvidenceUnavailable(
         `--commit ${sha}: git show failed in the calling repository ${repoRoot} (${res.stderr.trim()}); ` +
           "the evidence must come from a commit this machine can read, or omit the flag to record a mention instead",
       );
     }
     out.push({ sha, message: res.stdout });
   }
-  if (out.length === 0) {
-    const asked = input.range !== undefined ? `--commits-range ${input.range}` : "--commit";
-    throw new Error(
-      `${asked} resolved to no commits in the calling repository ${repoRoot}; ` +
-        "omit the flag to record a mention instead",
-    );
-  }
+  // An empty answer is not a failure: a range with no commits resolves to a
+  // mention on both sides, so the forwarder appends nothing and the far side
+  // runs its own git exactly as a local invocation would.
   return out;
 }

@@ -1931,6 +1931,13 @@ function ambientRepository(db: ReturnType<typeof openSubstrate>, projectId: stri
   return null;
 }
 
+// The two readers deliberately stay separate: this one runs where the object
+// store is authoritative and names the directory it looked in (XTRM-953), while
+// `src/remote/commit-evidence.ts` runs on the caller and must degrade instead of
+// failing. Unifying them is tracked on CORE-2787's review thread; until then the
+// range regexes differ on purpose (the caller's is permissive because git, not
+// this CLI, decides what a range means).
+//
 // The git commands below run on whichever host executes this CLI: in remote
 // mode `forwardCli` has already re-executed them on the registry host with the
 // verified server checkout as cwd, so `process.cwd()` is the object store this
