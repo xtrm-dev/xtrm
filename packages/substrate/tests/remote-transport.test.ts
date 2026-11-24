@@ -1651,13 +1651,22 @@ describe("issue link evidence read in the caller's repository", () => {
         ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commits-range", "HEAD", "--json"],
         ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commit", "not-a-sha", "--json"],
       ]) {
+        // The throw is captured rather than asserted around, so the assignment
+        // stays visible to the type checker: inside an `assert.doesNotThrow`
+        // callback the flow analysis cannot see it and the local narrows to
+        // `null`, which makes a non-null assertion `never` (TS2339 in CI).
         let outcome: ReturnType<typeof forwardCli> = null;
-        assert.doesNotThrow(() => {
+        let thrown: unknown = null;
+        try {
           outcome = forwardCli(argv, { env, transport: localTransport() });
-        }, "a malformed flag must not escape forwardCli: " + argv.join(" "));
-        assert.ok(outcome, "forwarded");
-        assert.equal(outcome!.code, 1);
-        const parsed = JSON.parse(outcome!.stdout) as { ok: boolean; error: string };
+        } catch (err) {
+          thrown = err;
+        }
+        assert.equal(thrown, null, "a malformed flag must not escape forwardCli: " + argv.join(" "));
+        assert.notEqual(outcome, null, "forwarded");
+        const forwarded = outcome as NonNullable<typeof outcome>;
+        assert.equal(forwarded.code, 1);
+        const parsed = JSON.parse(forwarded.stdout) as { ok: boolean; error: string };
         assert.equal(parsed.ok, false);
         assert.match(parsed.error, /must be <base>\.\.<head>|is not a SHA/);
       }
