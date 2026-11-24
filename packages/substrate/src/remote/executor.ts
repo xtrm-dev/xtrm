@@ -447,7 +447,11 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
   try {
     linked = withLocalCommitEvidence(argv, process.cwd());
   } catch (err) {
-    if (!(err instanceof CommitEvidenceUnavailable)) throw err;
+    // A malformed flag or a failed write is the caller's problem, and it must
+    // surface through the same envelope every other CLI error uses: this call
+    // sits outside runCli's try, so a throw here would kill the process with a
+    // stack trace and no --json envelope.
+    if (!(err instanceof CommitEvidenceUnavailable)) return failure(argv, err, schema);
     linked = { argv, evidencePath: null };
     fallbackNote =
       `sb: ${err.message}; the far side will run its own git, so this link may record a mention ` +

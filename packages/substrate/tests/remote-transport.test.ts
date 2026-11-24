@@ -1635,6 +1635,39 @@ describe("issue link evidence read in the caller's repository", () => {
     }
   });
 
+  it("fails through the JSON envelope when the flag itself is malformed", () => {
+    const fake = makeFake({ mode: "echo" });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    try {
+      process.chdir(repo);
+      // `HEAD` is a valid revision but not a range, and `--commit not-a-sha` is
+      // not a sha: both are the caller's mistake. They must come back as an
+      // error envelope, never as an uncaught throw out of forwardCli (which the
+      // CLI calls outside its own try).
+      for (const argv of [
+        ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commits-range", "HEAD", "--json"],
+        ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commit", "not-a-sha", "--json"],
+      ]) {
+        let outcome;
+        assert.doesNotThrow(() => {
+          outcome = forwardCli(argv, { env, transport: localTransport() });
+        }, "a malformed flag must not escape forwardCli: " + argv.join(" "));
+        assert.ok(outcome, "forwarded");
+        assert.equal(outcome!.code, 1);
+        const parsed = JSON.parse(outcome!.stdout) as { ok: boolean; error: string };
+        assert.equal(parsed.ok, false);
+        assert.match(parsed.error, /must be <base>\.\.<head>|is not a SHA/);
+      }
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.equal(call, undefined, "nothing was sent to the server");
+    } finally {
+      process.chdir(saved);
+    }
+  });
+
   it("retries with the plain argv when the server does not know the flag", () => {
     const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
     const env = remoteEnv(fake.clientConfigPath);
