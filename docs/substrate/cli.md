@@ -205,6 +205,13 @@ Kind doctrine and examples: [`journal.md`](./journal.md).
   without a valid receipt becomes a mention plus a finding; a commit naming
   two issues, or one already claimed by another issue, writes no second row
   and records a finding instead of throwing.
+- `issue link pr <ref> --repo <owner/name> --number <n> --commit-evidence <file|json>`
+  — the same T2 evidence, supplied as data: a JSON array of `{"sha":"<hex>","message":"<commit message>"}`.
+  It is read instead of git, which is what a caller sends when the commit is not
+  in this repository's object store — `sb remote` does exactly that for
+  `--commit`/`--commits-range`, reading them in the caller's repository before
+  the call leaves the machine (CORE-2787). An empty array is refused rather than
+  treated as a mention: omit the flag to record a mention.
 - `issue unlink pr <ref> --repo <owner/name> --number <n> [--relation <r>]` —
   sets `superseded_at`; the evidence row stays, reads filter it out.
 

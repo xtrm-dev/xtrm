@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tempDir } from "./helpers.ts";
@@ -1502,5 +1503,213 @@ describe("closure review", () => {
     assert.equal(envelope.ok, false);
     assert.equal(envelope.command, "issue.list");
     assert.match(envelope.error, /ended early/);
+  });
+});
+
+// CORE-2787: `issue link pr` reads T2 evidence from the repository it runs in. In
+// remote mode that repository is the server's checkout, so a commit pushed from
+// this machine seconds ago is missing there and the link loses its evidence. The
+// forwarder reads the caller's own repository instead and sends the evidence as
+// the document the command already accepts.
+describe("issue link evidence read in the caller's repository", () => {
+  function clientRepo(): { repo: string; head: string } {
+    const repo = tempDir("sb-evidence-client-");
+    const git = (args: string[]) => spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+    git(["init", "-q"]);
+    git(["config", "user.email", "t@example.com"]);
+    git(["config", "user.name", "t"]);
+    writeFileSync(join(repo, "a.txt"), "a");
+    git(["add", "a.txt"]);
+    git(["commit", "-q", "-m", "init"]);
+    writeFileSync(join(repo, "b.txt"), "b");
+    git(["add", "b.txt"]);
+    git(["commit", "-q", "-m", "feat: work\n\nXTRM-Issue: XTRM-1\nXTRM-Receipt: r1"]);
+    const head = spawnSync("git", ["-C", repo, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+    return { repo, head };
+  }
+
+  const LINK = (project: string) => [
+    "issue", "link", "pr", "XTRM-1", "--project", project, "--repo", "o/r", "--number", "7", "--commits-range", "HEAD~1..HEAD",
+  ];
+
+  // Files this side writes for the document channel. The far side's copy lives
+  // under its own tmpdir with a substituted name, so a leftover here is always
+  // the caller's.
+  const clientEvidenceFiles = () =>
+    readdirSync(tmpdir()).filter((name) => /^sb-commit-evidence-\d+-\d+\.json$/.test(name)).sort();
+
+  const leftovers = (before: string[]) => clientEvidenceFiles().filter((name) => !before.includes(name));
+
+  it("sends the evidence the caller read, and removes its temporary document", () => {
+    const receive = join(tempDir("sb-evidence-receive-"), "document.json");
+    const fake = makeFake({ mode: "file", fileFlag: "--commit-evidence", receive });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo, head } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    try {
+      process.chdir(repo);
+      const before = clientEvidenceFiles();
+      const outcome = forwardCli(LINK("prj_x"), { env, transport: localTransport() });
+      assert.ok(outcome, "the invocation is forwarded");
+      assert.equal(outcome.code, 0, outcome.stderr);
+      // The first forwarded command is the session's own `project links` probe.
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.ok(call, "the link reached the server");
+      const index = call!.argv.indexOf("--commit-evidence");
+      assert.ok(index > 0, "the forwarded argv carries the evidence document: " + call!.argv.join(" "));
+      const document = JSON.parse(readFileSync(receive, "utf8")) as Array<{ sha: string; message: string }>;
+      assert.equal(document.length, 1);
+      assert.equal(document[0]!.sha, head);
+      assert.match(document[0]!.message, /XTRM-Receipt: r1/);
+      // The caller's document is the one this side wrote: the path the far side
+      // reports is its own substituted copy, so the client temp file is checked
+      // by name. Deleting the cleanup in `forwardCli` leaves two files here.
+      assert.deepEqual(
+        leftovers(before),
+        [],
+        "the caller's temporary documents do not outlive the run",
+      );
+    } finally {
+      process.chdir(saved);
+    }
+  });
+
+  it("forwards the plain argv when the caller cannot read the evidence", () => {
+    const fake = makeFake({ mode: "echo" });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    const before = clientEvidenceFiles();
+    try {
+      process.chdir(repo);
+      // A base this repository has never seen: a fetch-depth:1 CI clone, or a
+      // commit that exists only on origin. The caller's object store is not the
+      // authority, so the invocation travels unchanged and the far side decides.
+      const outcome = forwardCli(
+        ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7",
+          "--commits-range", "0123456789abcdef0123456789abcdef01234567..HEAD"],
+        { env, transport: localTransport() },
+      );
+      assert.ok(outcome, "the invocation is still forwarded");
+      assert.equal(outcome.code, 0, outcome.stderr);
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.ok(call, "the link reached the server");
+      assert.equal(call!.argv.includes("--commit-evidence"), false, "no document: the far side runs its own git");
+      assert.deepEqual(leftovers(before), [], "no partial document is left behind");
+      // The skip is operable, not silent: the caller sees why the evidence was
+      // not sent, on stderr, while stdout and the exit code are untouched.
+      assert.match(outcome.stderr, /git log failed in the calling repository/);
+      assert.match(outcome.stderr, /the far side will run its own git, so this link may record a mention instead of commit evidence/);
+      assert.equal(outcome.stdout.includes("the far side will run its own git"), false, "stderr only: the warning never reaches stdout");
+    } finally {
+      process.chdir(saved);
+    }
+  });
+
+  it("sends no document for a range that resolves to no commits", () => {
+    const fake = makeFake({ mode: "echo" });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    const before = clientEvidenceFiles();
+    try {
+      process.chdir(repo);
+      // An empty range is not an error in either mode: local `issue link pr`
+      // records a mention, and the forwarder must not turn that into a refusal.
+      const outcome = forwardCli(
+        ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commits-range", "HEAD..HEAD"],
+        { env, transport: localTransport() },
+      );
+      assert.ok(outcome, "the invocation is forwarded");
+      assert.equal(outcome.code, 0, outcome.stderr);
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.ok(call, "the link reached the server");
+      assert.equal(call!.argv.includes("--commit-evidence"), false, "an empty range carries no document");
+      assert.equal(outcome.stderr, "", "nothing to warn about: this is the local behaviour too");
+      assert.deepEqual(leftovers(before), []);
+    } finally {
+      process.chdir(saved);
+    }
+  });
+
+  it("fails through the JSON envelope when the flag itself is malformed", () => {
+    const fake = makeFake({ mode: "echo" });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    try {
+      process.chdir(repo);
+      // `HEAD` is a valid revision but not a range, and `--commit not-a-sha` is
+      // not a sha: both are the caller's mistake. They must come back as an
+      // error envelope, never as an uncaught throw out of forwardCli (which the
+      // CLI calls outside its own try).
+      for (const argv of [
+        ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commits-range", "HEAD", "--json"],
+        ["issue", "link", "pr", "XTRM-1", "--project", "prj_x", "--repo", "o/r", "--number", "7", "--commit", "not-a-sha", "--json"],
+      ]) {
+        // The throw is captured rather than asserted around, so the assignment
+        // stays visible to the type checker: inside an `assert.doesNotThrow`
+        // callback the flow analysis cannot see it and the local narrows to
+        // `null`, which makes a non-null assertion `never` (TS2339 in CI).
+        let outcome: ReturnType<typeof forwardCli> = null;
+        let thrown: unknown = null;
+        try {
+          outcome = forwardCli(argv, { env, transport: localTransport() });
+        } catch (err) {
+          thrown = err;
+        }
+        assert.equal(thrown, null, "a malformed flag must not escape forwardCli: " + argv.join(" "));
+        assert.notEqual(outcome, null, "forwarded");
+        const forwarded = outcome as NonNullable<typeof outcome>;
+        assert.equal(forwarded.code, 1);
+        const parsed = JSON.parse(forwarded.stdout) as { ok: boolean; error: string };
+        assert.equal(parsed.ok, false);
+        assert.match(parsed.error, /must be <base>\.\.<head>|is not a SHA/);
+      }
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.equal(call, undefined, "nothing was sent to the server");
+    } finally {
+      process.chdir(saved);
+    }
+  });
+
+  it("retries with the plain argv when the server does not know the flag", () => {
+    const fake = makeFake({ mode: "echo", version: "sb 0.2.2\n" });
+    const env = remoteEnv(fake.clientConfigPath);
+    const { repo } = clientRepo();
+    writeClientConfig(fake.clientConfigPath, fake.sbPath, {});
+    const saved = process.cwd();
+    const inner = localTransport();
+    const taken: string[] = [];
+    let refused = false;
+    const transport: RemoteTransport = {
+      run(request) {
+        if (!refused && request.command.includes("--commit-evidence")) {
+          refused = true;
+          taken.push(request.command);
+          // The wording assertKnownFlags produces on a server that predates the flag.
+          return { code: 1, stdout: "", stderr: "sb: unknown flag --commit-evidence\n" };
+        }
+        if (request.command.includes("'--commits-range'")) taken.push(request.command);
+        return inner.run(request);
+      },
+    };
+    try {
+      process.chdir(repo);
+      const outcome = forwardCli(LINK("prj_x"), { env, transport });
+      assert.ok(outcome);
+      assert.equal(outcome.code, 0, outcome.stderr);
+      assert.equal(taken.length, 2, "one refused attempt, one plain retry: " + JSON.stringify(taken));
+      assert.ok(!taken[1]!.includes("--commit-evidence"), "the retry carries the argv the older server understands");
+      const call = fake.calls().find((entry) => entry.argv.includes("issue"));
+      assert.ok(call, "the retry reached the server");
+      assert.ok(call!.argv.includes("--commits-range"), "the retry still asks the server to read the range itself");
+    } finally {
+      process.chdir(saved);
+    }
   });
 });

@@ -129,7 +129,7 @@ Post-0.2.6 surface: these verbs need substrate >= 0.3.0 and are absent from 0.2.
 ```bash
 sb links check [--issue <ref>] [--repo <owner/name>] [--limit <n>] [--dry-run]
 sb links sync [<pr>] [--repo <owner/name>] [--since <ISO>] [--dry-run]
-sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <a>..<b>]
+sb issue link pr <ref> --repo <owner/name> --number <n> [--url <url>] [--commit <sha>]... [--commits-range <a>..<b>] [--commit-evidence <file|json>]
 sb issue unlink pr <ref> --repo <owner/name> --number <n> [--relation created_from|mentioned]
 sb provenance attach <ref> pr <owner/repo#n|url|#n> [--receipt <id>]
 ```

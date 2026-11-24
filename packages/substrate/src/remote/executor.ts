@@ -3,10 +3,11 @@
 // place that decides local versus remote, and it decides before the local store
 // is opened, so the stale local database can never be touched in remote mode.
 
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
+import { lstatSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
-import { flag, parseArgs } from "../domain/argv.ts";
+import { flag, flagList, parseArgs } from "../domain/argv.ts";
+import { COMMIT_EVIDENCE_FLAG, CommitEvidenceUnavailable, readLocalCommitEvidence } from "./commit-evidence.ts";
 import { resolveClaimHolder } from "../domain/claim.ts";
 import { RemoteError, type RemoteUpload } from "./spec.ts";
 import { clientRepositoryKey, openRemoteSession, resolveMapping, runRemote, storedMapping, type RemoteSession } from "./session.ts";
@@ -57,6 +58,11 @@ const EMPTY_FLAGS: ReadonlySet<string> = new Set();
 const DOCUMENT_FLAGS: Record<string, ReadonlySet<string>> = {
   "issue.create": new Set(["contract"]),
   "issue.edit": new Set(["contract", "ownership", "context-refs"]),
+  // CORE-2787: `issue link pr` reads its T2 evidence from the repository it runs
+  // in. In remote mode that is the server's checkout, where a PR pushed from
+  // this machine a moment ago does not exist yet, so the caller reads the
+  // evidence here and sends it as a document.
+  "issue.link": new Set([COMMIT_EVIDENCE_FLAG]),
   "issue.note": new Set(["result"]),
   "journal.append": new Set(["mechanical", "semantic", "result", "refs"]),
   "journal.checkpoint": new Set(["mechanical", "semantic", "refs"]),
@@ -172,6 +178,42 @@ export function shouldForward(argv: string[], env: NodeJS.ProcessEnv): boolean {
   const { group } = parseArgv(argv);
   if (group === null) return false;
   return !NEVER_FORWARDED.has(group);
+}
+
+// The server answers an unknown flag with `unknown flag --commit-evidence`. A
+// server older than this client is not a failed link: the evidence rides along
+// only when the far side can take it, so the invocation is retried once with
+// the original argv and the caller keeps the old behaviour.
+const UNKNOWN_EVIDENCE_FLAG = /unknown flag --commit-evidence/i;
+
+// CORE-2787: read the T2 evidence from the caller's own repository and append it
+// as the document the server reads instead of git. Nothing is done when the
+// caller already supplied evidence, or when it asked for a plain mention.
+function withLocalCommitEvidence(argv: string[], repoRoot: string): { argv: string[]; evidencePath: string | null } {
+  const { group, verb } = parseArgv(argv);
+  if (group !== "issue" || verb !== "link") return { argv, evidencePath: null };
+  const flags = parseArgs(argv).flags;
+  if (flag(flags, COMMIT_EVIDENCE_FLAG) !== undefined) return { argv, evidencePath: null };
+  const range = flag(flags, "commits-range");
+  const commits = flagList(flags, "commit") ?? [];
+  if (range === undefined && commits.length === 0) return { argv, evidencePath: null };
+  const evidence = readLocalCommitEvidence({ range, commits }, repoRoot);
+  // An empty answer is not evidence: nothing is appended, the far side runs its
+  // own git as it always did, and the link degrades to a mention exactly like a
+  // local invocation of the same command (an empty range or an empty message).
+  if (evidence.length === 0) return { argv, evidencePath: null };
+  // A file, not an argv value: the document channel exists for exactly this,
+  // and a PR's worth of commit messages can outgrow a command line.
+  const path = join(tmpdir(), "sb-" + COMMIT_EVIDENCE_FLAG + "-" + process.pid + "-" + Date.now() + ".json");
+  try {
+    writeFileSync(path, JSON.stringify(evidence), { mode: 0o600 });
+  } catch (err) {
+    // A half-written document must not outlive the failure: the caller never
+    // learns its path, so nothing else could remove it.
+    rmSync(path, { force: true });
+    throw err;
+  }
+  return { argv: [...argv, "--" + COMMIT_EVIDENCE_FLAG, path], evidencePath: path };
 }
 
 export interface PreparedFiles {
@@ -389,8 +431,36 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
     return failure(argv, err, schema);
   }
   if (session === null) return null;
+  // CORE-2787: evidence for `issue link pr` is read here, before anything is
+  // sent, and rides as a document. A caller-side failure is NOT authoritative:
+  // a shallow fetch-depth:1 clone, a commit that exists only on the remote, or a
+  // path outside a repository all leave the far side better placed to answer, so
+  // the invocation travels unchanged and behaves exactly as it did before this
+  // mechanism existed. Only a failure of the whole link (the far side's own
+  // error) is reported to the caller.
+  let linked: { argv: string[]; evidencePath: string | null };
+  // A read failure is a reason to fall back, never a silent one: the link can
+  // still end as a mention, which is exactly the state CORE-2787 was about, so
+  // the reason is printed. Anything else (a write failure, a malformed flag) is
+  // the caller's problem and fails the invocation.
+  let fallbackNote = "";
   try {
-    const prepared = prepareFiles(argv);
+    linked = withLocalCommitEvidence(argv, process.cwd());
+  } catch (err) {
+    // A malformed flag or a failed write is the caller's problem, and it must
+    // surface through the same envelope every other CLI error uses: this call
+    // sits outside runCli's try, so a throw here would kill the process with a
+    // stack trace and no --json envelope.
+    if (!(err instanceof CommitEvidenceUnavailable)) return failure(argv, err, schema);
+    linked = { argv, evidencePath: null };
+    fallbackNote =
+      `sb: ${err.message}; the far side will run its own git, so this link may record a mention ` +
+      "instead of commit evidence\n";
+  }
+  const withNote = (outcome: CliOutcome): CliOutcome =>
+    fallbackNote === "" ? outcome : { ...outcome, stderr: outcome.stderr + fallbackNote };
+  try {
+    const prepared = prepareFiles(linked.argv);
     // An explicit --project names the project itself, so it needs no checkout
     // here to resolve one: the server checkout is then only a working
     // directory, and not being inside one is not a mapping failure.
@@ -414,12 +484,23 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
           "Run sb from a checkout of the repository, pass --project to name the project explicitly, or run it on " + session.spec.host,
       );
     }
-    const result = runRemote(session, prepared.argv, {
+    let result = runRemote(session, prepared.argv, {
       cwd,
       env: forwardedEnv(env, prepared.argv, projectId),
       uploads: prepared.uploads,
       stdin: prepared.wantsStdin ? (deps.readStdin ?? (() => readFileSync(0, "utf8")))() : null,
     });
+    // A server that predates --commit-evidence refuses it as an unknown flag. The
+    // link then runs as it did before: one retry, original argv, no document.
+    if (result.code !== 0 && linked.evidencePath !== null && UNKNOWN_EVIDENCE_FLAG.test(result.stderr + result.stdout)) {
+      const retried = prepareFiles(argv);
+      result = runRemote(session, retried.argv, {
+        cwd,
+        env: forwardedEnv(env, retried.argv, projectId),
+        uploads: retried.uploads,
+        stdin: retried.wantsStdin ? (deps.readStdin ?? (() => readFileSync(0, "utf8")))() : null,
+      });
+    }
     // Exits 70-73 come from the generated prologue (cd refused, frame ended
     // early, decode failed, wrong size). They are the transport's own failures,
     // so --json callers get an error envelope rather than an empty success.
@@ -427,11 +508,13 @@ export function forwardCli(argv: string[], deps: ForwardDeps = {}): CliOutcome |
       const { group, verb } = parseArgv(prepared.argv);
       const command = group === null ? "" : verb === null ? group : group + "." + verb;
       const message = result.stderr.trim() || result.stdout.trim() || `the remote run exited ${result.code} on ${session.spec.host}`;
-      return { code: result.code, stdout: JSON.stringify({ schema, command, ok: false, error: message }) + "\n", stderr: "" };
+      return withNote({ code: result.code, stdout: JSON.stringify({ schema, command, ok: false, error: message }) + "\n", stderr: "" });
     }
-    return { code: result.code, stdout: result.stdout, stderr: result.stderr };
+    return withNote({ code: result.code, stdout: result.stdout, stderr: result.stderr });
   } catch (err) {
-    return failure(argv, err, schema);
+    return withNote(failure(argv, err, schema));
+  } finally {
+    if (linked.evidencePath !== null) rmSync(linked.evidencePath, { force: true });
   }
 }
 
