@@ -1,0 +1,472 @@
+@import "tailwindcss";
+@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * XTRM Console v2 tokens (PRD §27, shell architecture §15.1).
+ * Surface ladder: deep → sidebar → surface → raised → control.
+ * Depth comes from background shifts and hairlines; shadows only on floating layers.
+ * XTRM violet is an identity role: selection marker, focus, references, attention dots.
+ */
+
+:root {
+  color-scheme: light;
+  --x-deep: #f4f4f5;
+  --x-sidebar: #f4f4f5;
+  --x-surface: #ffffff;
+  --x-raised: #ffffff;
+  --x-control: #efeff1;
+  --x-hover: rgb(15 15 20 / 0.045);
+  --x-pressed: rgb(15 15 20 / 0.08);
+  --x-ink: #18181b;
+  --x-ink-muted: #5f5f68;
+  --x-ink-faint: #94949c;
+  --x-border-muted: rgb(15 15 20 / 0.07);
+  /* Table grid only: present, but close to transparent so rows read as a list, not a box. */
+  --x-border-subtle: rgb(15 15 20 / 0.04);
+  --x-border: rgb(15 15 20 / 0.11);
+  --x-border-strong: rgb(15 15 20 / 0.2);
+  /* GitHub's own button pair: near-black in light, near-white in dark, as on github.com. */
+  --x-github: #24292f;
+  --x-github-hover: #32383f;
+  --x-github-ink: #ffffff;
+  --x-accent: #4f46e5;
+  --x-accent-ink: #4338ca;
+  --x-accent-soft: rgb(79 70 229 / 0.1);
+  --x-danger: #c42b2b;
+  --x-success: #1b7f46;
+  /* The badge ink: --x-success on its own 12% tint is 4.30:1 on white and 3.93:1 on the
+     canvas, below the 4.5:1 text minimum. Same hue, darker: 5.85:1 and 5.34:1 (§3.2). */
+  --x-success-ink: #146839;
+  /* One datum, one green: diff counts follow success (lead ruling on the UI-1 review). */
+  --x-diff-add: #1b7f46;
+  --x-diff-del: #c42b2b;
+  /* NavRail geometry (§4.1). Geometry only: the rail's hairline is --x-border-muted and its active
+     marker is --x-accent, so Restraint rule 4 (no new colour, no new tint) holds in both themes.
+     The two lengths are rem on purpose: the row padding, the nav icon and the child row height are
+     rem too, so the child label keeps the parent's x and scale at any root font size (XTRM-897). */
+  --x-rail-indent: calc(1rem - 1px); /* 15px at a 16px root: rail x = centre of the parent icon */
+  --x-rail-gutter: 1.125rem; /* 18px at a 16px root: child text inset so the label x matches the parent's */
+  --x-rail-marker: 2px; /* active marker width */
+  /* A child row's fill starts at the sidebar's own edge, not at the rail (XTRM-927): the row box is
+     pulled left by the rail x plus its hairline, and its text inset grows by the same length. Only the
+     fill widens to a top-level row's edges; the label column, the hairline and the marker do not move. */
+  --x-rail-pull: calc(var(--x-rail-indent) + 1px); /* 16px at a 16px root: rail x + the 1px hairline */
+  --x-rail-text: calc(var(--x-rail-pull) + var(--x-rail-gutter)); /* 34px: the aligned label column */
+  --x-shadow-float: 0 10px 30px -12px rgb(15 15 20 / 0.22), 0 0 0 1px rgb(15 15 20 / 0.06);
+  /* Panel elevation without a hairline: the inspector carries no border (no-borders policy), so the
+     ring inside --x-shadow-float would outline it in a colour that is not its background. */
+  --x-shadow-panel: 0 10px 30px -12px rgb(15 15 20 / 0.22);
+  /* Persistent control at the foot of the sidebar (§15.1): a raised chip in light, the operator's
+     near-black plane in dark. One token set, so the strip and its drop-up can never diverge. */
+  --x-strip: var(--x-raised);
+  --x-strip-open: var(--x-control);
+  --x-strip-ink: var(--x-ink-muted);
+  --x-strip-ink-strong: var(--x-ink);
+  --x-strip-ink-faint: var(--x-ink-faint);
+  --x-strip-rule: var(--x-border-muted);
+  --x-strip-chip: var(--x-pressed);
+  --x-strip-chip-ink: var(--x-ink-muted);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  /* Dark ladder: the rail sits at #232323 and the raised plane at #1e1e1e, so a control that has to
+     be readable against the rail (the sources strip at #1c1c1c) is seven steps below it, not two. */
+  --x-deep: #0d0d0d;
+  --x-sidebar: #232323;
+  --x-surface: #151515;
+  --x-raised: #1e1e1e;
+  --x-control: #262626;
+  --x-hover: rgb(255 255 255 / 0.03);
+  --x-pressed: rgb(255 255 255 / 0.06);
+  --x-ink: #ececef;
+  --x-ink-muted: #a0a0a8;
+  --x-ink-faint: #6a6a72;
+  --x-border-muted: rgb(255 255 255 / 0.08);
+  --x-border-subtle: rgb(255 255 255 / 0.06);
+  --x-border: rgb(255 255 255 / 0.12);
+  --x-border-strong: rgb(255 255 255 / 0.18);
+  --x-github: #f0f6fc;
+  --x-github-hover: #ffffff;
+  --x-github-ink: #24292f;
+  /* dark surfaces use the accessible light violet role for small text/markers */
+  --x-accent: #818cf8;
+  --x-accent-ink: #a5b4fc;
+  --x-accent-soft: rgb(129 140 248 / 0.12);
+  --x-danger: #f07171;
+  --x-success: #5ccb8a;
+  --x-success-ink: #5ccb8a;
+  --x-diff-add: #5ccb8a;
+  --x-diff-del: #f07171;
+  --x-shadow-float: 0 18px 44px -12px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.08);
+  --x-shadow-panel: 0 18px 44px -12px rgb(0 0 0 / 0.72);
+  --x-strip: #1c1c1c;
+  --x-strip-open: #262626;
+  --x-strip-ink: rgb(255 255 255 / 0.72);
+  --x-strip-ink-strong: #ffffff;
+  --x-strip-ink-faint: rgb(255 255 255 / 0.45);
+  --x-strip-rule: rgb(255 255 255 / 0.12);
+  --x-strip-chip: rgb(255 255 255 / 0.12);
+  --x-strip-chip-ink: rgb(255 255 255 / 0.78);
+}
+
+@theme inline {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  --color-deep: var(--x-deep);
+  --color-sidebar: var(--x-sidebar);
+  --color-surface: var(--x-surface);
+  --color-raised: var(--x-raised);
+  --color-control: var(--x-control);
+  --color-hover: var(--x-hover);
+  --color-pressed: var(--x-pressed);
+  --color-ink: var(--x-ink);
+  --color-ink-muted: var(--x-ink-muted);
+  --color-ink-faint: var(--x-ink-faint);
+  --color-border-muted: var(--x-border-muted);
+  --color-border-subtle: var(--x-border-subtle);
+  --color-border: var(--x-border);
+  --color-border-strong: var(--x-border-strong);
+  --color-github: var(--x-github);
+  --color-github-hover: var(--x-github-hover);
+  --color-github-ink: var(--x-github-ink);
+  --color-accent: var(--x-accent);
+  --color-accent-ink: var(--x-accent-ink);
+  --color-accent-soft: var(--x-accent-soft);
+  --color-danger: var(--x-danger);
+  --color-success: var(--x-success);
+  --color-success-ink: var(--x-success-ink);
+  --color-diff-add: var(--x-diff-add);
+  --color-diff-del: var(--x-diff-del);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  --shadow-float: var(--x-shadow-float);
+  --shadow-panel: var(--x-shadow-panel);
+  --color-strip: var(--x-strip);
+  --color-strip-open: var(--x-strip-open);
+  --color-strip-ink: var(--x-strip-ink);
+  --color-strip-ink-strong: var(--x-strip-ink-strong);
+  --color-strip-ink-faint: var(--x-strip-ink-faint);
+  --color-strip-rule: var(--x-strip-rule);
+  --color-strip-chip: var(--x-strip-chip);
+  --color-strip-chip-ink: var(--x-strip-chip-ink);
+
+  /* shadcn alias layer (XT-215): names only, values stay --x-* authoritative. */
+  --color-background: var(--x-deep);
+  --color-foreground: var(--x-ink);
+  --color-card: var(--x-surface);
+  --color-card-foreground: var(--x-ink);
+  --color-popover: var(--x-raised);
+  --color-popover-foreground: var(--x-ink);
+  --color-primary: var(--x-accent);
+  --color-primary-foreground: var(--x-accent-ink);
+  --color-secondary: var(--x-control);
+  --color-secondary-foreground: var(--x-ink);
+  --color-muted: var(--x-control);
+  --color-muted-foreground: var(--x-ink-muted);
+  --color-accent-foreground: var(--x-ink);
+  --color-destructive: var(--x-danger);
+  --color-destructive-foreground: var(--x-ink);
+  --color-border-input: var(--x-border);
+  --color-input: var(--x-control);
+  --color-ring: var(--x-accent);
+
+  /* One step below --text-xs, for the timeline's `now` marker; it was a 10px literal (XTRM-907). */
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 0.875rem;
+  --text-xs: 0.72rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-deep);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border-muted);
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+    outline-offset: 1px;
+  }
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+}
+
+/* Rendered markdown and the rich editor share one prose style (Supernova-restrained). */
+@layer components {
+  .xtrm-prose {
+    color: var(--color-ink);
+    font-size: var(--text-sm);
+    line-height: 1.6rem;
+    overflow-wrap: anywhere;
+  }
+  .xtrm-prose > :first-child {
+    margin-top: 0;
+  }
+  .xtrm-prose > :last-child {
+    margin-bottom: 0;
+  }
+  .xtrm-prose p,
+  .xtrm-prose ul,
+  .xtrm-prose ol,
+  .xtrm-prose pre,
+  .xtrm-prose blockquote,
+  .xtrm-prose table {
+    margin: 0 0 0.7rem;
+  }
+  .xtrm-prose h1,
+  .xtrm-prose h2,
+  .xtrm-prose h3,
+  .xtrm-prose h4 {
+    margin: 1.1rem 0 0.4rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--color-ink);
+  }
+  .xtrm-prose h1 {
+    font-size: 1rem;
+  }
+  .xtrm-prose h2 {
+    font-size: 0.9rem;
+  }
+  .xtrm-prose h3,
+  .xtrm-prose h4 {
+    font-size: 0.8125rem;
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose ul,
+  .xtrm-prose ol {
+    padding-left: 1.25rem;
+  }
+  .xtrm-prose ul {
+    list-style: disc;
+  }
+  .xtrm-prose ol {
+    list-style: decimal;
+  }
+  .xtrm-prose li {
+    margin: 0.15rem 0;
+  }
+  .xtrm-prose li::marker {
+    color: var(--color-ink-faint);
+  }
+  .xtrm-prose a {
+    color: var(--color-accent-ink);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--color-accent-ink) 35%, transparent);
+    text-underline-offset: 2px;
+  }
+  .xtrm-prose strong {
+    font-weight: 600;
+  }
+  .xtrm-prose code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 0.05rem 0.3rem;
+    border-radius: 4px;
+    background: var(--color-control);
+    border: 1px solid var(--color-border-muted);
+  }
+  .xtrm-prose pre {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.15rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-md);
+    background: var(--color-deep);
+    border: 1px solid var(--color-border-muted);
+    /* A rendered `pre` carries no class, so it takes the thin-scrollbar treatment here rather than
+       from `.thin-scrollbar`: same width and colour, declared where this container can hold them. */
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  .xtrm-prose pre code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .xtrm-prose blockquote {
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--color-border-strong);
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose hr {
+    margin: 1rem 0;
+    border: 0;
+    border-top: 1px solid var(--color-border-muted);
+  }
+  /* GitHub bodies carry their own HTML: pr-lens ships diagrams as <img> inside <details>, with a
+     second SVG for dark. The image scales to the panel because the SVG declares a large width. */
+  .xtrm-prose img {
+    max-width: 100%;
+    height: auto;
+    margin: 0.2rem 0;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-muted);
+    background: var(--color-surface);
+  }
+  .xtrm-prose details {
+    margin: 0 0 0.7rem;
+  }
+  .xtrm-prose details[open] > summary {
+    margin-bottom: 0.4rem;
+  }
+  .xtrm-prose summary {
+    cursor: pointer;
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose summary:hover {
+    color: var(--color-ink);
+  }
+  .xtrm-prose table {
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    /* The Markdown renderer wraps tables in a scrolling box, so the table itself
+       sizes to its content instead of wrapping every header word (XTRM-397). */
+    width: max-content;
+    max-width: none;
+  }
+  .xtrm-prose th {
+    white-space: nowrap;
+  }
+  .xtrm-prose th,
+  .xtrm-prose td {
+    border: 1px solid var(--color-border-muted);
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+  }
+  .xtrm-prose th {
+    background: var(--color-control);
+    font-weight: 500;
+  }
+  .xtrm-prose input[type="checkbox"] {
+    margin-right: 0.35rem;
+    vertical-align: middle;
+  }
+  .xtrm-prose .ProseMirror {
+    outline: none;
+    min-height: 5rem;
+  }
+  .xtrm-prose .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--color-ink-faint);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+}
+
+/* ── Viewer additions ─────────────────────────────────────────────────────── */
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scroll-fade-b {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+
+@layer base {
+  html {
+    background: var(--color-deep);
+  }
+  body {
+    overflow: hidden;
+  }
+  button,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  /* The trace rail: a hairline down the left of a disclosure, with one dot per step. */
+  .trace-rail {
+    position: relative;
+  }
+  .trace-rail::before {
+    content: "";
+    position: absolute;
+    inset-block: 0.55rem;
+    inset-inline-start: 0.3125rem;
+    width: 1px;
+    background: var(--color-border-muted);
+  }
+  .trace-dot {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.6875rem;
+    height: 1.25rem;
+    flex: none;
+    color: var(--color-ink-faint);
+    background: var(--color-deep);
+  }
+  .viewer-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 2.6rem;
+  }
+  .viewer-turn {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 9rem;
+  }
+}
+
+@keyframes viewer-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.viewer-pulse {
+  animation: viewer-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer-pulse { animation: none; opacity: 1; }
+}
+
+/* Keep markdown tables from widening the thread column. */
+.xtrm-prose .md-table {
+  overflow-x: auto;
+  margin: 0 0 0.7rem;
+  scrollbar-width: thin;
+}
+.xtrm-prose .md-table > table {
+  margin: 0;
+}
