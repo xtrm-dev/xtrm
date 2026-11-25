@@ -78,6 +78,8 @@ export interface IntercomMeta {
   body: string
   /** True when this card's body was shortened by the parser. */
   truncated?: boolean
+  /** Server-computed body identity for the All-events paired marker. */
+  pairKey?: string
   runtime?: "pi" | "claude"
   delivery?: string
   /** True when the send tool reported an error. */

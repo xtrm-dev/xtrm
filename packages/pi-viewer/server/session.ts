@@ -34,6 +34,8 @@ export interface ParsedFile {
   thinkingLevel: string | null
   modifiedAt: number
   size: number
+  /** Per-entry revision for parsers that mutate an existing entry in place (Claude). */
+  entryVersions?: number[]
 }
 
 function isRecord(value: unknown): value is Raw {

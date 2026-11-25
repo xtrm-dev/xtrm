@@ -354,6 +354,7 @@ interface ClaudeState {
   rawRef: Raw[]
   processed: number
   entries: Raw[]
+  versions: number[]
   branchIds: Set<string>
   /** Assistant message id to the entry still accepting thinking/text/the first tool_use. */
   openEntry: Map<string, number>
@@ -372,6 +373,7 @@ function freshState(rawRef: Raw[]): ClaudeState {
     rawRef,
     processed: 0,
     entries: [],
+    versions: [],
     branchIds: new Set(),
     openEntry: new Map(),
     toolNames: new Map(),
@@ -409,6 +411,7 @@ function addEntry(state: ClaudeState, entry: Raw, record: Raw, sidechain: boolea
   entry._sidechain = sidechain
   hideRecords(entry, [record])
   state.entries.push(entry)
+  state.versions.push(0)
   if (!sidechain) state.branchIds.add(id)
 }
 
@@ -459,6 +462,8 @@ function ingestAssistant(state: ClaudeState, record: Raw, sidechain: boolean): v
     const records = (entry as { _records?: Raw[] })._records
     if (records && records[records.length - 1] !== record) records.push(record)
     if (stopReason) (entry.message as Raw).stopReason = stopReason
+    const index = state.entries.indexOf(entry)
+    if (index >= 0) state.versions[index] += 1
   }
 
   const blocks = message.content.map((block) => assistantBlock(state, block)).filter((block): block is Raw => block !== null)
@@ -673,6 +678,7 @@ export function parseClaudeFile(file: string): ParsedFile {
     events,
     seqById,
     branchIds: state.branchIds,
+    entryVersions: state.versions.slice(0, events.length),
     sessionName: state.customTitle ?? state.agentName,
     model: state.model,
     thinkingLevel: null,

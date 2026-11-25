@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import type { IntercomMeta, ViewerEvent } from "../src/shared/types.ts"
 import { peerLabel, resolvePeer } from "./peers.ts"
 
@@ -388,4 +389,10 @@ export function applyIntercomResults(events: ViewerEvent[]): ViewerEvent[] {
     const applied = applyResult(event, meta, results.get(meta.toolCallId))
     return { ...applied.event, intercom: applied.meta }
   })
+}
+
+/** Body identity for the All-events paired marker; survives the 160-char display cut. */
+export function intercomPairKey(body: string): string {
+  const normalized = body.replace(/\s+/g, " ").trim()
+  return `${normalized.length}:${createHash("sha1").update(normalized).digest("hex").slice(0, 16)}`
 }
