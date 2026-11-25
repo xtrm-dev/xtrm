@@ -28,8 +28,8 @@ import { SidebarDot } from "./SidebarDot"
 const PROVIDER_LABEL = { pi: "Pi", claude: "Claude" } as const
 
 /**
- * The role on line 2: plain text at the line's own size. Only Lead and Manager are called out,
- * bold in their role colour (the thread view's pill colours); any other role is plain faint text.
+ * The role on line 2, bold for every role. Lead and Manager keep their role colours (the thread
+ * view's pill colours); every other role is bold in the normal line ink (operator ruling, XTRM-1028).
  */
 function RoleLabel({ role }: { role: string | null }) {
   const key = role?.trim().toLowerCase()
@@ -37,7 +37,7 @@ function RoleLabel({ role }: { role: string | null }) {
   const label = key.charAt(0).toUpperCase() + key.slice(1)
   if (key === "lead") return <span className="shrink-0 font-semibold text-role-lead-ink">{label}</span>
   if (key === "manager" || key === "coordinator") return <span className="shrink-0 font-semibold text-role-manager-ink">{label}</span>
-  return <span className="shrink-0">{label}</span>
+  return <span className="shrink-0 font-semibold text-ink">{label}</span>
 }
 
 function GroupRow({
@@ -84,11 +84,12 @@ function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) 
     <>
       <span className="flex min-w-0 flex-1 flex-col" style={{ marginLeft: "var(--row-indent)" }}>
         <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
-        {/* Line 2: the role, then which runtime the agent is and its state. */}
+        {/* Line 2: the role, the repo the agent works in, then which runtime the agent is and its state. */}
         <span className="flex min-w-0 items-center gap-1 text-2xs text-ink-faint">
           <RoleLabel role={agent.role} />
-          <span className="truncate">
-            {PROVIDER_LABEL[agent.provider]} · {STATE_LABEL[state]}
+          {agent.repo ? <span className="min-w-0 truncate" title={agent.cwd}>{agent.repo}</span> : null}
+          <span className="shrink-0">
+            {agent.repo ? "· " : ""}{PROVIDER_LABEL[agent.provider]} · {STATE_LABEL[state]}
           </span>
         </span>
       </span>

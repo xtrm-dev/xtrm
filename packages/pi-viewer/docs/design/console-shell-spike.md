@@ -100,6 +100,12 @@ Icons stay lucide components (the registry holds only the shell's names); only t
 | `Composer.tsx` | send, sending spinner | 14 | 16 | chrome button |
 | `ViewerHeader.tsx` | menu check | 14 | 14 | row glyph, unchanged |
 
+### Switcher colours and the agent line (operator rulings)
+
+- The Work/Threads selected entry uses the colours of the top-right Channel / All events control (`ViewerHeader.tsx`, the `role="tablist"` "View" control): selected `bg-surface text-ink` with `shadow-[0_1px_2px_rgb(0_0_0/0.08)]` on the `bg-pressed` track, unselected `text-ink-faint hover:text-ink-muted`. Same tokens in both themes.
+- Role text on line 2 is bold for every role: Lead and Manager keep their role colours, every other role is `font-semibold text-ink`.
+- Line 2 reads `Role  repo · Runtime · state`. The repo comes from the server (`server/repo.ts`): `git -C <cwd> rev-parse --git-common-dir`, the parent of `.git` (a worktree reports its main checkout's repo), cached per cwd, the cwd basename outside git. It is the optional `repo` field of the agent payload.
+
 ### Edge
 
 No right-edge border and no resize hairline: the sidebar (`#181818` dark) and the thread differ by background only. The handle keeps

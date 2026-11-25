@@ -28,6 +28,8 @@ export interface ViewerAgent {
   role: string | null
   title: string
   cwd: string
+  /** The repository the agent works in (the main checkout's name, so a worktree reports its repo); the cwd basename outside git. */
+  repo?: string
   sessionFile: string | null
   sessionId: string | null
   sessionName: string | null

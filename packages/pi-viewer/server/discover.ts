@@ -16,6 +16,7 @@ import {
   type ClaudePaneQuery,
   type ClaudeTranscript,
 } from "./claude.ts"
+import { repoNameOf } from "./repo.ts"
 import { prunePaneReads, withPaneAttention } from "./attention.ts"
 import { lastWriteAt, parseSessionFile, readSessionName, sessionIdFromFile, statusOf, type AgentState } from "./session.ts"
 
@@ -303,6 +304,7 @@ function resolveClaudePane(
     role: pane.role,
     title: pane.title,
     cwd,
+    repo: repoNameOf(cwd),
     sessionFile: found.file,
     sessionId,
     sessionName: parsed?.sessionName ?? null,
@@ -381,6 +383,7 @@ function resolvePaneAgent(
     role: pane.role,
     title: pane.title,
     cwd: chosen.cwd,
+    repo: repoNameOf(chosen.cwd),
     sessionFile: chosen.file,
     sessionId: chosen.file ? sessionIdFromFile(chosen.file) : null,
     sessionName: parsed?.sessionName ?? wanted,
