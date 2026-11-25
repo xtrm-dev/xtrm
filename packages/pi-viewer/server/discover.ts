@@ -80,7 +80,7 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
     panes.push({
       session,
       windowIndex: Number(windowIndex) || 0,
-      windowId: windowId || `@${Number(windowIndex) || 0}`,
+      windowId,
       windowName: windowName ?? "",
       paneIndex: Number(paneIndex) || 0,
       paneId,

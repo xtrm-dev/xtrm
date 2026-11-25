@@ -109,7 +109,13 @@ export function SessionTree({
   const wanted = scope ? scopeRowKey(scope) : null
   const selectedKey =
     wanted && !rows.some((row) => row.key === wanted) && scope?.kind === "window"
-      ? (rows.find((row) => row.node.kind === "pane" && row.node.session === scope.session && row.node.agent.windowIndex === scope.window)?.key ?? wanted)
+      ? (rows.find((row) => {
+          if (row.node.kind !== "pane" || row.node.session !== scope.session) return false
+          const agent = row.node.agent
+          return scope.windowId && agent.windowId
+            ? agent.windowId === scope.windowId
+            : agent.windowIndex === scope.window
+        })?.key ?? wanted)
       : wanted
 
   // Roving tabindex: one row is tabbable. The remembered row if it is still visible, else the
