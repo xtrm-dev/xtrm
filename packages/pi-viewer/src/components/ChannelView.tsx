@@ -7,9 +7,11 @@ import { RoleChip } from "@/components/RoleChip"
 import { StatusDot } from "@/components/StatusDot"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent } from "@/components/ui/message"
+import { StoppedTurn } from "@/components/presence/StoppedTurn"
 import { MessageScrollerItem } from "@/components/ui/message-scroller"
 import { clock, dayKey, dayLabel, monogram } from "@/lib/format"
 import type { OptimisticMessage } from "@/lib/optimistic"
+import { splitPresence } from "@/lib/presence"
 import { channelTimeline, type Turn } from "@/lib/thread"
 import type { ViewerAgent, ViewerEvent } from "@/shared/types"
 
@@ -132,7 +134,12 @@ export function ChannelView({
   optimistic: OptimisticMessage[]
   onDismissOptimistic: (id: string) => void
 }) {
-  const items = useMemo(() => channelTimeline(events, optimistic), [events, optimistic])
+  // Running turns live in the presence line above the composer (XTRM-1035): the thread shows
+  // settled work, and a turn whose agent stopped shows as a stopped row.
+  const items = useMemo(
+    () => splitPresence(channelTimeline(events, optimistic), agents).timeline,
+    [events, optimistic, agents],
+  )
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
 
   if (!items.length) {
@@ -157,6 +164,8 @@ export function ChannelView({
             {divider ? <DayDivider at={item.at} /> : null}
             {item.kind === "turn" ? (
               <TurnView turn={item.turn} agent={byId.get(item.turn.agentId)} session={session} />
+            ) : item.kind === "stopped" ? (
+              <StoppedTurn item={item} agent={byId.get(item.agentId)} session={session} />
             ) : item.kind === "user" ? (
               <UserMessage
                 event={item.event}

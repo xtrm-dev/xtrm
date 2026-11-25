@@ -461,6 +461,25 @@
   animation: viewer-pulse 1.6s ease-in-out infinite;
 }
 
+/* ── Working presence (XTRM-1035) ── */
+/* A presence row that starts fades in; a turn appended to the thread when it settles fades in.
+   Opacity only, 150ms, never height: a settle must not move the rows above it (§3.5). */
+@keyframes presence-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.presence-in {
+  animation: presence-in 150ms ease-out;
+}
+[data-message-id^="turn:"]:last-child {
+  animation: presence-in 150ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .presence-in,
+  [data-message-id^="turn:"]:last-child { animation: none; }
+}
+/* ── end Working presence ── */
+
 @keyframes viewer-fade {
   0%, 100% { opacity: 0.45; }
   50% { opacity: 1; }

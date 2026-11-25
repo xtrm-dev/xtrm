@@ -33,7 +33,7 @@ function iconFor(item: ActivityItem) {
   return WrenchIcon
 }
 
-function ActivityRow({
+export function ActivityRow({
   item,
   turn,
   session,
