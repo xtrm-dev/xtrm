@@ -357,3 +357,30 @@ test("Back or Forward to a stale or invalid URL resolves to a valid scope whose 
   assert.deepEqual(scopeFromUrl("?s=xx&w=2", current, EMPTY), current)
   assert.equal(scopeFromUrl("?s=xx", null, EMPTY), null)
 })
+
+
+test("a reused window index with a different id is not the same state, and a missing id falls back to the index", () => {
+  const sameIndex: Scope = { kind: "window", session: "xx", window: 1, windowId: "@2" }
+  const reused: Scope = { kind: "window", session: "xx", window: 1, windowId: "@3" }
+  const renumbered: Scope = { kind: "window", session: "xx", window: 5, windowId: "@2" }
+  assert.equal(sameScope(sameIndex, reused), false)
+  assert.equal(sameScopeState(sameIndex, reused), false)
+  assert.equal(sameScopeState(sameIndex, renumbered), false, "the displayed index must follow a renumber")
+  assert.equal(sameScopeState(sameIndex, { ...sameIndex }), true)
+
+  const noId: Scope = { kind: "window", session: "xx", window: 1, windowId: "" }
+  assert.equal(scopeRowKey(noId), "w:xx:1")
+  assert.equal(serialiseScope(noId), "?s=xx&w=1")
+  const tree = buildTree([
+    {
+      name: "xx",
+      agents: [
+        agent("%90", 1, 0, { windowId: "" }),
+        agent("%91", 1, 1, { windowId: "" }),
+      ],
+      capturedAt: 1,
+    },
+  ])
+  assert.equal(tree[0].windows[0].key, "w:xx:1", "the fallback key is the plain index, never a fake @id")
+  assert.equal(tree[0].windows[0].windowId, "1")
+})

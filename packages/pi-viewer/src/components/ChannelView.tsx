@@ -9,12 +9,13 @@ import { StatusDot } from "@/components/StatusDot"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent } from "@/components/ui/message"
 import { StoppedTurn } from "@/components/presence/StoppedTurn"
-import { MessageScrollerItem } from "@/components/ui/message-scroller"
+import { MessageScrollerItem, useMessageScroller } from "@/components/ui/message-scroller"
 import { DELIVERY_WORD, deliveryOfOptimistic, deliveryOfUser, latestUserIds, type Delivery } from "@/lib/delivery"
 import { dayKey, dayLabel, fullDate, monogram, stamp } from "@/lib/format"
 import type { OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
 import { channelTimeline, type Turn } from "@/lib/thread"
+import { loadLastSeen, newCount, newSinceIndex, saveLastSeen } from "@/lib/readstate"
 import { cn } from "@/lib/utils"
 import type { ViewerAgent, ViewerEvent } from "@/shared/types"
 
@@ -211,6 +212,18 @@ function DayDivider({ at }: { at: number }) {
   )
 }
 
+function NewDivider({ count }: { count: number }) {
+  return (
+    <div className="flex items-center gap-3" role="separator" aria-label={`${count} new since you looked`}>
+      <span className="h-px flex-1 bg-accent/30" />
+      <span className="text-2xs tracking-wide text-accent-ink uppercase tabular">
+        New{count > 0 ? ` · ${count}` : ""}
+      </span>
+      <span className="h-px flex-1 bg-accent/30" />
+    </div>
+  )
+}
+
 export function ChannelView({
   events,
   agents,
@@ -231,6 +244,35 @@ export function ChannelView({
   const items = useMemo(() => splitPresence(channel, agents).timeline, [channel, agents])
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const latestUsers = useMemo(() => latestUserIds(channel), [channel])
+
+  // The scroller glides smoothly only while an agent in this thread works.
+  const { setWorking, reportNew, atBottom } = useMessageScroller()
+  const anyWorking = agents.some((agent) => agent.status === "working")
+  useEffect(() => setWorking(anyWorking), [anyWorking, setWorking])
+
+  // Rows that arrived while the reader was scrolled away from the end, for the scroll pill.
+  const awayBase = useRef(items.length)
+  useEffect(() => {
+    if (atBottom) awayBase.current = items.length
+    reportNew(atBottom ? 0 : Math.max(0, items.length - awayBase.current))
+  }, [atBottom, items.length, reportNew])
+
+  // "New since you looked": the baseline is the last-read time of this thread when it was opened.
+  // It stays frozen for the visit, so the divider does not walk away while the reader reads.
+  const [readKey] = useState(() => `${session}:${Array.from(new Set(events.map((e) => e.agentId))).sort().join(",")}`)
+  const [baseline] = useState(() => loadLastSeen(readKey))
+  const dividerAt = newSinceIndex(items, baseline)
+  const unread = newCount(items, baseline)
+  const [visible, setVisible] = useState(() => !document.hidden)
+  useEffect(() => {
+    const onChange = () => setVisible(!document.hidden)
+    document.addEventListener("visibilitychange", onChange)
+    return () => document.removeEventListener("visibilitychange", onChange)
+  }, [])
+  const newest = items.reduce((max, item) => Math.max(max, item.at), 0)
+  useEffect(() => {
+    if (atBottom && visible && newest > 0) saveLastSeen(readKey, newest)
+  }, [atBottom, visible, newest, readKey])
 
   // Rows that arrive after the first paint fade in; the rows present at mount never animate.
   const known = useRef<Set<string> | null>(null)
@@ -270,6 +312,7 @@ export function ChannelView({
             className={cn("flex flex-col gap-6", isFresh(item.id) && "xtrm-fade-in")}
           >
             {divider ? <DayDivider at={item.at} /> : null}
+            {index === dividerAt ? <NewDivider count={unread} /> : null}
             {item.kind === "turn" ? (
               <TurnView
                 turn={item.turn}

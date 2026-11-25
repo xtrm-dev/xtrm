@@ -66,7 +66,7 @@ export function buildTree(sessions: ViewerSession[]): SessionNode[] {
     const byWindow = new Map<string, ViewerAgent[]>()
     for (const agent of session.agents) {
       if (!agent.paneId) continue
-      const key = agent.windowId || `@${agent.windowIndex}`
+      const key = agent.windowId || String(agent.windowIndex)
       const list = byWindow.get(key) ?? []
       list.push(agent)
       byWindow.set(key, list)

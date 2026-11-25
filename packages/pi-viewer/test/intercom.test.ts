@@ -283,8 +283,79 @@ test("three intercom calls in one Pi assistant entry make three paired cards", (
     cards.map((item) => item.kind === "intercom" && item.event.intercom?.toolCallId),
     ["call-1", "call-2", "call-3"],
   )
+  assert.deepEqual(
+    cards.map((item) => item.kind === "intercom" && item.event.isError === true),
+    [false, true, false],
+    "each card carries its own delivery failure, not the entry-level flag",
+  )
   const turns = channelTurns(mapped)
   assert.equal(turns.length, 1)
   assert.equal(turns[0].sent.length, 3)
   assert.equal(turns[0].activity.length, 0)
+})
+
+
+test("a truncated card does not mark its siblings truncated", () => {
+  const call = (id: string, body: string) => ({
+    type: "toolCall",
+    id,
+    name: "SendMessage",
+    arguments: { to: "b", message: body, summary: "to b" },
+  })
+  const entry = {
+    type: "message",
+    id: "entry-long",
+    timestamp: 1_000,
+    message: {
+      role: "assistant",
+      content: [call("call-short", "short body"), call("call-long", "x".repeat(45_000))],
+      stopReason: "toolUse",
+    },
+  }
+  const event = normalizeEvent(entry, { id: "a", name: "a" }, 0, true)
+  assert.equal(event.intercoms?.length, 2)
+  assert.equal(event.intercoms?.[0].truncated, undefined)
+  assert.equal(event.intercoms?.[1].truncated, true)
+  const cards = channelTimeline([event]).filter((item) => item.kind === "intercom")
+  assert.deepEqual(
+    cards.map((item) => item.kind === "intercom" && Boolean(item.event.truncated)),
+    [false, true],
+  )
+})
+
+test("a single intercom call keeps the entry's other tool work", () => {
+  const entry = {
+    type: "message",
+    id: "entry-mixed",
+    timestamp: 1_000,
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-send",
+          name: "SendMessage",
+          arguments: { to: "b", message: "one message", summary: "to b" },
+        },
+        {
+          type: "toolCall",
+          id: "call-bash",
+          name: "bash",
+          arguments: { command: "echo after send" },
+        },
+      ],
+      stopReason: "toolUse",
+    },
+  }
+  const event = normalizeEvent(entry, { id: "a", name: "a" }, 0, true)
+  assert.equal(event.intercoms?.length, 1)
+  assert.ok(event.parts?.some((part) => part.type === "tool-call" && part.toolName === "bash"))
+
+  const timeline = channelTimeline([event])
+  const cards = timeline.filter((item) => item.kind === "intercom")
+  assert.equal(cards.length, 1)
+  const turns = channelTurns([event])
+  assert.equal(turns.length, 1)
+  assert.equal(turns[0].activity.length, 1)
+  assert.match(turns[0].activity[0].summary, /echo after send/)
 })

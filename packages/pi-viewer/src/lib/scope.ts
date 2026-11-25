@@ -68,7 +68,7 @@ export function serialiseScope(scope: Scope): string {
 export function sameScope(a: Scope | null, b: Scope | null): boolean {
   if (a === b) return true
   if (!a || !b || a.kind !== b.kind || a.session !== b.session) return false
-  if (a.kind === "window" && b.kind === "window") return (a.windowId ?? a.window) === (b.windowId ?? b.window)
+  if (a.kind === "window" && b.kind === "window") return (a.windowId || a.window) === (b.windowId || b.window)
   if (a.kind === "pane" && b.kind === "pane") return a.paneId === b.paneId
   return true
 }
@@ -84,13 +84,17 @@ export function sameScopeState(a: Scope | null, b: Scope | null): boolean {
   if (a === b) return true
   if (!sameScope(a, b) || !a || !b) return false
   if (a.kind === "session") return true
+  const aWindowId = (a as { windowId?: string | null }).windowId
+  const bWindowId = (b as { windowId?: string | null }).windowId
+  // A reused index is not the same placement; a renumbered window is not the same state.
+  if (aWindowId && bWindowId && aWindowId !== bWindowId) return false
   return a.window === (b as typeof a).window
 }
 
 /** The sidebar row key of a scope; matches the keys `buildTree` assigns. */
 export function scopeRowKey(scope: Scope): string {
   if (scope.kind === "session") return `s:${scope.session}`
-  if (scope.kind === "window") return `w:${scope.session}:${scope.windowId ?? scope.window}`
+  if (scope.kind === "window") return `w:${scope.session}:${scope.windowId || scope.window}`
   return `p:${scope.paneId}`
 }
 
@@ -158,7 +162,7 @@ export function resolveScope(current: Scope | null, sessions: ViewerSession[], p
     }
     if (scope.kind === "pane") {
       scope =
-        scope.windowId !== null && scope.windowId !== undefined
+        scope.windowId
           ? { kind: "window", session: scope.session, window: null, windowId: scope.windowId }
           : scope.window !== null
             ? { kind: "window", session: scope.session, window: scope.window, windowId: null }

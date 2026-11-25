@@ -378,7 +378,7 @@ export default function App() {
       ) : (
         <>
           <div className="min-h-0 flex-1">
-            <MessageScrollerProvider key={scrollerKey} autoScroll defaultScrollPosition="end">
+            <MessageScrollerProvider key={scrollerKey} threadKey={scrollerKey} autoScroll defaultScrollPosition="end">
               <MessageScroller>
                 <MessageScrollerViewport>
                   <MessageScrollerContent

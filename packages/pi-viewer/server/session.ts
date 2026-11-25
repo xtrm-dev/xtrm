@@ -367,7 +367,16 @@ export function normalizeEvent(
   } satisfies Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "raw">
 
   const intercoms = intercomsFromEntry(entry, agent)
-  if (intercoms.length === 1) {
+  const assistantMessage =
+    entry.type === "message" && isRecord(entry.message) && entry.message.role === "assistant"
+      ? entry.message
+      : null
+  const hasOtherToolCalls = assistantMessage
+    ? assistantParts(assistantMessage.content).some(
+        (part) => part.type === "tool-call" && !isIntercomTool(part.toolName),
+      )
+    : false
+  if (intercoms.length === 1 && (!assistantMessage || !hasOtherToolCalls)) {
     const intercom = intercoms[0]
     const body = cap(intercom.body, INTERCOM_CAP)
     return {
@@ -378,7 +387,7 @@ export function normalizeEvent(
         intercom.direction === "sent"
           ? `→ ${intercom.to} · ${intercom.summary ?? firstLine(intercom.body)}`
           : `← ${intercom.from} · ${intercom.summary ?? firstLine(intercom.body)}`,
-      intercom: { ...intercom, body: body.text },
+      intercom: { ...intercom, body: body.text, truncated: body.truncated || undefined },
       truncated: body.truncated || undefined,
       detail:
         intercom.direction === "sent"
@@ -445,6 +454,10 @@ export function normalizeEvent(
             parts.find((part) => part.type === "thinking")?.text ||
             (stopReason === "error" ? "failed · no reply" : "no reply"),
         )
+    const cappedIntercoms = intercoms.map((meta) => {
+      const capped = cap(meta.body, INTERCOM_CAP)
+      return { ...meta, body: capped.text, truncated: capped.truncated || undefined }
+    })
     return {
       ...base,
       kind: "assistant",
@@ -453,13 +466,10 @@ export function normalizeEvent(
       text: text || undefined,
       parts,
       stopReason,
-      ...(intercoms.length > 1
+      ...(cappedIntercoms.length
         ? {
-            intercoms: intercoms.map((meta) => {
-              const capped = cap(meta.body, INTERCOM_CAP)
-              return { ...meta, body: capped.text }
-            }),
-            truncated: intercoms.some((meta) => cap(meta.body, INTERCOM_CAP).truncated) || undefined,
+            intercoms: cappedIntercoms,
+            truncated: cappedIntercoms.some((meta) => meta.truncated) || undefined,
           }
         : {}),
       detail: stopReason ? `stopReason: ${stopReason}` : undefined,
