@@ -17,6 +17,7 @@ import {
 import { fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
 import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
+import { replyBarAgent, replyIdFor } from "@/lib/reply"
 import { channelTimeline } from "@/lib/thread"
 import {
   agentsInScope,
@@ -70,6 +71,8 @@ export default function App() {
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
   const [scope, setScope] = useState<Scope | null>(null)
   const [targetPaneId, setTargetPaneId] = useState<string | null>(null)
+  // The agent a Reply click aimed the composer at (XTRM-1045); the composer shows its bar.
+  const [replyPaneId, setReplyPaneId] = useState<string | null>(null)
   const [meta, setMeta] = useState<ThreadMeta | null>(null)
   const [branch, setBranch] = useState<ThreadPayload | null>(null)
   const [all, setAll] = useState<ThreadPayload | null>(null)
@@ -141,7 +144,10 @@ export default function App() {
       urlMode.current = "replace"
       // A history step within the same scope (the presence sheet's own entry) keeps the
       // composer target; only a scope change resets it.
-      if (!resolved || !sameScope(resolved, track.current.scope)) setTargetPaneId(null)
+      if (!resolved || !sameScope(resolved, track.current.scope)) {
+        setTargetPaneId(null)
+        setReplyPaneId(null)
+      }
       if (!resolved) return
       applyTrack({ scope: resolved, absent: 0 })
       const search = serialiseScope(resolved)
@@ -349,9 +355,15 @@ export default function App() {
 
   function messageAgent(agent: ViewerAgent) {
     setTargetPaneId(agent.id)
+    setReplyPaneId(null)
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLTextAreaElement>("[data-composer-input]")?.focus()
     })
+  }
+
+  function replyToAgent(agent: ViewerAgent) {
+    messageAgent(agent)
+    setReplyPaneId(scope ? replyIdFor(scope.kind, agent.id) : null)
   }
 
   function select(next: Scope) {
@@ -366,6 +378,7 @@ export default function App() {
     if (next.session !== sessionName) setView("channel")
     urlMode.current = "push"
     setTargetPaneId(null)
+    setReplyPaneId(null)
     applyTrack({ scope: next, absent: 0 })
   }
 
@@ -476,6 +489,7 @@ export default function App() {
                           earlierTurns={branch.earlierTurns}
                           earlierLoading={earlierLoading}
                           onLoadEarlier={() => void loadEarlier()}
+                          onReply={replyToAgent}
                         />
                       ) : (
                         <div className="py-20 text-center text-xs text-ink-muted">Loading thread…</div>
@@ -521,7 +535,12 @@ export default function App() {
           <Composer
             agents={agents}
             target={target}
-            onTargetChange={(agent) => setTargetPaneId(agent.id)}
+            onTargetChange={(agent) => {
+              setTargetPaneId(agent.id)
+              setReplyPaneId(null)
+            }}
+            replyTo={replyBarAgent(replyPaneId, target)}
+            onClearReply={() => setReplyPaneId(null)}
             onSend={handleSend}
             disabled={!agents.length}
           />

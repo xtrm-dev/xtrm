@@ -1,7 +1,9 @@
-import { ChevronDownIcon, LoaderCircleIcon, SendIcon } from "lucide-react"
+import { ChevronDownIcon, LoaderCircleIcon, SendIcon, XIcon } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { StatusDot, statusWord } from "@/components/StatusDot"
+import { monogram } from "@/lib/format"
+import { escapeClearsReply } from "@/lib/reply"
 import type { ViewerAgent } from "@/shared/types"
 import { cn } from "@/lib/utils"
 
@@ -25,12 +27,17 @@ export function Composer({
   onTargetChange,
   onSend,
   disabled,
+  replyTo = null,
+  onClearReply,
 }: {
   agents: ViewerAgent[]
   target: ViewerAgent | null
   onTargetChange: (agent: ViewerAgent) => void
   onSend: (agent: ViewerAgent, text: string) => Promise<void>
   disabled?: boolean
+  /** The agent a Reply click aimed the composer at: shows the "Replying to" bar (XTRM-1045). */
+  replyTo?: ViewerAgent | null
+  onClearReply?: () => void
 }) {
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
@@ -101,6 +108,7 @@ export function Composer({
     setError(null)
     try {
       await onSend(target, value)
+      onClearReply?.()
       setText("")
       setMention(null)
     } catch (caught) {
@@ -166,6 +174,34 @@ export function Composer({
             </div>
           ) : null}
 
+          {replyTo ? (
+            <div
+              data-reply-bar=""
+              className="flex items-center gap-2 px-3.5 pt-2.5 text-2xs text-ink-muted"
+            >
+              <span
+                aria-hidden="true"
+                className="flex size-5 shrink-0 items-center justify-center rounded-sm bg-control font-mono text-2xs text-ink-muted"
+              >
+                {monogram(replyTo.name)}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                Replying to <span className="font-medium text-ink">{replyTo.name}</span>
+              </span>
+              <button
+                type="button"
+                aria-label="Cancel reply"
+                onClick={() => {
+                  onClearReply?.()
+                  textareaRef.current?.focus()
+                }}
+                className="rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </div>
+          ) : null}
+
           <textarea
             ref={textareaRef}
             data-composer-input=""
@@ -203,6 +239,11 @@ export function Composer({
                   setMenu("none")
                   return
                 }
+              }
+              if (event.key === "Escape" && escapeClearsReply(Boolean(replyTo), text)) {
+                event.preventDefault()
+                onClearReply?.()
+                return
               }
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault()

@@ -1,4 +1,4 @@
-import { CheckIcon, CopyIcon } from "lucide-react"
+import { CheckIcon, CopyIcon, ReplyIcon } from "lucide-react"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { ActivityDisclosure } from "@/components/ActivityDisclosure"
@@ -15,6 +15,7 @@ import { DELIVERY_WORD, deliveryOfOptimistic, deliveryOfUser, latestUserIds, typ
 import { dayKey, dayLabel, fullDate, monogram, stamp } from "@/lib/format"
 import type { OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
+import { replyAvailability, replyLabel, replyTitle } from "@/lib/reply"
 import { channelTimeline, type Turn } from "@/lib/thread"
 import { migrateLastSeen, newCount, newSinceIndex, saveLastSeen, shouldSaveLastSeen, unseenTimelineItems } from "@/lib/readstate"
 import { cn } from "@/lib/utils"
@@ -54,6 +55,32 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       className="rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
     >
       {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+    </button>
+  )
+}
+
+export function ReplyButton({
+  agent,
+  name,
+  onReply,
+}: {
+  agent: ViewerAgent | undefined
+  name: string
+  onReply: (agent: ViewerAgent) => void
+}) {
+  const availability = replyAvailability(agent)
+  return (
+    <button
+      type="button"
+      aria-label={replyLabel(name)}
+      title={replyTitle(availability)}
+      disabled={availability === "gone"}
+      onClick={() => {
+        if (agent) onReply(agent)
+      }}
+      className="rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted"
+    >
+      <ReplyIcon className="size-3" />
     </button>
   )
 }
@@ -154,11 +181,13 @@ function TurnView({
   agent,
   session,
   pinned,
+  onReply,
 }: {
   turn: Turn
   agent: ViewerAgent | undefined
   session: string
   pinned: boolean
+  onReply?: (agent: ViewerAgent) => void
 }) {
   const name = agent?.name ?? turn.agentName
   const status = agent?.status ?? "unknown"
@@ -196,6 +225,7 @@ function TurnView({
               data-pinned={pinned ? "true" : undefined}
             >
               <span title={fullDate(at)}>{stamp(at)}</span>
+              {onReply ? <ReplyButton agent={agent} name={name} onReply={onReply} /> : null}
               {finalText ? <CopyButton text={finalText} label="Copy reply" /> : null}
             </div>
           ) : null}
@@ -237,6 +267,7 @@ export function ChannelView({
   earlierTurns = 0,
   earlierLoading = false,
   onLoadEarlier,
+  onReply,
 }: {
   events: ViewerEvent[]
   agents: ViewerAgent[]
@@ -251,6 +282,8 @@ export function ChannelView({
   earlierTurns?: number
   earlierLoading?: boolean
   onLoadEarlier?: () => void
+  /** Aims the composer at an agent and focuses it (XTRM-1045). Absent: no Reply action. */
+  onReply?: (agent: ViewerAgent) => void
 }) {
   // Running turns live in the presence line above the composer (XTRM-1035): the thread shows
   // settled work, and a turn whose agent stopped shows as a stopped row.
@@ -346,6 +379,7 @@ export function ChannelView({
                 agent={byId.get(item.turn.agentId)}
                 session={session}
                 pinned={pinned}
+                onReply={onReply}
               />
             ) : item.kind === "stopped" ? (
               <StoppedTurn item={item} agent={byId.get(item.agentId)} session={session} />

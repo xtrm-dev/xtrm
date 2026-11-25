@@ -16,7 +16,8 @@
     "test:anchor": "node scripts/anchor-check.mjs",
     "test:presence": "node scripts/presence-check.mjs",
     "test:contrast": "node scripts/contrast-check.mjs",
-    "test:follow": "node scripts/follow-check.mjs"
+    "test:follow": "node scripts/follow-check.mjs",
+    "test:reply": "node scripts/reply-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",
