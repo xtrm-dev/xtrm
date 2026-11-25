@@ -31,9 +31,9 @@ import type { TurnEffect } from "../shared/types.ts"
  * - `step`: the turn is open and has run a step (the agent loop is running). A step with no
  *   open turn opens one: the agent resumed by itself.
  * - `reply`: settled. `abort`: aborted. `fail`: failed.
- * - `compact`: inside a running loop (open with a step, or failed on a context overflow) the
- *   turn stays open ("compacting context"); anywhere else the conversation restarts and no
- *   turn is open (settled).
+ * - `compact`: an open turn stays open ("compacting context"), whether or not it has run a
+ *   step yet; a turn that failed on a context overflow reopens; anywhere else the conversation
+ *   restarts and no turn is open (settled).
  *
  * Only record contents and record order drive the machine. No timer and no file time enters
  * it, so a fresh parse and an incremental parse of the same records give the same state.
@@ -45,7 +45,7 @@ export interface TurnState {
   phase: TurnPhase
   /** The open turn has run a step since it opened. */
   loop: boolean
-  /** The newest decisive record is a compaction inside a running loop. */
+  /** The newest decisive record is a compaction inside an open turn. */
   compacting: boolean
   /** The turn failed on a context overflow, which a compaction resumes. */
   overflow: boolean
@@ -80,9 +80,8 @@ export function nextTurnState(state: TurnState, effect: TurnEffect, overflow = f
     case "fail":
       return { phase: "failed", loop: false, compacting: false, overflow }
     case "compact":
-      if ((state.phase === "open" && state.loop) || (state.phase === "failed" && state.overflow)) {
-        return { phase: "open", loop: true, compacting: true, overflow: false }
-      }
+      if (state.phase === "open") return { ...state, compacting: true }
+      if (state.phase === "failed" && state.overflow) return { phase: "open", loop: true, compacting: true, overflow: false }
       return SETTLED
   }
 }

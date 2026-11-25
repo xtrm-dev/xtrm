@@ -66,11 +66,11 @@ const FIXTURES: Array<{ name: string; provider: Provider; why: string; labels: L
   {
     name: "claude-oblw-2f0aa11a-6365",
     provider: "claude",
-    why: "Claude manual /compact: the typed /compact, the compaction, then the caveat, the command and its output",
+    why: "Claude manual /compact: the typed /compact, the compaction, then the caveat, the command (which makes the typed record local) and its output",
     labels: [
       { src: 6359, status: "waiting", presence: 0, stopped: 0 },
       { src: 6365, status: "working", presence: "turn" },
-      { src: 6374, status: "waiting", presence: 0, stopped: 1 },
+      { src: 6374, status: "working", note: "compacting context", presence: "turn", stopped: 0 },
       { src: 6376, status: "waiting", presence: 0, stopped: 1 },
       { src: 6377, status: "waiting", presence: 0, stopped: 1 },
       { src: 6401, status: "working", presence: "turn", stopped: 1 },
@@ -118,6 +118,30 @@ const FIXTURES: Array<{ name: string; provider: Provider; why: string; labels: L
       { src: 2609, status: "waiting", presence: 0, stopped: 0 },
       { src: 2622, status: "waiting", presence: 0, stopped: 1 },
       { src: 2648, status: "working", presence: "turn", stopped: 1 },
+    ],
+  },
+  {
+    name: "pi-specialists-019df732-807",
+    provider: "pi",
+    why: "Pi context overflow (context_length_exceeded) then compaction: the failed turn reopens and goes on",
+    labels: [
+      { src: 801, status: "idle", note: "turn aborted", presence: 0 },
+      { src: 802, status: "working", presence: "turn" },
+      { src: 807, status: "error", note: "last turn failed", presence: 0, stopped: 0 },
+      { src: 808, status: "working", note: "compacting context", presence: "turn", stopped: 0 },
+      { src: 809, status: "working", note: "running tools", presence: "turn", stopped: 0 },
+      { src: 816, status: "waiting", presence: 0, stopped: 0 },
+    ],
+  },
+  {
+    name: "claude-e9rd-e158b382-8096",
+    provider: "claude",
+    why: "Claude peer message then an auto compaction before the first step: the turn stays open; the summary's older timestamp does not quiet it",
+    labels: [
+      { src: 8083, status: "waiting", presence: 0 },
+      { src: 8096, status: "working", note: "turn in progress", presence: "turn", stopped: 0 },
+      { src: 8101, status: "working", note: "compacting context", presence: "turn", stopped: 0 },
+      { src: 8160, status: "working", presence: "turn", stopped: 0 },
     ],
   },
   {
@@ -381,4 +405,36 @@ test("a Pi message aborted during a SendMessage call closes the turn (whole-tran
   const last = result.snapshots.at(-1)!
   assert.equal(last.status.note, "turn aborted")
   assert.deepEqual(last.stopped.map((row) => row.split("|")[1]), ["turn aborted"])
+})
+
+test("the quiet period counts from the newest record that moves a turn, not from bookkeeping writes", () => {
+  const lines = [
+    line({ type: "session", version: 3, id: "s", cwd: "/r" }, 0),
+    line({ type: "message", id: "u1", parentId: "s", message: { role: "user", content: [{ type: "text", text: "go" }] } }, 1_000),
+    line({ type: "message", id: "a1", parentId: "u1", message: { role: "assistant", stopReason: "toolUse", content: [{ type: "toolCall", id: "t1", name: "bash", arguments: {} }] } }, 2_000),
+    // A model change 20 minutes later moves the file time, not the turn.
+    line({ type: "model_change", id: "m1", parentId: "a1", provider: "p", modelId: "x" }, 2_000 + 20 * 60_000),
+  ]
+  const parsed = parseSessionFile(write("quiet-bookkeeping.jsonl", lines, 2_000 + 20 * 60_000))
+  assert.equal(statusOf(parsed, T + 2_000 + 20 * 60_000 + 1_000).status, "quiet")
+  assert.equal(lastWriteAt(parsed), T + 2_000)
+})
+
+test("a peer message merged as a duplicate still opens its agent's turn (whole-transcript sweep, w2w9 line 3381)", () => {
+  const envelope = (id: string) =>
+    `<cross-session-message message-id="${id}" from="uds:/peer.sock" from-name="peer">\nAck, nothing outstanding.\n</cross-session-message>`
+  const lines = [
+    line({ type: "session", version: 3, id: "s", cwd: "/r" }, 0),
+    line({ type: "message", id: "u1", parentId: "s", message: { role: "user", content: [{ type: "text", text: "go" }] } }, 1_000),
+    line({ type: "message", id: "a1", parentId: "u1", message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "done" }] } }, 2_000),
+    line({ type: "custom_message", id: "n1", parentId: "a1", customType: "intercom_message", display: true, content: envelope("m-1") }, 3_000),
+    line({ type: "message", id: "a2", parentId: "n1", message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "noted" }] } }, 4_000),
+    // The same text again, under a new message id: one card, but a second wake-up.
+    line({ type: "custom_message", id: "n2", parentId: "a2", customType: "intercom_message", display: true, content: envelope("m-2") }, 5_000),
+  ]
+  const result = replay(write("duplicate-wake.jsonl", lines, 5_000), "pi", SCRATCH, "duplicate-wake")
+  assert.deepEqual(result.violations, [])
+  const last = result.snapshots.at(-1)!
+  assert.equal(last.status.status, "working")
+  assert.equal(last.pending.length, 1, "the duplicate's wake-up opens a turn")
 })

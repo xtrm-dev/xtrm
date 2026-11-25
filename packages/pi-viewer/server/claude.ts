@@ -12,6 +12,7 @@ import {
   mergeFile,
   normalizeEvent,
   statusOf,
+  turnWriteAt,
   type AgentState,
   type ParsedFile,
 } from "./session.ts"
@@ -429,6 +430,30 @@ function markCommandLocal(state: ClaudeState): void {
     if (entry._command === true && entry._local !== true) {
       entry._local = true
       state.versions[index] += 1
+      markTypedCommand(state, index)
+    }
+    return
+  }
+}
+
+/**
+ * Some Claude versions also record the command as typed (`/compact`) before running it, as a
+ * plain user record ahead of the compaction (2f0aa11a line 6365). When the command proves
+ * local, that typed record is local too: it never reached the model.
+ */
+function markTypedCommand(state: ClaudeState, commandIndex: number): void {
+  const command = state.entries[commandIndex]
+  const content = isRecord(command.message) ? command.message.content : undefined
+  const name = typeof content === "string" ? content.split(/\s+/)[0] : ""
+  if (!name) return
+  for (let index = commandIndex - 1; index >= 0; index -= 1) {
+    const entry = state.entries[index]
+    if (entry._sidechain === true || entry.type === "claude-event" || entry.type === "compaction") continue
+    const message = isRecord(entry.message) ? entry.message : null
+    const text = message?.role === "user" && typeof message.content === "string" ? message.content.trim() : ""
+    if (entry._command !== true && entry._local !== true && (text === name || text.startsWith(`${name} `))) {
+      entry._local = true
+      state.versions[index] += 1
     }
     return
   }
@@ -596,7 +621,9 @@ function ingestUserText(state: ClaudeState, record: Raw, text: string, sidechain
   const slash = slashCommand(text)
   const message = { type: "message", ...base, message: { role: "user", content: slash ?? text } }
   // A command right after the local-command caveat runs in Claude Code, not in the model.
-  addEntry(state, slash ? { ...message, _command: true, _local: !sidechain && afterCaveat(state) } : message, record, sidechain)
+  const local = slash !== null && !sidechain && afterCaveat(state)
+  addEntry(state, slash ? { ...message, _command: true, _local: local } : message, record, sidechain)
+  if (local) markTypedCommand(state, state.entries.length - 1)
 }
 
 /** True when the newest main-line injected record is the local-command caveat. */
@@ -764,6 +791,7 @@ export function parseClaudeFile(file: string): ParsedFile {
     thinkingLevel: null,
     modifiedAt: cache.mtimeMs,
     size: cache.size,
+    turnWriteAt: turnWriteAt(events),
   }
   parsedCache.set(file, { mtimeMs: cache.mtimeMs, size: cache.size, count: state.entries.length, parsed })
   return parsed

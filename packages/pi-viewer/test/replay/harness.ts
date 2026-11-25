@@ -17,7 +17,6 @@ import { join } from "node:path"
 import { claudeStatusOf, dropClaudeCache, normalizeClaudeEvent, parseClaudeFile } from "../../server/claude.ts"
 import {
   dropFileCache,
-  entryEffect,
   lastWriteAt,
   normalizeEvent,
   parseSessionFile,
@@ -153,11 +152,23 @@ function viewOf(provider: Provider, parsed: ParsedFile, now: number, cache: Even
 
 const LIVE = new Set(["working", "attention", "quiet"])
 
-/** True when one of the new entries is an operator prompt (a user message that opens a turn). */
-function hasPrompt(entries: Raw[]): boolean {
-  return entries.some(
-    (entry) => entryEffect(entry) === "open" && entry.type === "message" && (entry.message as Raw | undefined)?.role === "user",
-  )
+/**
+ * True when the raw record is an operator prompt or a peer message, judged from the record
+ * kind alone (not from the implementation's effects): a Pi user message, or a Claude user
+ * record that is not a tool result, injected context, a compaction summary, a tag other than
+ * a peer message, or an interrupt marker.
+ */
+function isPromptRecord(record: Raw): boolean {
+  const message = (record.message ?? {}) as Raw
+  if (record.type === "message") return message.role === "user"
+  if (record.type !== "user" || record.isMeta === true || record.isCompactSummary === true) return false
+  const content = message.content
+  if (Array.isArray(content) && content.some((block) => (block as Raw)?.type === "tool_result")) return false
+  const text = typeof content === "string" ? content : Array.isArray(content) ? content.map((block) => String((block as Raw)?.text ?? "")).join("") : ""
+  const body = text.trimStart()
+  if (body.startsWith("[Request interrupted")) return false
+  if (body.startsWith("<") || body.startsWith("Another Claude session")) return /^(?:Another Claude session sent a message:\s*)?<cross-session-message\b/.test(body)
+  return body.length > 0
 }
 
 /**
@@ -185,7 +196,6 @@ export function replay(
   const violations: string[] = []
   let newest = 0
   let previous: Snapshot | null = null
-  let seen = 0
 
   for (let index = 0; index < lines.length; index += 1) {
     const record = JSON.parse(lines[index]) as Raw
@@ -219,9 +229,10 @@ export function replay(
     if (view.pending.length && !LIVE.has(view.status.status)) {
       violations.push(`open turn ${view.pending.join(",")} while ${view.status.status} (${view.status.note}) at ${where}`)
     }
-    const added = incParsed.events.slice(seen)
-    seen = incParsed.events.length
-    if (previous && !hasPrompt(added)) {
+    if (!view.pending.length && LIVE.has(view.status.status)) {
+      violations.push(`${view.status.status} (${view.status.note}) with no open turn at ${where}`)
+    }
+    if (previous && !isPromptRecord(record)) {
       const ids = new Set(view.stopped.map((row) => row.split("|")[0]))
       for (const row of previous.stopped) {
         if (!ids.has(row.split("|")[0])) violations.push(`stopped row ${row} vanished at ${where}`)

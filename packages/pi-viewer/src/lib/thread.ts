@@ -228,7 +228,8 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
   const turns: Turn[] = []
   let state = INITIAL_TURN_STATE
   // Held in an object: the helpers below reassign both.
-  const at: { current: Turn | null; local: Turn | null } = { current: null, local: null }
+  // `failed`: the turn closed by a context overflow, which a compaction reopens.
+  const at: { current: Turn | null; local: Turn | null; failed: Turn | null } = { current: null, local: null, failed: null }
 
   const open = (event: ViewerEvent): Turn => {
     const turn = newTurn(event)
@@ -254,7 +255,9 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
   for (const event of events) {
     const effect = eventEffect(event)
     const before = state
-    state = nextTurnState(state, effect)
+    state = nextTurnState(state, effect, event.overflow === true)
+    const failed = at.failed
+    if (effect !== "none") at.failed = null
     const hasCall = event.kind === "assistant" && (event.parts ?? []).some((part) => part.type === "tool-call")
     let turn: Turn | null = at.current
 
@@ -306,6 +309,7 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
         turn.sentOnly = false
         turn.final = event
         close(turn)
+        if (effect === "fail" && event.overflow === true) at.failed = turn
         break
       case "abort":
         if (!turn && !hasCall) continue
@@ -320,16 +324,19 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
         break
       case "compact": {
         const item = activityOf(event)
-        if (turn && before.phase === "open" && before.loop) {
-          // Compaction inside a running loop: the turn goes on.
+        if (turn && before.phase === "open") {
+          // Compaction inside an open turn (before or after its first step): the turn goes on.
           if (item) turn.activity.push(item)
           break
         }
-        if (turn) {
-          // A turn that ran no step ends here: the prompt was a command, not agent work.
+        if (failed && before.phase === "failed" && before.overflow) {
+          // The turn failed on a context overflow; the compaction resumes it.
+          turn = failed
+          turn.final = undefined
+          turn.pending = true
+          at.current = turn
+          at.local = null
           if (item) turn.activity.push(item)
-          turn.local = true
-          close(turn)
           break
         }
         turn = localRow(event)
@@ -421,11 +428,20 @@ export function expandIntercomCalls(events: ViewerEvent[]): ViewerEvent[] {
   })
 }
 
+/** An invisible stand-in that keeps a merged event's turn effect for its own agent. */
+function effectCarrier(event: ViewerEvent): ViewerEvent {
+  return { ...event, id: `${event.id}:effect`, kind: "meta", intercom: undefined, intercoms: undefined, effect: eventEffect(event) }
+}
+
 /**
  * A message between two viewers is written twice, once on each side. Keep the send
  * position and time, but borrow the receiver's message id and delivery proof.
  */
-export function dedupeIntercoms(events: ViewerEvent[]): ViewerEvent[] {
+export function dedupeIntercoms(
+  events: ViewerEvent[],
+  /** Receives an invisible stand-in for each merged copy that moves its own agent's turn. */
+  carriers?: ViewerEvent[],
+): ViewerEvent[] {
   const out: ViewerEvent[] = []
   const byBody = new Map<string, number>()
   const byId = new Map<string, number>()
@@ -453,6 +469,9 @@ export function dedupeIntercoms(events: ViewerEvent[]): ViewerEvent[] {
       continue
     }
     const existing = out[index]
+    // The copy merges into the card already shown, but what it does to its own agent's turn
+    // stays: a peer message that wakes the receiver still opens its turn (w2w9 line 3381).
+    if (carriers && eventEffect(event) !== "none") carriers.push(effectCarrier(event))
     if (existing.intercom?.direction === "sent" && event.intercom.direction === "sent") {
       // A retry of the same body: a later success proves the message can be delivered, while
       // a later failure must never erase an earlier success.
@@ -612,7 +631,8 @@ function compareTurns(a: Turn, b: Turn): number {
 
 function groupTurns(events: ViewerEvent[]): Turn[] {
   const byAgent = new Map<string, ViewerEvent[]>()
-  for (const event of dedupeIntercoms(events)) {
+  const carriers: ViewerEvent[] = []
+  for (const event of [...dedupeIntercoms(events, carriers), ...carriers]) {
     const list = byAgent.get(event.agentId) ?? []
     list.push(event)
     byAgent.set(event.agentId, list)

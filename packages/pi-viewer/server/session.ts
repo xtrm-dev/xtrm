@@ -35,6 +35,8 @@ export interface ParsedFile {
   thinkingLevel: string | null
   modifiedAt: number
   size: number
+  /** Write time of the newest record that moves a turn (`turnWriteAt`), computed once per parse. */
+  turnWriteAt?: number
   /** Per-entry revision for parsers that mutate an existing entry in place (Claude). */
   entryVersions?: number[]
 }
@@ -265,6 +267,7 @@ export function parseSessionFile(file: string): ParsedFile {
     thinkingLevel,
     modifiedAt: cache.mtimeMs,
     size: cache.size,
+    turnWriteAt: turnWriteAt(raw),
   }
   parsedCache.set(file, { mtimeMs: cache.mtimeMs, size: cache.size, parsed })
   return parsed
@@ -363,7 +366,7 @@ export function normalizeEvent(
   options: NormalizeOptions = {},
 ): ViewerEvent {
   const at = atOf(entry)
-  const base: Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "effect"> & {
+  const base: Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "effect" | "overflow"> & {
     raw?: string
   } = {
     id: `${agent.id}:${seq}`,
@@ -374,6 +377,7 @@ export function normalizeEvent(
     onBranch,
     effect: entryEffect(entry),
   }
+  if (entryOverflow(entry)) base.overflow = true
   if (options.raw !== false) {
     let json = ""
     try {
@@ -663,24 +667,35 @@ function writeAtOf(entry: Raw): number {
 }
 
 /**
- * Write time of the newest record that moves a turn, read from the record itself, so a
- * fresh parse and an incremental parse agree. Zero when no record moves a turn.
+ * Write time of the newest record that moves a turn, from the records themselves, so a fresh
+ * parse and an incremental parse agree. A record cannot be written before the records above
+ * it, so its write time is the newest timestamp up to it: Claude stamps a compaction summary
+ * and a typed command with an earlier time than their write (e9rd line 8101). Zero when no
+ * record moves a turn.
  */
-export function lastWriteAt(parsed: ParsedFile): number {
-  for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
-    const entry = parsed.events[index]
-    if (entryEffect(entry) !== "none") return writeAtOf(entry)
+export function turnWriteAt(events: Raw[]): number {
+  let clock = 0
+  let at = 0
+  for (const entry of events) {
+    const time = writeAtOf(entry)
+    if (time > clock) clock = time
+    if (entryEffect(entry) !== "none") at = clock
   }
-  return 0
+  return at
+}
+
+export function lastWriteAt(parsed: ParsedFile): number {
+  return parsed.turnWriteAt ?? turnWriteAt(parsed.events)
 }
 
 /**
- * Agent status from the turn state model. The state comes from the records alone; the file
- * write time only separates a long silence (quiet, idle) from a recent one.
+ * Agent status from the turn state model. The state comes from the records alone; the write
+ * time of the newest record that moves a turn separates a long silence (quiet, idle) from a
+ * recent one, so bookkeeping writes (titles, modes, model changes) do not reset it.
  */
 export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   const { state, last } = resolveTurnState(parsed.events, entryEffect, entryOverflow)
-  const age = now - parsed.modifiedAt
+  const age = now - (lastWriteAt(parsed) || parsed.modifiedAt)
   switch (state.phase) {
     case "none":
       return { status: "idle", note: "no messages" }
