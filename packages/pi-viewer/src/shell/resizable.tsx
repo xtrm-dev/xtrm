@@ -56,7 +56,7 @@ export function ResizeHandle({ label, hidden }: { label: string; hidden?: boolea
       tabIndex={hidden ? -1 : 0}
       className={cn("group/sep relative z-10 w-2 shrink-0 cursor-col-resize outline-none", hidden && "hidden")}
     >
-      <span className="absolute inset-y-3 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover/sep:bg-border-strong group-focus-visible/sep:bg-accent" />
+      <span className="absolute inset-y-3 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-focus-visible/sep:bg-accent" />
     </Separator>
   )
 }

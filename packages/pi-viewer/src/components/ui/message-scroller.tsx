@@ -502,7 +502,7 @@ function MessageScrollerButton({
     >
       {children ?? (
         <>
-          <ChevronDownIcon className="size-3.5" />
+          <ChevronDownIcon className="size-4" />
           <span>Scroll to end</span>
           {newCount > 0 ? <span className="text-ink-muted tabular">· {newCount} new</span> : null}
         </>

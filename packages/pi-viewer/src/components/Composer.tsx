@@ -197,7 +197,7 @@ export function Composer({
                 }}
                 className="rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
               >
-                <XIcon className="size-3" />
+                <XIcon className="size-[0.8125rem]" />
               </button>
             </div>
           ) : null}
@@ -269,7 +269,7 @@ export function Composer({
               ) : (
                 <span>no agent</span>
               )}
-              <ChevronDownIcon className="size-3" />
+              <ChevronDownIcon className="size-3.5" />
             </button>
 
             <span className="ml-auto hidden text-2xs text-ink-muted sm:block">
@@ -284,9 +284,9 @@ export function Composer({
               className="flex size-7 items-center justify-center rounded-md bg-github text-github-ink transition-opacity hover:bg-github-hover disabled:opacity-30"
             >
               {sending ? (
-                <LoaderCircleIcon className="size-3.5 animate-spin" />
+                <LoaderCircleIcon className="size-4 animate-spin" />
               ) : (
-                <SendIcon className="size-3.5" />
+                <SendIcon className="size-4" />
               )}
             </button>
           </div>

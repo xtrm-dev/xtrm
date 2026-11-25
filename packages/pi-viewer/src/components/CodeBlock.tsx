@@ -46,7 +46,7 @@ export function CodeBlock({
         aria-label="Copy"
         className="absolute top-1.5 right-1.5 rounded-sm bg-deep p-1 text-ink-muted opacity-0 transition-opacity group-hover/code:opacity-100 hover:text-ink focus-visible:opacity-100"
       >
-        {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+        {copied ? <CheckIcon className="size-[0.8125rem]" /> : <CopyIcon className="size-[0.8125rem]" />}
       </button>
     </div>
   )
@@ -75,7 +75,7 @@ export function CodeFrame({ text, language }: { text: string; language?: string 
               wrap && "bg-control text-ink",
             )}
           >
-            <WrapTextIcon className="size-3" />
+            <WrapTextIcon className="size-[0.8125rem]" />
           </button>
           <button
             type="button"
@@ -83,7 +83,7 @@ export function CodeFrame({ text, language }: { text: string; language?: string 
             aria-label="Copy"
             className="rounded-sm p-1 text-ink-muted hover:bg-hover hover:text-ink"
           >
-            {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+            {copied ? <CheckIcon className="size-[0.8125rem]" /> : <CopyIcon className="size-[0.8125rem]" />}
           </button>
         </div>
       </div>

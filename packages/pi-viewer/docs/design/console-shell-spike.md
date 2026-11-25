@@ -43,7 +43,7 @@ Each copied file names its source on its first lines.
 
 Kept as the viewer's own, inside the console's container: the session > window > pane tree, scope selection
 and URL, role text (Lead and Manager bold and coloured), static status dots, two-line pane rows, the `#181818`
-dark plane, the `border-r border-border-subtle` edge, and the `Sessions` section label.
+dark plane, the `Sessions` section label.
 
 ## Measured against the console
 
@@ -76,6 +76,34 @@ ladder, and the viewer follows it. Values below are the refactor's sources, as r
 
 `src/shell/icon.tsx` carries the same names: micro 12, text 13, xs 14, sm and nav 16, md 18, lg 20 (stroke 2.25,
 2 at `text` and `micro`). The sidebar-gate asserts the 28px box and 16px glyph on the header buttons.
+
+### Ladder applied to the remaining icons (operator ruling)
+
+Role mapping: chrome buttons `sm` 16, row glyphs and chevrons `xs` 14, hover or row actions `text` 13, inline marks `micro` 12.
+Icons stay lucide components (the registry holds only the shell's names); only the size class changed.
+
+| file | icon | was | now | role |
+|---|---|---|---|---|
+| `CodeBlock.tsx` | copy, check, wrap-text (5 sites) | 12 | 13 | hover action |
+| `ChannelView.tsx` | copy, check, reply | 12 | 13 | hover action (previous commit) |
+| `ActivityDisclosure.tsx` | row kind glyph, tool glyph | 13 | 14 | row glyph |
+| `ActivityDisclosure.tsx` | row chevron, group chevron | 12 | 14 | row chevron |
+| `ActivityDisclosure.tsx` | error X mark | 12 | 12 | inline mark, unchanged |
+| `AllEventsView.tsx` | row chevron | 12 | 14 | row chevron |
+| `IntercomCard.tsx` | expand chevron | 12 | 14 | row chevron |
+| `IntercomCard.tsx` | arrow and status marks | 12 | 12 | inline marks, unchanged |
+| `message-scroller.tsx` | jump to latest chevron | 14 | 16 | chrome button |
+| `presence/PresenceDetail.tsx` | back arrow | 14 | 16 | chrome button |
+| `presence/PresenceLine.tsx` | chevrons | 12 and 14 | 12 and 14 | inline mark and row chevron, unchanged |
+| `Composer.tsx` | remove-chip X | 12 | 13 | row action |
+| `Composer.tsx` | target picker chevron | 12 | 14 | row chevron |
+| `Composer.tsx` | send, sending spinner | 14 | 16 | chrome button |
+| `ViewerHeader.tsx` | menu check | 14 | 14 | row glyph, unchanged |
+
+### Edge
+
+No right-edge border and no resize hairline: the sidebar (`#181818` dark) and the thread differ by background only. The handle keeps
+its 8px hit area, the `col-resize` cursor and the keyboard focus line.
 
 ## Decisions (operator, 2026-11-25) and remaining deviations
 

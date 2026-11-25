@@ -53,7 +53,7 @@ function IntercomBody({ text }: { text: string }) {
         >
           {expanded ? "Show less" : "Show more"}
           <ChevronDownIcon
-            className={cn("size-3 transition-transform", expanded && "rotate-180")}
+            className={cn("size-3.5 transition-transform", expanded && "rotate-180")}
             aria-hidden
           />
         </button>

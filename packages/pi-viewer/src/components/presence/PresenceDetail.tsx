@@ -86,7 +86,7 @@ export function PresenceDetail({
           aria-label="Back to the agent list"
           className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-faint hover:bg-hover hover:text-ink-muted focus-visible:bg-hover focus-visible:outline-none"
         >
-          <ArrowLeftIcon className="size-3.5" />
+          <ArrowLeftIcon className="size-4" />
         </button>
         <span className="min-w-0 truncate text-xs font-medium text-ink" title={agent.name}>
           {agent.name}

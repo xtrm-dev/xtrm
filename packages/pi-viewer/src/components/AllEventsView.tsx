@@ -48,7 +48,7 @@ function EventRow({
         <span className="col-span-2 flex min-w-0 items-baseline gap-2 sm:col-span-1">
           <ChevronRightIcon
             className={cn(
-              "size-3 shrink-0 self-center text-ink-muted transition-transform",
+              "size-3.5 shrink-0 self-center text-ink-muted transition-transform",
               open && "rotate-90",
             )}
           />
