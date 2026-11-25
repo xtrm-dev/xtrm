@@ -6,8 +6,8 @@ import { clock, monogram } from "@/lib/format"
 import type { ViewerEvent } from "@/shared/types"
 import { cn } from "@/lib/utils"
 
-/** Five rendered lines at the .xtrm-prose line-height. */
-const COLLAPSED_HEIGHT = 5 * 25.6
+/** Three rendered lines at the .xtrm-prose line-height. */
+const COLLAPSED_HEIGHT = 3 * 25.6
 
 function IntercomBody({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false)
@@ -29,7 +29,8 @@ function IntercomBody({ text }: { text: string }) {
     <div>
       <div
         id={bodyId}
-        className={cn("relative overflow-hidden", !expanded && "max-h-32")}
+        className="relative overflow-hidden"
+        style={!expanded ? { maxHeight: COLLAPSED_HEIGHT } : undefined}
         data-slot="intercom-body"
       >
         <div ref={bodyRef}>
@@ -75,17 +76,19 @@ export function IntercomCard({
   const meta = event.intercom
   if (!meta) return null
   const sent = meta.direction === "sent"
-  const body = meta.body || event.text || event.summary
-  const failed = Boolean(meta.failed || meta.delivery === "failed" || event.isError)
+  const body = meta.body?.trim() || event.text?.trim() || "(empty message)"
+  const delivery = meta.delivery?.trim() || undefined
+  const error = meta.error?.trim() || undefined
+  const failed = meta.failed === true || delivery === "failed"
   const delivered =
-    meta.delivery === "delivered" ||
-    meta.delivery === "received" ||
-    Boolean(meta.delivery?.startsWith("injected"))
+    delivery === "delivered" ||
+    delivery === "received" ||
+    Boolean(delivery?.startsWith("injected"))
   const status = failed ? "failed" : delivered ? "delivered" : sent ? "sent" : "received"
   const statusLabel =
     status === "failed"
-      ? meta.error
-        ? `Delivery failed: ${meta.error}`
+      ? error
+        ? `Delivery failed: ${error}`
         : "Delivery failed"
       : status === "delivered"
         ? "Delivered"
@@ -131,11 +134,10 @@ export function IntercomCard({
           <IntercomBody text={body} />
         </div>
 
+        {failed ? <div className="mt-1.5 text-2xs text-danger">{statusLabel}</div> : null}
+
         {hasFooter ? (
           <div className="mt-2 space-y-1">
-            {failed && meta.error ? (
-              <div className="text-2xs text-danger">{meta.error}</div>
-            ) : null}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-ink-muted">
               {meta.expectsReply ? (
                 <span className="flex items-center gap-1 text-accent">

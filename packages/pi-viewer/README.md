@@ -154,13 +154,14 @@ custom entries become `intercom` events.
 Incoming messages are recognised in both formats: the current
 `<cross-session-message>` envelope used by Pi and Claude sessions, and the
 older `**From <name>**` header. The full body is kept (up to 40,000
-characters) and rendered as Markdown. The Channel card shows five rendered
+characters) and rendered as Markdown. The Channel card shows three rendered
 lines with a `Show more` control; the full body remains available in the
 expanded card and in All events.
 
 A send's tool result is attached back to its card by tool call id. A failed
-send stays in the thread: the card gets a red delivery mark and the tool
-error, instead of disappearing into the meta stream. Successful delivery
+send stays in the thread: the card gets a red delivery mark and an inline
+failure reason, instead of disappearing into the meta stream. Each card keeps
+its own delivery state, including when one entry issued several messages. Successful delivery
 gets a green check; a send without a result yet gets a muted check.
 
 A sent message appears under the sender's reply. A received message appears

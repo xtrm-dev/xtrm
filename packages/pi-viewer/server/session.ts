@@ -466,12 +466,7 @@ export function normalizeEvent(
       text: text || undefined,
       parts,
       stopReason,
-      ...(cappedIntercoms.length
-        ? {
-            intercoms: cappedIntercoms,
-            truncated: cappedIntercoms.some((meta) => meta.truncated) || undefined,
-          }
-        : {}),
+      ...(cappedIntercoms.length ? { intercoms: cappedIntercoms } : {}),
       detail: stopReason ? `stopReason: ${stopReason}` : undefined,
     }
   }
