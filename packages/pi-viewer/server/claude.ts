@@ -200,7 +200,12 @@ export interface ClaudeTranscriptQuery {
   start: ProcStart
   /** Transcripts already assigned to another pane in this discovery pass. */
   claimed: Set<string>
+  /** True when another claude process shares this cwd: the pairing must then stay stable across polls. */
+  contested?: boolean
 }
+
+/** Fallback pairings per pid, kept while the pid (start time) and the transcript stay the same. */
+const assignments = new Map<number, { ticks: string | null; file: string }>()
 
 /**
  * Pick the transcript a claude pane is writing.
@@ -208,10 +213,14 @@ export interface ClaudeTranscriptQuery {
  * 1. registry: `<config>/sessions/<pid>.json` names the session id of that exact process.
  *    The entry is trusted only when its `procStart` equals the process start time in
  *    /proc/<pid>/stat, so a recycled pid cannot borrow another process's session.
- * 2. newest-since-start: when no valid registry entry or its transcript is missing, the
- *    newest transcript in the cwd's project directory that was written after the process
- *    started, excluding transcripts claimed by another pane and session ids registered by
- *    other live claude processes. Two panes sharing a cwd are separated by those exclusions.
+ *    A valid entry whose transcript does not exist yet (a session with no message) yields
+ *    no file: the heuristic below never overrides a valid registry entry.
+ * 2. newest-since-start: only when there is no valid registry entry. The newest transcript in
+ *    the cwd's project directory that was written after the process started, excluding
+ *    transcripts claimed by another pane and session ids registered by other live claude
+ *    processes. When another claude process shares the cwd, the pairing is remembered per
+ *    pid (start time) and kept while its transcript exists, so mtimes that flip between
+ *    polls cannot swap two panes. `resolveClaudeTranscripts` orders the panes.
  */
 export function resolveClaudeTranscript(query: ClaudeTranscriptQuery): ClaudeTranscript {
   const { pid, cwds, configDir, start, claimed } = query
@@ -220,13 +229,23 @@ export function resolveClaudeTranscript(query: ClaudeTranscriptQuery): ClaudeTra
 
   if (registry && registryValid) {
     const file = findTranscript(configDir, registry.sessionId, registry.cwd ? [registry.cwd, ...cwds] : cwds)
+    assignments.delete(pid)
     if (file) {
       claimed.add(file)
       return { file, rule: "registry", sessionId: registry.sessionId }
     }
+    return { file: null, rule: null, sessionId: registry.sessionId }
   }
 
   const others = registeredSessionIds(configDir, pid)
+  const remembered = assignments.get(pid)
+  if (query.contested && remembered && remembered.ticks === start.ticks) {
+    const id = transcriptSessionId(remembered.file)
+    if (existsSync(remembered.file) && !claimed.has(remembered.file) && !(id && others.has(id))) {
+      claimed.add(remembered.file)
+      return { file: remembered.file, rule: "newest-since-start", sessionId: id }
+    }
+  }
   const candidates: Array<{ file: string; mtimeMs: number }> = []
   for (const dir of projectDirs(configDir, cwds)) {
     let names: string[]
@@ -251,9 +270,51 @@ export function resolveClaudeTranscript(query: ClaudeTranscriptQuery): ClaudeTra
   }
   candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)
   const best = candidates[0]
-  if (!best) return { file: null, rule: null, sessionId: registryValid ? (registry?.sessionId ?? null) : null }
+  if (!best) {
+    assignments.delete(pid)
+    return { file: null, rule: null, sessionId: null }
+  }
   claimed.add(best.file)
+  assignments.set(pid, { ticks: start.ticks, file: best.file })
   return { file: best.file, rule: "newest-since-start", sessionId: transcriptSessionId(best.file) }
+}
+
+export interface ClaudePaneQuery extends Omit<ClaudeTranscriptQuery, "claimed" | "contested"> {
+  paneId: string
+}
+
+function paneNumber(paneId: string): number {
+  const value = Number(paneId.replace(/^%/, ""))
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER
+}
+
+/**
+ * Resolve every claude pane of one discovery pass together. Panes are ordered by process
+ * start time, then pane id, so which pane meets a shared transcript first never depends on
+ * tmux's pane order. Remembered pairings of pids that are gone are dropped.
+ */
+export function resolveClaudeTranscripts(queries: ClaudePaneQuery[]): Map<number, ClaudeTranscript> {
+  const ordered = [...queries].sort(
+    (a, b) =>
+      (a.start.ticks === null ? Number.MAX_SAFE_INTEGER : Number(a.start.ticks)) -
+        (b.start.ticks === null ? Number.MAX_SAFE_INTEGER : Number(b.start.ticks)) ||
+      paneNumber(a.paneId) - paneNumber(b.paneId),
+  )
+  const perCwd = new Map<string, number>()
+  for (const query of ordered) {
+    const key = query.cwds[0] ?? ""
+    perCwd.set(key, (perCwd.get(key) ?? 0) + 1)
+  }
+  const claimed = new Set<string>()
+  const found = new Map<number, ClaudeTranscript>()
+  for (const query of ordered) {
+    const { paneId: _paneId, ...rest } = query
+    const contested = (perCwd.get(query.cwds[0] ?? "") ?? 0) > 1
+    found.set(query.pid, resolveClaudeTranscript({ ...rest, claimed, contested }))
+  }
+  const live = new Set(queries.map((query) => query.pid))
+  for (const pid of assignments.keys()) if (!live.has(pid)) assignments.delete(pid)
+  return found
 }
 
 export function transcriptSessionId(file: string): string | null {
@@ -621,10 +682,21 @@ export function parseClaudeFile(file: string): ParsedFile {
   return parsed
 }
 
+/**
+ * Status from the main conversation only. Walking back from the newest record:
+ * sidechain records and bookkeeping rows (system, attachment, queue-operation, ...) are skipped,
+ * an interrupt marker means idle, and the first main-line message decides the rest.
+ */
 export function claudeStatusOf(parsed: ParsedFile): { status: AgentStatus; note: string | null } {
-  const last = parsed.events[parsed.events.length - 1]
-  if (last && last._interrupt === true) return { status: "idle", note: "turn interrupted" }
-  return statusOf(parsed)
+  const events = parsed.events
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const entry = events[index]
+    if (entry._sidechain === true) continue
+    if (entry._interrupt === true) return { status: "idle", note: "turn interrupted" }
+    if (entry.type !== "message") continue
+    return statusOf(index === events.length - 1 ? parsed : { ...parsed, events: events.slice(0, index + 1) })
+  }
+  return statusOf({ ...parsed, events: [] })
 }
 
 export function normalizeClaudeEvent(

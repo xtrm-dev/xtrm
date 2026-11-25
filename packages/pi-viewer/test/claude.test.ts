@@ -12,6 +12,7 @@ import {
   normalizeClaudeEvent,
   parseClaudeFile,
   resolveClaudeTranscript,
+  resolveClaudeTranscripts,
 } from "../server/claude.ts"
 import { channelTurns } from "../src/lib/thread.ts"
 import type { ViewerEvent } from "../src/shared/types.ts"
@@ -379,4 +380,103 @@ test("slugs over 200 characters resolve through the truncated-prefix directory",
   registry(config, 4248, ID_A, longCwd, "5")
   const found = resolveClaudeTranscript({ pid: 4248, cwds: [longCwd], configDir: config, start: { ticks: "5", ms: 1 }, claimed: new Set() })
   assert.equal(found.file, file)
+})
+
+test("a valid registry entry whose transcript does not exist yet yields no file, never a neighbouring transcript", () => {
+  const config = makeConfig("registry-no-file")
+  transcript(config, CWD, ID_B, 9_000)
+  registry(config, 4249, ID_A, CWD, "42")
+  const found = resolveClaudeTranscript({
+    pid: 4249,
+    cwds: [CWD],
+    configDir: config,
+    start: { ticks: "42", ms: 1_000 },
+    claimed: new Set(),
+  })
+  assert.equal(found.file, null)
+  assert.equal(found.rule, null)
+  assert.equal(found.sessionId, ID_A)
+})
+
+test("two same-cwd panes without a registry keep their pairing across polls whose mtimes flip", () => {
+  const config = makeConfig("stable")
+  const fileA = transcript(config, CWD, ID_A, 9_000)
+  const fileB = transcript(config, CWD, ID_B, 8_000)
+  const panes = (order: "forward" | "reverse") => {
+    const list = [
+      { pid: 91_001, paneId: "%7", cwds: [CWD], configDir: config, start: { ticks: "100", ms: 1_000 } },
+      { pid: 91_002, paneId: "%3", cwds: [CWD], configDir: config, start: { ticks: "200", ms: 1_000 } },
+    ]
+    return order === "forward" ? list : list.reverse()
+  }
+
+  const first = resolveClaudeTranscripts(panes("forward"))
+  assert.equal(first.get(91_001)?.file, fileA, "the older process meets the newest transcript first")
+  assert.equal(first.get(91_002)?.file, fileB)
+
+  // Poll 2: the other session writes last, and tmux lists the panes the other way round.
+  utimesSync(fileA, 7_000, 7_000)
+  utimesSync(fileB, 9_500, 9_500)
+  const second = resolveClaudeTranscripts(panes("reverse"))
+  assert.equal(second.get(91_001)?.file, fileA)
+  assert.equal(second.get(91_002)?.file, fileB)
+  assert.notEqual(second.get(91_001)?.file, second.get(91_002)?.file)
+})
+
+test("a pairing is dropped when its transcript disappears or the pid restarts", () => {
+  const config = makeConfig("unstable")
+  const fileA = transcript(config, CWD, ID_A, 9_000)
+  const fileB = transcript(config, CWD, ID_B, 8_000)
+  const query = (ticks: string) => [
+    { pid: 91_011, paneId: "%1", cwds: [CWD], configDir: config, start: { ticks, ms: 1_000 } },
+    { pid: 91_012, paneId: "%2", cwds: [CWD], configDir: config, start: { ticks: "999", ms: 1_000 } },
+  ]
+  assert.equal(resolveClaudeTranscripts(query("5")).get(91_011)?.file, fileA)
+  rmSync(fileA)
+  const after = resolveClaudeTranscripts(query("5"))
+  assert.equal(after.get(91_011)?.file, fileB, "the removed transcript is replaced")
+  // Same pid number, new process (different start ticks): the remembered file is not reused.
+  const fileC = transcript(config, CWD, "cccccccc-0000-4000-8000-000000000003", 9_900)
+  const restarted = resolveClaudeTranscripts(query("6"))
+  assert.equal(restarted.get(91_011)?.file, fileC)
+})
+
+test("a lone claude pane follows its newest transcript (no stale pairing)", () => {
+  const config = makeConfig("lone")
+  transcript(config, CWD, ID_A, 5_000)
+  const lone = () => [{ pid: 91_021, paneId: "%9", cwds: [CWD], configDir: config, start: { ticks: "1", ms: 1_000 } }]
+  assert.match(resolveClaudeTranscripts(lone()).get(91_021)?.file ?? "", new RegExp(ID_A))
+  const fresh = transcript(config, CWD, ID_B, 9_000)
+  assert.equal(resolveClaudeTranscripts(lone()).get(91_021)?.file, fresh)
+})
+
+test("status ignores sidechain records: a trailing subagent tool turn does not make the agent 'working'", () => {
+  const file = join(SCRATCH, "sidechain-status.jsonl")
+  const now = new Date().toISOString()
+  writeFileSync(
+    file,
+    `${JSON.stringify({ type: "assistant", uuid: "a1", timestamp: now, message: { id: "m1", role: "assistant", stop_reason: "end_turn", content: [{ type: "text", text: "done" }] } })}\n` +
+      `${JSON.stringify({ type: "assistant", uuid: "s1", isSidechain: true, timestamp: now, message: { id: "m2", role: "assistant", stop_reason: "tool_use", content: [{ type: "tool_use", id: "t", name: "Bash", input: { command: "ls" } }] } })}\n`,
+  )
+  assert.equal(claudeStatusOf(parseClaudeFile(file)).status, "waiting")
+})
+
+test("an interrupt stays idle behind trailing system, attachment and queue records", () => {
+  const file = join(SCRATCH, "interrupt-trailing.jsonl")
+  const now = new Date().toISOString()
+  const line = (record: Record<string, unknown>) => `${JSON.stringify({ timestamp: now, ...record })}\n`
+  writeFileSync(
+    file,
+    line({ type: "user", uuid: "u1", message: { role: "user", content: "go" } }) +
+      line({ type: "assistant", uuid: "a1", message: { id: "m1", role: "assistant", stop_reason: "tool_use", content: [{ type: "tool_use", id: "t", name: "Bash", input: { command: "sleep 99" } }] } }) +
+      line({ type: "user", uuid: "u2", message: { role: "user", content: [{ type: "text", text: "[Request interrupted by user for tool use]" }] } }) +
+      line({ type: "system", uuid: "sy", subtype: "turn_duration", durationMs: 5 }) +
+      line({ type: "attachment", uuid: "at", attachment: { type: "hook_success" } }) +
+      line({ type: "queue-operation", operation: "enqueue" }),
+  )
+  assert.deepEqual(claudeStatusOf(parseClaudeFile(file)), { status: "idle", note: "turn interrupted" })
+
+  // A prompt sent after the interrupt ends the idle state.
+  appendFileSync(file, line({ type: "user", uuid: "u3", message: { role: "user", content: "again" } }))
+  assert.equal(claudeStatusOf(parseClaudeFile(file)).status, "working")
 })

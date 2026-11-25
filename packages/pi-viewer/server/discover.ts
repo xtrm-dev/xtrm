@@ -11,8 +11,10 @@ import {
   parseClaudeFile,
   readClaudeRegistry,
   readProcStart,
-  resolveClaudeTranscript,
+  resolveClaudeTranscripts,
   transcriptSessionId,
+  type ClaudePaneQuery,
+  type ClaudeTranscript,
 } from "./claude.ts"
 import { parseSessionFile, readSessionName, sessionIdFromFile, statusOf } from "./session.ts"
 
@@ -241,24 +243,25 @@ function uniqueName(name: string, pane: TmuxPane, usedNames: Set<string>): strin
   return name
 }
 
+function claudeQuery(pane: TmuxPane, proc: Proc): ClaudePaneQuery {
+  const cwd = readProcCwd(proc.pid) ?? pane.cwd
+  return {
+    pid: proc.pid,
+    paneId: pane.paneId,
+    cwds: [cwd, pane.cwd].filter(Boolean),
+    configDir: configDirOf(proc.pid),
+    start: readProcStart(proc.pid),
+  }
+}
+
 function resolveClaudePane(
   pane: TmuxPane,
   proc: Proc,
   usedNames: Set<string>,
-  claimed: Set<string>,
+  found: ClaudeTranscript,
 ): ResolvedAgent {
   const cwd = readProcCwd(proc.pid) ?? pane.cwd
   const configDir = configDirOf(proc.pid)
-  // Matching rule: the claude registry entry of this pid (validated against the process
-  // start time), else the newest transcript written since the process started that no
-  // other pane or live claude process owns. See server/claude.ts.
-  const found = resolveClaudeTranscript({
-    pid: proc.pid,
-    cwds: [cwd, pane.cwd].filter(Boolean),
-    configDir,
-    start: readProcStart(proc.pid),
-    claimed,
-  })
   let parsed: ReturnType<typeof parseSessionFile> | null = null
   if (found.file) {
     try {
@@ -302,21 +305,33 @@ function resolveClaudePane(
   return { agent, parsed, sessionName: parsed?.sessionName ?? null }
 }
 
-function resolvePaneAgent(
-  pane: TmuxPane,
-  table: Map<number, Proc>,
-  usedNames: Set<string>,
-  claimed: Set<string>,
-): ResolvedAgent | null {
+type PaneAgent = { kind: "claude"; proc: Proc } | { kind: "pi"; candidates: Proc[] }
+
+/** The shallowest agent process owns the pane; a claude spawned under a pi pane stays hidden. */
+function paneAgent(pane: TmuxPane, table: Map<number, Proc>): PaneAgent | null {
   const root = table.get(pane.panePid)
   const all = descendants(pane.panePid, table)
   if (root) all.push({ ...root, depth: 0 })
   const candidates: Proc[] = all.filter(isPiProcess)
   const claude = all.filter(isClaudeProcess).sort((a, b) => a.depth - b.depth)[0]
   const pi = candidates.length ? Math.min(...candidates.map((proc) => proc.depth)) : Infinity
-  // The shallowest agent process owns the pane; a claude spawned under a pi pane stays hidden.
-  if (claude && claude.depth < pi) return resolveClaudePane(pane, claude, usedNames, claimed)
-  if (!candidates.length) return null
+  if (claude && claude.depth < pi) return { kind: "claude", proc: claude }
+  return candidates.length ? { kind: "pi", candidates } : null
+}
+
+function resolvePaneAgent(
+  pane: TmuxPane,
+  table: Map<number, Proc>,
+  usedNames: Set<string>,
+  transcripts: Map<number, ClaudeTranscript>,
+): ResolvedAgent | null {
+  const owner = paneAgent(pane, table)
+  if (!owner) return null
+  if (owner.kind === "claude") {
+    const found = transcripts.get(owner.proc.pid) ?? { file: null, rule: null, sessionId: null }
+    return resolveClaudePane(pane, owner.proc, usedNames, found)
+  }
+  const candidates = owner.candidates
   candidates.sort((a, b) => a.depth - b.depth)
 
   const wanted = titleName(pane.title)
@@ -382,13 +397,19 @@ export function discover(): Discovery {
   }
 
   const sessions: ViewerSession[] = []
-  // Transcripts already assigned to a claude pane in this pass, across tmux sessions.
-  const claimed = new Set<string>()
+  // Claude transcripts are paired for all panes together: one claim set across tmux
+  // sessions, in a deterministic pane order (see resolveClaudeTranscripts).
+  const claudeQueries: ClaudePaneQuery[] = []
+  for (const pane of panes) {
+    const owner = paneAgent(pane, table)
+    if (owner?.kind === "claude") claudeQueries.push(claudeQuery(pane, owner.proc))
+  }
+  const transcripts = resolveClaudeTranscripts(claudeQueries)
   for (const [name, sessionPanes] of bySession) {
     const usedNames = new Set<string>()
     const agents: ViewerAgent[] = []
     for (const pane of sessionPanes) {
-      const resolved = resolvePaneAgent(pane, table, usedNames, claimed)
+      const resolved = resolvePaneAgent(pane, table, usedNames, transcripts)
       if (resolved) agents.push(resolved.agent)
     }
     if (!agents.length) continue
