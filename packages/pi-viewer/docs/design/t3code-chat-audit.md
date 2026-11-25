@@ -1,6 +1,6 @@
 # t3code chat view audit (XTRM-1025)
 
-Status: draft 1 (tokens, layout, components, scroll and motion, goodies, conflicts, licence). Draft 2 extends it (see §11, open items).
+Status: draft 2. It adds contrast ratios (§1.6), the lead's rulings of 2026-11-25 (§10, §5), syntax theme names, the send-pill class and the tool detail panel (§3.3, §3.6, §3.8), and closes the open items (§11).
 Audience: a builder who restyles the pi-viewer chat view without opening t3code.
 Audited: `pingdotgg/t3code` at commit `dca3ab2025c15cfa5907757229be894cbc04cd80` (HEAD of the default branch on 2026-11-25), shallow clone, read-only.
 Compared with: `packages/pi-viewer/src` at `xt/thread-lead` (50d0a74f) and `packages/xtrm-app/docs/design/console-ui-system.md`.
@@ -8,7 +8,7 @@ Compared with: `packages/pi-viewer/src` at `xt/thread-lead` (50d0a74f) and `pack
 ## 0. How to read this document
 
 - **Path convention.** `T3/` means `apps/web/src/` in the t3code repository. `index.css:1146` means `T3/index.css` line 1146. `contracts/settings.ts` means `packages/contracts/src/settings.ts`. Every value cites its file and line.
-- **Verified** = read in a t3code source file, cited. **Inferred** = derived from a verified value (for example a Tailwind palette step converted to hex, or a `color-mix` computed by hand). The Tailwind v4 palette is not in the t3code repository, so every hex for a Tailwind step is **inferred** from the Tailwind v4 default palette (`apps/web/package.json` pins `"tailwindcss": "^4.0.0"`).
+- **Verified** = read in a t3code source file, cited. **Inferred** = derived from a verified value by a calculation. The Tailwind v4 palette is not in the t3code repository. The `oklch` value of every Tailwind step was read from Tailwind's own `packages/tailwindcss/theme.css` at tag `v4.1.0` (t3code pins `"tailwindcss": "^4.0.0"`, `apps/web/package.json`). The hex shown for a Tailwind step, and every `color-mix`, is my conversion of those values (OKLCH to sRGB, `color-mix` in sRGB, composites in sRGB gamma space as browsers do), so every such hex is **inferred**.
 - **Units.** t3code sets `html { font-size }` from the "interface font size" setting, default 16px (`contracts/settings.ts:174`, applied at `appearanceFonts.ts:101`). Every rem value below is also given as px at a 16px root. Our operator runs a 12px root (`console-ui-system.md` §3.3 "Unit rule"): keep rem, never convert to px.
 - **Not read** (listed in §11): shiki theme names, the send-button pill class, tool detail panels, header, sidebar. Nothing in this document is guessed for those.
 
@@ -23,7 +23,7 @@ t3code defines semantic tokens on `:root` (`index.css:1146-1262`) and passes mos
 | Canvas | `--background` | `zinc-25` = `oklch(99.2% 0 0)` ≈ `#fcfcfc` (inferred hex) | `#000` | `index.css:224,1149,1225` | `--x-deep` / `--x-surface` |
 | Text | `--foreground` | `zinc-900` ≈ `#18181b` (inferred) | `neutral-100` ≈ `#f5f5f5` (inferred) | `index.css:1158,1227` | `--x-ink` |
 | Prose text | `text-foreground/90` | foreground at 90% | foreground at 90% | `ChatMarkdown.tsx:2110` | `--x-ink` |
-| Muted text | `--muted-foreground` | `zinc-500` ≈ `#71717a` (inferred) | `neutral-400` ≈ `#a3a3a3` (inferred) | `index.css:1168,1236` | `--x-ink-muted` |
+| Muted text | `--muted-foreground` | `zinc-500` ≈ `#71717b` (inferred) | `neutral-400` ≈ `#a1a1a1` (inferred) | `index.css:1168,1236` | `--x-ink-muted` |
 | Secondary label (tool rows, meta) | `--secondary-label` | = muted-foreground | = muted-foreground (`#8f8f8f` only inside the sidebar) | `index.css:1170,1309` | `--x-ink-muted` |
 | Icon muted | `--icon-muted` | = muted-foreground | = muted-foreground | `index.css:1171` | `--x-ink-faint` |
 | Placeholder | `--placeholder` | = muted-foreground | = muted-foreground | `index.css:1169` | `--x-ink-faint` |
@@ -158,6 +158,69 @@ Discrepancy (verified): the table rule comment says "One step under 15px prose" 
 
 Animations that loop are **duty-cycled with `steps()`** and **paused when off-screen** (`animation-play-state: var(--visible-animation-state, paused)`, driven by `observeVisibleAnimation`): the comments say this cuts compositor updates from about 288 to 14 per second on a 120Hz display (`index.css:301-306`, `:602-603`). Reduced motion turns the shimmer off (`index.css:665-669,678-681`).
 
+### 1.6 Contrast ratios (WCAG 2.x, computed)
+
+Method: relative luminance from the inferred sRGB hex values in §1.1; ratio = (L1 + 0.05) / (L2 + 0.05). Script and inputs are in the scratch directory (`.../scratchpad/t3/py/contrast.py`). Threshold for body text is 4.5:1, for large text and UI glyphs 3:1.
+
+**t3code, light** (canvas `#fcfcfc`)
+
+| Pair | Foreground | Background | Ratio | Result |
+|---|---|---|---|---|
+| foreground on canvas | `#18181b` | `#fcfcfc` | 17.27 | pass |
+| prose (foreground at 90%) on canvas | `#2f2f32` | `#fcfcfc` | 13.01 | pass |
+| muted-foreground on canvas (tool rows, meta) | `#71717b` | `#fcfcfc` | 4.71 | pass, narrow |
+| muted-foreground on white card | `#71717b` | `#ffffff` | 4.83 | pass |
+| foreground on user bubble | `#18181b` | `#ebebed` | 14.88 | pass |
+| **muted-foreground on user bubble** | `#71717b` | `#ebebed` | **4.05** | **fail** (t3code puts no muted text on the bubble) |
+| link `blue-700` on canvas | `#1447e6` | `#fcfcfc` | 6.66 | pass |
+| error `red-700` on canvas | `#c10007` | `#fcfcfc` | 6.26 | pass |
+| success `emerald-700` on canvas | `#007a55` | `#fcfcfc` | 5.23 | pass |
+| warning `amber-700` on canvas | `#bb4d00` | `#fcfcfc` | 4.90 | pass |
+| foreground on code frame (`zinc-50`) | `#18181b` | `#fafafa` | 16.97 | pass |
+| code header (foreground at 72%) on code frame | `#575759` | `#fafafa` | 6.91 | pass |
+| muted-foreground on code frame | `#71717b` | `#fafafa` | 4.62 | pass, narrow |
+
+**t3code, dark** (canvas `#000`)
+
+| Pair | Foreground | Background | Ratio | Result |
+|---|---|---|---|---|
+| foreground on canvas | `#f5f5f5` | `#000000` | 19.26 | pass |
+| prose (foreground at 90%) on canvas | `#dcdcdc` | `#000000` | 15.31 | pass |
+| muted-foreground on canvas | `#a1a1a1` | `#000000` | 8.13 | pass |
+| muted-foreground on card | `#a1a1a1` | `#111111` | 7.31 | pass |
+| foreground on user bubble | `#f5f5f5` | `#1e1e1e` | 15.29 | pass |
+| muted-foreground on user bubble | `#a1a1a1` | `#1e1e1e` | 6.45 | pass |
+| link `blue-400` on canvas | `#51a2ff` | `#000000` | 7.96 | pass |
+| error `red-400` on canvas | `#ff6467` | `#000000` | 7.27 | pass |
+| success `emerald-400` on canvas | `#00d492` | `#000000` | 10.83 | pass |
+| warning `amber-400` on canvas | `#ffb900` | `#000000` | 12.19 | pass |
+| foreground on code frame (white 3.5% on `#000`) | `#f5f5f5` | `#090909` | 18.26 | pass |
+| muted-foreground on code frame | `#a1a1a1` | `#090909` | 7.71 | pass |
+| sidebar secondary-label `#8f8f8f` on `#000` | `#8f8f8f` | `#000000` | 6.49 | pass |
+
+**Our tokens** (`styles.css:82-117`, same method)
+
+| Pair | Foreground | Background | Ratio | Result |
+|---|---|---|---|---|
+| light ink on deep | `#18181b` | `#f4f4f5` | 16.12 | pass |
+| light ink-muted on surface / on deep | `#5f5f68` | `#ffffff` / `#f4f4f5` | 6.32 / 5.75 | pass |
+| **light ink-faint on surface / on deep** | `#94949c` | `#ffffff` / `#f4f4f5` | **3.01 / 2.74** | **fail for text** |
+| light accent-ink on surface | `#4338ca` | `#ffffff` | 7.90 | pass |
+| light danger on surface | `#c42b2b` | `#ffffff` | 5.63 | pass |
+| dark ink on deep | `#ececef` | `#0d0d0d` | 16.48 | pass |
+| dark ink-muted on deep / on control | `#a0a0a8` | `#0d0d0d` / `#262626` | 7.49 / 5.83 | pass |
+| **dark ink-faint on deep / surface / control** | `#6a6a72` | `#0d0d0d` / `#151515` / `#262626` | **3.63 / 3.41 / 2.82** | **fail for text** |
+| dark accent-ink on deep | `#a5b4fc` | `#0d0d0d` | 9.75 | pass |
+| dark danger on deep | `#f07171` | `#0d0d0d` | 6.76 | pass |
+
+What the numbers decide:
+
+1. **t3code puts all readable chat text on a muted-foreground that passes 4.5:1** (4.71 light, 8.13 dark): tool rows, working row, turn fold, meta row, timestamps. Our viewer sets the same roles in `text-ink-faint` (`ActivityDisclosure.tsx:77,94,107,179`, `ChannelView.tsx:43,90,99,142`), which measures 2.74-3.63 and fails. The console doc keeps `ink-faint` for section headings on purpose (`§3.1`), which is a heading role, not a transcript role. **Recommendation: tool rows, the working row, the turn fold and the meta row use `--x-ink-muted`; `--x-ink-faint` stays for headings and for glyphs only.** This is the largest legibility gain in the restyle and costs no new token.
+2. **Do not put muted text on the user bubble in light theme** (4.05 in t3code). Our light bubble would be `--x-control` `#efeff1`; `ink-muted` `#5f5f68` on it is 5.50 (computed with the same method), so ours passes. Keep `ink-muted`, never `ink-faint`, in or under the bubble.
+3. Light muted on the canvas is a narrow pass (4.71). A builder who darkens the canvas by one step loses it. Our `ink-muted` has 5.75-6.32 headroom.
+4. Dark mode has wide headroom everywhere; the dark canvas `#000` against `#a1a1a1` is 8.13.
+5. Syntax colours and tool icon tints were not measured (see §11).
+
 ## 2. Layout
 
 ```
@@ -229,6 +292,10 @@ Verified (`WorkLog.tsx`, `TimelineWorkGroupRows.tsx`, `MessagesTimeline.tsx`).
 
 **Superseded attempt** (`AttemptFoldTimelineRow`, `:1939-1971`): `rounded-md border border-border/60 bg-muted/20 px-2.5 py-2 hover:bg-muted/35`, a chevron `size-3.5 text-muted-foreground`, label `text-xs font-medium text-foreground/80`, hint `text-2xs text-muted-foreground` ("Cut off by a steer").
 
+**Expanded group is its own scroll region** (`ExpandedWorkGroupEntries`, `TimelineWorkGroupRows.tsx:188-347`): a nested virtualised list, `max-height: calc(min(18rem, 50dvh) + <height of expanded rows>)` (`:339`), `rounded-md`, `scrollbar-gutter: stable`, 24px estimated row (`compactWorkEntryHeight`, `:141`), `role="region"` with the label "Tool calls". Top and bottom edges fade through a 1.5rem mask only on the side that has more content (`ui/scroll-area.tsx:5-20`, `--fade-size: 1.5rem`). The list follows appended entries only while the user sits at the bottom (`shouldFollowWorkGroupAppend`, `:217-224`), and each group remembers its scroll position (`:254-257`).
+
+**Expanded entry body** (`TimelineWorkEntryRow.tsx`): a `WorkLogDetails kind="panel"` (`:725`). Plain output renders in a `pre`: `max-h-64 cursor-text overflow-auto whitespace-pre-wrap break-words font-mono text-secondary-label leading-relaxed select-text`, size `--font-size-code` falling back to `text-2xs` (`:198-199`). Entry label line: `text-sm leading-relaxed`, truncated, optional second muted segment for an answer preview (`:594-638`). Reasoning entries show inline-markdown previews. Warning and error entries use `text-warning` or `text-destructive` with a `size-4` icon (`:373-378`). Reasoning body text in a detail pane: `ms-7 text-sm leading-relaxed text-foreground/80` (`:392`).
+
 Command lines in the work log use `CommandBlock`: `$` prompt in `text-muted-foreground mr-2`, `min-w-0 truncate`, a copy button with `size-3.5` icons (`CommandBlock.tsx:35-45`).
 
 ### 3.4 Reasoning ("Thinking")
@@ -258,6 +325,7 @@ Verified (`MarkdownCodeBlock.tsx`, `index.css`):
 
 - Frame: `chat-markdown-codeblock my-[0.65rem] text-start overflow-hidden rounded-lg border border-border/70 bg-secondary leading-snug dark:border-transparent dark:bg-input/32` (`MarkdownCodeBlock.tsx:67`). Light: 1px zinc border at 70% on `#fafafa`. Dark: no border, fill `--input` (white 11%) at 32% ≈ white 3.5%.
 - Header: `flex items-center justify-between gap-2 pt-1.5 pr-1.5 pb-0 pl-3 select-none` (`:74`); colour `foreground` at 72% (`index.css:2238`). Left: language label `font-mono text-2xs` (11px). Right: a toolbar of `ghost-muted` `icon-xs` buttons with `size-3` (12px) icons, `gap-0.5`: wrap toggle (pressed state = `secondary` variant), run in terminal (shell blocks only), view toggle (diagrams), copy (swaps to a check mark) (`:223-265,190-202`).
+- Syntax theme: `pierre-dark` in dark mode and `t3-light` in light mode (`lib/diffRendering.ts:9-13`). `t3-light` is `pierre-light` with darker syntax colours "so syntax stays readable on every code surface" (`lib/readableSyntaxTheme.ts:4,64`). Token colours were not measured.
 - Body: `pre` has no margin, border or radius inside the frame (`index.css:2241-2246`); syntax colours come from the highlighter's inline styles with the `.shiki` background forced transparent (`index.css:2253-2255`). Plain-text fences (`text`, `txt`, `plain`, `plaintext`) inherit foreground (`index.css:2257-2269`).
 - Wrapping: `data-wrap="true"` gives `white-space: pre-wrap; overflow-wrap: anywhere` (`index.css:2248-2251`); otherwise horizontal scroll with a 6px thin thumb (`index.css:2228-2235`).
 - Size: `--font-size-code`, default 13px (`index.css:1822-1826`).
@@ -286,7 +354,7 @@ Verified (`ComposerSurface.tsx`, `ChatView.tsx`, `ComposerPromptEditorTiptap.tsx
 - **Shadow.** Light `0 1px 2px rgb(0 0 0 / 5%)`; dark none (`:41`, `index.css:200`).
 - **Editor.** `composer-tiptap -m-1 block max-h-52 min-h-[calc(2lh+--spacing(2))] overflow-y-auto p-1 whitespace-pre-wrap wrap-break-word bg-transparent leading-relaxed text-foreground focus:outline-none` (`ComposerPromptEditorTiptap.tsx:1148`). Two lines minimum, 208px maximum, then it scrolls. Font size is the prompt size (14px default). Headings, lists and quotes inside the editor share the chat markdown styles (`:is(.chat-markdown, .composer-tiptap)` selectors, `index.css:1914-2016`).
 - **Touch.** On phones the prompt size is `max(prompt, 16px)` so iOS does not zoom on focus (`index.css:134-135`).
-- **Send.** A pill button `h-8 sm:h-7`, `px-3` compact / `px-4` regular (`ComposerPrimaryActions.tsx:338`); the shared class is `messageActionPillClassName` (not read). Send icons `size-4` (`:475-481`).
+- **Send.** A pill button `h-8 sm:h-7`, `px-3` compact / `px-4` regular (`ComposerPrimaryActions.tsx:338`). Shared class `messageActionPillClassName` (`:101-102`): `inline-flex items-center justify-center gap-1.5 rounded-full bg-message-action font-medium text-base text-message-action-foreground shadow-xs shadow-message-action/24 hover:bg-message-action-hover`, `sm:text-sm`, focus ring `ring-2 ring-inset ring-ring ring-offset-1`, disabled `opacity-64`. `--message-action` is the primary colour (`index.css:1175-1177`: hover is primary 90% over the background). Send icons `size-4` (`:475-481`). We map it to our existing send button (`bg-github`), not to the accent: accent is for selection and focus (`console-ui-system.md` §2.1 rule 4).
 - **Context strip.** An optional row under the card (environment, branch) with `surface-glass`, `gap-2 px-2 pt-2 text-muted-foreground` (`ComposerSurface.tsx:77`).
 - **Draft hero.** With no messages the composer is vertically centred in the viewport and a headline sits above it (`ChatView.tsx:3784-3800`).
 
@@ -385,7 +453,8 @@ Rank key: value (H/M/L) = how much it changes the feel of the chat view; effort 
 | 22 | **Reply to a response** (select text, send a quoted follow-up) (`AssistantReplyButton`, `TimelineAssistantRows.tsx:257-303`) | M | L | Partial | Our send path is text via send-keys; a quoted prefix is plain text. t3code stores a structured citation; we would not. |
 | 23 | **Fork thread from a message** (`AssistantForkButton`) | M | L | N | Needs agent control. |
 | 24 | **Revert / checkpoint** (`RevertUserMessageButton`) | M | L | N | Needs agent control. |
-| 25 | **Pending approvals row** (`TimelinePendingApprovalRow`) | H | L | Partial | We can detect "waiting for approval" from the transcript; answering is `send-keys`. Needs a lead ruling on the risk (CLAUDE.md: the lead answers pane prompts after reading the command). |
+| 25 | **Pending approvals row** (`TimelinePendingApprovalRow`): show the request and an approve / deny control | H | L | Partial | **Operator ruling needed** (lead, 2026-11-25: it sends keystrokes that change an agent's state, so it is the operator's call). Showing the pending request read-only is safe (S). Answering through `send-keys` carries three risks: (a) **wrong-pane target**: the key lands in a different agent's pane; (b) **race with the agent's own input**: the prompt is already answered or replaced when the key arrives, and the key becomes prompt text or answers the next prompt; (c) **approving something unread**: a one-click approve without the command visible. Mitigation if approved: show the full command, bind the control to the pane id and a request id, disable once the transcript shows an answer, require a second click. |
+| 28 | **Interrupt a working agent** (t3code: stop button in the composer actions; ours would be `Escape` through `send-keys`) | H | S | Partial | **Operator ruling needed** (same reason as #25). Risks: (a) **wrong-pane target**: it stops the wrong agent mid-edit; (b) **race with the agent's own input**: `Escape` arrives while the agent is already idle and clears or edits its input line, or during a permission prompt and dismisses it; (c) **destructive timing**: it can cancel a tool call that has partly written files. Mitigation if approved: visible only while status is `working`, shows the target agent name, confirm click, no keyboard shortcut. |
 | 26 | **Subagent groups, background work chips** | M | L | Partial | Pi has no equivalent event stream yet. |
 | 27 | **Brand grain texture** (`index.css:1793-1810`) | L | S | Y | Rejected, see §10. |
 
@@ -403,7 +472,7 @@ These ideas use only transcript data and `send-keys`.
 8. **Keyboard map.** `j` / `k` next / previous turn, `e` expand or collapse all tool rows in the focused turn, `/` find, `y` copy the last assistant message, `G` jump to end, `Esc` clear focus. The minimap tick strip mirrors `j/k`.
 9. **Intercom as a conversation lane.** Group consecutive agent-to-agent messages between the same pair into one block with `from → to` once, then bubbles on alternating sides (our `IntercomCard` repeats the header every time). Collapse delivery receipts into one line.
 10. **Quick-send macros.** A row above the composer with `Continue`, `Status?`, `Summarise` that fill the composer (never auto-send). The send path stays the operator's decision.
-11. **Interrupt button (needs ruling).** `Escape` via `send-keys` is the only interrupt we have; show it only for a working agent and require a confirm. The contract forbids attaching to a pane; `send-keys` is allowed, but an interrupt changes agent state, so the lead must rule.
+11. **Interrupt button (operator ruling needed).** `Escape` via `send-keys` is the only interrupt we have. Listed as goodie #28 with its risks. The lead ruled on 2026-11-25 that the operator decides.
 12. **Pinned context line.** When scrolled more than two screens away from the first user message of a turn, show a one-line sticky header with that prompt's first 80 characters.
 13. **Anchor links.** `#event-<id>` deep links so one lead can point another at a turn.
 14. **Copy turn as Markdown.** One action on the fold header.
@@ -420,12 +489,12 @@ All sizes are rem so they follow the operator's 12px root. Our tokens are author
 | Prose | 0.875rem / 1.625, colour foreground 90% | `text-sm` is 0.8125rem in our ladder; use a viewer-local `--chat-text: 0.875rem` and `line-height: 1.625` only on `.xtrm-prose` (§3.3 of the console doc lets prose own its scale) |
 | Heading sizes | 1.25 / 1.125 / 1 / 0.875rem, weight 600, lh 1.3 | `.xtrm-prose` h1-h4 |
 | Block rhythm | 0.65rem | `.xtrm-prose` margins (ours is 0.7rem; keep 0.7) |
-| Tool row | `min-h-6` (1.5rem), icon box 1.5rem, `gap-1.5`, label 0.875rem secondary-label | `text-ink-muted`; icon 0.8125rem (`text` glyph step, see §10) |
+| Tool row | `min-h-6` (1.5rem), icon box 1.5rem, `gap-1.5`, label 0.875rem secondary-label | 24px ruled exception; `text-ink-muted` (not `ink-faint`, §1.6); icon 0.8125rem (`text` glyph step, §10) |
 | Meta row | 0.75rem, `tabular-nums`, `opacity-0 → 100` 200ms | `text-xs` is 0.72rem in ours; keep ours |
-| User bubble | 80% max, radius 16px, p 12px, `rounded-tr-md`/`rounded-br-md` when grouped | `bg-control`, radius needs a ruling (§10) |
+| User bubble | 80% max, p 12px, grouped-corner tightening | `bg-control`, `rounded-lg` 10px (ruled), `rounded-tr-sm` / `rounded-br-sm` 6px when grouped |
 | Code frame | radius 8px, border at 70% light / none dark, header 0.6875rem mono | `rounded-md` (8px), `border-border-muted`, `text-2xs` |
 | Dividers | `border-border/60` at turn boundaries only | `border-border-muted` |
-| Composer | 16px radius, glass, 2-line min, 208px max | `bg-raised`, `rounded-md` or ruling, `max-h-52` |
+| Composer | glass, 2-line min, 208px max | `bg-raised`, `rounded-lg` 10px (ruled), `max-h-52` |
 | Scroll pill | glass, `rounded-full`, `h-6`, chevron + label + summary | `bg-raised shadow-float` |
 | Motion | 200ms opacity reveal; 600ms stream fade; 2.2s stepped shimmer paused off-screen | add `--ease-drawer` only if a drawer appears |
 
@@ -458,7 +527,7 @@ All sizes are rem so they follow the operator's 12px root. Our tokens are author
 | 1 | Prose size | 14px / 1.625 | Prose owns its scale (`§3.3`: ".xtrm-prose … is outside the type ladder by design") but the shell body is `text-sm` 13px | No conflict if prose stays in `.xtrm-prose`. Set the prose size there only; do not touch `--text-sm`. |
 | 2 | UI text sizes | `text-xs` 12px, `text-2xs` 11px | `text-xs` 0.72rem, `text-2xs` 0.625rem (`§3.3`) | Keep ours. Differences are 0.5px and 1px. |
 | 3 | Row glyph size | 16px icons in a 24px box next to 14px text | "A glyph never exceeds its row's text" (`§3.4`); row glyph is `text` step 0.8125rem | Use the `text` step (0.8125rem). Conflict with the t3code look (smaller icons). Accept ours. |
-| 4 | Radii | 16px bubble and composer, 8px code frame | `rounded-md` 8px for rows and cards; `rounded-lg` 10px for floating layers only; nothing larger (`§3.2`) | **Open ruling.** Option A: bubble 12px (`rounded-xl`) added as a new "message" step. Option B: bubble at `rounded-lg` 10px. Recommend B plus the grouped-corner tightening at `rounded-sm`. The lead decides. |
+| 4 | Radii | 16px bubble and composer, 8px code frame | `rounded-md` 8px for rows and cards; `rounded-lg` 10px for floating layers only; nothing larger (`§3.2`) | **Ruled by the lead, 2026-11-25: the user bubble and the composer use `rounded-lg` 10px.** The difference from t3code is 6px (16px vs 10px) and is intentional. Grouped-message corners tighten to `rounded-sm` 6px (t3code: 6px `rounded-md`, `TimelineUserMessageRow.tsx:942-943`). The code frame stays `rounded-md` 8px. |
 | 5 | Boxes and borders | Code frame has a 1px border (light), composer has an outline, attempt fold is a bordered box | "Hairlines, not boxes" (`§2.1` rule 3, `§11`); no card around a list | Code frame: border only in light, none in dark (as t3code) using `border-border-muted`. Composer outline: `border-border` input border (`§3.1`: "input borders, form controls"). Attempt fold: hairline only. |
 | 6 | Shadows | Composer `0 1px 2px` in light, buttons `shadow-xs` | Shadows only on floating layers; `shadow-float` / `shadow-panel`; no `shadow-[…]` literal (`§3.2`) | Drop the composer shadow; our dark theme already has none. The scroll pill takes `shadow-float`. |
 | 7 | Glass and blur | Composer and pill use `backdrop-blur` and `saturate` | Not in the doc; no glass token | Not adopted. A solid `bg-raised` composer satisfies the ladder. If wanted, add a token through the lead. |
@@ -470,18 +539,20 @@ All sizes are rem so they follow the operator's 12px root. Our tokens are author
 | 13 | Dividers | `border-border/60` | `--x-border-muted` (ink 7% / white 8%) | Use `--x-border-muted`. |
 | 14 | Weights | 400 / 500 / 600 / 700 | Title `font-medium`; row labels inherit; headings 600 in prose | Compatible. Do not use 700 outside `strong`. |
 | 15 | Fonts | System stack, optional Inter | Figtree Variable and Geist Mono Variable (viewer `styles.css:2-3,121`) | Keep ours. |
-| 16 | Row height | Tool row 24px (`min-h-6`) | Rows are 28 / 32px (`§4.2`) | Conflict for dense logs. The chat view is not a list; treat the tool row as a transcript line, not a `Row`. Recommend a 24px line documented as a transcript exception. Needs a lead ruling. |
+| 16 | Row height | Tool row 24px (`min-h-6`, `WorkLog.tsx:64`) | Rows are 28 / 32px (`§4.2`) | **Ruled by the lead, 2026-11-25: tool rows are 24px, a documented transcript exception.** Reason: dense log rows are not navigation rows. A transcript line is read in sequence, never picked from a list, so it needs no 28-32px pointer target. Scope of the exception: the tool-call line, the working row and the turn-fold line inside the chat thread only. Every list and table elsewhere keeps `§4.2`. Add the exception to `console-ui-system.md` §4.2 when the restyle merges. |
 | 17 | Motion | Stepped 2.2s shimmer, 600ms fade | Doc mentions motion only for the toolbar filter (150ms, `§5.3`) | Add a short motion section when adopted. Keep reduced-motion branches. |
 
-## 11. Open items (draft 2)
+## 11. Open items
 
-Not yet read; nothing above depends on them:
+Closed in draft 2: contrast ratios (§1.6), syntax theme names (§3.6), send-pill class (§3.8), tool detail panels (§3.3).
 
-- Syntax highlighter theme names and token colours (`@pierre/diffs`, shiki). Needed to match code colours.
-- `messageActionPillClassName` and the composer controls bar (model picker, effort glyph, attachments).
-- Tool detail panels (`CommandOutputPanel`, diff panels), subagent rows, approvals row.
+Still not read, and nothing above depends on them:
+
+- Syntax token colours (`pierre-dark`, `t3-light`) and their contrast on the code frame. A builder who needs matching code colours reads `lib/readableSyntaxTheme.ts` and the `@pierre/diffs` theme files.
+- The composer controls bar (model picker, effort glyph, attachment strip) and the approvals panel above the composer.
+- Subagent rows and background-work details (`BackgroundWorkDetails.tsx`).
 - Thread header and sidebar (out of scope for the chat view).
-- Quick computed contrast ratios for the t3code text colours on both canvases.
+- A live visual check of t3code itself: the audit reads source only; it did not run the app. All pixel values are therefore derived from classes and CSS, not measured in a browser.
 
 ## 12. Licence
 
