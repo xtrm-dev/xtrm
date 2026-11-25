@@ -1,7 +1,7 @@
 import * as React from "react"
-import { ArrowDownIcon } from "lucide-react"
+import { ChevronDownIcon } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
+import { followMode, recall, remember, smoothStep } from "@/lib/stick"
 import { cn } from "@/lib/utils"
 
 interface ScrollOptions {
@@ -10,6 +10,11 @@ interface ScrollOptions {
 
 interface ScrollerContextValue {
   atBottom: boolean
+  /** Rows that arrived while the reader was scrolled away from the end. */
+  newCount: number
+  setWorking: (working: boolean) => void
+  /** The thread reports how many rows arrived while the reader was away from the end. */
+  reportNew: (count: number) => void
   registerViewport: (element: HTMLDivElement | null) => void
   registerContent: (element: HTMLDivElement | null) => void
   sync: () => void
@@ -38,8 +43,11 @@ const BOTTOM_SLACK = 8
  */
 function MessageScrollerProvider({
   children,
+  threadKey,
 }: {
   children: React.ReactNode
+  /** Names the thread; its scroll position is remembered per key. */
+  threadKey?: string
   autoScroll?: boolean
   defaultScrollPosition?: "start" | "end" | "last-anchor"
   scrollEdgeThreshold?: number
@@ -53,11 +61,54 @@ function MessageScrollerProvider({
   const initializedRef = React.useRef(false)
   const suppressRef = React.useRef<number | null>(null)
   const [atBottom, setAtBottom] = React.useState(true)
+  const [newCount, setNewCount] = React.useState(0)
+  const workingRef = React.useRef(false)
+  const glidingRef = React.useRef(false)
+  const frameRef = React.useRef<number | null>(null)
+  const restoreRef = React.useRef<{ id: string; top: number } | null>(null)
+  const threadKeyRef = React.useRef(threadKey)
+  threadKeyRef.current = threadKey
+
+  const stopGlide = React.useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
+    frameRef.current = null
+    glidingRef.current = false
+  }, [])
+
+  /** Follow growing content smoothly while an agent works: a quarter of the gap per frame. */
+  const glide = React.useCallback(() => {
+    if (frameRef.current !== null) return
+    glidingRef.current = true
+    const tick = () => {
+      const viewport = viewportRef.current
+      if (!viewport || !atBottomRef.current) {
+        stopGlide()
+        return
+      }
+      const target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      const next = smoothStep(viewport.scrollTop, target)
+      viewport.scrollTop = next
+      if (next === target) {
+        frameRef.current = null
+        glidingRef.current = false
+        return
+      }
+      frameRef.current = requestAnimationFrame(tick)
+    }
+    frameRef.current = requestAnimationFrame(tick)
+  }, [stopGlide])
+
+  const reportNew = React.useCallback((count: number) => setNewCount(count), [])
+
+  const setWorking = React.useCallback((working: boolean) => {
+    workingRef.current = working
+  }, [])
 
   const setBottom = React.useCallback((next: boolean) => {
     if (atBottomRef.current === next) return
     atBottomRef.current = next
     setAtBottom(next)
+    if (next) setNewCount(0)
   }, [])
 
   const captureAnchor = React.useCallback(() => {
@@ -84,11 +135,12 @@ function MessageScrollerProvider({
       const viewport = viewportRef.current
       if (!viewport) return
       anchorRef.current = null
+      stopGlide()
       setBottom(true)
       suppressRef.current = null
       viewport.scrollTo({ top: viewport.scrollHeight, behavior })
     },
-    [setBottom],
+    [setBottom, stopGlide],
   )
 
   const sync = React.useCallback(() => {
@@ -100,14 +152,48 @@ function MessageScrollerProvider({
       atBottomRef.current = true
       setAtBottom(true)
       viewport.scrollTop = viewport.scrollHeight
+      // A thread the reader left mid-way reopens where they were, once its rows exist.
+      const saved = threadKeyRef.current ? recall(threadKeyRef.current) : undefined
+      if (saved && !saved.atEnd && saved.anchorId) {
+        restoreRef.current = { id: saved.anchorId, top: saved.anchorTop }
+      }
       return
+    }
+
+    if (restoreRef.current) {
+      const wanted = restoreRef.current
+      const content = contentRef.current
+      const element = content
+        ? Array.from(content.children).find(
+            (child): child is HTMLElement => child instanceof HTMLElement && child.dataset.messageId === wanted.id,
+          )
+        : undefined
+      if (element) {
+        restoreRef.current = null
+        const delta = element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - wanted.top
+        viewport.scrollTop += delta
+        anchorRef.current = { id: wanted.id, top: wanted.top }
+        atBottomRef.current = false
+        setAtBottom(false)
+        return
+      }
     }
 
     if (atBottomRef.current) {
       const target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
       if (Math.abs(viewport.scrollTop - target) > 1) {
-        suppressRef.current = target
-        viewport.scrollTop = target
+        const mode = followMode({
+          atBottom: true,
+          working: workingRef.current,
+          reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        })
+        if (mode === "smooth") {
+          glide()
+        } else {
+          stopGlide()
+          suppressRef.current = target
+          viewport.scrollTop = target
+        }
       }
       return
     }
@@ -136,11 +222,12 @@ function MessageScrollerProvider({
     const delta = top - anchor.top
     if (Math.abs(delta) > 0.5) viewport.scrollTop += delta
     anchor.top = top
-  }, [captureAnchor])
+  }, [captureAnchor, glide, stopGlide])
 
   const handleScroll = React.useCallback(() => {
     const viewport = viewportRef.current
     if (!viewport) return
+    if (glidingRef.current) return
 
     if (suppressRef.current !== null) {
       if (Math.abs(viewport.scrollTop - suppressRef.current) < 1) {
@@ -165,6 +252,33 @@ function MessageScrollerProvider({
     contentRef.current = element
   }, [])
 
+  // A reader's own input ends a smooth follow at once.
+  React.useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const interrupt = () => stopGlide()
+    const events = ["wheel", "touchstart", "keydown", "pointerdown"] as const
+    for (const name of events) viewport.addEventListener(name, interrupt, { passive: true })
+    return () => {
+      for (const name of events) viewport.removeEventListener(name, interrupt)
+      stopGlide()
+    }
+  }, [stopGlide])
+
+  // Leaving a thread remembers where the reader was.
+  React.useEffect(() => {
+    return () => {
+      const key = threadKeyRef.current
+      if (!key) return
+      const anchor = anchorRef.current
+      remember(key, {
+        atEnd: atBottomRef.current,
+        anchorId: anchor?.id ?? null,
+        anchorTop: anchor?.top ?? 0,
+      })
+    }
+  }, [])
+
   React.useEffect(() => {
     const content = contentRef.current
     if (!content || typeof ResizeObserver === "undefined") return
@@ -174,8 +288,18 @@ function MessageScrollerProvider({
   }, [sync])
 
   const value = React.useMemo(
-    () => ({ atBottom, registerViewport, registerContent, sync, handleScroll, scrollToEnd }),
-    [atBottom, registerViewport, registerContent, sync, handleScroll, scrollToEnd],
+    () => ({
+      atBottom,
+      newCount,
+      setWorking,
+      reportNew,
+      registerViewport,
+      registerContent,
+      sync,
+      handleScroll,
+      scrollToEnd,
+    }),
+    [atBottom, newCount, setWorking, reportNew, registerViewport, registerContent, sync, handleScroll, scrollToEnd],
   )
 
   return <ScrollerContext.Provider value={value}>{children}</ScrollerContext.Provider>
@@ -249,18 +373,19 @@ function MessageScrollerButton({
   onClick,
   direction: _direction = "end",
   ...props
-}: React.ComponentProps<typeof Button> & { direction?: "start" | "end" }) {
-  const { atBottom, scrollToEnd } = useScrollerContext()
+}: React.ComponentProps<"button"> & { direction?: "start" | "end" }) {
+  const { atBottom, newCount, scrollToEnd } = useScrollerContext()
   return (
-    <Button
+    <button
+      type="button"
       data-slot="message-scroller-button"
       data-active={atBottom ? "false" : "true"}
-      variant="secondary"
-      size="icon-sm"
       tabIndex={atBottom ? -1 : 0}
       aria-hidden={atBottom}
+      // Keep the composer's focus: the pill must not steal it.
+      onPointerDown={(event) => event.preventDefault()}
       className={cn(
-        "absolute inset-s-1/2 -translate-x-1/2 border-0 bg-raised text-foreground shadow-float transition-[translate,scale,opacity] duration-200 hover:bg-hover hover:text-foreground data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-400 data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)] data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)] data-[active=false]:translate-y-full bottom-4",
+        "absolute inset-s-1/2 bottom-4 flex h-6 -translate-x-1/2 items-center gap-1 rounded-full bg-raised px-2.5 text-xs text-ink shadow-float transition-[translate,scale,opacity] duration-200 hover:bg-hover data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-400 data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)] data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)] data-[active=false]:translate-y-full",
         className,
       )}
       onClick={(event) => {
@@ -271,18 +396,22 @@ function MessageScrollerButton({
     >
       {children ?? (
         <>
-          <ArrowDownIcon />
-          <span className="sr-only">Scroll to end</span>
+          <ChevronDownIcon className="size-3.5" />
+          <span>Scroll to end</span>
+          {newCount > 0 ? <span className="text-ink-muted tabular">· {newCount} new</span> : null}
         </>
       )}
-    </Button>
+    </button>
   )
 }
 
 function useMessageScroller() {
-  const { scrollToEnd } = useScrollerContext()
+  const { scrollToEnd, setWorking, reportNew, atBottom } = useScrollerContext()
   return {
     scrollToEnd,
+    setWorking,
+    reportNew,
+    atBottom,
     scrollToStart: () => {},
     scrollToMessage: () => {},
   }
