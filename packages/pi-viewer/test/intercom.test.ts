@@ -359,3 +359,28 @@ test("a single intercom call keeps the entry's other tool work", () => {
   assert.equal(turns[0].activity.length, 1)
   assert.match(turns[0].activity[0].summary, /echo after send/)
 })
+
+test("a delivery-failed card does not rely on the entry-level error flag", () => {
+  const entry = event("a", 0, 1_000, "assistant", {
+    isError: false,
+    parts: [
+      { type: "tool-call", toolCallId: "ok", toolName: "SendMessage", summary: "to b" },
+      { type: "tool-call", toolCallId: "bad", toolName: "SendMessage", summary: "to c" },
+    ],
+    intercoms: [
+      {
+        direction: "sent", from: "a", to: "b", body: "fine", toolCallId: "ok",
+        delivery: "delivered", runtime: "pi",
+      },
+      {
+        direction: "sent", from: "a", to: "c", body: "lost", toolCallId: "bad",
+        delivery: "failed", error: "not delivered", runtime: "pi",
+      },
+    ],
+  })
+  const cards = channelTimeline([entry]).filter((item) => item.kind === "intercom")
+  assert.deepEqual(
+    cards.map((item) => item.kind === "intercom" && item.event.isError === true),
+    [false, true],
+  )
+})

@@ -367,6 +367,11 @@ test("a reused window index with a different id is not the same state, and a mis
   assert.equal(sameScopeState(sameIndex, reused), false)
   assert.equal(sameScopeState(sameIndex, renumbered), false, "the displayed index must follow a renumber")
   assert.equal(sameScopeState(sameIndex, { ...sameIndex }), true)
+  assert.equal(
+    sameScope(sameIndex, { kind: "window", session: "xx", window: 1, windowId: "" }),
+    false,
+    "an empty id is not the real tmux window at the same index",
+  )
 
   const noId: Scope = { kind: "window", session: "xx", window: 1, windowId: "" }
   assert.equal(scopeRowKey(noId), "w:xx:1")

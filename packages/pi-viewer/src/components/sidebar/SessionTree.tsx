@@ -112,9 +112,8 @@ export function SessionTree({
       ? (rows.find((row) => {
           if (row.node.kind !== "pane" || row.node.session !== scope.session) return false
           const agent = row.node.agent
-          return scope.windowId && agent.windowId
-            ? agent.windowId === scope.windowId
-            : agent.windowIndex === scope.window
+          if (scope.windowId) return agent.windowId === scope.windowId
+          return agent.windowIndex === scope.window
         })?.key ?? wanted)
       : wanted
 

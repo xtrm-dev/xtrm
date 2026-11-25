@@ -286,7 +286,7 @@ function intercomCard(event: ViewerEvent, meta: NonNullable<ViewerEvent["interco
     parts: undefined,
     intercom: meta,
     intercoms: undefined,
-    isError: meta.failed === true,
+    isError: meta.failed === true || meta.delivery === "failed" || undefined,
     truncated: meta.truncated || undefined,
     detail:
       meta.direction === "sent"
