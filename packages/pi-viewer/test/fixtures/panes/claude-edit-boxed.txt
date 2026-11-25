@@ -1,0 +1,16 @@
+● Update(src/lib/thread.ts)
+
+╭──────────────────────────────────────────────────────────────────────────╮
+│ Edit file                                                                │
+│ ╭──────────────────────────────────────────────────────────────────────╮ │
+│ │ src/lib/thread.ts                                                    │ │
+│ │                                                                      │ │
+│ │ 455  export function turnAnchor(turn: Turn): number {                │ │
+│ │ 456 -  if (!turn.pending) {                                          │ │
+│ │ 456 +  if (!turn.pending && turn.final) {                            │ │
+│ ╰──────────────────────────────────────────────────────────────────────╯ │
+│ Do you want to make this edit to thread.ts?                              │
+│ ❯ 1. Yes                                                                 │
+│   2. Yes, allow all edits during this session (shift+tab)                │
+│   3. No, and tell Claude what to do differently (esc)                    │
+╰──────────────────────────────────────────────────────────────────────────╯
