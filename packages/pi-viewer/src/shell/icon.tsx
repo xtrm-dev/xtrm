@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Layers, MousePointer2, Moon, PanelLeft, Sun, type LucideIcon } from "lucide-react"
+import { ChevronDown, ChevronUp, Layers, MousePointer2, Moon, MoveHorizontal, PanelLeft, Sun, type LucideIcon } from "lucide-react"
 
 /**
  * The console's icon component, copied from packages/xtrm-app/src/ui/icon.tsx (XTRM-1044).
@@ -10,6 +10,8 @@ const registry = {
   chevronDown: ChevronDown,
   chevronUp: ChevronUp,
   moon: Moon,
+  /** Not in the console registry: the chat-width control (XTRM-1042) is the viewer's own. */
+  width: MoveHorizontal,
   sun: Sun,
   sidebar: PanelLeft,
   agents: MousePointer2,

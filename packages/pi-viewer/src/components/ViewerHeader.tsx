@@ -1,4 +1,4 @@
-import { CheckIcon, MoveHorizontalIcon } from "lucide-react"
+import { CheckIcon } from "lucide-react"
 import { Popover } from "radix-ui"
 import { useState } from "react"
 
@@ -14,6 +14,7 @@ import {
 } from "@/lib/chat-width"
 import type { ScopeLabel } from "@/lib/scope"
 import { cn } from "@/lib/utils"
+import { Icon } from "@/shell/icon"
 import { IconButton } from "@/shell/IconButton"
 import { modShortcut } from "@/shell/layout"
 
@@ -86,9 +87,9 @@ function ChatWidthControl({
           aria-label={`Chat width: ${widthLabel(width)}`}
           title={`Chat width: ${widthLabel(width)}`}
           // Below 640px the lane is already the full column.
-          className="hidden size-7 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-hover hover:text-ink data-[state=open]:bg-hover data-[state=open]:text-ink sm:flex"
+          className="hidden size-7 items-center justify-center rounded-md text-ink-muted transition-colors outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover active:bg-pressed data-[state=open]:bg-hover data-[state=open]:text-ink sm:flex"
         >
-          <MoveHorizontalIcon className="size-3.5" />
+          <Icon name="width" size="text" />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
