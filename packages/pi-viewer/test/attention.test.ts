@@ -136,22 +136,26 @@ test("a Claude local slash command (/model) opens no turn; a prompt-type slash c
   assert.equal(claudeStatusOf(parseClaudeFile(prompted)).status, "working", "a slash command with no local output runs the model")
 })
 
-test("a compaction newer than every message closes the turn: waiting, then idle", () => {
-  const open = { role: "user", content: "a prompt the agent never answered" }
-  const compacted = (modifiedAt: number): ParsedFile => ({
-    ...parsed([open], modifiedAt),
-    events: [{ type: "message", id: "e0", message: open }, { type: "compaction", id: "c1", summary: "…" }],
+test("a compaction after a settled turn settles (waiting, then idle); after an unanswered prompt the turn stays open", () => {
+  const open = { role: "user", content: "a prompt the agent has not answered yet" }
+  const reply = { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "done" }] }
+  const compacted = (messages: Array<Record<string, unknown>>, modifiedAt: number): ParsedFile => ({
+    ...parsed(messages, modifiedAt),
+    events: [...messages.map((message, index) => ({ type: "message", id: `e${index}`, message })), { type: "compaction", id: "c1", summary: "…" }],
   })
-  assert.equal(statusOf(compacted(NOW), NOW).status, "waiting")
-  assert.equal(statusOf(compacted(NOW - QUIET_MS - 60_000), NOW).status, "idle")
+  assert.equal(statusOf(compacted([open, reply], NOW), NOW).status, "waiting")
+  assert.equal(statusOf(compacted([open, reply], NOW - QUIET_MS - 60_000), NOW).status, "idle")
+  // An auto compaction between a prompt and the first step (e9rd line 8097): the turn goes on.
+  assert.deepEqual(statusOf(compacted([open], NOW), NOW), { status: "working", note: "compacting context" })
 
-  // Claude: /compact writes the summary, then the slash command and its local output.
+  // Claude: the typed /compact record, the summary, then the slash command and its local output.
+  // The local command makes the typed record local too.
   const now = new Date().toISOString()
   const rec = (value: Record<string, unknown>) => `${JSON.stringify({ timestamp: now, ...value })}\n`
   const file = join(SCRATCH, "compact.jsonl")
   writeFileSync(
     file,
-    rec({ type: "user", uuid: "u1", message: { role: "user", content: "never answered" } }) +
+    rec({ type: "user", uuid: "u1", message: { role: "user", content: "/compact" } }) +
       rec({ type: "system", subtype: "compact_boundary", uuid: "b1", parentUuid: null }) +
       rec({ type: "user", uuid: "s1", parentUuid: "b1", isCompactSummary: true, message: { role: "user", content: "This session is being continued…" } }) +
       rec({ type: "user", uuid: "c1", parentUuid: "s1", message: { role: "user", content: "<command-name>/compact</command-name>" } }) +
@@ -194,7 +198,7 @@ test("Claude bash mode is a local command, not a user turn", () => {
       rec({ type: "user", uuid: "b1", parentUuid: "a1", message: { role: "user", content: "<bash-input>ls</bash-input>" } }) +
       rec({ type: "user", uuid: "b2", parentUuid: "b1", message: { role: "user", content: "<bash-stdout>a\nb</bash-stdout>" } }),
   )
-  assert.deepEqual(claudeStatusOf(parseClaudeFile(file)), { status: "waiting", note: "awaiting input" })
+  assert.deepEqual(claudeStatusOf(parseClaudeFile(file), NOW + 1_000), { status: "waiting", note: "awaiting input" })
 })
 
 // ── quiet ──

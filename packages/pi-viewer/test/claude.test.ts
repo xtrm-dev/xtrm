@@ -14,6 +14,7 @@ import {
   resolveClaudeTranscript,
   resolveClaudeTranscripts,
 } from "../server/claude.ts"
+import { lastWriteAt } from "../server/session.ts"
 import { applyIntercomResults } from "../server/intercom.ts"
 import { channelTurns } from "../src/lib/thread.ts"
 import type { ViewerEvent } from "../src/shared/types.ts"
@@ -206,7 +207,7 @@ test("a half-written tool turn stays pending instead of looking settled", () => 
   const early = eventsOf(file)
   assert.equal(early.length, 1, "the tail with no tool_use block yet is held back")
   assert.equal(channelTurns(early).at(-1)?.pending, true)
-  assert.equal(claudeStatusOf(parseClaudeFile(file)).status, "working")
+  assert.equal(claudeStatusOf(parseClaudeFile(file), Date.parse("2026-11-25T10:00:02.000Z")).status, "working")
   appendFileSync(
     file,
     record({
@@ -223,7 +224,9 @@ test("a half-written tool turn stays pending instead of looking settled", () => 
 
 test("status: an interrupted turn is idle, a finished reply waits for input", () => {
   // The fixture ends on an operator prompt: the agent is mid-turn.
-  assert.equal(claudeStatusOf(parseClaudeFile(fixtureCopy("status"))).status, "working")
+  const status = parseClaudeFile(fixtureCopy("status"))
+  // Status counts silence from the newest turn record, so the clock is that record's time.
+  assert.equal(claudeStatusOf(status, lastWriteAt(status) + 1_000).status, "working")
   const interrupted = join(SCRATCH, "interrupted.jsonl")
   const now = new Date().toISOString()
   writeFileSync(

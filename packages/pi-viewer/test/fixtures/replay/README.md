@@ -16,6 +16,8 @@ stay equal. `_src` is the record's line in the source transcript.
 | `claude-thread-lead-8a1d4345-2803.jsonl` | same | 2780–2850 | `AskUserQuestion` attention |
 | `pi-i1wb-01a20df7-798.jsonl` | Pi, i1wb session `01a20df7` (header + window) | 780–840 | task, specialist and intercom notices wake the agent |
 | `pi-i1wb-01a20df7-1236.jsonl` | same | 1225–1345 | abort, task notification, 502/503 retries |
+| `pi-specialists-019df732-807.jsonl` | Pi, specialists session `019df732` (header + window) | 795–822 | context overflow, compaction resumes the turn |
+| `claude-e9rd-e158b382-8096.jsonl` | Claude, e9rd session `e158b382` | 8060–8160 | peer message, then auto compaction before the first step |
 
 Regenerate one window:
 

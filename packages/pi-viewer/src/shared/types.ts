@@ -136,6 +136,8 @@ export interface ViewerEvent {
   intercoms?: IntercomMeta[]
   /** What this record does to its agent's turn (src/lib/turn-state.ts). The server sets it on every event. */
   effect?: TurnEffect
+  /** A failed assistant message whose error is a context overflow: a compaction resumes its turn. */
+  overflow?: boolean
   /** False for events that belong to an abandoned branch of the session tree. */
   onBranch: boolean
   /** Compact, capped JSON of the original line for inspection. */

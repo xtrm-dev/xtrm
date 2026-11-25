@@ -366,7 +366,7 @@ run a step (`loop`). An effect of `none` never changes the state.
 | `reply` | `settled` |
 | `abort` | `aborted` |
 | `fail` | `failed`; the state remembers whether the error is a context overflow |
-| `compact` | inside a running loop (`open` with `loop`, or `failed` on a context overflow): stays `open`, note `compacting context`; anywhere else: `settled` (the conversation restarted) |
+| `compact` | an open turn stays `open`, before or after its first step, note `compacting context`; a turn `failed` on a context overflow reopens; anywhere else: `settled` (the conversation restarted) |
 
 A context overflow is matched by error text: `prompt is too long`, `input is too long`, `context length`
 or `context window`, `maximum context`, `too many tokens`. `Rate limit exceeded` and `quota exceeded` are
@@ -389,11 +389,15 @@ This equals a fold from the start, but costs only the trailing records.
 
 The pane capture (`attention · permission: <tool>`, XTRM-1035) is applied after this, unchanged.
 
-**Time.** No timer enters the machine. The file write time decides only between a recent and a long
-silence (`quiet`, `idle`); a fresh parse and an incremental parse see the same file time.
-`ViewerAgent.lastWriteAt` is now the newest decisive record's own write time. For Pi this is the entry
-`timestamp`, written when the entry is appended at stream end; `message.timestamp` is the stream start.
-For Claude it is the record `timestamp`. It is never a batch read's file time. The old
+**Time.** No timer enters the machine. Time decides only between a recent and a long silence (`quiet`,
+`idle`). It is measured from `ViewerAgent.lastWriteAt`, the write time of the newest record that moves a
+turn. Bookkeeping writes (titles, modes, model changes) do not reset the silence. A record cannot be
+written before the records above it, so its write time is the newest timestamp up to it (a running
+maximum, computed once per parse). For Pi the timestamp is the entry `timestamp`, written when the entry
+is appended at stream end; `message.timestamp` is the stream start. For Claude it is the record
+`timestamp`. Claude stamps a compaction summary and a typed command with an earlier time than their write
+(e9rd line 8101: 10:03:20, written at 10:37:56); the running maximum absorbs that. It is never a batch
+read's file time. The old
 `nonMetaWriteAt` stamped the file time of a whole read. A fresh parse (a viewer restart, a first view)
 therefore differed from an incremental one, and a `!ls` turn stayed in presence as working.
 
@@ -407,12 +411,21 @@ phase is `open`:
 - `abort` closes the turn. A Claude interrupt marker, or an abort during a tool call, leaves
   `Turn.stopped` (`turn interrupted`, `turn aborted`). The turn is closed, so the next prompt starts a
   new turn: an interrupted turn no longer merges into the next prompt's turn.
-- `compact` inside a loop is a step of the open turn. Outside a loop it ends a turn that ran no step:
-  that turn is `local`, because its prompt was a command, as with the bare `/compact` record in
-  `2f0aa11a` line 6365.
+- `compact` inside an open turn is a step of that turn, before or after its first step (e9rd line 8097: a
+  peer message, then an auto compaction). After a context overflow (`ViewerEvent.overflow`, set by the
+  server) it reopens the failed turn: the final error is dropped and the turn goes on, with its prompt
+  (Pi `019df732` line 808).
+- Some Claude versions record a typed `/compact` as a plain user record before the compaction (`2f0aa11a`
+  line 6365). When the command proves local (caveat or output), that typed record becomes local too
+  (`_local`, revision bumped), so it never reads as a prompt afterwards.
 - Work with no open turn (`!ls`, `/model`, `/compact`, an idle compaction, a notice that wakes nobody)
   collects in one closed `local` turn. It is never pending and never joins the next prompt's turn.
   This fixes the idle compaction row and the Pi notice row that vanished on the next record.
+
+When a peer message merges into a card already shown, either as a duplicate or as the receiver's copy
+of a sent card, `dedupeIntercoms` still hands the grouping an invisible stand-in with the copy's effect. A
+duplicate wake-up therefore still opens its agent's turn (Pi `w2w9` line 3381: the same text sent twice
+under two message ids).
 
 The browser receives meta events that carry an effect: an interrupt marker, a Claude wake-up, a Pi
 skill prompt, a Pi intercom delivery result. The Channel filter keeps them (`channelEvent`); rendering
@@ -440,9 +453,13 @@ split, and checks three conditions:
 1. **fresh == incremental:** the status, `lastWriteAt`, the presence entries and the stopped rows are
    identical;
 2. **no flicker:** a stopped row never disappears unless the new record is an operator prompt;
-3. **sync:** an open turn exists only while the status is live.
+3. **sync:** an open turn exists only while the status is live, and a live status always has an open
+   turn.
 
-`test/replay.test.ts` replays eight redacted windows of real transcripts and asserts labelled states at
+Whether a new record is an operator prompt (condition 2) is judged from the raw record kind, not from the
+implementation's effects.
+
+`test/replay.test.ts` replays ten redacted windows of real transcripts and asserts labelled states at
 named source lines. The windows are listed in `test/fixtures/replay/README.md`:
 
 - the Claude adapter `a09891e1` start (skill commands);
@@ -451,7 +468,9 @@ named source lines. The windows are listed in `test/fixtures/replay/README.md`:
 - `8a1d4345` lines 2117 to 2148 (an idle `/compact`, `/model`, a task notification, peer messages) and
   line 2803 (`AskUserQuestion`);
 - Pi `01a20df7` lines 797 to 827 (task, specialist and intercom notices) and lines 1236 to 1339 (an
-  abort, a task notification, and the 502/503 retries).
+  abort, a task notification, and the 502/503 retries);
+- Pi `019df732` line 807 (context overflow, then compaction);
+- Claude e9rd `e158b382` line 8096 (a peer message, then an auto compaction before the first step).
 
 The same file holds the reviewer's `restart.ts` and `slash.ts` reproductions and the review nits as
 tests. `scripts/redact-transcript.mjs` makes a fixture from any window. `scripts/replay-transcript.ts`
@@ -462,9 +481,11 @@ replays any transcript, redacted or real, and prints its status transitions and 
 - **Pi retries.** Pi retries a failed request by writing `context_edit` (replacement null) over the error.
   Each failed attempt reads as `error` until the next attempt writes; a successful retry opens a new
   turn. The model does not guess a retry before it is written.
-- **Pi overflow compaction.** When a compaction resumes after a context overflow, the status is
-  `working · compacting context`. The failed turn is already closed in the thread, so presence shows the
-  agent with no open turn ("Working…") until the next step. No such case occurred in 30 days.
+- **Claude command with no caveat.** A slash command that Claude Code runs itself but writes without the
+  local-command caveat (`/goal`) reads as a prompt until its output arrives, usually in the same write.
+  Then the command, and a typed record before it, become local.
+- **Overflow before its compaction.** A context-overflow error reads as `error` until the compaction is written
+  (Pi `019df732`: 32 s). The failed turn then reopens.
 - **Local row wording.** An automatic compaction with no turn open shows as a local row whose text is
   "Ran in the pane, no agent turn". The row is stable. Better wording is a visual change and is out of
   scope.
