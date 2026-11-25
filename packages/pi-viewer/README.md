@@ -24,6 +24,21 @@ npm run preview    # http://127.0.0.1:5199
 Requirements: Linux (`/proc`), tmux, and pi sessions under `~/.pi/agent/sessions`.
 The server binds to `127.0.0.1` only and has no authentication.
 
+## Sidebar
+
+The left sidebar is a tree of tmux session > window > pane. Only panes that hold a pi or claude agent are
+listed; windows and sessions without an agent are omitted. Session and window rows are one line with an
+agent count and expand/collapse. A pane row has two lines: the agent name, then `role · state`, with one
+status dot (idle, running, needs attention, error). Clicking a pane loads that agent's thread. The sidebar
+collapses to an icon rail of status dots; on a narrow screen it starts as the rail and opens over the thread.
+
+It is built from the console's primitives, not ReUI or shadcn Sidebar. The values (28px row, 264px plane,
+`INDENT_REM` 1.25, type ladder, `--x-hover` selected fill with the 2px accent marker, hairline rails) are
+copied from `packages/xtrm-app` (`docs/design/console-ui-system.md` §3, §4.2, §4.3, §6, §11 and
+`src/agent/AgentSidebar.tsx`, `src/ui/sidebar.tsx`, `src/ui/nav-rail.tsx`); `src/components/sidebar/geometry.ts`
+names the source of each. The tree is keyboard operable (`role="tree"`, `aria-expanded`, roving focus; arrows,
+Home, End, Enter, Space).
+
 ## Views
 
 **Channel** is the default. It is a timeline: operator messages appear at their

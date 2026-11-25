@@ -1,6 +1,7 @@
-import { ChevronDownIcon, MoonIcon, SunIcon } from "lucide-react"
+import { MoonIcon, SunIcon } from "lucide-react"
 
-import type { ViewerSession } from "@/shared/types"
+import { RoleChip } from "@/components/RoleChip"
+import type { ViewerAgent } from "@/shared/types"
 import { cn } from "@/lib/utils"
 
 function Segmented({
@@ -39,18 +40,14 @@ function Segmented({
 }
 
 export function ViewerHeader({
-  sessions,
-  session,
-  onSessionChange,
+  agent,
   view,
   onViewChange,
   agentCount,
   theme,
   onToggleTheme,
 }: {
-  sessions: ViewerSession[]
-  session: string | null
-  onSessionChange: (session: string) => void
+  agent: ViewerAgent | null
   view: "channel" | "all"
   onViewChange: (view: "channel" | "all") => void
   agentCount: number
@@ -60,23 +57,10 @@ export function ViewerHeader({
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 px-4 sm:px-5">
       <div className="flex min-w-0 items-baseline gap-2.5">
-        <span className="relative inline-flex shrink-0 self-center">
-          <select
-            value={session ?? ""}
-            onChange={(event) => onSessionChange(event.target.value)}
-            aria-label="tmux session"
-            className="max-w-52 cursor-pointer appearance-none truncate bg-transparent pr-5 text-sm font-semibold text-ink focus:outline-none"
-          >
-            {sessions.length ? null : <option value="">no session</option>}
-            {sessions.map((entry) => (
-              <option key={entry.name} value={entry.name}>
-                {entry.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDownIcon className="pointer-events-none absolute top-1/2 right-0 size-3 -translate-y-1/2 text-ink-faint" />
-        </span>
-        <span className="hidden text-2xs text-ink-faint sm:inline">
+        <span className="min-w-0 truncate text-sm font-semibold text-ink">{agent?.name ?? "No agent"}</span>
+        {agent ? <RoleChip role={agent.role} className="self-center" /> : null}
+        <span className="hidden truncate text-2xs text-ink-faint sm:inline">
+          {agent ? `${agent.tmuxSession} · ${agent.windowName || `window ${agent.windowIndex}`} · ` : ""}
           {agentCount} {agentCount === 1 ? "agent" : "agents"}
         </span>
       </div>

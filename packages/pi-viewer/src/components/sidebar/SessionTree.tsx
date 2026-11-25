@@ -1,0 +1,193 @@
+import { ChevronDownIcon } from "lucide-react"
+import { useCallback, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react"
+
+import {
+  STATE_LABEL,
+  flatten,
+  navigate,
+  paneKey,
+  stateOf,
+  type FlatRow,
+  type PaneNode,
+  type Selection,
+  type SessionNode,
+  type WindowNode,
+} from "@/lib/tree"
+import { cn } from "@/lib/utils"
+
+import {
+  DISCLOSURE,
+  INDENT_REM,
+  MARKER,
+  RAIL_ORIGIN_REM,
+  ROW_BASE,
+  ROW_ONE_LINE,
+  ROW_SELECTED,
+  ROW_TWO_LINE,
+} from "./geometry"
+import { SidebarDot } from "./SidebarDot"
+
+function Disclosure({ expanded }: { expanded: boolean }) {
+  return (
+    <span aria-hidden className={cn("flex shrink-0 items-center justify-center text-ink-faint", DISCLOSURE)}>
+      <ChevronDownIcon className={cn("size-[0.875rem] transition-transform", !expanded && "-rotate-90")} />
+    </span>
+  )
+}
+
+/** Vertical hairlines of the open ancestors (design doc §11, "a tree rail"). */
+function Rails({ level }: { level: number }) {
+  return (
+    <>
+      {Array.from({ length: level - 1 }, (_, depth) => (
+        <span
+          key={depth}
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 border-l border-border-muted"
+          style={{ left: `${RAIL_ORIGIN_REM + depth * INDENT_REM}rem` }}
+        />
+      ))}
+    </>
+  )
+}
+
+function GroupRow({ row, node }: { row: FlatRow; node: SessionNode | WindowNode }) {
+  const isSession = node.kind === "session"
+  const count = node.kind === "session" ? node.count : node.panes.length
+  const label = node.kind === "session" ? node.name : node.name
+  return (
+    <>
+      <Rails level={row.level} />
+      <span className="flex min-w-0 items-center" style={{ paddingLeft: "var(--row-indent)" }}>
+        <Disclosure expanded={row.expanded} />
+      </span>
+      <span
+        className={cn("min-w-0 truncate text-sm", isSession ? "font-semibold text-ink" : "font-medium text-ink-muted")}
+        title={node.kind === "window" ? `window ${node.index}` : undefined}
+      >
+        {label}
+      </span>
+      <span className="ml-auto shrink-0 text-xs text-ink-faint tabular">{count}</span>
+    </>
+  )
+}
+
+function PaneRowBody({ row, pane, selected }: { row: FlatRow; pane: PaneNode; selected: boolean }) {
+  const { agent } = pane
+  const state = stateOf(agent.status)
+  return (
+    <>
+      <Rails level={row.level} />
+      {selected && <span aria-hidden className={MARKER} />}
+      <span className="flex shrink-0 items-start" style={{ paddingLeft: "var(--row-indent)" }}>
+        <SidebarDot state={state} className="mt-[0.1875rem]" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
+        <span className="truncate text-2xs text-ink-faint">
+          {agent.role ? `${agent.role} · ` : ""}
+          {STATE_LABEL[state]}
+        </span>
+      </span>
+    </>
+  )
+}
+
+export function SessionTree({
+  tree,
+  selection,
+  collapsed,
+  onToggle,
+  onSelect,
+}: {
+  tree: SessionNode[]
+  selection: Selection | null
+  collapsed: ReadonlySet<string>
+  onToggle: (key: string, open: boolean) => void
+  onSelect: (session: string, paneId: string) => void
+}) {
+  const rows = useMemo(() => flatten(tree, collapsed), [tree, collapsed])
+  const refs = useRef(new Map<string, HTMLDivElement>())
+  const [focusKey, setFocusKey] = useState<string | null>(null)
+  const selectedKey = selection ? paneKey(selection.paneId) : null
+
+  // Roving tabindex: one row is tabbable. The remembered row if it is still visible, else the
+  // selected pane, else the first row.
+  const tabbable =
+    (focusKey && rows.some((row) => row.key === focusKey) && focusKey) ||
+    (selectedKey && rows.some((row) => row.key === selectedKey) && selectedKey) ||
+    rows[0]?.key ||
+    null
+
+  const focus = useCallback((key: string) => {
+    setFocusKey(key)
+    refs.current.get(key)?.focus()
+  }, [])
+
+  const activate = useCallback(
+    (row: FlatRow) => {
+      if (row.node.kind === "pane") onSelect(row.node.session, row.node.agent.paneId)
+      else onToggle(row.key, !row.expanded)
+    },
+    [onSelect, onToggle],
+  )
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>, row: FlatRow) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return
+    const action = navigate(rows, row.key, event.key)
+    if (!action) return
+    event.preventDefault()
+    if (action.type === "focus") focus(action.key)
+    else if (action.type === "toggle") onToggle(action.key, action.open)
+    else activate(row)
+  }
+
+  return (
+    <div role="tree" aria-label="tmux sessions" className="flex flex-col gap-px">
+      {rows.map((row) => {
+        const selected = row.key === selectedKey
+        const pane = row.node.kind === "pane"
+        const label =
+          row.node.kind === "pane"
+            ? `${row.node.agent.name}, ${row.node.agent.role ? `${row.node.agent.role}, ` : ""}${STATE_LABEL[stateOf(row.node.agent.status)]}`
+            : row.node.kind === "session"
+              ? `${row.node.name}, ${row.node.count} agents`
+              : `${row.node.name}, ${row.node.panes.length} agents`
+        return (
+          <div
+            key={row.key}
+            ref={(element) => {
+              if (element) refs.current.set(row.key, element)
+              else refs.current.delete(row.key)
+            }}
+            role="treeitem"
+            aria-level={row.level}
+            aria-posinset={row.index + 1}
+            aria-setsize={row.siblings}
+            aria-expanded={row.expandable ? row.expanded : undefined}
+            aria-selected={pane ? selected : undefined}
+            aria-label={label}
+            title={row.node.kind === "pane" ? `${row.node.agent.provider} · ${row.node.agent.cwd}` : undefined}
+            tabIndex={row.key === tabbable ? 0 : -1}
+            data-key={row.key}
+            data-provider={row.node.kind === "pane" ? row.node.agent.provider : undefined}
+            onClick={() => {
+              setFocusKey(row.key)
+              activate(row)
+            }}
+            onFocus={() => setFocusKey(row.key)}
+            onKeyDown={(event) => handleKeyDown(event, row)}
+            style={{ "--row-indent": `${(row.level - 1) * INDENT_REM}rem` } as CSSProperties}
+            className={cn(ROW_BASE, pane ? ROW_TWO_LINE : ROW_ONE_LINE, selected && ROW_SELECTED)}
+          >
+            {row.node.kind === "pane" ? (
+              <PaneRowBody row={row} pane={row.node} selected={selected} />
+            ) : (
+              <GroupRow row={row} node={row.node} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
