@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readlinkSync, realpathSync, statSync } from "n
 import { homedir } from "node:os"
 import { basename, join } from "node:path"
 
-import type { AgentStatus, ViewerAgent, ViewerSession } from "../src/shared/types.ts"
+import type { ViewerAgent, ViewerSession } from "../src/shared/types.ts"
 import {
   claudeAgentName,
   claudeStatusOf,
@@ -16,7 +16,8 @@ import {
   type ClaudePaneQuery,
   type ClaudeTranscript,
 } from "./claude.ts"
-import { parseSessionFile, readSessionName, sessionIdFromFile, statusOf } from "./session.ts"
+import { withPaneAttention } from "./attention.ts"
+import { parseSessionFile, readSessionName, sessionIdFromFile, statusOf, type AgentState } from "./session.ts"
 
 const HOME = homedir()
 const SESSIONS_ROOT = join(HOME, ".pi", "agent", "sessions")
@@ -80,7 +81,7 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
     panes.push({
       session,
       windowIndex: Number(windowIndex) || 0,
-      windowId: windowId || `@${Number(windowIndex) || 0}`,
+      windowId,
       windowName: windowName ?? "",
       paneIndex: Number(paneIndex) || 0,
       paneId,
@@ -274,7 +275,7 @@ function resolveClaudePane(
     }
   }
   const sessionId = found.sessionId ?? (found.file ? transcriptSessionId(found.file) : null)
-  const state = parsed ? claudeStatusOf(parsed) : { status: "unknown" as AgentStatus, note: "no transcript" }
+  const state: AgentState = parsed ? claudeStatusOf(parsed) : { status: "unknown", note: "no transcript" }
   const registry = readClaudeRegistry(configDir, proc.pid)
   const name = uniqueName(
     claudeAgentName(parsed?.sessionName ?? null, registry?.cwd ?? cwd, sessionId, pane.windowName || pane.paneId),
@@ -305,6 +306,7 @@ function resolveClaudePane(
     eventCount: parsed?.events.length ?? 0,
     status: state.status,
     statusNote: state.note,
+    statusDetail: state.detail ?? null,
   }
   return { agent, parsed, sessionName: parsed?.sessionName ?? null }
 }
@@ -350,7 +352,7 @@ function resolvePaneAgent(
   if (!chosen) return null
 
   const parsed = chosen.file ? parseSessionFile(chosen.file) : null
-  const state = parsed ? statusOf(parsed) : { status: "unknown" as AgentStatus, note: "no session file" }
+  const state: AgentState = parsed ? statusOf(parsed) : { status: "unknown", note: "no session file" }
   const name = uniqueName(
     parsed?.sessionName || wanted || basename(chosen.cwd) || pane.windowName || pane.paneId,
     pane,
@@ -381,6 +383,7 @@ function resolvePaneAgent(
     eventCount: parsed?.events.length ?? 0,
     status: state.status,
     statusNote: state.note,
+    statusDetail: state.detail ?? null,
   }
   return { agent, parsed, sessionName: parsed?.sessionName ?? wanted }
 }
@@ -415,7 +418,7 @@ export function discover(): Discovery {
     const agents: ViewerAgent[] = []
     for (const pane of sessionPanes) {
       const resolved = resolvePaneAgent(pane, table, usedNames, transcripts)
-      if (resolved) agents.push(resolved.agent)
+      if (resolved) agents.push(withPaneAttention(resolved.agent))
     }
     if (!agents.length) continue
     agents.sort((a, b) => a.windowIndex - b.windowIndex || a.paneIndex - b.paneIndex)

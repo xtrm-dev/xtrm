@@ -60,6 +60,11 @@ function MessageScrollerProvider({
   const anchorRef = React.useRef<{ id: string; top: number } | null>(null)
   const initializedRef = React.useRef(false)
   const suppressRef = React.useRef<number | null>(null)
+  // A programmatic scroll-to-end owns the viewport until it reaches the bottom.
+  // Without this, the first smooth-scroll event reads a mid-flight position,
+  // clears the pin, and records a half-way anchor.
+  const pinRef = React.useRef(false)
+  const pinTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const [atBottom, setAtBottom] = React.useState(true)
   const [newCount, setNewCount] = React.useState(0)
   const workingRef = React.useRef(false)
@@ -136,9 +141,23 @@ function MessageScrollerProvider({
       if (!viewport) return
       anchorRef.current = null
       stopGlide()
+      pinRef.current = true
       setBottom(true)
       suppressRef.current = null
+      if (pinTimerRef.current) clearTimeout(pinTimerRef.current)
       viewport.scrollTo({ top: viewport.scrollHeight, behavior })
+      if (behavior !== "smooth") {
+        pinRef.current = false
+      } else {
+        // Native smooth scrolling has no guaranteed end event. The pin is a
+        // safety net, not a second animation: it only spans this gesture.
+        pinTimerRef.current = setTimeout(() => {
+          pinTimerRef.current = null
+          if (!pinRef.current) return
+          pinRef.current = false
+          viewport.scrollTop = viewport.scrollHeight
+        }, 900)
+      }
     },
     [setBottom, stopGlide],
   )
@@ -180,6 +199,8 @@ function MessageScrollerProvider({
     }
 
     if (atBottomRef.current) {
+      // The glide is the only scrollTop writer while it runs; it re-reads the target each frame.
+      if (glidingRef.current) return
       const target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
       if (Math.abs(viewport.scrollTop - target) > 1) {
         const mode = followMode({
@@ -220,8 +241,14 @@ function MessageScrollerProvider({
 
     const top = element.getBoundingClientRect().top - viewport.getBoundingClientRect().top
     const delta = top - anchor.top
-    if (Math.abs(delta) > 0.5) viewport.scrollTop += delta
-    anchor.top = top
+    if (Math.abs(delta) > 0.5) {
+      viewport.scrollTop += delta
+      // Store the offset after the correction; scrollTop assignment can land on
+      // a fractional device pixel, and the pre-correction value would drift.
+      anchor.top = element.getBoundingClientRect().top - viewport.getBoundingClientRect().top
+    } else {
+      anchor.top = top
+    }
   }, [captureAnchor, glide, stopGlide])
 
   const handleScroll = React.useCallback(() => {
@@ -232,6 +259,11 @@ function MessageScrollerProvider({
     if (suppressRef.current !== null) {
       if (Math.abs(viewport.scrollTop - suppressRef.current) < 1) {
         suppressRef.current = null
+        if (pinRef.current) {
+          pinRef.current = false
+          setBottom(true)
+          anchorRef.current = null
+        }
         return
       }
       suppressRef.current = null
@@ -239,6 +271,18 @@ function MessageScrollerProvider({
 
     const bottom =
       viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - BOTTOM_SLACK
+    if (pinRef.current) {
+      // Keep the pin through the animation; growth during it is handled by sync().
+      if (bottom) {
+        pinRef.current = false
+        setBottom(true)
+        anchorRef.current = null
+      } else {
+        setBottom(true)
+        anchorRef.current = null
+      }
+      return
+    }
     setBottom(bottom)
     if (bottom) anchorRef.current = null
     else captureAnchor()
@@ -252,22 +296,11 @@ function MessageScrollerProvider({
     contentRef.current = element
   }, [])
 
-  // A reader's own input ends a smooth follow at once.
+  // Leaving a thread remembers where the reader was and ends any glide or pin timer.
   React.useEffect(() => {
-    const viewport = viewportRef.current
-    if (!viewport) return
-    const interrupt = () => stopGlide()
-    const events = ["wheel", "touchstart", "keydown", "pointerdown"] as const
-    for (const name of events) viewport.addEventListener(name, interrupt, { passive: true })
     return () => {
-      for (const name of events) viewport.removeEventListener(name, interrupt)
+      if (pinTimerRef.current) clearTimeout(pinTimerRef.current)
       stopGlide()
-    }
-  }, [stopGlide])
-
-  // Leaving a thread remembers where the reader was.
-  React.useEffect(() => {
-    return () => {
       const key = threadKeyRef.current
       if (!key) return
       const anchor = anchorRef.current
@@ -277,15 +310,42 @@ function MessageScrollerProvider({
         anchorTop: anchor?.top ?? 0,
       })
     }
-  }, [])
+  }, [stopGlide])
 
   React.useEffect(() => {
     const content = contentRef.current
+    const viewport = viewportRef.current
     if (!content || typeof ResizeObserver === "undefined") return
     const observer = new ResizeObserver(() => sync())
     observer.observe(content)
+    // A composer growth or window resize changes only the viewport height. At the
+    // bottom the reader must follow; mid-thread the anchor must survive.
+    if (viewport) observer.observe(viewport)
     return () => observer.disconnect()
   }, [sync])
+
+  React.useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const cancel = () => {
+      stopGlide()
+      pinRef.current = false
+      if (pinTimerRef.current) {
+        clearTimeout(pinTimerRef.current)
+        pinTimerRef.current = null
+      }
+    }
+    viewport.addEventListener("wheel", cancel, { passive: true })
+    viewport.addEventListener("touchstart", cancel, { passive: true })
+    viewport.addEventListener("pointerdown", cancel)
+    viewport.addEventListener("keydown", cancel)
+    return () => {
+      viewport.removeEventListener("wheel", cancel)
+      viewport.removeEventListener("touchstart", cancel)
+      viewport.removeEventListener("pointerdown", cancel)
+      viewport.removeEventListener("keydown", cancel)
+    }
+  }, [stopGlide])
 
   const value = React.useMemo(
     () => ({

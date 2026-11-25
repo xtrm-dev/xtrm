@@ -168,6 +168,7 @@ export function Composer({
 
           <textarea
             ref={textareaRef}
+            data-composer-input=""
             value={text}
             rows={1}
             disabled={disabled || !target}

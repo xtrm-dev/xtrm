@@ -1,0 +1,10 @@
+● The tests pass. Do you want to proceed?
+
+  I can also run the build if you want:
+  1. Yes, run it now
+
+────────────────────────────────────────────────────────────────────────────── xtrm-xt-claude-lead ─
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 medium · 18.0%/1.0M · 100% cache
+  ⏵⏵ bypass permissions on · 1 monitor · ← 1 agent · ↓ to manage

@@ -8,10 +8,12 @@ import { RoleChip } from "@/components/RoleChip"
 import { StatusDot } from "@/components/StatusDot"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent } from "@/components/ui/message"
+import { StoppedTurn } from "@/components/presence/StoppedTurn"
 import { MessageScrollerItem, useMessageScroller } from "@/components/ui/message-scroller"
 import { DELIVERY_WORD, deliveryOfOptimistic, deliveryOfUser, latestUserIds, type Delivery } from "@/lib/delivery"
 import { dayKey, dayLabel, fullDate, monogram, stamp } from "@/lib/format"
 import type { OptimisticMessage } from "@/lib/optimistic"
+import { splitPresence } from "@/lib/presence"
 import { channelTimeline, type Turn } from "@/lib/thread"
 import { loadLastSeen, newCount, newSinceIndex, saveLastSeen } from "@/lib/readstate"
 import { cn } from "@/lib/utils"
@@ -235,9 +237,13 @@ export function ChannelView({
   optimistic: OptimisticMessage[]
   onDismissOptimistic: (id: string) => void
 }) {
-  const items = useMemo(() => channelTimeline(events, optimistic), [events, optimistic])
+  // Running turns live in the presence line above the composer (XTRM-1035): the thread shows
+  // settled work, and a turn whose agent stopped shows as a stopped row.
+  // Delivery reads the unsplit timeline (`channel`); rows render from the split one (`items`).
+  const channel = useMemo(() => channelTimeline(events, optimistic), [events, optimistic])
+  const items = useMemo(() => splitPresence(channel, agents).timeline, [channel, agents])
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
-  const latestUsers = useMemo(() => latestUserIds(items), [items])
+  const latestUsers = useMemo(() => latestUserIds(channel), [channel])
 
   // The scroller glides smoothly only while an agent in this thread works.
   const { setWorking, reportNew, atBottom } = useMessageScroller()
@@ -314,11 +320,13 @@ export function ChannelView({
                 session={session}
                 pinned={pinned}
               />
+            ) : item.kind === "stopped" ? (
+              <StoppedTurn item={item} agent={byId.get(item.agentId)} session={session} />
             ) : item.kind === "user" ? (
               <UserMessage
                 event={item.event}
                 agentName={byId.get(item.agentId)?.name ?? item.agentName}
-                delivery={latestUsers.has(item.id) ? deliveryOfUser(item, items) : undefined}
+                delivery={latestUsers.has(item.id) ? deliveryOfUser(item, channel) : undefined}
                 pinned={pinned || latestUsers.has(item.id)}
                 joinsAbove={joinsAbove}
                 joinsBelow={joinsBelow}

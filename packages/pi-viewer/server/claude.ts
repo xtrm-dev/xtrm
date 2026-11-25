@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "n
 import { homedir } from "node:os"
 import { join } from "node:path"
 
-import type { AgentStatus, ViewerEvent } from "../src/shared/types.ts"
+import type { ViewerEvent } from "../src/shared/types.ts"
 import {
   RAW_CAP,
   cap,
@@ -11,6 +11,7 @@ import {
   mergeFile,
   normalizeEvent,
   statusOf,
+  type AgentState,
   type ParsedFile,
 } from "./session.ts"
 
@@ -687,16 +688,16 @@ export function parseClaudeFile(file: string): ParsedFile {
  * sidechain records and bookkeeping rows (system, attachment, queue-operation, ...) are skipped,
  * an interrupt marker means idle, and the first main-line message decides the rest.
  */
-export function claudeStatusOf(parsed: ParsedFile): { status: AgentStatus; note: string | null } {
+export function claudeStatusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   const events = parsed.events
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const entry = events[index]
     if (entry._sidechain === true) continue
     if (entry._interrupt === true) return { status: "idle", note: "turn interrupted" }
     if (entry.type !== "message") continue
-    return statusOf(index === events.length - 1 ? parsed : { ...parsed, events: events.slice(0, index + 1) })
+    return statusOf(index === events.length - 1 ? parsed : { ...parsed, events: events.slice(0, index + 1) }, now)
   }
-  return statusOf({ ...parsed, events: [] })
+  return statusOf({ ...parsed, events: [] }, now)
 }
 
 export function normalizeClaudeEvent(

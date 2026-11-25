@@ -212,6 +212,61 @@ try {
   })
 
   assert.ok(bottomAfter.distance <= 2, `reader fell ${bottomAfter.distance}px behind the bottom after an append`)
+
+  // Smooth scroll-to-end must stay pinned while the content grows mid-flight.
+  await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.scrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight - 400)
+  })
+  await page.waitForTimeout(150)
+  await page.getByRole("button", { name: "Scroll to end" }).click()
+  await page.evaluate(() => {
+    const content = document.querySelector('[data-slot="message-scroller-content"]')
+    const spacer = document.createElement("div")
+    spacer.id = "anchor-smooth-growth"
+    spacer.style.height = "1200px"
+    content.append(spacer)
+  })
+  await page.waitForTimeout(700)
+  const smoothAfter = await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    return {
+      distance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+      scrollTop: viewport.scrollTop,
+      scrollHeight: viewport.scrollHeight,
+    }
+  })
+  assert.ok(
+    smoothAfter.distance <= 2,
+    `smooth scroll lost its pin while content grew (${smoothAfter.distance}px from the bottom)`,
+  )
+  await page.evaluate(() => document.getElementById("anchor-smooth-growth")?.remove())
+  await page.waitForTimeout(100)
+
+  // A viewport-only resize (composer growth, window resize) at the bottom must re-pin.
+  await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.scrollTop = viewport.scrollHeight
+  })
+  await page.waitForTimeout(100)
+  await page.setViewportSize({ width: 1440, height: 600 })
+  await page.waitForTimeout(400)
+  const resizedAfter = await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    return {
+      distance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+      scrollTop: viewport.scrollTop,
+      scrollHeight: viewport.scrollHeight,
+      clientHeight: viewport.clientHeight,
+    }
+  })
+  assert.ok(
+    resizedAfter.distance <= 2,
+    `a viewport-only resize left the reader ${resizedAfter.distance}px above the bottom`,
+  )
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.waitForTimeout(300)
+
   assert.equal(errors.length, 0, `console errors: ${errors.join(" | ")}`)
 
   console.log(
@@ -221,10 +276,14 @@ try {
         drift,
         appendedInView: after.addedTop !== null && after.addedTop <= after.viewportHeight,
         bottomDistance: bottomAfter.distance,
+        smoothDistance: smoothAfter.distance,
+        resizedDistance: resizedAfter.distance,
         before,
         after,
         bottomBefore,
         bottomAfter,
+        smoothAfter,
+        resizedAfter,
       },
       null,
       2,

@@ -286,6 +286,8 @@ function intercomCard(event: ViewerEvent, meta: NonNullable<ViewerEvent["interco
     parts: undefined,
     intercom: meta,
     intercoms: undefined,
+    isError: meta.failed === true,
+    truncated: meta.truncated || undefined,
     detail:
       meta.direction === "sent"
         ? `intercom sent to ${meta.to}`
@@ -486,7 +488,7 @@ function kindRank(item: ChannelItem): number {
   return RANK_TURN
 }
 
-function compareChannelItems(a: ChannelItem, b: ChannelItem): number {
+export function compareChannelItems(a: ChannelItem, b: ChannelItem): number {
   return (
     pendingRank(a) - pendingRank(b) ||
     a.at - b.at ||

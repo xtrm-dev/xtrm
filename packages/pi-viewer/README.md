@@ -191,7 +191,11 @@ session are shown; a full Claude Code transcript channel is not included.
    file's size or mtime changes. All-event detail is loaded on demand.
 
 Parsed files are cached by path, mtime, and size so polling does not re-parse
-unchanged sessions.
+unchanged sessions. The Channel payload omits meta events; the inspection payload
+carries summaries only (and a 160-character intercom prefix for pairing). JSON
+responses are gzip-compressed when the client accepts it. Event detail uses an
+append-only normalized cache: the first expand of a revision normalizes the new
+entries, later expands resolve by `seq` in constant time.
 
 ## Layout
 

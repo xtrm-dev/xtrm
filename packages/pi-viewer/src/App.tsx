@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { AllEventsView } from "@/components/AllEventsView"
 import { ChannelView } from "@/components/ChannelView"
 import { Composer } from "@/components/Composer"
+import { PresenceLine } from "@/components/presence/PresenceLine"
 import { Sidebar } from "@/components/sidebar/Sidebar"
 import { ViewerHeader } from "@/components/ViewerHeader"
 import {
@@ -14,6 +15,8 @@ import {
 } from "@/components/ui/message-scroller"
 import { fetchMeta, fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
 import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
+import { splitPresence } from "@/lib/presence"
+import { channelTimeline } from "@/lib/thread"
 import {
   agentsInScope,
   defaultTarget,
@@ -272,6 +275,19 @@ export default function App() {
   )
   const label = useMemo(() => describeScope(scope, agents), [scope, agents])
 
+  // The running agents of the scope, shown by the presence line above the composer (XTRM-1035).
+  const presence = useMemo(
+    () => splitPresence(channelTimeline(scopeEvents, scopeOptimistic), agents).presence,
+    [scopeEvents, scopeOptimistic, agents],
+  )
+
+  function messageAgent(agent: ViewerAgent) {
+    setTargetPaneId(agent.id)
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>("[data-composer-input]")?.focus()
+    })
+  }
+
   function select(next: Scope) {
     if (sameScope(next, scope)) {
       // The same target: no history entry. A pane opened without its window learns it quietly.
@@ -399,6 +415,23 @@ export default function App() {
                 <MessageScrollerButton direction="end" />
               </MessageScroller>
             </MessageScrollerProvider>
+          </div>
+
+          <div className="shrink-0 bg-deep px-4 pt-1 sm:px-5">
+            <PresenceLine
+              entries={presence}
+              session={branch?.session ?? sessionName ?? ""}
+              onMessage={messageAgent}
+              onOpenPane={(agent) =>
+                select({
+                  kind: "pane",
+                  session: agent.tmuxSession,
+                  window: agent.windowIndex,
+                  windowId: agent.windowId,
+                  paneId: agent.paneId,
+                })
+              }
+            />
           </div>
 
           <Composer
