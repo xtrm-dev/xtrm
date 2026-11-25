@@ -18,7 +18,7 @@ const THREADS_LIGHT = { canvas: "rgb(244, 244, 245)", sidebar: "rgb(244, 244, 24
 const EXPECT = {
   "threads dark": { canvas: "rgb(13, 13, 13)", sidebar: "rgb(24, 24, 24)", composer: "rgb(21, 21, 21)", prose: "rgb(236, 236, 239)", muted: "rgb(160, 160, 168)" },
   "console dark": { canvas: "rgb(21, 21, 21)", sidebar: "rgb(35, 35, 35)", composer: "rgb(21, 21, 21)", prose: "rgb(236, 236, 239)", muted: "rgb(160, 160, 168)" },
-  "desktop dark": { canvas: "rgb(31, 31, 31)", sidebar: "rgb(36, 36, 36)", composer: "rgb(51, 51, 51)", prose: "rgb(200, 200, 200)", muted: "rgb(142, 142, 142)", selected: "rgb(69, 69, 69)" },
+  "desktop dark": { canvas: "rgb(31, 31, 31)", sidebar: "rgb(36, 36, 36)", composer: "rgb(51, 51, 51)", prose: "rgb(200, 200, 200)", muted: "rgb(161, 161, 161)", selected: "rgb(69, 69, 69)" },
   "threads light": THREADS_LIGHT,
   "console light": { canvas: "rgb(255, 255, 255)", sidebar: "rgb(244, 244, 245)", composer: "rgb(255, 255, 255)", prose: "rgb(24, 24, 27)", muted: "rgb(95, 95, 104)" },
   "desktop light": THREADS_LIGHT,

@@ -114,33 +114,24 @@ function plane(set, name) {
 }
 
 // ink-muted on control is the user bubble and the code toolbar; the others are the canvas and frames.
-// Desktop dark carries the operator's own values, which are fixed (XTRM-1051). Its muted text (#8e8e8e) is
-// 5.0:1 on the canvas but falls below 4.5:1 on the lighter planes (#333333, #383838, #454545), so on those
-// planes it is reported as WARN, not failed. Each WARN is a place a builder must not put muted text without
-// a decision; the numbers are in docs/design/palette-console.md. Nothing else is waived, and a waived pair
-// that reaches 4.5:1 prints PASS.
-const WAIVED = new Set(
-  ["surface", "raised", "control", "composer-focus", "selected", "track", "inset"].map((name) => `desktop|dark|ink-muted|${name}`),
-)
 // Prose is held to 7:1 on the canvas in every palette; muted text to 4.5:1 there (the generic loop).
 const PROSE_MIN = 7
 
 let failures = 0
-let waived = 0
 for (const [palette, theme, set] of sets) {
   for (const role of roles) {
     for (const name of planes) {
       // Error text never sits on a control, a selected sidebar row or a segmented track.
       if (role.token === "danger" && ["control", "selected", "track"].includes(name)) continue
       const bg = plane(set, name)
-      let fg = parse(value(set, role.token), bg)
+      // Inside a selected row a palette may restyle muted text (Desktop: --x-ink-muted-selected).
+      const token = role.token === "ink-muted" && name === "selected" && set["ink-muted-selected"] ? "ink-muted-selected" : role.token
+      let fg = parse(value(set, token), bg)
       if (role.alpha) fg = mix(fg, bg, role.alpha)
       const result = ratio(fg, bg)
       const ok = result >= 4.5
-      const waive = !ok && WAIVED.has(`${palette}|${theme}|${role.token}|${name}`)
-      if (!ok && !waive) failures += 1
-      if (waive) waived += 1
-      console.log(`${ok ? "PASS" : waive ? "WARN" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} ${role.name.padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
+      if (!ok) failures += 1
+      console.log(`${ok ? "PASS" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} ${role.name.padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
     }
   }
   const bg = plane(set, "canvas")
@@ -183,4 +174,4 @@ if (dotFailures) {
   console.error(`${dotFailures} sidebar dot(s) below 3:1`)
 }
 if (failures || dotFailures) process.exit(1)
-console.log(`all transcript text roles >= 4.5:1 (${waived} Desktop dark muted-on-light-plane pairs waived, see WARN lines), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, in all three palettes`)
+console.log(`all transcript text roles >= 4.5:1 (Desktop dark muted text on a selected row reads in --x-ink-muted-selected), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, in all three palettes`)
