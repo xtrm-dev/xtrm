@@ -102,6 +102,24 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
         check(tag + " " + name + " unselected label on the track is 4.5:1 or better", r.offVsTrack >= 4.5, JSON.stringify(r))
         check(tag + " " + name + " selected pill against the track is " + (theme === "dark" ? "1.5:1" : "1.25:1 (white pill)") + " or better", r.pillVsTrack >= (theme === "dark" ? 1.5 : 1.25), JSON.stringify(r))
       }
+      // Console palette: both controls keep their original look; no contrast threshold there.
+      const cons = await p.evaluate(async () => {
+        const root = document.documentElement, prev = root.getAttribute("data-palette")
+        root.setAttribute("data-palette", "console")
+        await new Promise((r) => setTimeout(r, 500))
+        const rgba = (c) => { const x = document.createElement("canvas").getContext("2d"); x.fillStyle = "#000"; x.fillStyle = c; x.fillRect(0, 0, 1, 1); return [...x.getImageData(0, 0, 1, 1).data].join(",") }
+        const tok = (n) => rgba(getComputedStyle(root).getPropertyValue(n).trim())
+        const hs = document.querySelector("[data-testid=half-switch]"), vs = document.querySelector('[role=tablist][aria-label=View]')
+        const hsSel = hs.querySelector("[aria-checked=true]"), hsOff = hs.querySelector("[aria-checked=false]"), vsSel = vs.querySelector("[aria-selected=true]"), vsOff = vs.querySelector("[aria-selected=false]")
+        const c = (e, k) => rgba(getComputedStyle(e)[k])
+        const r = {
+          hsSelBg: c(hsSel, "backgroundColor") === tok("--x-control"), hsSelInk: c(hsSel, "color") === tok("--x-ink"), hsSelShadow: !/0px 1px 2px/.test(getComputedStyle(hsSel).boxShadow), hsOff: c(hsOff, "color") === tok("--x-ink-faint"),
+          vsSelBg: c(vsSel, "backgroundColor") === tok("--x-surface"), vsSelInk: c(vsSel, "color") === tok("--x-ink"), vsOff: c(vsOff, "color") === tok("--x-ink-faint"),
+        }
+        if (prev === null) root.removeAttribute("data-palette"); else root.setAttribute("data-palette", prev)
+        return r
+      }).catch(() => null)
+      if (cons) check(tag + " console palette: switcher bg-control/text-ink/no shadow/faint, view control surface/ink/faint (original look)", Object.values(cons).every(Boolean), JSON.stringify(cons))
       const sep = p.getByRole("separator", { name: "Resize sidebar" })
       const drag = async (dx) => { const bb = await sep.boundingBox(); const x = bb.x + bb.width / 2, y = bb.y + 300; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x + dx, y, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(400) }
       await drag(60); check(tag + " drag +60 widens to 324", (await panelW()) === 324, String(await panelW()))

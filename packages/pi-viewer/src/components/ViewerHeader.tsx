@@ -43,8 +43,8 @@ function Segmented({
           className={cn(
             "rounded-md px-2.5 py-1 text-xs whitespace-nowrap transition-colors",
             view === value
-              ? "bg-segment text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)]"
-              : "text-ink-muted hover:text-ink",
+              ? "bg-segment text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)] in-data-[palette=console]:bg-surface"
+              : "text-ink-muted hover:text-ink in-data-[palette=console]:text-ink-faint in-data-[palette=console]:hover:text-ink-muted",
           )}
         >
           {label}

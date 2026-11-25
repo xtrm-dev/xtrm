@@ -106,6 +106,15 @@ Icons stay lucide components (the registry holds only the shell's names); only t
 - Role text on line 2 is bold for every role: Lead and Manager keep their role colours, every other role is `font-semibold text-ink`.
 - Line 2 reads `Role  repo · Runtime · state`. The repo comes from the server (`server/repo.ts`): `git -C <cwd> rev-parse --git-common-dir`, the parent of `.git` (a worktree reports its main checkout's repo), cached per cwd, the cwd basename outside git. It is the optional `repo` field of the agent payload.
 
+### Segmented controls: Threads palette stronger, Console palette original (operator ruling)
+
+Applies to the Work/Threads switcher and the Channel / All events view control, which stay identical to each other.
+Threads palette: selected pill `bg-segment` (`--x-segment`: light `#ffffff`, dark `#4d4d4d`) with `text-ink` and a 1px shadow, unselected `text-ink-muted`.
+Measured (WCAG, track composited over its background): dark pill against track 1.80 (switcher) and 2.03 (view), selected text 7.17,
+unselected 5.86 and 6.62; light pill 1.30, selected text 17.7, unselected 4.88. Console palette (`in-data-[palette=console]:` variants): the
+original look. Switcher `bg-control text-ink`, no shadow, unselected `text-ink-faint`. View control `bg-surface` with the shadow, unselected `text-ink-faint`.
+The gate asserts the ratios in the Threads palette (text 4.5:1, unselected 4.5:1, pill 1.5:1 dark and 1.25:1 light) and the original classes' colours in the Console palette, with no contrast threshold there.
+
 ### Edge
 
 No right-edge border and no resize hairline: the sidebar (`#181818` dark) and the thread differ by background only. The handle keeps
