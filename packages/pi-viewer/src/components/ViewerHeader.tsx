@@ -1,4 +1,4 @@
-import { CheckIcon, MoonIcon, MoveHorizontalIcon, SunIcon } from "lucide-react"
+import { CheckIcon, MoveHorizontalIcon } from "lucide-react"
 import { Popover } from "radix-ui"
 import { useState } from "react"
 
@@ -14,6 +14,8 @@ import {
 } from "@/lib/chat-width"
 import type { ScopeLabel } from "@/lib/scope"
 import { cn } from "@/lib/utils"
+import { IconButton } from "@/shell/IconButton"
+import { modShortcut } from "@/shell/layout"
 
 function Segmented({
   view,
@@ -155,6 +157,8 @@ export function ViewerHeader({
   onToggleTheme,
   chatWidth,
   onChatWidthChange,
+  sidebarOpen,
+  onOpenSidebar,
 }: {
   label: ScopeLabel | null
   view: "channel" | "all"
@@ -163,9 +167,15 @@ export function ViewerHeader({
   onToggleTheme: () => void
   chatWidth: ChatWidth
   onChatWidthChange: (width: ChatWidth) => void
+  sidebarOpen: boolean
+  onOpenSidebar: () => void
 }) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 px-4 sm:px-5">
+    // The console's top bar is 44px (h-11) and carries the sidebar reopen button while the sidebar is closed.
+    <header className="flex h-11 shrink-0 items-center gap-3 px-3 sm:px-4" data-testid="top-bar">
+      {sidebarOpen ? null : (
+        <IconButton data-testid="sidebar-reopen" icon="sidebar" label="Open sidebar" shortcut={modShortcut("B")} aria-expanded={false} onClick={onOpenSidebar} />
+      )}
       <div className="flex min-w-0 items-baseline gap-2.5">
         <span className="min-w-0 truncate text-sm font-semibold text-ink" data-testid="scope-title">
           {label?.title ?? "No agent"}
@@ -179,14 +189,12 @@ export function ViewerHeader({
       <div className="ml-auto flex items-center gap-2">
         <Segmented view={view} onChange={onViewChange} />
         {view === "channel" ? <ChatWidthControl width={chatWidth} onChange={onChatWidthChange} /> : null}
-        <button
-          type="button"
+        <IconButton
+          icon={theme === "dark" ? "sun" : "moon"}
+          label={theme === "dark" ? "Light theme" : "Dark theme"}
+          aria-pressed={theme === "dark"}
           onClick={onToggleTheme}
-          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          className="flex size-7 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-hover hover:text-ink-muted"
-        >
-          {theme === "dark" ? <SunIcon className="size-3.5" /> : <MoonIcon className="size-3.5" />}
-        </button>
+        />
       </div>
     </header>
   )

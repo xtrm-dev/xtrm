@@ -5,6 +5,8 @@ import { ChannelView } from "@/components/ChannelView"
 import { Composer } from "@/components/Composer"
 import { PresenceLine } from "@/components/presence/PresenceLine"
 import { Sidebar } from "@/components/sidebar/Sidebar"
+import { ConsoleShell } from "@/shell/ConsoleShell"
+import { useSidebarLayout } from "@/shell/layout"
 import { ViewerHeader } from "@/components/ViewerHeader"
 import { laneValue, loadWidth, saveWidth } from "@/lib/chat-width"
 import {
@@ -67,6 +69,7 @@ function mergePayload(previous: ThreadPayload | null, incoming: ThreadPayload): 
 }
 
 export default function App() {
+  const shell = useSidebarLayout()
   const [sessions, setSessions] = useState<ViewerSession[]>([])
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
   const [scope, setScope] = useState<Scope | null>(null)
@@ -409,13 +412,20 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-dvh bg-deep text-ink">
-      <Sidebar
-        sessions={liveSessions}
-        scope={scope}
-        onSelect={select}
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
+    <ConsoleShell
+      layout={shell}
+      sidebar={
+        <Sidebar
+          sessions={liveSessions}
+          scope={scope}
+          onSelect={(next) => {
+            select(next)
+            if (shell.narrow) shell.setOpen(false)
+          }}
+          onCollapse={() => shell.setOpen(false)}
+        />
+      }
+    >
       <ViewerHeader
         label={label}
         view={view}
@@ -424,6 +434,8 @@ export default function App() {
         onToggleTheme={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
         chatWidth={chatWidth}
         onChatWidthChange={setChatWidth}
+        sidebarOpen={shell.open}
+        onOpenSidebar={() => shell.setOpen(true)}
       />
 
       {threadError ? (
@@ -546,7 +558,6 @@ export default function App() {
           />
         </>
       )}
-      </div>
-    </div>
+    </ConsoleShell>
   )
 }

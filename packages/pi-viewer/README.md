@@ -31,15 +31,16 @@ listed; windows and sessions without an agent are omitted. Session and window ro
 A window that holds a single pane has no row of its own: its pane sits directly under the session, and the
 window name is in the pane's tooltip. A pane row is two lines (46px): the agent name, then the role, the runtime (`Claude` or `Pi`) and the state. The role is plain text at the line's size; only Lead and Manager are bold and coloured (the thread view's role colours), with one
 small static status dot on the right (idle, running, error; the server's `waiting` is a finished turn, so it
-reads as idle, and no state is proven to "need attention"). The dark sidebar plane is `#181818`, a quiet step from the `#0d0d0d` viewport. Every level is a selectable scope (see Scope and URL below). The sidebar collapses to an icon
-rail of status dots (one Tab stop, arrow keys). On a narrow screen it starts as the rail and opens as an overlay
-that closes on Escape, on a click outside, or when a pane is chosen; only the desktop rail/open choice is
-persisted.
+reads as idle, and no state is proven to "need attention"). The dark sidebar plane is `#181818`, a quiet step from the `#0d0d0d` viewport. Every level is a selectable scope (see Scope and URL below). The sidebar sits in the console's shell
+(XTRM-1044, `src/shell`, `docs/design/console-shell-spike.md`): the Work / Agent switcher and the collapse button in a 44px header,
+a drag-resizable plane (264px, 220 to 360, saved in localStorage `xtrm.console.layout.v1`), collapse to width 0 with the reopen
+button in the top bar, and Ctrl/Cmd+B. On a narrow screen the sidebar is an overlay, closed by default, that closes on Escape,
+on a click outside, or when a row is chosen; only the desktop open/width choice is persisted.
 
 It is built from the console's primitives, not ReUI or shadcn Sidebar. The values (28px row, type ladder,
 `--x-hover` selected fill, no accent marker) are
 copied from `packages/xtrm-app` (`docs/design/console-ui-system.md` §3, §4.2, §4.3, §6, §11 and
-`src/agent/AgentSidebar.tsx`, `src/ui/sidebar.tsx`, `src/ui/nav-rail.tsx`), except two deliberate narrowings: the plane is 240px (the console's is 264px) and the
+`src/agent/AgentSidebar.tsx`, `src/ui/sidebar.tsx`, `src/ui/nav-rail.tsx`), except one deliberate narrowing: the
 indent step is 0.75rem (the console's `INDENT_REM` is 1.25). `src/components/sidebar/geometry.ts`
 names the source of each. The tree is keyboard operable (`role="tree"`, `aria-expanded`, roving focus; arrows,
 Home, End, Enter, Space).
@@ -47,7 +48,7 @@ Home, End, Enter, Space).
 ### Browser gate
 
 `scripts/sidebar-gate.mjs` checks the sidebar against a running viewer at 1440 and 390 wide, dark and light
-(28px rows, contiguous rails, scopes, URL, reload, keyboard, icon rail, mobile overlay, no console errors or
+(28px rows, no rails, scopes, URL, reload, keyboard, the console shell's width, drag limits, persistence and collapse, mobile overlay, no console errors or
 warnings). It only clicks the UI. Usage: `PI_VIEWER_URL=http://127.0.0.1:5199/ node scripts/sidebar-gate.mjs [screenshot-dir]`;
 set `PLAYWRIGHT_MODULE` and `CHROMIUM_PATH` if playwright or its browser are not installed here.
 

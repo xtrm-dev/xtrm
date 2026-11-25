@@ -1,6 +1,6 @@
 /**
  * Sidebar geometry, copied from the console (packages/xtrm-app). The viewer does not import
- * across packages, so each value names where it came from. Lengths are rem so the sidebar
+ * across packages for these values, so each names where it came from. Lengths are rem so the sidebar
  * follows the root font size, as the console's unit rule requires (console-ui-system.md §3.3).
  */
 
@@ -10,11 +10,10 @@
  */
 export const INDENT_REM = 0.5
 
-/** Sidebar plane width: 240px at a 16px root. The console's is 264px; this one only lists names. Deliberate deviation. */
-export const SIDEBAR_WIDTH = "w-[15rem]"
-
-/** Icon rail width: a size-7 control plus the px-2 gutter of a sidebar row (design doc §4.2). */
-export const RAIL_WIDTH = "w-11"
+/*
+ * The plane's width, collapse and resize are the console's and live in src/shell (XTRM-1044):
+ * default 264, min 220, max 360, collapsed to 0. This file keeps the row geometry.
+ */
 
 /**
  * Leading slot of every row: the chevron of a group, the status dot of a pane. One 14px box, so labels
