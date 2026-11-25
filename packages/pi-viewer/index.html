@@ -12,10 +12,11 @@
         document.documentElement.dataset.theme = "dark"
       }
       try {
-        document.documentElement.dataset.palette =
-          (function (saved) {
-            return saved === "console" || saved === "desktop" ? saved : "threads"
-          })(localStorage.getItem("pi-viewer-palette"))
+        var palette = localStorage.getItem("pi-viewer-palette")
+        var known = ["threads", "threads-soft", "console", "console-soft", "desktop"]
+        if (known.indexOf(palette) < 0) palette = "threads"
+        document.documentElement.dataset.palette = palette.replace("-soft", "")
+        if (palette.indexOf("-soft") > 0) document.documentElement.dataset.text = "soft"
       } catch (error) {
         document.documentElement.dataset.palette = "threads"
       }

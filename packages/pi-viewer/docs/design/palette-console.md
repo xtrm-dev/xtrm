@@ -1,10 +1,10 @@
-# Palettes: Threads, Console and Desktop (XTRM-1046, XTRM-1051)
+# Palettes: Threads, Console, Desktop and the soft-text versions (XTRM-1046, XTRM-1051, XTRM-1053)
 
-The header has a Colours control (palette glyph, 16px): **Colours: Threads | Console | Desktop**. Default Threads,
+The header has a Colours control (palette glyph, 16px): **Colours: Threads | Threads · soft text | Console | Console · soft text | Desktop**. Default Threads,
 persisted in `localStorage` under `pi-viewer-palette`, applied as `data-palette` on `<html>` (set before
 first paint by `index.html`). Switching rewrites CSS variables only; no component forks, no reload, no scroll change.
 The operator decides which palette stays; this document records what each one is. Console and Threads are
-described first, Desktop (XTRM-1051) in its own section below, with a token table across all three.
+described first, Desktop (XTRM-1051) and the soft-text versions (XTRM-1053) in their own sections below.
 
 ## Source of the console values
 
@@ -75,7 +75,7 @@ sticky header; `bg-inset` on the four quiet panels; `xtrm-composer-box` on the c
 
 ## Contrast
 
-`npm run test:contrast` resolves the tokens for all six sets (Threads, Console and Desktop, dark and light)
+`npm run test:contrast` resolves the tokens for all ten sets (Threads, Threads · soft, Console, Console · soft and Desktop, dark and light)
 and checks ink, ink at 90%, read (thread prose), ink-muted, accent-ink and danger against deep, surface,
 raised, control, canvas, sidebar, composer-focus, code, inset, the sidebar's selected row and the segmented
 track: every pair is at least 4.5:1. Thread prose is also held to 7:1 on the canvas in every palette.
@@ -160,6 +160,52 @@ pressed track).
 
 Every pair is at least 4.5:1; the contrast check has no waived pairs.
 
+## Soft-text versions (XTRM-1053)
+
+The operator wanted to compare the dimmer **text** alone, and Desktop also changed the surfaces. **Threads · soft
+text** and **Console · soft text** are their base palette with Desktop's text colours and nothing else.
+
+Mechanism: a soft choice sets the root to the base's `data-palette` (`threads` or `console`) and adds
+`data-text="soft"` (`src/lib/palette.ts`, `index.html`; persisted as `threads-soft` or `console-soft`). In
+`src/styles.css` one block holds the text set and is shared with Desktop through a grouped selector
+(`:root[data-palette="desktop"][data-theme="dark"], :root[data-text="soft"][data-theme="dark"]`), so no value is
+written twice and no surface value appears in it. It matches in dark only; in light nothing matches and each
+soft version equals its base. `test/palette.test.ts` proves that the layer sets only the four text variables,
+that each soft version differs from its base in no other variable (every non-text variable resolves
+byte-identical, including the ones that reference others), that the layer never names the light theme or a
+selected row, and that Desktop's own non-text values are unchanged.
+
+### Text tokens (dark)
+
+| Token | Threads | Threads · soft | Console | Console · soft | Desktop |
+|---|---|---|---|---|---|
+| `--x-ink` (names, titles, selected rows) | `#ececef` | `#e4e4e4` | `#ececef` | `#e4e4e4` | `#e4e4e4` |
+| `--x-read` (thread prose, operator bubble) | ink `#ececef` | `#c8c8c8` | ink `#ececef` | `#c8c8c8` | `#c8c8c8` |
+| `--x-ink-muted` (meta, time, labels, resting icons) | `#a0a0a8` | `#a1a1a1` | `#a0a0a8` | `#a1a1a1` | `#a1a1a1` |
+| `--x-ink-muted-selected` | unused | `#c8c8c8` (unused) | unused | `#c8c8c8` (unused) | `#c8c8c8` (selected row) |
+
+Icons follow the text tokens they already use (`ink-muted` at rest, `ink` on hover). Every other token (canvas,
+sidebar, surface, raised, control, selected, segment, borders, accent, danger, pill edge, code frame, composer)
+is the base's, as in the tables above. Light theme: each soft version equals its base. The control's tooltip
+says so ("Dark theme: ... surfaces with softer text. In the light theme it equals ...").
+
+The selected-row rule (muted text reads `#c8c8c8` inside a selected row) belongs to Desktop's `#454545` fill.
+The Threads and Console selected fills are the hover wash, where `#a1a1a1` already passes (6.38 and 5.56), so the
+soft versions do not carry the rule.
+
+### Contrast, soft versions, dark (`npm run test:contrast`, all five palettes)
+
+| Pair | Threads · soft | Console · soft |
+|---|---|---|
+| prose `#c8c8c8` on canvas (7:1 required) | 11.62 | 10.91 |
+| ink `#e4e4e4` on canvas / control (lowest) | 15.29 / 11.90 | 14.36 / 11.90 |
+| muted `#a1a1a1` on canvas | 7.52 | 7.07 |
+| muted on sidebar | 6.87 | 6.08 |
+| muted on control (lowest) | 5.86 | 5.86 |
+| muted on the selected row | 6.38 | 5.56 |
+
+Every text role is at least 4.5:1 on every plane in both versions; the check prints all pairs.
+
 ## Presence pill edge (XTRM-1047)
 
 The monogram pills in the presence line above the composer wear a 2px ring (`ring-2 ring-canvas`,
@@ -175,6 +221,7 @@ the canvas token, so each combination uses its own surround (asserted by `npm ru
 | Console light | `#ffffff` (it was `#f4f4f5`, the deep token, which outlined the pill) |
 | Desktop dark | `#1f1f1f` |
 | Desktop light | `#f4f4f5` (the Threads light set) |
+| Soft-text versions | their base's canvas (the layer changes text only) |
 
 The edge does not follow the line's hover fill (`bg-hover`, a translucent wash), so on hover the ring is
 a hair lighter than the wash. The cut-out effect holds at rest, which is the state the operator compared.

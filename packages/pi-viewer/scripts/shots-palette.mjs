@@ -36,7 +36,7 @@ const paint = (page) =>
   })
 async function choose(page, name) {
   await page.getByRole("button", { name: /^Colours:/ }).click()
-  await page.getByRole("radiogroup", { name: "Colours" }).getByRole("radio", { name }).click()
+  await page.getByRole("radiogroup", { name: "Colours" }).getByRole("radio", { name, exact: true }).click()
   await page.keyboard.press("Escape")
 }
 

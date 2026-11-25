@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 
-import { DEFAULT_PALETTE, PALETTES, PALETTE_KEY, applyPalette, loadPalette, paletteHint, paletteLabel, parsePalette, savePalette } from "../src/lib/palette.ts"
+import { DEFAULT_PALETTE, PALETTES, PALETTE_KEY, applyPalette, loadPalette, paletteBase, paletteHint, paletteLabel, paletteSoft, parsePalette, savePalette } from "../src/lib/palette.ts"
 
 function fakeWindow(initial: Record<string, string> = {}, blocked = false) {
   const store = new Map(Object.entries(initial))
@@ -26,21 +28,33 @@ test("Threads is the default; only the exact values 'console' and 'desktop' sele
   assert.equal(parsePalette("Console"), "threads")
   assert.equal(parsePalette("console"), "console")
   assert.equal(parsePalette("desktop"), "desktop")
+  assert.equal(parsePalette("threads-soft"), "threads-soft")
+  assert.equal(parsePalette("console-soft"), "console-soft")
   assert.equal(parsePalette("Desktop"), "threads")
+  assert.equal(parsePalette("soft"), "threads")
   assert.equal(parsePalette("threads"), "threads")
-  assert.deepEqual([...PALETTES], ["threads", "console", "desktop"])
+  assert.deepEqual([...PALETTES], ["threads", "threads-soft", "console", "console-soft", "desktop"])
 })
 
 test("labels match the switch wording", () => {
   assert.equal(paletteLabel("threads"), "Threads")
   assert.equal(paletteLabel("console"), "Console")
   assert.equal(paletteLabel("desktop"), "Desktop")
+  assert.equal(paletteLabel("threads-soft"), "Threads · soft text")
+  assert.equal(paletteLabel("console-soft"), "Console · soft text")
 })
 
-test("only Desktop carries a hint, and it says the light theme uses Threads; no branding in any label", () => {
+test("a soft version wears its base's surfaces and adds the text layer", () => {
+  assert.deepEqual(PALETTES.map(paletteBase), ["threads", "threads", "console", "console", "desktop"])
+  assert.deepEqual(PALETTES.map(paletteSoft), [false, true, false, true, false])
+})
+
+test("Desktop and the soft versions carry a hint that says what the light theme does; no branding in any label", () => {
   assert.equal(paletteHint("threads"), null)
   assert.equal(paletteHint("console"), null)
   assert.match(paletteHint("desktop") ?? "", /light theme it uses the Threads colours/)
+  assert.match(paletteHint("threads-soft") ?? "", /light theme it equals Threads/)
+  assert.match(paletteHint("console-soft") ?? "", /light theme it equals Console/)
   for (const palette of PALETTES) assert.doesNotMatch(`${paletteLabel(palette)} ${paletteHint(palette) ?? ""}`, /claude|anthropic/i)
 })
 
@@ -53,6 +67,8 @@ test("a saved choice round-trips through storage", () => {
   assert.equal(loadPalette(), "console")
   savePalette("desktop")
   assert.equal(loadPalette(), "desktop")
+  savePalette("console-soft")
+  assert.equal(loadPalette(), "console-soft")
   savePalette("threads")
   assert.equal(loadPalette(), "threads")
 })
@@ -69,4 +85,115 @@ test("applyPalette writes the root attribute", () => {
   assert.equal(root.dataset.palette, "console")
   applyPalette("threads", root)
   assert.equal(root.dataset.palette, "threads")
+  assert.equal(root.dataset.text, undefined)
+})
+
+test("a soft version keeps the base on data-palette and adds data-text=soft; any other choice removes it", () => {
+  const root = { dataset: {} as Record<string, string> } as unknown as HTMLElement
+  applyPalette("console-soft", root)
+  assert.equal(root.dataset.palette, "console")
+  assert.equal(root.dataset.text, "soft")
+  applyPalette("threads-soft", root)
+  assert.equal(root.dataset.palette, "threads")
+  assert.equal(root.dataset.text, "soft")
+  applyPalette("desktop", root)
+  assert.equal(root.dataset.palette, "desktop")
+  assert.equal(root.dataset.text, undefined)
+  applyPalette("console", root)
+  assert.equal(root.dataset.text, undefined)
+})
+
+// The soft-text versions are a text-only layer over their base (XTRM-1053). These tests read styles.css the
+// way the cascade does and prove the layer cannot change a surface, border, accent or any other non-text token.
+const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8")
+
+function block(selector: string): string {
+  const start = css.indexOf(selector)
+  assert.ok(start >= 0, `no block ${selector}`)
+  const open = css.indexOf("{", start)
+  let depth = 0
+  for (let i = open; i < css.length; i += 1) {
+    if (css[i] === "{") depth += 1
+    if (css[i] === "}") {
+      depth -= 1
+      if (depth === 0) return css.slice(open + 1, i)
+    }
+  }
+  throw new Error(`unclosed ${selector}`)
+}
+
+function tokens(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const match of text.matchAll(/--x-([\w-]+):\s*([^;]+);/g)) out[match[1]] = match[2].replace(/\/\*.*?\*\//g, "").trim()
+  return out
+}
+
+/** The only variables a soft-text layer may set: Desktop's text roles. */
+const TEXT = ["ink", "read", "ink-muted", "ink-muted-selected"]
+
+const threadsLight = tokens(block(":root {"))
+const dark = tokens(block(':root[data-theme="dark"]'))
+const consoleAll = tokens(block(':root[data-palette="console"] {'))
+const consoleDark = tokens(block(':root[data-palette="console"][data-theme="dark"]'))
+const desktopDark = tokens(block(':root[data-palette="desktop"][data-theme="dark"] {'))
+const layer = tokens(block(':root[data-text="soft"][data-theme="dark"] {'))
+const threadsDark = { ...threadsLight, ...dark }
+const consoleDarkSet = { ...threadsLight, ...dark, ...consoleAll, ...consoleDark }
+
+function differing(a: Record<string, string>, b: Record<string, string>): string[] {
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((key) => a[key] !== b[key]).sort()
+}
+
+test("the soft-text layer sets text variables only", () => {
+  assert.deepEqual(Object.keys(layer).sort(), [...TEXT].sort())
+  // Every rule that names data-text sets only text variables, and only in the dark theme.
+  const rules = [...css.matchAll(/([^{}]*data-text="soft"[^{}]*)\{([^{}]*)\}/g)]
+  assert.ok(rules.length >= 1)
+  for (const [, selector, body] of rules) {
+    assert.match(selector, /\[data-theme="dark"\]/, "a soft rule must be dark only")
+    assert.doesNotMatch(selector, /aria-selected/, "a soft rule must not restyle selected rows")
+    for (const name of Object.keys(tokens(body))) assert.ok(TEXT.includes(name), `soft layer sets non-text variable --x-${name}`)
+  }
+})
+
+test("each soft version differs from its base only in text variables", () => {
+  const cases: [string, Record<string, string>][] = [
+    ["threads", threadsDark],
+    ["console", consoleDarkSet],
+  ]
+  for (const [name, base] of cases) {
+    const soft = { ...base, ...layer }
+    const changed = differing(base, soft)
+    assert.ok(changed.length > 0, `${name}: the layer changes something`)
+    for (const key of changed) assert.ok(TEXT.includes(key), `${name}-soft changes non-text variable --x-${key}`)
+    // Every non-text variable is byte-identical, including the ones that reference others.
+    for (const key of Object.keys(base).filter((key) => !TEXT.includes(key))) assert.equal(soft[key], base[key], `--x-${key}`)
+    assert.deepEqual(Object.keys(soft).sort(), [...new Set([...Object.keys(base), ...TEXT])].sort())
+  }
+})
+
+test("in the light theme a soft version equals its base: no light rule names the layer", () => {
+  assert.doesNotMatch(css, /data-text="soft"\](?!\[data-theme="dark"\])/)
+  assert.doesNotMatch(css, /data-text="soft"\]\[data-theme="light"\]/)
+})
+
+test("the soft text values are Desktop's text set and Desktop's surfaces are unchanged", () => {
+  assert.deepEqual(layer, { ink: "#e4e4e4", read: "#c8c8c8", "ink-muted": "#a1a1a1", "ink-muted-selected": "#c8c8c8" })
+  // Desktop wears the same layer through the shared selector, so its text equals the soft versions'.
+  assert.match(css, /:root\[data-palette="desktop"\]\[data-theme="dark"\],\s*:root\[data-text="soft"\]\[data-theme="dark"\]\s*\{/)
+  assert.deepEqual(desktopDark, {
+    deep: "#1f1f1f",
+    sidebar: "#242424",
+    surface: "#333333",
+    raised: "#333333",
+    control: "#383838",
+    segment: "#454545",
+    selected: "#454545",
+    border: "#383838",
+    danger: "#f58f8f",
+    "composer-focus": "var(--x-control)",
+    code: "var(--x-deep)",
+    "code-edge": "var(--x-border)",
+  })
+  assert.deepEqual(differing(threadsDark, { ...threadsDark, ...layer }).sort(), ["ink", "ink-muted", "ink-muted-selected", "read"].sort())
 })

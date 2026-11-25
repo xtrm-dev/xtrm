@@ -60,7 +60,15 @@ const EXPECT = {
   "console light": { canvas: "rgb(255, 255, 255)", sidebar: "rgb(244, 244, 245)", composer: "rgb(255, 255, 255)", edge: true, prose: "rgb(24, 24, 27)", muted: "rgb(95, 95, 104)" },
   "desktop light": THREADS_LIGHT,
 }
-const paletteName = (palette) => ({ threads: "Threads", console: "Console", desktop: "Desktop" })[palette]
+// Soft text (XTRM-1053): the base's surfaces, Desktop's text; in light the base's light values.
+const SOFT_TEXT = { prose: "rgb(200, 200, 200)", muted: "rgb(161, 161, 161)", ink: "rgb(228, 228, 228)" }
+EXPECT["threads-soft dark"] = { ...EXPECT["threads dark"], ...SOFT_TEXT }
+EXPECT["console-soft dark"] = { ...EXPECT["console dark"], ...SOFT_TEXT }
+EXPECT["threads-soft light"] = EXPECT["threads light"]
+EXPECT["console-soft light"] = EXPECT["console light"]
+EXPECT["desktop dark"].ink = "rgb(228, 228, 228)"
+const paletteName = (palette) =>
+  ({ threads: "Threads", "threads-soft": "Threads · soft text", console: "Console", "console-soft": "Console · soft text", desktop: "Desktop" })[palette]
 
 function expectPalette(seen, palette, theme, width, label) {
   const want = EXPECT[`${palette} ${theme}`]
@@ -71,6 +79,9 @@ function expectPalette(seen, palette, theme, width, label) {
   assert.equal(/inset/.test(seen.shadow) && !/rgba\(0, 0, 0, 0\) 0px 0px 0px 1px inset/.test(seen.shadow), want.edge, `${tag} composer edge`)
   assert.equal(seen.prose, want.prose, `${tag} thread prose colour`)
   assert.equal(seen.muted, want.muted, `${tag} muted text colour`)
+  if (want.ink) assert.equal(seen.ink, want.ink, `${tag} primary text colour`)
+  // Soft text keeps the base's attributes: data-palette is the base, data-text marks the layer.
+  assert.equal(seen.text, palette.endsWith("-soft") ? "soft" : null, `${tag} data-text`)
   if (want.selected && seen.selected) assert.equal(seen.selected, want.selected, `${tag} selected sidebar row`)
 }
 
@@ -116,6 +127,16 @@ const paint = (page) =>
     const shell = document.querySelector('[data-slot="message-scroller"]')?.closest(".bg-canvas")
     return {
       palette: document.documentElement.dataset.palette,
+      text: document.documentElement.dataset.text ?? null,
+      // The primary text colour, read through a probe that wears the text-ink class.
+      ink: (() => {
+        const probe = document.createElement("span")
+        probe.className = "text-ink"
+        document.body.append(probe)
+        const color = getComputedStyle(probe).color
+        probe.remove()
+        return color
+      })(),
       canvas: bg(box.closest(".bg-canvas")),
       shell: bg(shell),
       body: bg(document.body),
@@ -145,12 +166,12 @@ const paint = (page) =>
 
 async function choose(page, name) {
   await page.getByRole("button", { name: /^Colours:/ }).click()
-  await page.getByRole("radiogroup", { name: "Colours" }).getByRole("radio", { name }).click()
+  await page.getByRole("radiogroup", { name: "Colours" }).getByRole("radio", { name, exact: true }).click()
   await page.keyboard.press("Escape")
 }
 
 const shots = {}
-const OTHERS = ["console", "desktop"]
+const OTHERS = ["threads-soft", "console", "console-soft", "desktop"]
 try {
   for (const [width, height, label] of [[1440, 900, "1440"], [390, 844, "390"]]) {
     for (const theme of ["dark", "light"]) {
@@ -172,7 +193,7 @@ try {
         await choose(page, paletteName(palette))
         await page.waitForTimeout(200)
         const after = await paint(page)
-        assert.equal(after.palette, palette)
+        assert.equal(after.palette, palette.replace("-soft", ""))
         expectPalette(after, palette, theme, width, label)
         assert.equal(after.shell, EXPECT[`${palette} ${theme}`].canvas, `${label} ${theme} ${palette} shell`)
         assert.equal(after.body, EXPECT[`${palette} ${theme}`].canvas, `${label} ${theme} ${palette} body`)
@@ -185,14 +206,17 @@ try {
         // Persisted: a reload keeps the palette without a flash of Threads.
         await page.reload({ waitUntil: "domcontentloaded" })
         await page.locator('[data-slot="message-scroller-item"]').first().waitFor({ state: "visible" })
-        assert.equal((await paint(page)).palette, palette, `${palette} persists across a reload`)
-        assert.equal((await paint(page)).overflow, 0, `${label} ${theme} ${palette}: no horizontal overflow`)
+        const reloaded = await paint(page)
+        assert.equal(reloaded.palette, palette.replace("-soft", ""), `${palette} persists across a reload`)
+        assert.equal(reloaded.text, palette.endsWith("-soft") ? "soft" : null, `${palette} text layer persists across a reload`)
+        assert.equal(await page.evaluate(() => localStorage.getItem("pi-viewer-palette")), palette)
+        assert.equal(reloaded.overflow, 0, `${label} ${theme} ${palette}: no horizontal overflow`)
       }
 
       // And back; the choice list offers all three.
       await page.getByRole("button", { name: /^Colours:/ }).click()
       const names = await page.getByRole("radiogroup", { name: "Colours" }).getByRole("radio").allTextContents()
-      assert.deepEqual(names.map((name) => name.replace(/dark only$/, "").trim()), ["Threads", "Console", "Desktop"])
+      assert.deepEqual(names.map((name) => name.replace(/dark only$/, "").trim()), ["Threads", "Threads · soft text", "Console", "Console · soft text", "Desktop"])
       await page.keyboard.press("Escape")
       await choose(page, "Threads")
       assert.equal((await paint(page)).palette, "threads")
@@ -220,10 +244,10 @@ try {
   }
 
   // Side by side, one image per viewport and theme: Threads, Console, Desktop.
-  const page = await browser.newPage({ viewport: { width: 3000, height: 1000 } })
+  const page = await browser.newPage({ viewport: { width: 5000, height: 1000 } })
   for (const label of ["1440", "390"]) {
     for (const theme of ["dark", "light"]) {
-      const figure = (name) => `<figure style="margin:0"><figcaption>${paletteName(name)}</figcaption><img style="max-width:${label === "1440" ? 960 : 390}px" src="data:image/png;base64,${shots[`${label}-${theme}-${name}`].toString("base64")}"></figure>`
+      const figure = (name) => `<figure style="margin:0"><figcaption>${paletteName(name)}</figcaption><img style="max-width:${label === "1440" ? 900 : 390}px" src="data:image/png;base64,${shots[`${label}-${theme}-${name}`].toString("base64")}"></figure>`
       await page.setContent(`<body style="margin:0;display:flex;gap:16px;background:#888;padding:16px;align-items:flex-start;font:14px sans-serif">${["threads", ...OTHERS].map(figure).join("")}</body>`)
       await page.screenshot({ path: join(SHOTS, `mock-side-by-side-${label}-${theme}.png`), fullPage: true })
     }

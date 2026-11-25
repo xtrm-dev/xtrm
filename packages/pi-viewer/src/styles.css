@@ -174,10 +174,6 @@
   --x-control: #383838; /* input */
   --x-segment: #454545; /* selected segment */
   --x-selected: #454545; /* selected row */
-  --x-ink: #e4e4e4; /* text primary: names, titles, selected rows */
-  --x-read: #c8c8c8; /* text secondary: thread prose */
-  --x-ink-muted: #a1a1a1; /* text muted (operator ruling 2026-11-26: #a0a0a0, one step up so it is 4.5:1 on #383838): meta, time, unselected labels, resting icons */
-  --x-ink-muted-selected: #c8c8c8; /* muted text inside a selected row: #a1a1a1 is 3.7:1 on #454545 */
   --x-border: #383838;
   --x-danger: #f58f8f; /* inferred: #f07171 is 4.1:1 on the focused composer fill (#383838); this is 5.1:1 */
   --x-composer-focus: var(--x-control); /* the focused composer takes the input fill */
@@ -187,6 +183,23 @@
 /* Inside a selected row or segment (#454545) muted text reads in the secondary colour. */
 :root[data-palette="desktop"][data-theme="dark"] [aria-selected="true"] {
   --x-ink-muted: var(--x-ink-muted-selected);
+}
+
+/* Soft text (XTRM-1053): Desktop's text colours, and nothing else, as one layer. Desktop wears it with its
+   own surfaces; a soft-text version is the root's base palette (data-palette threads or console) plus
+   data-text="soft", so every surface, border and accent of the base is untouched and no surface value is
+   written twice. Dark only: in the light theme nothing here matches and the base's light values apply.
+   Only text variables may live in this block (test/palette.test.ts holds it to that list).
+   Primary #e4e4e4: names, titles, selected rows. Reading #c8c8c8: thread prose, operator bubble. Muted
+   #a1a1a1 (operator ruling 2026-11-26: #a0a0a0, one step up so it is 4.5:1 on #383838): meta, time,
+   unselected labels, resting icons. The selected-row rule above belongs to Desktop's #454545 fill only; the
+   Threads and Console selected fills are the hover wash, where #a1a1a1 already passes. */
+:root[data-palette="desktop"][data-theme="dark"],
+:root[data-text="soft"][data-theme="dark"] {
+  --x-ink: #e4e4e4;
+  --x-read: #c8c8c8;
+  --x-ink-muted: #a1a1a1;
+  --x-ink-muted-selected: #c8c8c8; /* inside Desktop's selected row: #a1a1a1 is 3.7:1 on #454545 */
 }
 
 @theme inline {

@@ -1,9 +1,10 @@
-// Contrast gate for the transcript text roles (XTRM-1034, audit 1.6), in all three palettes (XTRM-1046,
+// Contrast gate for the transcript text roles (XTRM-1034, audit 1.6), in all five palettes (XTRM-1046,
 // XTRM-1051).
 // Reads the --x-* tokens from src/styles.css, so a token edit re-runs the proof. The Console palette
 // is the Threads set with the :root[data-palette="console"] blocks laid over it, as the cascade does.
-// Desktop (dark only) is the Threads dark set with its own block over it; Desktop in the light theme is
-// the Threads light set, because no Desktop rule matches there.
+// Desktop (dark only) is the Threads dark set with its own block and the soft-text layer over it; Desktop in
+// the light theme is the Threads light set, because no Desktop rule matches there. A soft-text version is its
+// base plus the soft-text layer in dark, and equals its base in light.
 // Since XTRM-1048 it also holds the sidebar's status dot to 3:1 against the sidebar: the dot carries
 // the state alone, so its colour is a non-text mark that must stay visible in every palette.
 // Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1 or a dot below 3:1)
@@ -38,14 +39,22 @@ const threadsLight = tokens(block(":root {"))
 const dark = tokens(block(':root[data-theme="dark"]'))
 const consoleAll = tokens(block(':root[data-palette="console"] {'))
 const consoleDark = tokens(block(':root[data-palette="console"][data-theme="dark"]'))
-const desktopDark = tokens(block(':root[data-palette="desktop"][data-theme="dark"]'))
+const desktopDark = tokens(block(':root[data-palette="desktop"][data-theme="dark"] {'))
+// The text-only layer Desktop and the soft-text versions share (XTRM-1053).
+const softText = tokens(block(':root[data-text="soft"][data-theme="dark"] {'))
+const consoleDarkSet = { ...threadsLight, ...dark, ...consoleAll, ...consoleDark }
 const sets = [
   ["threads", "light", threadsLight],
   ["threads", "dark", { ...threadsLight, ...dark }],
+  ["threads-soft", "light", threadsLight],
+  ["threads-soft", "dark", { ...threadsLight, ...dark, ...softText }],
   ["console", "light", { ...threadsLight, ...consoleAll }],
-  ["console", "dark", { ...threadsLight, ...dark, ...consoleAll, ...consoleDark }],
+  ["console", "dark", consoleDarkSet],
+  ["console-soft", "light", { ...threadsLight, ...consoleAll }],
+  ["console-soft", "dark", { ...consoleDarkSet, ...softText }],
   ["desktop", "light", threadsLight],
-  ["desktop", "dark", { ...threadsLight, ...dark, ...desktopDark }],
+  // Desktop alone restyles muted text inside its #454545 selected row (styles.css, [aria-selected]).
+  ["desktop", "dark", { ...threadsLight, ...dark, ...desktopDark, ...softText, "muted-selected-rule": "on" }],
 ]
 
 /** The final value of a token, following var(--x-name) the way the cascade does. */
@@ -125,24 +134,24 @@ for (const [palette, theme, set] of sets) {
       if (role.token === "danger" && ["control", "selected", "track"].includes(name)) continue
       const bg = plane(set, name)
       // Inside a selected row a palette may restyle muted text (Desktop: --x-ink-muted-selected).
-      const token = role.token === "ink-muted" && name === "selected" && set["ink-muted-selected"] ? "ink-muted-selected" : role.token
+      const token = role.token === "ink-muted" && name === "selected" && set["muted-selected-rule"] ? "ink-muted-selected" : role.token
       let fg = parse(value(set, token), bg)
       if (role.alpha) fg = mix(fg, bg, role.alpha)
       const result = ratio(fg, bg)
       const ok = result >= 4.5
       if (!ok) failures += 1
-      console.log(`${ok ? "PASS" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} ${role.name.padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
+      console.log(`${ok ? "PASS" : "FAIL"} ${palette.padEnd(12)} ${theme.padEnd(5)} ${role.name.padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
     }
   }
   const bg = plane(set, "canvas")
   const prose = ratio(parse(value(set, "read"), bg), bg)
   if (prose < PROSE_MIN) failures += 1
-  console.log(`${prose >= PROSE_MIN ? "PASS" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} thread prose (read) on canvas, minimum 7:1 ${prose.toFixed(2)}`)
+  console.log(`${prose >= PROSE_MIN ? "PASS" : "FAIL"} ${palette.padEnd(12)} ${theme.padEnd(5)} thread prose (read) on canvas, minimum 7:1 ${prose.toFixed(2)}`)
 }
 // ink-faint is a glyph and heading role only; it must not carry transcript text.
 for (const [palette, theme, set] of sets) {
   const bg = plane(set, "canvas")
-  console.log(`INFO ${palette.padEnd(7)} ${theme.padEnd(5)} ink-faint (glyphs only, not text) on canvas ${ratio(parse(value(set, "ink-faint"), bg), bg).toFixed(2)}`)
+  console.log(`INFO ${palette.padEnd(12)} ${theme.padEnd(5)} ink-faint (glyphs only, not text) on canvas ${ratio(parse(value(set, "ink-faint"), bg), bg).toFixed(2)}`)
 }
 
 /** The token and alpha a dot class paints with; `bg-transparent` means the border draws the ring. */
@@ -163,7 +172,7 @@ for (const [palette, theme, set] of sets) {
     const fg = mix(parse(value(set, token), bg), bg, alpha)
     const result = ratio(fg, bg)
     if (result < 3) dotFailures += 1
-    console.log(`${result >= 3 ? "PASS" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} ${("dot " + status).padEnd(40)} on ${"sidebar".padEnd(14)} ${result.toFixed(2)}`)
+    console.log(`${result >= 3 ? "PASS" : "FAIL"} ${palette.padEnd(12)} ${theme.padEnd(5)} ${("dot " + status).padEnd(40)} on ${"sidebar".padEnd(14)} ${result.toFixed(2)}`)
   }
 }
 
@@ -174,4 +183,4 @@ if (dotFailures) {
   console.error(`${dotFailures} sidebar dot(s) below 3:1`)
 }
 if (failures || dotFailures) process.exit(1)
-console.log(`all transcript text roles >= 4.5:1 (Desktop dark muted text on a selected row reads in --x-ink-muted-selected), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, in all three palettes`)
+console.log(`all transcript text roles >= 4.5:1 (Desktop dark muted text on a selected row reads in --x-ink-muted-selected), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, in all five palettes`)

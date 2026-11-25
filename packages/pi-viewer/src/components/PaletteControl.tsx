@@ -6,7 +6,7 @@ import { PALETTES, applyPalette, loadPalette, paletteHint, paletteLabel, savePal
 import { cn } from "@/lib/utils"
 
 /**
- * Header control for the Colours setting (XTRM-1046): "Colours: Threads | Console | Desktop". It owns its
+ * Header control for the Colours setting (XTRM-1046): "Colours: Threads | Threads · soft text | Console | Console · soft text | Desktop". It owns its
  * state and writes the root `data-palette` attribute, so switching is instant and leaves the
  * scroll position alone. The glyph is 16px, the console's `sm` step.
  */
