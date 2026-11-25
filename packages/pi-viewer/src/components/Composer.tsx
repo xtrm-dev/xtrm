@@ -51,7 +51,7 @@ export function Composer({
     const node = textareaRef.current
     if (!node) return
     node.style.height = "auto"
-    node.style.height = `${Math.min(node.scrollHeight, 160)}px`
+    node.style.height = `${Math.min(node.scrollHeight, parseFloat(getComputedStyle(document.documentElement).fontSize) * 13)}px`
   }, [text])
 
   useEffect(() => {
@@ -111,8 +111,8 @@ export function Composer({
   }
 
   return (
-    <div className="shrink-0 bg-deep px-4 pt-2 pb-4 sm:px-5">
-      <div ref={rootRef} className="relative mx-auto w-full max-w-3xl">
+    <div className="shrink-0 bg-deep px-3 pt-2 pb-4 sm:px-12">
+      <div ref={rootRef} className="relative mx-auto w-full max-w-[46rem]">
         <div
           className={cn(
             "relative rounded-lg bg-surface transition-colors focus-within:bg-raised",
@@ -121,7 +121,7 @@ export function Composer({
         >
           {menu === "mention" && matches.length ? (
             <div className="absolute right-2 bottom-full left-2 z-20 mb-2 max-h-60 overflow-y-auto rounded-lg bg-raised p-1 shadow-float sm:right-auto sm:w-80">
-              <div className="px-2 py-1 text-2xs text-ink-faint">Send to agent</div>
+              <div className="px-2 py-1 text-2xs text-ink-muted">Send to agent</div>
               {matches.map((agent, position) => (
                 <button
                   key={agent.id}
@@ -136,7 +136,7 @@ export function Composer({
                 >
                   <StatusDot status={agent.status} />
                   <span className="min-w-0 flex-1 truncate text-xs text-ink">{agent.name}</span>
-                  <span className="text-2xs text-ink-faint">{statusWord(agent.status)}</span>
+                  <span className="text-2xs text-ink-muted">{statusWord(agent.status)}</span>
                 </button>
               ))}
             </div>
@@ -144,7 +144,7 @@ export function Composer({
 
           {menu === "to" ? (
             <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-72 overflow-y-auto rounded-lg bg-raised p-1 shadow-float">
-              <div className="px-2 py-1 text-2xs text-ink-faint">Send to agent</div>
+              <div className="px-2 py-1 text-2xs text-ink-muted">Send to agent</div>
               {agents.map((agent) => (
                 <button
                   key={agent.id}
@@ -160,7 +160,7 @@ export function Composer({
                 >
                   <StatusDot status={agent.status} />
                   <span className="min-w-0 flex-1 truncate text-xs text-ink">{agent.name}</span>
-                  <span className="text-2xs text-ink-faint">{statusWord(agent.status)}</span>
+                  <span className="text-2xs text-ink-muted">{statusWord(agent.status)}</span>
                 </button>
               ))}
             </div>
@@ -208,7 +208,7 @@ export function Composer({
                 void submit()
               }
             }}
-            className="scrollbar-thin block max-h-40 w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-sm text-ink placeholder:text-ink-faint focus:outline-none"
+            className="scrollbar-thin block max-h-52 min-h-[calc(2lh+1rem)] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[0.875rem] leading-[1.625] text-ink placeholder:text-ink-muted focus:outline-none"
           />
 
           <div className="flex items-center gap-2 px-2.5 pb-2">
@@ -216,7 +216,7 @@ export function Composer({
               type="button"
               disabled={!agents.length}
               onClick={() => setMenu((value) => (value === "to" ? "none" : "to"))}
-              className="flex min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-2xs text-ink-faint transition-colors hover:text-ink-muted"
+              className="flex min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-2xs text-ink-muted transition-colors hover:text-ink"
             >
               <span>To</span>
               {target ? (
@@ -230,7 +230,7 @@ export function Composer({
               <ChevronDownIcon className="size-3" />
             </button>
 
-            <span className="ml-auto hidden text-2xs text-ink-faint sm:block">
+            <span className="ml-auto hidden text-2xs text-ink-muted sm:block">
               @ to mention · Shift+Enter for a new line
             </span>
 
