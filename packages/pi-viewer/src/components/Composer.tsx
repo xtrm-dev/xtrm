@@ -2,6 +2,7 @@ import { ChevronDownIcon, LoaderCircleIcon, SendIcon, XIcon } from "lucide-react
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { StatusDot, statusWord } from "@/components/StatusDot"
+import { composerMeta } from "@/lib/composer-meta"
 import { monogram } from "@/lib/format"
 import { escapeClearsReply } from "@/lib/reply"
 import type { ViewerAgent } from "@/shared/types"
@@ -47,6 +48,8 @@ export function Composer({
   const [index, setIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  // The under-row carries the two fields the presence detail shows, and omits a missing one.
+  const meta = composerMeta(target)
 
   const matches = useMemo(() => {
     if (!mention) return []
@@ -121,59 +124,63 @@ export function Composer({
   return (
     <div className="shrink-0 bg-canvas px-3 pt-2 pb-4 sm:px-12">
       <div ref={rootRef} className="xtrm-lane relative mx-auto w-full">
+        {menu === "mention" && matches.length ? (
+          <div
+            data-composer-menu=""
+            className="absolute right-2 bottom-full left-2 z-20 mb-2 max-h-60 overflow-y-auto rounded-lg bg-raised p-1 shadow-float sm:right-auto sm:w-80">
+            <div className="px-2 py-1 text-2xs text-ink-muted">Send to agent</div>
+            {matches.map((agent, position) => (
+              <button
+                key={agent.id}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => insertMention(agent)}
+                onMouseEnter={() => setIndex(position)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left",
+                  position === index ? "bg-pressed" : "hover:bg-hover",
+                )}
+              >
+                <StatusDot status={agent.status} />
+                <span className="min-w-0 flex-1 truncate text-xs text-ink">{agent.name}</span>
+                <span className="text-2xs text-ink-muted">{statusWord(agent.status)}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {menu === "to" ? (
+          <div
+            data-composer-menu=""
+            className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-72 overflow-y-auto rounded-lg bg-raised p-1 shadow-float">
+            <div className="px-2 py-1 text-2xs text-ink-muted">Send to agent</div>
+            {agents.map((agent) => (
+              <button
+                key={agent.id}
+                type="button"
+                onClick={() => {
+                  onTargetChange(agent)
+                  setMenu("none")
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover",
+                  agent.id === target?.id && "bg-pressed",
+                )}
+              >
+                <StatusDot status={agent.status} />
+                <span className="min-w-0 flex-1 truncate text-xs text-ink">{agent.name}</span>
+                <span className="text-2xs text-ink-muted">{statusWord(agent.status)}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div
           className={cn(
             "xtrm-composer-box relative rounded-lg",
             disabled && "opacity-60",
           )}
         >
-          {menu === "mention" && matches.length ? (
-            <div className="absolute right-2 bottom-full left-2 z-20 mb-2 max-h-60 overflow-y-auto rounded-lg bg-raised p-1 shadow-float sm:right-auto sm:w-80">
-              <div className="px-2 py-1 text-2xs text-ink-muted">Send to agent</div>
-              {matches.map((agent, position) => (
-                <button
-                  key={agent.id}
-                  type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => insertMention(agent)}
-                  onMouseEnter={() => setIndex(position)}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left",
-                    position === index ? "bg-pressed" : "hover:bg-hover",
-                  )}
-                >
-                  <StatusDot status={agent.status} />
-                  <span className="min-w-0 flex-1 truncate text-xs text-ink">{agent.name}</span>
-                  <span className="text-2xs text-ink-muted">{statusWord(agent.status)}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {menu === "to" ? (
-            <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-72 overflow-y-auto rounded-lg bg-raised p-1 shadow-float">
-              <div className="px-2 py-1 text-2xs text-ink-muted">Send to agent</div>
-              {agents.map((agent) => (
-                <button
-                  key={agent.id}
-                  type="button"
-                  onClick={() => {
-                    onTargetChange(agent)
-                    setMenu("none")
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover",
-                    agent.id === target?.id && "bg-pressed",
-                  )}
-                >
-                  <StatusDot status={agent.status} />
-                  <span className="min-w-0 flex-1 truncate text-xs text-ink">{agent.name}</span>
-                  <span className="text-2xs text-ink-muted">{statusWord(agent.status)}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
           {replyTo ? (
             <div
               data-reply-bar=""
@@ -250,38 +257,23 @@ export function Composer({
                 void submit()
               }
             }}
-            className="scrollbar-thin block max-h-52 min-h-[calc(2lh+1rem)] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[0.875rem] leading-[1.625] text-ink placeholder:text-ink-muted focus:outline-none"
+            className="scrollbar-thin block max-h-52 min-h-[calc(1lh+1rem)] w-full resize-none bg-transparent px-3.5 py-2.5 pr-12 text-[0.875rem] leading-5 text-ink placeholder:text-ink-muted focus:outline-none"
           />
 
-          <div className="flex items-center gap-2 px-2.5 pb-2">
-            <button
-              type="button"
-              disabled={!agents.length}
-              onClick={() => setMenu((value) => (value === "to" ? "none" : "to"))}
-              className="flex min-w-0 items-center gap-1.5 rounded-md px-1 py-1 text-2xs text-ink-muted transition-colors hover:text-ink"
-            >
-              <span>To</span>
-              {target ? (
-                <>
-                  <StatusDot status={target.status} />
-                  <span className="max-w-44 truncate text-ink-muted">{target.name}</span>
-                </>
-              ) : (
-                <span>no agent</span>
-              )}
-              <ChevronDownIcon className="size-3.5" />
-            </button>
-
-            <span className="ml-auto hidden text-2xs text-ink-muted sm:block">
-              @ to mention · Shift+Enter for a new line
-            </span>
-
+          {/* The box's inner bottom row, as in Claude Desktop (XTRM-1054 rev 2): an empty slot on the
+              left for a control the viewer does not have yet (attach), send on the right. It overlays
+              the box instead of taking a row, so an empty one-line composer stays 40px high. */}
+          <div
+            data-composer-controls=""
+            className="pointer-events-none absolute inset-x-3.5 bottom-2 flex items-center justify-between"
+          >
+            <span data-composer-attach-slot="" aria-hidden="true" className="size-7" />
             <button
               type="button"
               onClick={() => void submit()}
               disabled={!text.trim() || !target || sending}
               aria-label="Send"
-              className="flex size-7 items-center justify-center rounded-md bg-github text-github-ink transition-opacity hover:bg-github-hover disabled:opacity-30"
+              className="pointer-events-auto flex size-7 items-center justify-center rounded-md bg-github text-github-ink transition-opacity hover:bg-github-hover disabled:opacity-30"
             >
               {sending ? (
                 <LoaderCircleIcon className="size-4 animate-spin" />
@@ -289,6 +281,53 @@ export function Composer({
                 <SendIcon className="size-4" />
               )}
             </button>
+          </div>
+        </div>
+
+        {/* The agent selector lives under the box, as in Claude Desktop (XTRM-1054): right-aligned on
+            one line, the target, its model and its bare effort, muted at the 13px step against the
+            14px prompt, 12px apart, no chips and no borders. */}
+        <div data-composer-under-row="" className="mt-1.5 flex min-w-0 items-center gap-3 px-1">
+          <span className="hidden min-w-0 truncate text-2xs text-ink-muted sm:block">
+            @ to mention · Shift+Enter for a new line
+          </span>
+
+          <div data-composer-target-meta="" className="ml-auto flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              disabled={!agents.length}
+              onClick={() => setMenu((value) => (value === "to" ? "none" : "to"))}
+              aria-expanded={menu === "to"}
+              aria-label={`Target: ${target ? [target.name, meta.label].filter(Boolean).join(", ") : "no agent"}`}
+              className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-md text-sm text-ink-muted transition-colors hover:text-ink"
+            >
+              <StatusDot status={target?.status ?? "unknown"} decorative />
+              {target ? (
+                <span className="max-w-44 truncate">{target.name}</span>
+              ) : (
+                <span>no agent</span>
+              )}
+              <ChevronDownIcon className="size-[0.8125rem]" />
+            </button>
+
+            {meta.model ? (
+              <span
+                data-composer-target-model=""
+                title={meta.label ?? meta.model}
+                className="min-w-0 max-w-56 truncate text-sm text-ink-muted"
+              >
+                {meta.model}
+              </span>
+            ) : null}
+            {meta.effort ? (
+              <span
+                data-composer-target-effort=""
+                title={`thinking ${meta.effort}`}
+                className="shrink-0 text-sm text-ink-muted"
+              >
+                {meta.effort}
+              </span>
+            ) : null}
           </div>
         </div>
 

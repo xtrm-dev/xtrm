@@ -121,7 +121,8 @@ async function open(width, height, theme, search = `?s=${SESSION}`) {
 const replyButtons = (page) => page.locator('button[aria-label^="Reply to"]')
 const bar = (page) => page.locator("[data-reply-bar]")
 const composer = (page) => page.locator("[data-composer-input]")
-const toLabel = (page) => page.locator("button", { hasText: /^To/ }).first().innerText()
+// The selector under the box names the target directly (XTRM-1054 rev 2: no "To" label).
+const toLabel = (page) => page.locator("[data-composer-under-row] button").first().innerText()
 
 try {
   const { context, page, errors } = await open(1440, 900, "dark")
@@ -192,7 +193,7 @@ try {
   await page.locator('button[aria-label="Reply to agent-beta"]').click({ force: true })
   await page.waitForTimeout(100)
   assert.equal(await bar(page).count(), 1)
-  await page.locator("button", { hasText: /^To/ }).first().click()
+  await page.locator("[data-composer-under-row] button").first().click()
   await page.locator("button", { hasText: "agent-alpha" }).last().click()
   assert.equal(await bar(page).count(), 0, "picking a target in the To menu clears the bar")
 
