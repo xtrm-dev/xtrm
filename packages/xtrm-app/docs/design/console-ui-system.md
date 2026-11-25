@@ -336,6 +336,13 @@ viewer joins the console, and no console test or review checks it.
 In that thread, three lines are **24px** (`min-h-6`), not 28 or 32px: the tool-call line, the working row
 and the turn-fold line ("Worked for 1m 12s").
 
+Implementation, read at `a68830f0`: `packages/pi-viewer/src/components/ActivityDisclosure.tsx` carries the
+tool-call line (`ActivityRow`, line 74, `flex min-h-6`), the grouped tool-call line (`GroupRow`, line 161,
+`flex min-h-6`) and the turn-fold line (line 240, `flex min-h-6`). The working row is **not** in that file:
+the running-agent line is rendered by presence above the composer, outside the thread
+(`packages/pi-viewer/src/components/presence/PresenceLine.tsx`, 2rem agent rows), so the exception binds
+no working row today. It applies to one if the thread renders one.
+
 Reason: these lines are a log read in sequence. A reader scans them, never picks one from a list, so
 they need no 28–32px pointer target, and a turn with 20 tool calls must fit on one screen. The ruling
 follows `packages/pi-viewer/docs/design/t3code-chat-audit.md` §3.3 and §10 row 16. That audit is
