@@ -1,6 +1,6 @@
-import { CheckIcon, CopyIcon, ReplyIcon } from "lucide-react"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
+import { Icon } from "@/shell/icon"
 import { ActivityDisclosure } from "@/components/ActivityDisclosure"
 import { EarlierTurns } from "@/components/EarlierTurns"
 import { IntercomCard } from "@/components/IntercomCard"
@@ -54,7 +54,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       }}
       className="rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
     >
-      {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+      <Icon name={copied ? "check" : "copy"} size="text" />
     </button>
   )
 }
@@ -80,7 +80,7 @@ export function ReplyButton({
       }}
       className="rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted"
     >
-      <ReplyIcon className="size-3" />
+      <Icon name="reply" size="text" />
     </button>
   )
 }

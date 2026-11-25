@@ -78,9 +78,9 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       const stored = () => p.evaluate(() => JSON.parse(localStorage.getItem("xtrm.console.layout.v1") ?? "null"))
       check(tag + " expanded width is the console's 264", (await panelW()) === 264, String(await panelW()))
       check(tag + " console top switcher: Work, Threads selected", await p.evaluate(() => { const r = [...document.querySelectorAll('[data-testid=half-switch] [role=radio]')]; return r.length === 2 && r[0].getAttribute("aria-label") === "Work" && r[1].getAttribute("aria-label") === "Threads" && r[1].getAttribute("aria-checked") === "true" }))
-      // Header icon buttons equal the console's measured ones (xtrm-app TopBar and sidebar header): a 28px box, a 13px glyph.
+      // Header icon buttons equal the console's measured ones (xtrm-app TopBar and sidebar header): a 28px box, a 16px glyph (refactored ladder).
       const ib = await p.evaluate(() => [...document.querySelectorAll('[data-testid=sidebar-collapse], [data-testid=top-bar] button:has(svg)')].filter((b) => /sidebar|theme|Chat width/.test(b.getAttribute("aria-label") || "")).map((b) => { const r = b.getBoundingClientRect(), s = b.querySelector("svg").getBoundingClientRect(); return [b.getAttribute("aria-label"), Math.round(r.width), Math.round(r.height), Math.round(s.width * 10) / 10] }))
-      check(tag + " header icon buttons are the console's 28px box with a 13px glyph", ib.length >= 2 && ib.every((x) => x[1] === 28 && x[2] === 28 && x[3] === 13), JSON.stringify(ib))
+      check(tag + " header icon buttons are the console's 28px box with a 16px glyph", ib.length >= 2 && ib.every((x) => x[1] === 28 && x[2] === 28 && x[3] === 16), JSON.stringify(ib))
       const sep = p.getByRole("separator", { name: "Resize sidebar" })
       const drag = async (dx) => { const bb = await sep.boundingBox(); const x = bb.x + bb.width / 2, y = bb.y + 300; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x + dx, y, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(400) }
       await drag(60); check(tag + " drag +60 widens to 324", (await panelW()) === 324, String(await panelW()))

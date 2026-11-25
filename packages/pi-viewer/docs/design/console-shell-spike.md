@@ -54,34 +54,35 @@ dark plane, the `border-r border-border-subtle` edge, and the `Sessions` section
 | collapsed width | 0 | 0 |
 | header height (sidebar and top bar) | 44 | 44 |
 | switcher | Work / Agent, 28px track | Work / Threads, 28px track, Threads selected |
-| header icon button | 28px box, 13px glyph (`text`), stroke 2 | same: collapse, reopen, theme and chat-width |
+| header icon button | main: 28px box, 13px glyph. Refactor: 28px box, 16px glyph (`sm`) | refactor: collapse, reopen, theme and chat-width, 28px box, 16px glyph |
 | persistence | `xtrm.console.layout.v1` | same key, same fields |
 
-## Icon buttons: source values
+## Icon ladder (operator ruling: match the refactor, not main)
 
-Source: `ui/primitives.tsx` `IconButton` (default `size="sm"`: `size-7`, glyph `iconSize ?? "text"`) and
-`ui/icon.tsx` (`SIZE_CLASS.text = size-[0.8125rem]`, `defaultStroke("text") = 2`). The console's top bar and
-sidebar header use that default everywhere (`ContextSidebar.tsx` collapse; `AppShell.tsx` `TopBar`:
-commands, theme, settings). Both apps use the same type and rem scale (`--text-sm` 0.8125rem), so rem values match.
+The console on `main` is the old one. The refactor that has not shipped (previewed on :5179) uses a larger
+ladder, and the viewer follows it. Values below are the refactor's sources, as reported by the thread lead
+(`src/ui/primitives.tsx`, `src/shell/AppShell.tsx:35`, `src/ui/sidebar.tsx:20,85,100`, `src/ui/row-action.tsx:62`).
+`main` still shows 13px chrome: its `IconButton` default glyph is `text`, 13px, and my earlier measurement of
+28px boxes with 13px glyphs was correct for `main` only.
 
-Measured in the browser, 1440 wide, console `/agent` (read-only dev server) against the viewer, same day:
+| use | box | glyph step | px | viewer |
+|---|---|---|---|---|
+| top-bar Commands, theme, settings (`IconButton` default) | 28px (`size-7`) | `sm` | 16 | sidebar collapse, reopen, theme, chat width |
+| search magnifier | | `sm` | 16 | not in the viewer |
+| sidebar destination rows, section chevrons | 28-32px rows | `xs` | 14 | tree chevrons (`SessionTree`), status dot cell, disclosure |
+| list row kind glyph, expand chevron; 24px toggle (`size-6`) | | `xs` | 14 | same |
+| row hover action | 20px | `text` | 13 | message Copy and Reply |
+| inline count marks beside 13px text | | `micro` | 12 | existing `size-3` marks |
 
-| button | console (box, glyph, stroke) | viewer (box, glyph, stroke) |
-|---|---|---|
-| collapse sidebar | 28x28, 13, 2 | 28x28, 13, 2 |
-| theme | 28x28, 13, 2 | 28x28, 13, 2 |
-| commands / settings | 28x28, 13, 2 | not in the viewer |
-| chat width | not in the console | 28x28, 13, 2 (was 14, now the `text` step) |
-
-The console's larger glyph is `New session` (`sm`, 16px, stroke 2.25) and the 14px `xs` glyphs of search and rows. The header
-buttons are the same size in both apps. The sidebar-gate asserts the 28px box and 13px glyph.
+`src/shell/icon.tsx` carries the same names: micro 12, text 13, xs 14, sm and nav 16, md 18, lg 20 (stroke 2.25,
+2 at `text` and `micro`). The sidebar-gate asserts the 28px box and 16px glyph on the header buttons.
 
 ## Decisions (operator, 2026-11-25) and remaining deviations
 
 1. Collapse is the console's: width 0, reopened by the top-bar button or Ctrl/Cmd+B. No dot rail. (Done.)
 2. Default width 264, drag 220 to 360. (Done.)
 3. The switcher shows Work and Threads, complete as in the console, Threads selected, Work inert. (Done.)
-4. Header icon buttons match the console's size, glyph and hit area exactly (table above).
+4. Header icon buttons match the refactored console: 28px box, 16px glyph; 14px in rows, 13px hover actions, 12px inline marks (ladder above).
 
 Still different from the console, on purpose: the `#181818` dark plane (the console's is `#232323`); at 390 wide the sidebar is an
 overlay (the console has no narrow pattern); no search pill, command button, account control, settings, inspector drawer or source footer

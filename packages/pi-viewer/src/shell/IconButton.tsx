@@ -8,7 +8,7 @@ import { Icon, type IconName } from "./icon"
 
 /**
  * Console `IconButton` (packages/xtrm-app/src/ui/primitives.tsx, XTRM-1044): a 28px square, glyph at the
- * `text` size, `text-ink-muted` with the hover and pressed fills. The tooltip is the console's label
+ * `sm` size (16px, the refactored console; main still uses `text`, 13px), `text-ink-muted` with the hover and pressed fills. The tooltip is the console's label
  * plus a keyboard hint; it uses the viewer's Radix tooltip because the console's base-ui one is not a dependency here.
  */
 export function IconButton({
@@ -30,7 +30,7 @@ export function IconButton({
             className,
           )}
         >
-          <Icon name={icon} size="text" />
+          <Icon name={icon} size="sm" />
         </button>
       </Tooltip.Trigger>
       <Tooltip.Portal>

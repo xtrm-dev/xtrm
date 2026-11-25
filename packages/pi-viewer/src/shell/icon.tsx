@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Layers, MousePointer2, Moon, MoveHorizontal, PanelLeft, Sun, type LucideIcon } from "lucide-react"
+import { Check, ChevronDown, ChevronUp, Copy, Layers, Reply, MousePointer2, Moon, MoveHorizontal, PanelLeft, Sun, type LucideIcon } from "lucide-react"
 
 /**
  * The console's icon component, copied from packages/xtrm-app/src/ui/icon.tsx (XTRM-1044).
@@ -7,7 +7,10 @@ import { ChevronDown, ChevronUp, Layers, MousePointer2, Moon, MoveHorizontal, Pa
  * the names the viewer shell uses; the names, glyphs, size ladder and stroke rule are the console's.
  */
 const registry = {
+  check: Check,
   chevronDown: ChevronDown,
+  copy: Copy,
+  reply: Reply,
   chevronUp: ChevronUp,
   moon: Moon,
   /** Not in the console registry: the chat-width control (XTRM-1042) is the viewer's own. */
@@ -20,7 +23,10 @@ const registry = {
 
 export type IconName = keyof typeof registry
 
-/** The glyph ladder in rem (console icon.tsx SIZE_CLASS): `text` is 13px, `xs` 14px, `nav` 16px at a 16px root. */
+/**
+ * The glyph ladder in rem, the refactored console's (XTRM-1044): micro 12 inline marks, text 13 hover actions,
+ * xs 14 rows and chevrons, sm and nav 16 chrome, md 18, lg 20. Main's console still shows 13px chrome.
+ */
 const SIZE_CLASS = {
   micro: "size-[0.75rem]",
   text: "size-[0.8125rem]",
