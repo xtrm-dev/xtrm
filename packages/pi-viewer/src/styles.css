@@ -228,10 +228,13 @@
 /* Rendered markdown and the rich editor share one prose style (Supernova-restrained). */
 @layer components {
   .xtrm-prose {
-    color: var(--color-ink);
-    font-size: var(--text-sm);
-    line-height: 1.6rem;
+    /* Transcript prose owns its scale (console-ui-system §3.3): 0.875rem / 1.625, ink at 90%.
+       rem only, so it follows the operator's 12px root. Audit 7. */
+    color: color-mix(in oklab, var(--color-ink) 90%, transparent);
+    font-size: 0.875rem;
+    line-height: 1.625;
     overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .xtrm-prose > :first-child {
     margin-top: 0;
@@ -257,14 +260,16 @@
     color: var(--color-ink);
   }
   .xtrm-prose h1 {
-    font-size: 1rem;
+    font-size: 1.25rem;
   }
   .xtrm-prose h2 {
-    font-size: 0.9rem;
+    font-size: 1.125rem;
   }
-  .xtrm-prose h3,
+  .xtrm-prose h3 {
+    font-size: 1rem;
+  }
   .xtrm-prose h4 {
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     color: var(--color-ink-muted);
   }
   .xtrm-prose ul,
@@ -281,21 +286,25 @@
     margin: 0.15rem 0;
   }
   .xtrm-prose li::marker {
-    color: var(--color-ink-faint);
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
   }
   .xtrm-prose a {
     color: var(--color-accent-ink);
-    text-decoration: underline;
-    text-decoration-color: color-mix(in oklab, var(--color-accent-ink) 35%, transparent);
-    text-underline-offset: 2px;
+    text-decoration: none;
+    text-underline-offset: 3px;
+  }
+  .xtrm-prose a:hover,
+  .xtrm-prose a:focus-visible {
+    text-decoration: underline dotted;
   }
   .xtrm-prose strong {
     font-weight: 600;
   }
   .xtrm-prose code {
     font-family: var(--font-mono);
-    font-size: 0.75rem;
-    padding: 0.05rem 0.3rem;
+    font-size: 0.85em;
+    padding: 0.1em 0.35em;
     border-radius: 4px;
     background: var(--color-control);
   }
@@ -318,9 +327,8 @@
     background: transparent;
   }
   .xtrm-prose blockquote {
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--radius-sm);
-    background: var(--color-control);
+    padding: 0 0 0 0.8rem;
+    border-left: 2px solid var(--color-border-strong);
     color: var(--color-ink-muted);
   }
   .xtrm-prose hr {
@@ -366,12 +374,17 @@
     padding: 0.3rem 0.5rem;
     text-align: left;
   }
-  .xtrm-prose thead th {
-    background: var(--color-control);
-    font-weight: 500;
+  .xtrm-prose th:first-child,
+  .xtrm-prose td:first-child {
+    padding-left: 0;
   }
-  .xtrm-prose tbody tr:nth-child(even) {
-    background: color-mix(in oklab, var(--color-control) 55%, transparent);
+  /* Row rules only: no header fill, no zebra (audit 3.9). */
+  .xtrm-prose thead th {
+    font-weight: 500;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .xtrm-prose tbody tr + tr td {
+    border-top: 1px solid var(--color-border-muted);
   }
   .xtrm-prose input[type="checkbox"] {
     margin-right: 0.35rem;
@@ -383,7 +396,7 @@
   }
   .xtrm-prose .ProseMirror p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);
-    color: var(--color-ink-faint);
+    color: var(--color-ink-muted);
     float: left;
     height: 0;
     pointer-events: none;
@@ -446,7 +459,7 @@
     width: 0.6875rem;
     height: 1.25rem;
     flex: none;
-    color: var(--color-ink-faint);
+    color: var(--color-ink-muted);
     background: var(--color-deep);
   }
   /* No content-visibility on transcript rows: an unrendered row changes height when it
@@ -482,4 +495,95 @@
 }
 .xtrm-prose .md-table > table {
   margin: 0;
+}
+
+/* ── Chat restyle (XTRM-1034) ─────────────────────────────────────────────────
+   Values from docs/design/t3code-chat-audit.md, mapped to our tokens (audit 7).
+   Motion rules: every animation has a reduced-motion branch; nothing animates off-screen. */
+
+/* Stepped label shimmer: a band of full ink sweeps across muted text. Reused by presence.
+   Usage: <span class="xtrm-shimmer">Reading file.ts</span>; set data-paused="true" when off-screen
+   (the <Shimmer> component does that). Audit 1.5 and 4.4: 2.2s, steps(30). */
+@keyframes xtrm-shimmer {
+  from {
+    background-position: 150% 0, 0 0;
+  }
+  to {
+    background-position: -50% 0, 0 0;
+  }
+}
+.xtrm-shimmer {
+  color: var(--color-ink-muted);
+  background-image:
+    linear-gradient(100deg, transparent 38%, var(--color-ink) 50%, transparent 62%),
+    linear-gradient(var(--color-ink-muted), var(--color-ink-muted));
+  background-size: 250% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 150% 0, 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: xtrm-shimmer 2.2s steps(30) infinite;
+}
+.xtrm-shimmer[data-paused="true"] {
+  animation-play-state: paused;
+}
+
+/* Blocks that arrive after the first paint fade in; a reopened thread never replays it. */
+@keyframes xtrm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.xtrm-fade-in {
+  animation: xtrm-fade-in 600ms ease-out both;
+}
+
+/* Metadata is quiet until the row is hovered or focused; pinned rows stay visible. */
+.xtrm-meta {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.group\/row:hover .xtrm-meta,
+.group\/row:focus-within .xtrm-meta,
+.xtrm-meta[data-pinned="true"],
+.xtrm-meta:focus-within {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .xtrm-meta {
+    opacity: 1;
+  }
+}
+
+/* Long operator message: clamp at 11rem (176px at a 16px root) and fade the cut. */
+.xtrm-bubble-fold {
+  max-height: 11rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
+}
+
+/* Code frame: light has a hairline, dark has none (audit 3.6). */
+.xtrm-code {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+}
+:root[data-theme="dark"] .xtrm-code {
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xtrm-shimmer {
+    animation: none;
+  }
+  .xtrm-fade-in {
+    animation: none;
+  }
+  .xtrm-meta {
+    transition: none;
+  }
 }
