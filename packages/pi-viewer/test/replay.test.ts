@@ -438,3 +438,39 @@ test("a peer message merged as a duplicate still opens its agent's turn (whole-t
   assert.equal(last.status.status, "working")
   assert.equal(last.pending.length, 1, "the duplicate's wake-up opens a turn")
 })
+
+test("two context overflows in a row, with no prompt between them, still reopen the turn on compaction", () => {
+  const overflow = (id: string, parentId: string, offset: number) =>
+    line({ type: "message", id, parentId, message: { role: "assistant", stopReason: "error", errorMessage: "400 prompt is too long: 210000 tokens > 200000 maximum", content: [] } }, offset)
+  const lines = [
+    line({ type: "session", version: 3, id: "s", cwd: "/r" }, 0),
+    line({ type: "message", id: "u1", parentId: "s", message: { role: "user", content: [{ type: "text", text: "go" }] } }, 1_000),
+    line({ type: "message", id: "a1", parentId: "u1", message: { role: "assistant", stopReason: "toolUse", content: [{ type: "toolCall", id: "t1", name: "bash", arguments: {} }] } }, 2_000),
+    line({ type: "message", id: "r1", parentId: "a1", message: { role: "toolResult", toolCallId: "t1", toolName: "bash", content: [{ type: "text", text: "x" }] } }, 3_000),
+    overflow("e1", "r1", 4_000),
+    overflow("e2", "e1", 5_000),
+    line({ type: "compaction", id: "c1", parentId: "e2", summary: "s" }, 6_000),
+    line({ type: "message", id: "a2", parentId: "c1", message: { role: "assistant", stopReason: "toolUse", content: [{ type: "toolCall", id: "t2", name: "bash", arguments: {} }] } }, 7_000),
+  ]
+  const result = replay(write("double-overflow.jsonl", lines, 7_000), "pi", SCRATCH, "double-overflow")
+  assert.deepEqual(result.violations, [])
+  const promptTurn = result.snapshots[1].pending
+  assert.equal(promptTurn.length, 1)
+  const compacted = result.snapshots[6]
+  assert.deepEqual([compacted.status.status, compacted.status.note], ["working", "compacting context"])
+  assert.deepEqual(compacted.pending, promptTurn, "the compaction reopens the prompt's turn")
+  assert.deepEqual(result.snapshots.at(-1)!.pending, promptTurn)
+  assert.deepEqual(result.snapshots.at(-1)!.stopped, [], "no local row for the compaction")
+})
+
+test("a record stamped in the future cannot hold off quiet: the clock stops at the file time", () => {
+  const lines = [
+    line({ type: "session", version: 3, id: "s", cwd: "/r" }, 0),
+    line({ type: "message", id: "u1", parentId: "s", message: { role: "user", content: [{ type: "text", text: "go" }] } }, 1_000),
+    // Clock skew: the step claims to be written a day later than the file was.
+    line({ type: "message", id: "a1", parentId: "u1", message: { role: "assistant", stopReason: "toolUse", content: [{ type: "toolCall", id: "t1", name: "bash", arguments: {} }] } }, 2_000 + 24 * 3_600_000),
+  ]
+  const parsed = parseSessionFile(write("future-record.jsonl", lines, 2_000))
+  assert.equal(lastWriteAt(parsed), T + 2_000)
+  assert.equal(statusOf(parsed, T + 2_000 + 16 * 60_000).status, "quiet")
+})

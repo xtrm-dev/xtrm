@@ -304,8 +304,12 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
         break
       case "reply":
       case "fail":
-        // A reply with no open turn answers nothing shown in the thread.
-        if (!turn || event.kind !== "assistant") continue
+        // A reply with no open turn answers nothing shown in the thread. A second overflow error
+        // with no turn open (no prompt between them) keeps the failed turn for the compaction.
+        if (!turn || event.kind !== "assistant") {
+          if (state.phase === "failed" && state.overflow) at.failed = failed
+          continue
+        }
         turn.sentOnly = false
         turn.final = event
         close(turn)
@@ -471,7 +475,10 @@ export function dedupeIntercoms(
     const existing = out[index]
     // The copy merges into the card already shown, but what it does to its own agent's turn
     // stays: a peer message that wakes the receiver still opens its turn (w2w9 line 3381).
-    if (carriers && eventEffect(event) !== "none") carriers.push(effectCarrier(event))
+    // Only an opening effect is carried: an invisible carrier cannot close a turn (a reply on a
+    // meta event is skipped) and must not draw a stopped row (abort).
+    const copyEffect = eventEffect(event)
+    if (carriers && (copyEffect === "open" || copyEffect === "step")) carriers.push(effectCarrier(event))
     if (existing.intercom?.direction === "sent" && event.intercom.direction === "sent") {
       // A retry of the same body: a later success proves the message can be delivered, while
       // a later failure must never erase an earlier success.

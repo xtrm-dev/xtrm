@@ -684,8 +684,13 @@ export function turnWriteAt(events: Raw[]): number {
   return at
 }
 
+/**
+ * `turnWriteAt`, never later than the file time: nothing was written after the file's last
+ * write, so a record stamped in the future (a clock skew) cannot hold off quiet.
+ */
 export function lastWriteAt(parsed: ParsedFile): number {
-  return parsed.turnWriteAt ?? turnWriteAt(parsed.events)
+  const at = parsed.turnWriteAt ?? turnWriteAt(parsed.events)
+  return parsed.modifiedAt > 0 ? Math.min(at, parsed.modifiedAt) : at
 }
 
 /**
