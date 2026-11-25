@@ -2,6 +2,7 @@ import { CheckIcon } from "lucide-react"
 import { Popover } from "radix-ui"
 import { useState } from "react"
 
+import { PaletteControl } from "@/components/PaletteControl"
 import { RoleChip } from "@/components/RoleChip"
 import {
   COMFORTABLE_REM,
@@ -190,6 +191,7 @@ export function ViewerHeader({
       <div className="ml-auto flex items-center gap-2">
         <Segmented view={view} onChange={onViewChange} />
         {view === "channel" ? <ChatWidthControl width={chatWidth} onChange={onChatWidthChange} /> : null}
+        <PaletteControl />
         <IconButton
           icon={theme === "dark" ? "sun" : "moon"}
           label={theme === "dark" ? "Light theme" : "Dark theme"}

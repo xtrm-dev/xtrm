@@ -11,6 +11,12 @@
       } catch (error) {
         document.documentElement.dataset.theme = "dark"
       }
+      try {
+        document.documentElement.dataset.palette =
+          localStorage.getItem("pi-viewer-palette") === "console" ? "console" : "threads"
+      } catch (error) {
+        document.documentElement.dataset.palette = "threads"
+      }
     </script>
   </head>
   <body>

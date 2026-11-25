@@ -527,7 +527,7 @@ export default function App() {
             </MessageScrollerProvider>
           </div>
 
-          <div className="shrink-0 bg-deep px-3 pt-1 sm:px-12">
+          <div className="shrink-0 bg-canvas px-3 pt-1 sm:px-12">
             <PresenceLine
               entries={presence}
               session={branch?.session ?? sessionName ?? ""}

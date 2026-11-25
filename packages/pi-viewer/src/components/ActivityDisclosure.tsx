@@ -94,7 +94,7 @@ export function ActivityRow({
         />
       </button>
       {expanded ? (
-        <div className="mt-0.5 mb-1.5 ml-7 flex flex-col gap-2 rounded-md bg-surface/40 px-3 py-2">
+        <div className="mt-0.5 mb-1.5 ml-7 flex flex-col gap-2 rounded-md bg-inset/40 px-3 py-2">
           {item.kind === "thinking" ? (
             thought ? (
               <div className="scrollbar-thin max-h-64 overflow-auto whitespace-pre-wrap text-xs text-ink-muted">

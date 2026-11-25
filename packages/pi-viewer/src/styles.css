@@ -76,6 +76,15 @@
   --x-strip-rule: var(--x-border-muted);
   --x-strip-chip: var(--x-pressed);
   --x-strip-chip-ink: var(--x-ink-muted);
+  /* Region roles (XTRM-1046): which plane each region wears. These are the Threads assignment; the
+     console palette below swaps them on a root data-palette attribute. Sources: docs/design/palette-console.md. */
+  --x-canvas: var(--x-deep); /* page, header, thread, presence line, composer margin */
+  --x-composer-focus: var(--x-raised); /* composer fill while focused */
+  --x-composer-edge: transparent; /* composer hairline */
+  --x-composer-edge-focus: transparent;
+  --x-inset: var(--x-surface); /* quiet panels inside the thread: activity detail, intercom card */
+  --x-code: var(--x-surface); /* rendered code frame */
+  --x-code-edge: var(--x-border-muted);
 }
 
 :root[data-theme="dark"] {
@@ -120,6 +129,24 @@
   --x-strip-rule: rgb(255 255 255 / 0.12);
   --x-strip-chip: rgb(255 255 255 / 0.12);
   --x-strip-chip-ink: rgb(255 255 255 / 0.78);
+  --x-code-edge: transparent; /* a dark code frame carries no hairline (audit 3.6) */
+}
+
+/* Console palette (XTRM-1046). The console's region assignments (packages/xtrm-app/src/shell/AppShell.tsx:82
+   canvas bg-surface, :93 sidebar bg-sidebar; src/agent/Composer.tsx:279 composer bg-surface with a border;
+   src/styles.css:302-303 code frame bg-deep with border-muted) and its tokens (src/styles.css:14-114).
+   Only the assignments and the dark sidebar differ from Threads; every other token already equals the console's. */
+:root[data-palette="console"] {
+  --x-canvas: var(--x-surface);
+  --x-composer-focus: var(--x-surface);
+  --x-composer-edge: var(--x-border);
+  --x-composer-edge-focus: var(--x-border-strong);
+  --x-inset: var(--x-control);
+  --x-code: var(--x-deep);
+  --x-code-edge: var(--x-border-muted);
+}
+:root[data-palette="console"][data-theme="dark"] {
+  --x-sidebar: #232323; /* console src/styles.css:79 */
 }
 
 @theme inline {
@@ -127,6 +154,8 @@
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 
   --color-deep: var(--x-deep);
+  --color-canvas: var(--x-canvas);
+  --color-inset: var(--x-inset);
   --color-sidebar: var(--x-sidebar);
   --color-surface: var(--x-surface);
   --color-raised: var(--x-raised);
@@ -173,7 +202,7 @@
   --color-strip-chip-ink: var(--x-strip-chip-ink);
 
   /* shadcn alias layer (XT-215): names only, values stay --x-* authoritative. */
-  --color-background: var(--x-deep);
+  --color-background: var(--x-canvas);
   --color-foreground: var(--x-ink);
   --color-card: var(--x-surface);
   --color-card-foreground: var(--x-ink);
@@ -211,7 +240,7 @@
   }
   body {
     margin: 0;
-    background: var(--color-deep);
+    background: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: var(--text-sm);
@@ -441,7 +470,7 @@
 
 @layer base {
   html {
-    background: var(--color-deep);
+    background: var(--color-canvas);
   }
   body {
     overflow: hidden;
@@ -467,7 +496,7 @@
     height: 1.25rem;
     flex: none;
     color: var(--color-ink-muted);
-    background: var(--color-deep);
+    background: var(--color-canvas);
   }
   /* No content-visibility on transcript rows: an unrendered row changes height when it
      enters the viewport, which moves the reader's anchor. The scroller owns anchoring. */
@@ -589,13 +618,25 @@
   mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
 }
 
-/* Code frame: light has a hairline, dark has none (audit 3.6). */
+/* Code frame: Threads is a surface fill, a hairline in light only (audit 3.6); Console is the deep well
+   with a hairline in both (--x-code, --x-code-edge). */
 .xtrm-code {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-muted);
+  background: var(--x-code);
+  border: 1px solid var(--x-code-edge);
 }
-:root[data-theme="dark"] .xtrm-code {
-  border-color: transparent;
+
+/* Composer box. Threads: surface fill, raised on focus, no edge. Console: surface fill with the
+   console's border and border-strong on focus. An inset ring, so the box keeps its geometry. */
+.xtrm-composer-box {
+  background: var(--x-surface);
+  box-shadow: inset 0 0 0 1px var(--x-composer-edge);
+  transition:
+    background-color 150ms,
+    box-shadow 150ms;
+}
+.xtrm-composer-box:focus-within {
+  background: var(--x-composer-focus);
+  box-shadow: inset 0 0 0 1px var(--x-composer-edge-focus);
 }
 
 @media (prefers-reduced-motion: reduce) {

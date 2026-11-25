@@ -19,7 +19,7 @@ function Thinking({ part }: { part: ViewerPart }) {
   return (
     <details className="mt-1 text-xs">
       <summary className="cursor-pointer text-ink-muted hover:text-ink">Thought</summary>
-      <div className="scrollbar-thin mt-1 max-h-64 overflow-auto rounded-md bg-surface/40 px-3 py-2 whitespace-pre-wrap text-ink-muted">
+      <div className="scrollbar-thin mt-1 max-h-64 overflow-auto rounded-md bg-inset/40 px-3 py-2 whitespace-pre-wrap text-ink-muted">
         {part.text}
       </div>
     </details>

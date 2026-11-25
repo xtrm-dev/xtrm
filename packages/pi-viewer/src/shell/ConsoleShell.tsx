@@ -30,7 +30,7 @@ export function ConsoleShell({ layout, sidebar, children }: { layout: Layout; si
   return (
     <Tooltip.Provider delayDuration={350}>
       {narrow ? (
-        <div className="relative flex h-dvh bg-deep text-ink">
+        <div className="relative flex h-dvh bg-canvas text-ink">
           <div className="flex min-w-0 flex-1 flex-col">{children}</div>
           {open ? (
             <>
@@ -47,7 +47,7 @@ export function ConsoleShell({ layout, sidebar, children }: { layout: Layout; si
           ) : null}
         </div>
       ) : (
-        <ResizableGroup className="h-dvh bg-deep text-ink">
+        <ResizableGroup className="h-dvh bg-canvas text-ink">
           <ResizablePanel
             data-testid="sidebar-panel"
             size={width}

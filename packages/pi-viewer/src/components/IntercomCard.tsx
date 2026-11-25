@@ -102,7 +102,7 @@ export function IntercomCard({
       <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-control font-mono text-2xs text-ink-muted">
         {monogram(meta.from)}
       </div>
-      <div className="min-w-0 flex-1 rounded-md bg-surface/70 py-2.5 pr-3 pl-3.5">
+      <div className="min-w-0 flex-1 rounded-md bg-inset/70 py-2.5 pr-3 pl-3.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="truncate text-xs font-medium text-ink">{meta.from}</span>
           <ArrowRightIcon className="size-3 shrink-0 self-center text-ink-muted" aria-hidden />

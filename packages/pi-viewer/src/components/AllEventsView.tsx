@@ -71,7 +71,7 @@ function EventRow({
         </span>
       </button>
       {open ? (
-        <div className="bg-surface/40 px-3 py-3 sm:pl-[calc(3.5rem+8rem+1.25rem)]">
+        <div className="bg-inset/40 px-3 py-3 sm:pl-[calc(3.5rem+8rem+1.25rem)]">
           {detail.loading ? (
             <div className="text-2xs text-ink-muted">Loading event…</div>
           ) : detail.error ? (
@@ -134,7 +134,7 @@ export function AllEventsView({
 
   return (
     <div className="flex flex-col">
-      <div className="sticky top-0 z-10 -mx-5 bg-deep">
+      <div className="sticky top-0 z-10 -mx-5 bg-canvas">
         <div className="relative">
           <div className="flex items-center gap-1 overflow-x-auto px-5">
         <button

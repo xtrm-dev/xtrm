@@ -1,5 +1,6 @@
-// Contrast gate for the transcript text roles (XTRM-1034, audit 1.6).
-// Reads the --x-* tokens from src/styles.css, so a token edit re-runs the proof.
+// Contrast gate for the transcript text roles (XTRM-1034, audit 1.6), in both palettes (XTRM-1046).
+// Reads the --x-* tokens from src/styles.css, so a token edit re-runs the proof. The Console palette
+// is the Threads set with the :root[data-palette="console"] blocks laid over it, as the cascade does.
 // Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1)
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
@@ -26,8 +27,28 @@ function tokens(text) {
   return out
 }
 
-const light = tokens(block(":root {"))
-const dark = { ...light, ...tokens(block(':root[data-theme="dark"]')) }
+const threadsLight = tokens(block(":root {"))
+const dark = tokens(block(':root[data-theme="dark"]'))
+const consoleAll = tokens(block(':root[data-palette="console"] {'))
+const consoleDark = tokens(block(':root[data-palette="console"][data-theme="dark"]'))
+const sets = [
+  ["threads", "light", threadsLight],
+  ["threads", "dark", { ...threadsLight, ...dark }],
+  ["console", "light", { ...threadsLight, ...consoleAll }],
+  ["console", "dark", { ...threadsLight, ...dark, ...consoleAll, ...consoleDark }],
+]
+
+/** The final value of a token, following var(--x-name) the way the cascade does. */
+function value(set, name) {
+  let text = set[name]
+  for (let guard = 0; guard < 8; guard += 1) {
+    const ref = /^var\(--x-([\w-]+)\)$/.exec(text ?? "")
+    if (!ref) break
+    text = set[ref[1]]
+  }
+  if (text === undefined) throw new Error(`no token ${name}`)
+  return text
+}
 
 function parse(value, under) {
   const hex = /^#([0-9a-f]{6})$/i.exec(value)
@@ -57,8 +78,10 @@ function mix(fg, bg, alpha) {
   return fg.map((v, i) => Math.round(v * alpha + bg[i] * (1 - alpha)))
 }
 
-// Transcript text roles and the planes they sit on.
-const planes = ["deep", "surface", "raised", "control"]
+// Transcript text roles and the planes they sit on. The first four planes are the Threads set;
+// canvas, sidebar, composer-focus and code are the region roles the palette swaps; inset is the
+// quiet panel in the thread, drawn at 40% over the canvas as ActivityDisclosure draws it.
+const planes = ["deep", "surface", "raised", "control", "canvas", "sidebar", "composer-focus", "code", "inset"]
 const roles = [
   { name: "ink (prose 90%)", token: "ink", alpha: 0.9 },
   { name: "ink", token: "ink" },
@@ -66,29 +89,38 @@ const roles = [
   { name: "accent-ink (links)", token: "accent-ink" },
   { name: "danger (failed, errors)", token: "danger" },
 ]
+
+function plane(set, name) {
+  if (name === "inset") {
+    const canvas = parse(value(set, "canvas"), [255, 255, 255])
+    return mix(parse(value(set, "inset"), canvas), canvas, 0.4)
+  }
+  return parse(value(set, name), [255, 255, 255])
+}
+
 // ink-muted on control is the user bubble and the code toolbar; the others are the canvas and frames.
 let failures = 0
-for (const [theme, set] of [["light", light], ["dark", dark]]) {
+for (const [palette, theme, set] of sets) {
   for (const role of roles) {
-    for (const plane of planes) {
-      if (role.token === "danger" && plane === "control") continue
-      const bg = parse(set[plane], [255, 255, 255])
-      let fg = parse(set[role.token], bg)
+    for (const name of planes) {
+      if (role.token === "danger" && name === "control") continue
+      const bg = plane(set, name)
+      let fg = parse(value(set, role.token), bg)
       if (role.alpha) fg = mix(fg, bg, role.alpha)
-      const value = ratio(fg, bg)
-      const ok = value >= 4.5
+      const result = ratio(fg, bg)
+      const ok = result >= 4.5
       if (!ok) failures += 1
-      console.log(`${ok ? "PASS" : "FAIL"} ${theme.padEnd(5)} ${role.name.padEnd(40)} on ${plane.padEnd(8)} ${value.toFixed(2)}`)
+      console.log(`${ok ? "PASS" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} ${role.name.padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
     }
   }
 }
 // ink-faint is a glyph and heading role only; it must not carry transcript text.
-for (const [theme, set] of [["light", light], ["dark", dark]]) {
-  const bg = parse(set.deep, [255, 255, 255])
-  console.log(`INFO ${theme.padEnd(5)} ink-faint (glyphs only, not text) on deep ${ratio(parse(set["ink-faint"], bg), bg).toFixed(2)}`)
+for (const [palette, theme, set] of sets) {
+  const bg = plane(set, "canvas")
+  console.log(`INFO ${palette.padEnd(7)} ${theme.padEnd(5)} ink-faint (glyphs only, not text) on canvas ${ratio(parse(value(set, "ink-faint"), bg), bg).toFixed(2)}`)
 }
 if (failures) {
   console.error(`${failures} pair(s) below 4.5:1`)
   process.exit(1)
 }
-console.log("all transcript text roles >= 4.5:1")
+console.log("all transcript text roles >= 4.5:1 in both palettes")
