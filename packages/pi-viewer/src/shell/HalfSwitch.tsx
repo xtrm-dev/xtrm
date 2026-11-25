@@ -32,7 +32,11 @@ export function HalfSwitch({ current = "threads" }: { current?: "console" | "thr
                 aria-label={half.label}
                 className={cn(
                   "flex h-6 min-w-0 flex-1 items-center justify-center rounded-sm text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
-                  on ? "bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)]" : "text-ink-faint hover:text-ink-muted",
+                  // Threads palette: the top-right view control's colours. Console palette: the
+                  // console's own original switcher state (operator ruling 2026-11-25).
+                  on
+                    ? "bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)] in-data-[palette=console]:bg-control in-data-[palette=console]:shadow-none"
+                    : "text-ink-faint hover:text-ink-muted",
                 )}
               >
                 {half.label}

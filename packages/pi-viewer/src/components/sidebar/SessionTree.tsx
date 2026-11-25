@@ -87,7 +87,12 @@ function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) 
         {/* Line 2: the role, the repo the agent works in, then which runtime the agent is and its state. */}
         <span className="flex min-w-0 items-center gap-1 text-2xs text-ink-faint">
           <RoleLabel role={agent.role} />
-          {agent.repo ? <span className="min-w-0 truncate" title={agent.cwd}>{agent.repo}</span> : null}
+          {agent.repo ? (
+            <span className="flex min-w-0 items-center gap-0.5" title={agent.cwd}>
+              <Icon name="folder" size="micro" className="shrink-0" />
+              <span className="min-w-0 truncate">{agent.repo}</span>
+            </span>
+          ) : null}
           <span className="shrink-0">
             {agent.repo ? "· " : ""}{PROVIDER_LABEL[agent.provider]} · {STATE_LABEL[state]}
           </span>
