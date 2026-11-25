@@ -12,6 +12,7 @@ import {
   type SessionNode,
   type WindowNode,
 } from "@/lib/tree"
+import { RoleChip } from "@/components/RoleChip"
 import { scopeRowKey, type Scope } from "@/lib/scope"
 import { cn } from "@/lib/utils"
 
@@ -25,6 +26,8 @@ import {
   ROW_TWO_LINE,
 } from "./geometry"
 import { SidebarDot } from "./SidebarDot"
+
+const PROVIDER_LABEL = { pi: "Pi", claude: "Claude" } as const
 
 function GroupRow({
   row,
@@ -74,9 +77,12 @@ function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) 
       {selected && <span aria-hidden className={MARKER} />}
       <span className="flex min-w-0 flex-1 flex-col" style={{ marginLeft: "var(--row-indent)" }}>
         <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
-        <span className="truncate text-2xs text-ink-faint">
-          {agent.role ? `${agent.role} · ` : ""}
-          {STATE_LABEL[state]}
+        {/* Line 2: the role pill as in the thread view, then which runtime the agent is and its state. */}
+        <span className="flex min-w-0 items-center gap-1.5 text-2xs text-ink-faint">
+          <RoleChip role={agent.role} />
+          <span className="truncate">
+            {PROVIDER_LABEL[agent.provider]} · {STATE_LABEL[state]}
+          </span>
         </span>
       </span>
       <SidebarDot state={state} className="mt-[0.1875rem]" />
@@ -171,7 +177,7 @@ export function SessionTree({
         const selected = row.key === selectedKey
         const label =
           row.node.kind === "pane"
-            ? `${row.node.agent.name}, ${row.node.agent.role ? `${row.node.agent.role}, ` : ""}${STATE_LABEL[stateOf(row.node.agent.status)]}`
+            ? `${row.node.agent.name}, ${row.node.agent.role ? `${row.node.agent.role}, ` : ""}${PROVIDER_LABEL[row.node.agent.provider]}, ${STATE_LABEL[stateOf(row.node.agent.status)]}`
             : row.node.kind === "session"
               ? `${row.node.name}, ${row.node.count} agents`
               : `${row.node.name}, ${row.node.panes.length} agents`

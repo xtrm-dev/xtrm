@@ -40,9 +40,9 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       return { groupHs: uniq(groups), paneHs: uniq(leaves), railLines: document.querySelectorAll('[data-testid=sidebar] [role=tree] .border-l').length, nGroups: groups.length, n: rows.length, hs: [...new Set(r.map((x) => Math.round(x.height * 10) / 10))], contiguous: r.every((x, i) => i === 0 || Math.abs(x.top - r[i - 1].bottom) < 0.6), levels: [...new Set(rows.map((e) => e.getAttribute("aria-level")))].sort(), windowsRows: rows.filter((e) => e.getAttribute("aria-level") === "2" && e.hasAttribute("aria-expanded")).length, panes: rows.filter((e) => !e.hasAttribute("aria-expanded")).length, groupCounts: rows.filter((e) => e.hasAttribute("aria-expanded")).every((e) => /\d+ agents/.test(e.getAttribute("aria-label"))), total: r.length ? Math.round(r.at(-1).bottom - r[0].top) : 0, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth }
     })
     check(tag + " session and window rows are one 28px line", g.groupHs.length === 1 && g.groupHs[0] === 28, JSON.stringify(g.groupHs))
-    check(tag + " pane rows are two lines, 46px", g.paneHs.length === 1 && g.paneHs[0] === 46, JSON.stringify(g.paneHs))
+    check(tag + " pane rows are two lines, 48px (name, then role pill, runtime and state)", g.paneHs.length === 1 && g.paneHs[0] === 48, JSON.stringify(g.paneHs))
     check(tag + " rows are contiguous and draw no rail lines", g.contiguous && g.railLines === 0, "rails " + g.railLines)
-    check(tag + " tree height " + g.total + "px for " + g.panes + " agents", g.total <= g.nGroups * 28 + g.panes * 46 + 1)
+    check(tag + " tree height " + g.total + "px for " + g.panes + " agents", g.total <= g.nGroups * 28 + g.panes * 48 + 1)
     check(tag + " group rows carry counts", g.groupCounts)
     check(tag + " one-pane windows add no row (window rows have 2+ agents)", await p.evaluate(() => [...document.querySelectorAll('[role=treeitem][aria-level="2"][aria-expanded]')].every((e) => Number(/(\d+) agents/.exec(e.getAttribute("aria-label"))[1]) >= 2)))
     check(tag + " no overflow", !g.overflow)
@@ -50,9 +50,10 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     // scopes
     check(tag + " fresh page: session scope", (await S_()) === "?s=xx" && (await sel()) === "s:xx")
     await open()
-    const multi = p.locator('[role=treeitem][aria-level="2"][aria-expanded]').first(); const wk = await multi.getAttribute("data-key"); const wi = wk.split(":").pop()
+    const multi = p.locator('[role=treeitem][aria-level="2"][aria-expanded]').first(); const wk = await multi.getAttribute("data-key"); void wk
     await multi.click(); await p.waitForTimeout(1500)
-    check(tag + " window click", (await S_()) === "?s=xx&w=" + wi && (await sel()) === wk, await S_())
+    // The URL carries the tmux window id (w=%40N), not its index, so a renumbered window keeps its URL.
+    check(tag + " window click: URL has the window id, window row selected", /^\?s=xx&w=%40\d+$/.test(await S_()) && (await sel()) === wk, (await S_()) + " " + wk)
     await open()
     const pane = p.locator('[role=treeitem][aria-level="3"]').first(); const pk = await pane.getAttribute("data-key"); const pname = (await pane.getAttribute("aria-label")).split(",")[0]
     await pane.click(); await p.waitForTimeout(1500)
