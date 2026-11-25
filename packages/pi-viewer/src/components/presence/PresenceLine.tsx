@@ -1,7 +1,7 @@
 import { ChevronUpIcon, ChevronRightIcon } from "lucide-react"
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
-import { Elapsed } from "@/components/presence/Elapsed"
+import { Elapsed } from "@/lib/ticker"
 import { PresenceDetail } from "@/components/presence/PresenceDetail"
 import { StatusDot } from "@/components/StatusDot"
 import { monogram } from "@/lib/format"

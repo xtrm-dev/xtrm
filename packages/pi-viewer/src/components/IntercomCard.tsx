@@ -48,7 +48,7 @@ function IntercomBody({ text }: { text: string }) {
           aria-expanded={expanded}
           aria-controls={bodyId}
           onClick={() => setExpanded((value) => !value)}
-          className="mt-1 flex items-center gap-1 rounded-sm text-2xs text-ink-faint transition-colors hover:text-ink-muted"
+          className="mt-1 flex items-center gap-1 rounded-sm text-2xs text-ink-muted transition-colors hover:text-ink"
         >
           {expanded ? "Show less" : "Show more"}
           <ChevronDownIcon
@@ -102,7 +102,7 @@ export function IntercomCard({
       <div className="min-w-0 flex-1 rounded-md bg-surface/70 py-2.5 pr-3 pl-3.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="truncate text-xs font-medium text-ink">{meta.from}</span>
-          <ArrowRightIcon className="size-3 shrink-0 self-center text-ink-faint" aria-hidden />
+          <ArrowRightIcon className="size-3 shrink-0 self-center text-ink-muted" aria-hidden />
           <span className="truncate text-xs text-ink-muted">{meta.to}</span>
           {failed ? (
             <CircleXIcon
@@ -116,7 +116,7 @@ export function IntercomCard({
             <CircleCheckIcon
               className={cn(
                 "size-3 shrink-0 self-center",
-                delivered ? "text-success" : "text-ink-faint",
+                delivered ? "text-success" : "text-ink-muted",
               )}
               role="img"
               aria-label={statusLabel}
@@ -124,7 +124,7 @@ export function IntercomCard({
               <title>{statusLabel}</title>
             </CircleCheckIcon>
           )}
-          <time className="ml-auto shrink-0 text-2xs text-ink-faint">{clock(event.at)}</time>
+          <time className="ml-auto shrink-0 text-2xs text-ink-muted">{clock(event.at)}</time>
         </div>
 
         <div className="mt-1.5">
@@ -136,7 +136,7 @@ export function IntercomCard({
             {failed && meta.error ? (
               <div className="text-2xs text-danger">{meta.error}</div>
             ) : null}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-ink-faint">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-ink-muted">
               {meta.expectsReply ? (
                 <span className="flex items-center gap-1 text-accent">
                   <span className="size-1.5 rounded-full bg-accent" aria-hidden />

@@ -2,7 +2,8 @@ import { ArrowLeftIcon } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 
 import { ActivityRow } from "@/components/ActivityDisclosure"
-import { Elapsed, formatElapsed } from "@/components/presence/Elapsed"
+import { formatElapsed } from "@/lib/elapsed"
+import { Elapsed } from "@/lib/ticker"
 import { StatusDot, statusWord } from "@/components/StatusDot"
 import { clockWithSeconds } from "@/lib/format"
 import type { PresenceEntry } from "@/lib/presence"
@@ -175,7 +176,7 @@ export function PresenceDetail({
         {turn && turn.activity.length ? (
           <div className="mt-2">
             <div className="px-0.5 pb-1 text-2xs text-ink-faint">
-              Activity{running ? <span className="viewer-fade text-ink-muted"> · running</span> : null}
+              Activity{running ? <span className="xtrm-shimmer"> · running</span> : null}
             </div>
             <div
               ref={listRef}
