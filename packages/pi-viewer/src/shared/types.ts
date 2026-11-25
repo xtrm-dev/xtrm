@@ -141,8 +141,22 @@ export interface ThreadMeta {
 }
 
 export interface ThreadPayload extends ThreadMeta {
-  /** All parsed events (including off-branch ones), chronological. */
+  /** Parsed events in chronological order (a page, or the events since a cursor). */
   events: ViewerEvent[]
+  /** Monotonic cursor of the newest cached event. */
+  cursor: number
+  /** Identity of the server cache generation; a change means reload, not merge. */
+  revision: string
+  /** True when older turns exist before the first returned turn. */
+  hasEarlier: boolean
+  /** Cursor of the first returned event; use as `before` to load older turns. */
+  earlier: number | null
+  /** Number of turns skipped before the returned window. */
+  earlierTurns: number
+  /** Server cache changed; the client must replace its window. */
+  reset?: boolean
+  /** Incremental poll with no new events. */
+  unchanged?: boolean
 }
 
 export interface SessionsPayload {

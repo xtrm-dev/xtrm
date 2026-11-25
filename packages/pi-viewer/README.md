@@ -188,15 +188,23 @@ session are shown; a full Claude Code transcript channel is not included.
    matches the pane title.
 5. Session JSONL is parsed incrementally. The active branch is the parentId
    chain from the last entry.
-6. The browser polls a version endpoint every 1.5 s and refetches only when a
-   file's size or mtime changes. All-event detail is loaded on demand.
+6. The browser reads the newest 150 turns first, then polls sequentially with
+   `since=<cursor>&revision=<id>`; a poll returns only new or changed events.
+   `limit` bounds a window and `before=<cursor>` loads the previous page. The
+   client never starts a poll while one is in flight and backs off after a slow
+   response (5 s over 800 ms, 10 s over 2 s). All-event detail is loaded on
+   demand.
 
-Parsed files are cached by path, mtime, and size so polling does not re-parse
-unchanged sessions. The Channel payload omits meta events; the inspection payload
-carries summaries only (and a 160-character intercom prefix for pairing). JSON
-responses are gzip-compressed when the client accepts it. Event detail uses an
-append-only normalized cache: the first expand of a revision normalizes the new
-entries, later expands resolve by `seq` in constant time.
+Each agent transcript is normalized once and then updated entry-by-entry
+(Claude's in-place entry mutation is tracked by entry revision). The session
+cache keeps a sorted event list and one monotonic cursor per event, so an
+unchanged poll is a few bytes. A revision change (server restart, file shrink,
+agent set change) makes the client reload the window instead of merging across
+a broken cursor space. The Channel payload omits meta events; the inspection
+payload carries summaries only (and a 160-character intercom prefix for pairing).
+JSON responses are gzip-compressed when the client accepts it. Event detail uses
+an append-only normalized cache: the first expand of a revision normalizes the
+new entries, later expands resolve by `seq` in constant time.
 
 ## Layout
 
@@ -207,6 +215,7 @@ server/
   intercom.ts   agent-message normalisation (Pi and Claude envelopes)
   peers.ts      Claude/Pi socket address resolution
   session.ts    incremental JSONL parsing and event normalisation
+  thread-cache.ts  agent/session caches, cursors and turn paging
   plugin.ts     Vite dev/preview middleware
 src/
   components/   channel, all-events, composer, activity disclosure, primitives
@@ -225,10 +234,11 @@ npm test
 npm run typecheck
 npm run build
 npm run test:anchor
+npm run test:follow
 ```
 
 `npm test` covers the ordering invariant (settle anchors, pending last, stable
-ties) and intercom pairing. `npm run test:anchor` starts an isolated Vite
+ties), intercom pairing, and the incremental/earlier page merge. `npm run test:anchor` starts an isolated Vite
 instance on port 5198 with a deterministic fixture and drives headless Chromium
 to prove that a poll growing or appending content above the viewport does not
 move the reader's anchor, and that the bottom stays pinned. It needs the
@@ -239,5 +249,6 @@ Live API checks:
 ```bash
 curl -s http://127.0.0.1:5199/api/sessions
 curl -s 'http://127.0.0.1:5199/api/thread?session=xx&meta=1'
-curl -s 'http://127.0.0.1:5199/api/thread?session=xx'
+curl -s 'http://127.0.0.1:5199/api/thread?session=xx&limit=5'
+curl -s 'http://127.0.0.1:5199/api/thread?session=xx&since=<cursor>&revision=<id>'
 ```

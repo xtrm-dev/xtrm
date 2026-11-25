@@ -2,6 +2,7 @@ import { CheckIcon, CopyIcon } from "lucide-react"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { ActivityDisclosure } from "@/components/ActivityDisclosure"
+import { EarlierTurns } from "@/components/EarlierTurns"
 import { IntercomCard } from "@/components/IntercomCard"
 import { Markdown } from "@/components/Markdown"
 import { RoleChip } from "@/components/RoleChip"
@@ -230,12 +231,20 @@ export function ChannelView({
   session,
   optimistic,
   onDismissOptimistic,
+  hasEarlier = false,
+  earlierTurns = 0,
+  earlierLoading = false,
+  onLoadEarlier,
 }: {
   events: ViewerEvent[]
   agents: ViewerAgent[]
   session: string
   optimistic: OptimisticMessage[]
   onDismissOptimistic: (id: string) => void
+  hasEarlier?: boolean
+  earlierTurns?: number
+  earlierLoading?: boolean
+  onLoadEarlier?: () => void
 }) {
   // Running turns live in the presence line above the composer (XTRM-1035): the thread shows
   // settled work, and a turn whose agent stopped shows as a stopped row.
@@ -298,6 +307,9 @@ export function ChannelView({
 
   return (
     <>
+      {hasEarlier && onLoadEarlier ? (
+        <EarlierTurns count={earlierTurns} loading={earlierLoading} onLoad={onLoadEarlier} />
+      ) : null}
       {items.map((item, index) => {
         const key = dayKey(item.at)
         const divider = key !== lastDay

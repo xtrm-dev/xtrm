@@ -15,6 +15,7 @@ import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
 import { discover } from "./discover.ts"
 import { applyIntercomResults, intercomPairKey } from "./intercom.ts"
 import { normalizeEvent, parseSessionFile } from "./session.ts"
+import { cachedThread } from "./thread-cache.ts"
 
 const MAX_TEXT = 20_000
 const MAX_BODY = 64 * 1024
@@ -164,42 +165,33 @@ function readerFor(agent: ViewerAgent): {
     : { parse: parseSessionFile, normalize: normalizeEvent }
 }
 
-function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayload {
-  const normalized: ViewerEvent[] = []
-  for (const agent of session.agents) {
-    if (!agent.sessionFile) continue
-    const reader = readerFor(agent)
-    let parsed: ReturnType<typeof parseSessionFile>
-    try {
-      parsed = reader.parse(agent.sessionFile)
-    } catch {
-      continue
-    }
-    parsed.events.forEach((entry, index) => {
-      const id = typeof entry.id === "string" ? entry.id : null
-      const onBranch = id === null || parsed.branchIds.has(id)
-      if (scope === "branch" && !onBranch) return
-      normalized.push(
-        reader.normalize(entry, { id: agent.id, name: agent.name }, index, onBranch),
-      )
-    })
-  }
-  const events = applyIntercomResults(normalized)
-    // Channel turns never render meta events; the inspection view fetches them with scope=all.
-    .filter((event) => scope === "all" || event.kind !== "meta")
-    .map((event) => lite(event, scope))
-  events.sort((a, b) => a.at - b.at || a.agentId.localeCompare(b.agentId) || a.seq - b.seq)
-  return {
-    session: session.name,
-    version: versionOf(session),
-    agents: session.agents,
-    capturedAt: Date.now(),
-    events,
-  }
+function threadOf(
+  session: ViewerSession,
+  scope: "branch" | "all",
+  query: { limit?: number; before?: number | null; since?: number | null; revision?: string | null },
+): ThreadPayload {
+  return cachedThread(
+    {
+      name: session.name,
+      agents: session.agents,
+      version: versionOf(session),
+      capturedAt: Date.now(),
+    },
+    { scope, ...query },
+  )
+}
+
+let discovery: { at: number; value: ReturnType<typeof discover> } | null = null
+
+/** Discovery walks /proc and parses each transcript; one second is enough. */
+function currentDiscovery() {
+  if (discovery && Date.now() - discovery.at < 1_000) return discovery.value
+  discovery = { at: Date.now(), value: discover() }
+  return discovery.value
 }
 
 function resolveSession(name: string | null): { session: ViewerSession; all: ViewerSession[] } {
-  const found = discover()
+  const found = currentDiscovery()
   if (!found.sessions.length) {
     throw new ApiError(404, found.error || "no tmux session with a running pi or claude pane found")
   }
@@ -300,7 +292,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
   }
 
   if (url.pathname === "/api/sessions" && method === "GET") {
-    const found = discover()
+    const found = currentDiscovery()
     const payload: SessionsPayload = {
       sessions: found.sessions,
       capturedAt: Date.now(),
@@ -323,7 +315,20 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
       return true
     }
     const scope = url.searchParams.get("scope") === "all" ? "all" : "branch"
-    sendJson(req, res, 200, threadOf(session, scope))
+    const number = (key: string): number | null => {
+      const raw = url.searchParams.get(key)
+      if (raw == null || raw === "") return null
+      const value = Number(raw)
+      return Number.isSafeInteger(value) && value >= 0 ? value : null
+    }
+    const payload = threadOf(session, scope, {
+      limit: number("limit") ?? undefined,
+      before: number("before"),
+      since: number("since"),
+      revision: url.searchParams.get("revision"),
+    })
+    payload.events = payload.events.map((event) => lite(event, scope))
+    sendJson(req, res, 200, payload)
     return true
   }
 

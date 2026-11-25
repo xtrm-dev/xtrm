@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "lucide-react"
 import { Fragment, useMemo, useState } from "react"
 
+import { EarlierTurns } from "@/components/EarlierTurns"
 import { EventBody } from "@/components/EventDetail"
 import { RoleChip } from "@/components/RoleChip"
 import { useDetail } from "@/lib/details"
@@ -88,10 +89,18 @@ export function AllEventsView({
   events,
   agents,
   session,
+  hasEarlier = false,
+  earlierTurns = 0,
+  earlierLoading = false,
+  onLoadEarlier,
 }: {
   events: ViewerEvent[]
   agents: ViewerAgent[]
   session: string
+  hasEarlier?: boolean
+  earlierTurns?: number
+  earlierLoading?: boolean
+  onLoadEarlier?: () => void
 }) {
   const [filter, setFilter] = useState<string>("all")
 
@@ -174,6 +183,10 @@ export function AllEventsView({
           input, output, and JSON.
         </div>
       )}
+
+      {hasEarlier && onLoadEarlier ? (
+        <EarlierTurns count={earlierTurns} loading={earlierLoading} onLoad={onLoadEarlier} />
+      ) : null}
 
       {shown.length ? (
         <div>
