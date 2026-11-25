@@ -18,7 +18,8 @@
     "test:contrast": "node scripts/contrast-check.mjs",
     "test:follow": "node scripts/follow-check.mjs",
     "test:reply": "node scripts/reply-check.mjs",
-    "test:palette": "node scripts/palette-check.mjs"
+    "test:palette": "node scripts/palette-check.mjs",
+    "test:rows": "node scripts/rows-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",

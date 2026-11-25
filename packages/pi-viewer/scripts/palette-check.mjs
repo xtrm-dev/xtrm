@@ -23,7 +23,7 @@ function agent(index) {
   return {
     id: `%${index}`, paneId: `%${index}`, panePid: index, piPid: index, provider: "claude",
     tmuxSession: SESSION, windowIndex: 0, windowId: "@0", windowName: "w0", paneIndex: index,
-    name: `agent-${["", "alpha", "beta"][index]}`, title: "", cwd: `/home/u/agent${index}`,
+    name: `agent-${["", "alpha", "beta", "gamma"][index]}`, title: "", cwd: `/home/u/agent${index}`,
     sessionFile: `/tmp/agent${index}.jsonl`, sessionId: `s${index}`, sessionName: `agent${index}`,
     model: "claude-opus-5-5", thinkingLevel: null, role: "worker", modifiedAt: Date.now(),
     lastWriteAt: Date.now(), eventCount: 0, status: "idle", statusNote: null, statusDetail: null,
@@ -44,6 +44,10 @@ for (let i = 0; i < 30; i += 1) {
   events.push(ev(a, i * 2 + 1, at + 5_000, "assistant", { parts: [{ type: "text", text }], stopReason: "stop", text }))
 }
 const agents = [agent(1), agent(2)]
+// A third agent works, so the presence line above the composer shows its pill (XTRM-1047). A working
+// agent makes the thread follow the end, so the pill is checked in its own page, after the switch checks.
+const workingAgents = [...agents, { ...agent(3), name: "agent-gamma", status: "working", statusNote: "running tools" }]
+
 
 // What docs/design/palette-console.md says each region wears.
 const EXPECT = {
@@ -58,7 +62,7 @@ await server.listen()
 const base = `http://127.0.0.1:${PORT}`
 const browser = await chromium.launch({ headless: true })
 
-async function open(width, height, theme) {
+async function open(width, height, theme, list = agents) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: theme })
   await context.addInitScript((value) => {
     if (!sessionStorage.getItem("seeded")) {
@@ -75,9 +79,9 @@ async function open(width, height, theme) {
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url())
     const json = (body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) })
-    if (url.pathname === "/api/sessions") return json({ sessions: [{ name: SESSION, agents, capturedAt: Date.now() }], capturedAt: Date.now() })
+    if (url.pathname === "/api/sessions") return json({ sessions: [{ name: SESSION, agents: list, capturedAt: Date.now() }], capturedAt: Date.now() })
     if (url.pathname !== "/api/thread") return route.fulfill({ status: 404, contentType: "application/json", body: "{}" })
-    const meta = { session: SESSION, version: "v1", agents, capturedAt: Date.now() }
+    const meta = { session: SESSION, version: "v1", agents: list, capturedAt: Date.now() }
     if (url.searchParams.get("meta") === "1") return json(meta)
     return json({ ...meta, events, cursor: events.length, revision: "r1", hasEarlier: false, earlier: null, earlierTurns: 0 })
   })
@@ -102,6 +106,11 @@ const paint = (page) =>
       composer: bg(box),
       shadow: getComputedStyle(box).boxShadow,
       overflow: document.documentElement.scrollWidth - window.innerWidth,
+      // The presence pill's edge is the surrounding background (the console's cut-out trick).
+      pillShadow: (() => {
+        const mark = document.querySelector("[data-presence-line] span[aria-hidden]")
+        return mark ? getComputedStyle(mark).boxShadow : null
+      })(),
     }
   })
 
@@ -160,6 +169,24 @@ try {
       await choose(page, "Threads")
       assert.equal((await paint(page)).palette, "threads")
       assert.deepEqual(errors, [], `${label} ${theme}: no console errors`)
+      await context.close()
+    }
+  }
+
+  // The presence pill's edge is the surrounding background, the console's cut-out trick: in each
+  // palette and theme it equals that palette's canvas, so the pill reads as a cut-out, not an outlined chip.
+  for (const [width, height, label] of [[1440, 900, "1440"], [390, 844, "390"]]) {
+    for (const theme of ["dark", "light"]) {
+      const { context, page, errors } = await open(width, height, theme, workingAgents)
+      await page.locator("[data-presence-line] span[aria-hidden]").first().waitFor({ state: "visible" })
+      for (const palette of ["threads", "console"]) {
+        if (palette === "console") await choose(page, "Console")
+        const seen = await paint(page)
+        const want = EXPECT[`${palette} ${theme}`].canvas
+        assert.ok(seen.pillShadow?.includes(`${want} 0px 0px 0px 2px`), `${label} ${theme} ${palette}: presence pill edge equals the canvas ${want}: ${seen.pillShadow}`)
+        console.log(`pill edge ${label} ${theme} ${palette}: ${want}`)
+      }
+      assert.deepEqual(errors, [], `${label} ${theme}: no console errors (pill)`)
       await context.close()
     }
   }

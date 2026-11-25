@@ -27,7 +27,7 @@ function Mark({ name, className }: { name: string; className?: string }) {
     <span
       aria-hidden
       className={cn(
-        "flex size-5 shrink-0 items-center justify-center rounded-md bg-control font-mono text-[0.625rem] leading-none text-ink-muted ring-2 ring-deep",
+        "flex size-5 shrink-0 items-center justify-center rounded-md bg-control font-mono text-[0.625rem] leading-none text-ink-muted ring-2 ring-canvas",
         className,
       )}
     >

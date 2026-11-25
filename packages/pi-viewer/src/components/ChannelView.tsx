@@ -52,7 +52,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
           // Clipboard access can be denied; the text stays selectable.
         }
       }}
-      className="rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+      className="shrink-0 rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
     >
       <Icon name={copied ? "check" : "copy"} size="text" />
     </button>
@@ -78,7 +78,7 @@ export function ReplyButton({
       onClick={() => {
         if (agent) onReply(agent)
       }}
-      className="rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted"
+      className="shrink-0 rounded-sm p-0.5 text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted"
     >
       <Icon name="reply" size="text" />
     </button>
@@ -135,41 +135,57 @@ function UserMessage({
             </div>
           </BubbleContent>
         </Bubble>
-        {tall ? (
-          <button
-            type="button"
-            onClick={() => setExpanded((value) => !value)}
-            aria-expanded={expanded}
-            className="rounded-sm px-1 text-xs text-ink-muted hover:text-ink"
-          >
-            {expanded ? "Show less" : "Show full message"}
-          </button>
-        ) : null}
+        {/* One line at any width (XTRM-1047): the fold control sits on the left, the meta actions on the
+            right. The labels shorten, then truncate; nothing wraps. */}
         <div
-          className="xtrm-meta flex items-center gap-1.5 pr-1 text-xs tabular text-ink-muted"
-          data-pinned={pinned || delivery === "failed" ? "true" : undefined}
+          data-action-row="user"
+          className="flex w-full min-w-0 items-center justify-between gap-2 text-xs whitespace-nowrap"
         >
-          <span title={fullDate(event.at)}>{stamp(event.at)}</span>
-          <span className="text-border-strong">·</span>
-          <span className="max-w-40 truncate">to {agentName}</span>
-          {delivery ? (
-            <span
-              title={DELIVERY_TITLE[delivery]}
-              className={cn(delivery === "failed" && "text-danger")}
-            >
-              · {delivery === "failed" ? (error ?? DELIVERY_WORD.failed) : DELIVERY_WORD[delivery]}
-            </span>
-          ) : null}
-          {delivery === "failed" && onDismiss ? (
+          {tall ? (
             <button
               type="button"
-              onClick={onDismiss}
-              className="text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+              onClick={() => setExpanded((value) => !value)}
+              aria-expanded={expanded}
+              className="min-w-0 shrink-0 truncate rounded-sm px-1 text-ink-muted hover:text-ink"
             >
-              dismiss
+              {expanded ? (
+                "Show less"
+              ) : (
+                <>
+                  <span className="sm:hidden">Show more</span>
+                  <span className="hidden sm:inline">Show full message</span>
+                </>
+              )}
             </button>
           ) : null}
-          {body ? <CopyButton text={body} label="Copy message" /> : null}
+          <div
+            className="xtrm-meta ml-auto flex min-w-0 items-center gap-1.5 pr-1 tabular text-ink-muted"
+            data-pinned={pinned || delivery === "failed" ? "true" : undefined}
+          >
+            <span className="shrink-0" title={fullDate(event.at)}>
+              {stamp(event.at)}
+            </span>
+            <span className="shrink-0 text-border-strong">·</span>
+            <span className="min-w-0 truncate">to {agentName}</span>
+            {delivery ? (
+              <span
+                title={DELIVERY_TITLE[delivery]}
+                className={cn("min-w-0 shrink truncate", delivery === "failed" && "text-danger")}
+              >
+                · {delivery === "failed" ? (error ?? DELIVERY_WORD.failed) : DELIVERY_WORD[delivery]}
+              </span>
+            ) : null}
+            {delivery === "failed" && onDismiss ? (
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="shrink-0 text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+              >
+                dismiss
+              </button>
+            ) : null}
+            {body ? <CopyButton text={body} label="Copy message" /> : null}
+          </div>
         </div>
       </MessageContent>
     </Message>
@@ -221,10 +237,13 @@ function TurnView({
 
           {turn.final ? (
             <div
-              className="xtrm-meta flex items-center gap-1.5 text-xs tabular text-ink-muted"
+              data-action-row="agent"
+              className="xtrm-meta flex min-w-0 items-center gap-1.5 text-xs tabular whitespace-nowrap text-ink-muted"
               data-pinned={pinned ? "true" : undefined}
             >
-              <span title={fullDate(at)}>{stamp(at)}</span>
+              <span className="shrink-0" title={fullDate(at)}>
+                {stamp(at)}
+              </span>
               {onReply ? <ReplyButton agent={agent} name={name} onReply={onReply} /> : null}
               {finalText ? <CopyButton text={finalText} label="Copy reply" /> : null}
             </div>

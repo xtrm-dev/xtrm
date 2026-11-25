@@ -62,9 +62,14 @@ export function CodeFrame({ text, language }: { text: string; language?: string 
 
   return (
     <div className="xtrm-code my-[0.7rem] overflow-hidden rounded-md leading-snug">
-      <div className="flex items-center justify-between gap-2 pt-1 pr-1 pl-3 select-none">
-        <span className="font-mono text-2xs text-ink-muted">{language || "text"}</span>
-        <div className="flex items-center gap-0.5">
+      <div
+        data-action-row="code"
+        className="flex items-center justify-between gap-2 pt-1 pr-1 pl-3 whitespace-nowrap select-none"
+      >
+        <span className="min-w-0 truncate font-mono text-2xs text-ink-muted" title={language || undefined}>
+          {language || "text"}
+        </span>
+        <div className="flex shrink-0 items-center gap-0.5">
           <button
             type="button"
             onClick={() => setWrap((value) => !value)}
