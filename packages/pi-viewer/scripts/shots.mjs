@@ -24,6 +24,7 @@ for (const viewport of viewports) {
       } catch {}
     }, theme)
     const page = await context.newPage()
+    page.setDefaultTimeout(90_000)
     const errors = []
     page.on("console", (message) => message.type() === "error" && errors.push(message.text()))
     page.on("pageerror", (error) => errors.push(String(error)))
@@ -48,7 +49,8 @@ for (const viewport of viewports) {
     // Open the first turn fold so the tool rows show.
     const fold = page.locator("button[aria-expanded=false]:has-text('Worked for'), button[aria-expanded=false]:has-text('step')").first()
     if (await fold.count()) {
-      await fold.click()
+      // The scroll pill can sit over the row; a dispatched click does not need a clear hit target.
+      await fold.dispatchEvent("click", {}, { timeout: 5_000 }).catch(() => {})
       await page.waitForTimeout(300)
       await page.screenshot({ path: `${out}${label}-${viewport.name}-${theme}-folded.png` })
     }
