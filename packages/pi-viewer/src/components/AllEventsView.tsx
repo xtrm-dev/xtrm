@@ -106,7 +106,7 @@ export function AllEventsView({
       const meta = event.intercom
       if (!meta) continue
       const pair = [meta.from, meta.to].sort().join("|")
-      const key = `${pair}|${meta.body.replace(/\s+/g, " ").trim()}`
+      const key = `${pair}|${(meta.body ?? "").replace(/\s+/g, " ").trim()}`
       const group = groups.get(key) ?? { sent: [], received: [] }
       if (meta.direction === "sent") group.sent.push(event.id)
       else group.received.push(event.id)
