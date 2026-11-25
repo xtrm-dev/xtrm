@@ -207,3 +207,14 @@ test("the rail toolbar moves one agent at a time and stops at the ends", () => {
   assert.equal(railNext(4, 1, "Enter"), null)
   assert.equal(railNext(0, 0, "ArrowDown"), null)
 })
+
+test("buildTree: two agents on one pane id give one row, so no key repeats", () => {
+  const first = agent({ paneId: "%1", name: "first" })
+  const second = agent({ paneId: "%1", name: "second", provider: "claude" })
+  const other = agent({ paneId: "%2", paneIndex: 1 })
+  const tree = buildTree([{ name: "xx", agents: [first, second, other] } as unknown as ViewerSession])
+  const keys = flatten(tree, new Set()).map((row) => row.key)
+  assert.equal(new Set(keys).size, keys.length)
+  assert.equal(tree[0].count, 2)
+  assert.equal(tree[0].windows[0].panes[0].agent.name, "first")
+})
