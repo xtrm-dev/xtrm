@@ -210,7 +210,7 @@ export function Sidebar({
                     tabIndex={index === railTab ? 0 : -1}
                     onClick={() => {
                       setRailIndex(index)
-                      choose({ kind: "pane", session: pane.session, window: agent.windowIndex, paneId: agent.paneId })
+                      choose({ kind: "pane", session: pane.session, window: agent.windowIndex, windowId: agent.windowId, paneId: agent.paneId })
                     }}
                     onFocus={() => setRailIndex(index)}
                     onKeyDown={(event) => onRailKey(event, index)}

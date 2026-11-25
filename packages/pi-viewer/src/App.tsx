@@ -23,6 +23,7 @@ import {
   identicalScope,
   parseScope,
   sameScope,
+  sameScopeState,
   SCOPE_GRACE,
   scopeFromUrl,
   scopeRowKey,
@@ -96,7 +97,7 @@ export default function App() {
   function applyTrack(next: ScopeTrack) {
     track.current = next
     if (next.scope) requestedScope.current = null
-    setScope((current) => (identicalScope(current, next.scope) ? current : next.scope))
+    setScope((current) => (sameScopeState(current, next.scope) ? current : next.scope))
   }
 
   // One observation of what exists now (a discovery or a thread poll) advances the scope.

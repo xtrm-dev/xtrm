@@ -10,6 +10,7 @@ import {
   parseScope,
   resolveScope,
   sameScope,
+  sameScopeState,
   scopeFromUrl,
   scopeRowKey,
   serialiseScope,
@@ -30,6 +31,7 @@ function agent(paneId: string, windowIndex: number, paneIndex: number, extra: Pa
     piPid: 2,
     tmuxSession: "xx",
     windowIndex,
+    windowId: `@${windowIndex + 1}`,
     windowName: `win${windowIndex}`,
     paneIndex,
     name: `agent${paneId}`,
@@ -119,8 +121,8 @@ test("agents in scope follow tree order: window index, then pane index", () => {
 test("a scope that still resolves comes back as the same object across polls", () => {
   for (const scope of [
     { kind: "session", session: "xx" },
-    { kind: "window", session: "xx", window: 1 },
-    { kind: "pane", session: "xx", window: 0, paneId: "%2" },
+    { kind: "window", session: "xx", window: 1, windowId: "@2" },
+    { kind: "pane", session: "xx", window: 0, windowId: "@1", paneId: "%2" },
   ] as Scope[]) {
     assert.equal(resolveScope(scope, SESSIONS), scope)
     // A poll that reorders the agents changes nothing.
@@ -132,12 +134,12 @@ test("a scope that still resolves comes back as the same object across polls", (
 test("a vanished scope falls back: pane to window, window to session, session to the default", () => {
   const without = (...ids: string[]): ViewerSession[] =>
     SESSIONS.map((session) => ({ ...session, agents: session.agents.filter((entry) => !ids.includes(entry.paneId)) }))
-  const pane: Scope = { kind: "pane", session: "xx", window: 0, paneId: "%2" }
+  const pane: Scope = { kind: "pane", session: "xx", window: 0, windowId: "@1", paneId: "%2" }
   // The pane leaves; its window still has %1.
-  assert.deepEqual(resolveScope(pane, without("%2")), { kind: "window", session: "xx", window: 0 })
+  assert.deepEqual(resolveScope(pane, without("%2")), { kind: "window", session: "xx", window: 0, windowId: "@1" })
   // The whole window empties: the session.
   assert.deepEqual(resolveScope(pane, without("%1", "%2")), { kind: "session", session: "xx" })
-  assert.deepEqual(resolveScope({ kind: "window", session: "xx", window: 1 }, without("%5")), { kind: "session", session: "xx" })
+  assert.deepEqual(resolveScope({ kind: "window", session: "xx", window: 1, windowId: "@2" }, without("%5")), { kind: "session", session: "xx" })
   // The session itself goes: the default (the preferred session, else the first with agents).
   const noXx = SESSIONS.filter((session) => session.name !== "xx")
   assert.deepEqual(resolveScope(pane, noXx), { kind: "session", session: "yy" })
@@ -172,7 +174,7 @@ test("scope row keys match the sidebar tree's keys one to one", () => {
   const keys = rows.map((row) => row.key)
   for (const scope of [
     { kind: "session", session: "xx" },
-    { kind: "window", session: "xx", window: 0 }, // two panes: has a row
+    { kind: "window", session: "xx", window: 0, windowId: "@1" }, // two panes: has a row
     { kind: "pane", session: "xx", window: 2, paneId: "%12" },
   ] as Scope[]) {
     assert.ok(keys.includes(scopeRowKey(scope)), scopeRowKey(scope))
@@ -207,18 +209,18 @@ test("sameScope compares kind, session and the level's own key", () => {
 const without = (...ids: string[]): ViewerSession[] =>
   SESSIONS.map((session) => ({ ...session, agents: session.agents.filter((entry) => !ids.includes(entry.paneId)) }))
 const EMPTY: ViewerSession[] = []
-const PANE: Scope = { kind: "pane", session: "xx", window: 0, paneId: "%2" }
+const PANE: Scope = { kind: "pane", session: "xx", window: 0, windowId: "@1", paneId: "%2" }
 
 test("an empty or failed discovery poll keeps the last good scope and does not count as absence", () => {
-  let track: ScopeTrack = { scope: { kind: "window", session: "xx", window: 2 }, absent: 0 }
+  let track: ScopeTrack = { scope: { kind: "window", session: "xx", window: 2, windowId: "@3" }, absent: 0 }
   for (let poll = 0; poll < 10; poll += 1) {
     track = trackScope(track, EMPTY, null)
-    assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 2 })
+    assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 2, windowId: "@3" })
     assert.equal(track.absent, 0)
   }
   // Sessions that exist but hold no agent are the same as no discovery.
   track = trackScope(track, [{ name: "xx", agents: [], capturedAt: 0 }], null)
-  assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 2 })
+  assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 2, windowId: "@3" })
   // Before any scope has resolved, an empty poll leaves the request waiting (no default invented).
   assert.deepEqual(trackScope({ scope: null, absent: 0 }, EMPTY, parseScope("?s=xx&w=2")), { scope: null, absent: 0 })
 })
@@ -226,7 +228,7 @@ test("an empty or failed discovery poll keeps the last good scope and does not c
 test("the page-open URL is read only until a scope has resolved; it never replaces the user's selection", () => {
   const requested = parseScope("?s=xx&w=2")
   let track = trackScope({ scope: null, absent: 0 }, SESSIONS, requested)
-  assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 2 }, "the request resolves on the first poll")
+  assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 2, windowId: "@3" }, "the request resolves on the first poll")
   // The user then clicks a pane. A later empty poll, and a later good poll, both keep the pane,
   // even though the stale request is still passed in.
   track = { scope: PANE, absent: 0 }
@@ -267,7 +269,7 @@ test("one poll that drops a pane does not downgrade the scope; it degrades only 
   assert.equal(back.absent, 0)
   // The third consecutive absent poll degrades along the chain: pane to window.
   const third = trackScope(track, without("%2"), null)
-  assert.deepEqual(third.scope, { kind: "window", session: "xx", window: 0 })
+  assert.deepEqual(third.scope, { kind: "window", session: "xx", window: 0, windowId: "@1" })
   assert.equal(third.absent, 0)
   // An intermittent pane never accumulates: absent, present, absent, present stays a pane.
   let flaky: ScopeTrack = { scope: PANE, absent: 0 }
@@ -276,11 +278,11 @@ test("one poll that drops a pane does not downgrade the scope; it degrades only 
 })
 
 test("after the grace the chain continues: window to session to the default", () => {
-  let track: ScopeTrack = { scope: { kind: "window", session: "xx", window: 1 }, absent: 0 }
+  let track: ScopeTrack = { scope: { kind: "window", session: "xx", window: 1, windowId: "@2" }, absent: 0 }
   const gone = without("%5")
   for (let poll = 1; poll < SCOPE_GRACE; poll += 1) {
     track = trackScope(track, gone, null)
-    assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 1 }, `poll ${poll}`)
+    assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 1, windowId: "@2" }, `poll ${poll}`)
   }
   track = trackScope(track, gone, null)
   assert.deepEqual(track.scope, { kind: "session", session: "xx" })
@@ -296,7 +298,7 @@ test("after the grace the chain continues: window to session to the default", ()
 
 test("a pane scope is the pane id alone: no new selection, no remount, no duplicate history entry", () => {
   const bare: Scope = { kind: "pane", session: "xx", window: null, paneId: "%12" }
-  const full: Scope = { kind: "pane", session: "xx", window: 2, paneId: "%12" }
+  const full: Scope = { kind: "pane", session: "xx", window: 2, windowId: "@3", paneId: "%12" }
   assert.ok(sameScope(bare, full), "?s=xx&p=%12 then a click on %12 is the same selection")
   assert.ok(!identicalScope(bare, full), "but the URL still learns the window")
   assert.equal(scopeRowKey(bare), scopeRowKey(full), "so the scroller and All events keys do not change")
@@ -306,13 +308,38 @@ test("a pane scope is the pane id alone: no new selection, no remount, no duplic
   assert.deepEqual(track.scope, full)
   assert.ok(sameScope(track.scope, bare))
   // A pane whose URL carries a stale window is corrected to where the pane is.
-  assert.deepEqual(resolveScope({ kind: "pane", session: "xx", window: 9, paneId: "%12" }, SESSIONS), full)
+  assert.deepEqual(resolveScope({ kind: "pane", session: "xx", window: 9, windowId: "@3", paneId: "%12" }, SESSIONS), full)
   // An already-correct scope keeps its identity (the same object): nothing re-renders.
   assert.equal(trackScope({ scope: full, absent: 0 }, SESSIONS, null).scope, full)
 })
 
+test("a stable window id survives tmux renumbering and keeps the URL", () => {
+  const before: Scope = { kind: "window", session: "xx", window: 1, windowId: "@2" }
+  assert.equal(serialiseScope(before), "?s=xx&w=%402")
+  const renumbered = SESSIONS.map((entry) => ({
+    ...entry,
+    agents: entry.agents.map((item) => (item.windowId === "@2" ? { ...item, windowIndex: 5 } : item)),
+  }))
+  const after = resolveScope(before, renumbered)
+  assert.deepEqual(after, { kind: "window", session: "xx", window: 5, windowId: "@2" })
+  assert.equal(serialiseScope(after as Scope), "?s=xx&w=%402")
+  assert.equal(agentsInScope(renumbered, before).length, 1)
+  assert.ok(sameScope(after, before), "the target is the same")
+  assert.ok(!sameScopeState(after, before), "but the displayed index changed")
+})
+
+test("an old index URL resolves once to the stable id and rewrites", () => {
+  const migrated = scopeFromUrl("?s=xx&w=2&p=%2512", null, SESSIONS)
+  assert.deepEqual(migrated, { kind: "pane", session: "xx", window: 2, windowId: "@3", paneId: "%12" })
+  assert.equal(serialiseScope(migrated as Scope), "?s=xx&w=%403&p=%2512")
+  // A window URL migrates the same way.
+  assert.deepEqual(scopeFromUrl("?s=xx&w=1", null, SESSIONS), { kind: "window", session: "xx", window: 1, windowId: "@2" })
+  // A window id in the URL parses without an index; resolution fills the current one.
+  assert.deepEqual(parseScope("?s=xx&w=%402"), { kind: "window", session: "xx", window: null, windowId: "@2" })
+})
+
 test("Back or Forward to a stale or invalid URL resolves to a valid scope whose URL replaces the address", () => {
-  const current: Scope = { kind: "window", session: "xx", window: 1 }
+  const current: Scope = { kind: "window", session: "xx", window: 1, windowId: "@2" }
   // Stale: a window and a pane that no longer exist resolve to the session; the URL to write is that scope's.
   const stale = scopeFromUrl("?s=xx&w=9&p=%25404", current, SESSIONS)
   assert.deepEqual(stale, { kind: "session", session: "xx" })
@@ -320,12 +347,12 @@ test("Back or Forward to a stale or invalid URL resolves to a valid scope whose 
   // Invalid: no usable session means the current scope is kept, and its URL is what to write.
   const garbled = scopeFromUrl("?s=&w=zz&p=nope", current, SESSIONS)
   assert.deepEqual(garbled, current)
-  assert.equal(serialiseScope(garbled as Scope), "?s=xx&w=1")
+  assert.equal(serialiseScope(garbled as Scope), "?s=xx&w=%402")
   assert.deepEqual(scopeFromUrl("", current, SESSIONS), current)
   // A vanished session resolves to the default.
   assert.deepEqual(scopeFromUrl("?s=nosuch", current, SESSIONS), { kind: "session", session: "xx" })
   // A valid deeper URL is honoured as is.
-  assert.deepEqual(scopeFromUrl("?s=xx&w=2&p=%2512", current, SESSIONS), { kind: "pane", session: "xx", window: 2, paneId: "%12" })
+  assert.deepEqual(scopeFromUrl("?s=xx&w=2&p=%2512", current, SESSIONS), { kind: "pane", session: "xx", window: 2, windowId: "@3", paneId: "%12" })
   // Empty discovery keeps the current scope instead of resetting it.
   assert.deepEqual(scopeFromUrl("?s=xx&w=2", current, EMPTY), current)
   assert.equal(scopeFromUrl("?s=xx", null, EMPTY), null)

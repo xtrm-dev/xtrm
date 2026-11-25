@@ -37,6 +37,9 @@ export interface WindowNode {
   kind: "window"
   key: string
   session: string
+  /** Stable tmux window id (@N). */
+  windowId: string
+  /** Current tmux index, for display and ordering. */
   index: number
   name: string
   panes: PaneNode[]
@@ -58,23 +61,25 @@ export const paneKey = (paneId: string) => `p:${paneId}`
 export function buildTree(sessions: ViewerSession[]): SessionNode[] {
   const tree: SessionNode[] = []
   for (const session of sessions) {
-    const byWindow = new Map<number, ViewerAgent[]>()
+    const byWindow = new Map<string, ViewerAgent[]>()
     for (const agent of session.agents) {
       if (!agent.paneId) continue
-      const list = byWindow.get(agent.windowIndex) ?? []
+      const key = agent.windowId || `@${agent.windowIndex}`
+      const list = byWindow.get(key) ?? []
       list.push(agent)
-      byWindow.set(agent.windowIndex, list)
+      byWindow.set(key, list)
     }
     const windows: WindowNode[] = [...byWindow.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([index, agents]) => {
+      .map(([windowId, agents]) => {
+        const index = agents[0]?.windowIndex ?? 0
         const ordered = [...agents].sort((a, b) => a.paneIndex - b.paneIndex || a.paneId.localeCompare(b.paneId))
         return {
           kind: "window" as const,
-          key: `w:${session.name}:${index}`,
+          key: `w:${session.name}:${windowId}`,
           session: session.name,
+          windowId,
           index,
-          name: ordered[0]?.windowName || `window ${index}`,
+          name: ordered[0]?.windowName || `window ${windowId}`,
           panes: ordered.map((agent) => ({
             kind: "pane" as const,
             key: paneKey(agent.paneId),
@@ -83,6 +88,7 @@ export function buildTree(sessions: ViewerSession[]): SessionNode[] {
           })),
         }
       })
+      .sort((a, b) => a.index - b.index || a.windowId.localeCompare(b.windowId))
     const count = windows.reduce((sum, window) => sum + window.panes.length, 0)
     if (!count) continue
     tree.push({ kind: "session", key: `s:${session.name}`, name: session.name, windows, count })

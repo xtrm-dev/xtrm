@@ -15,6 +15,8 @@ export interface ViewerAgent {
   piPid: number | null
   tmuxSession: string
   windowIndex: number
+  /** Stable tmux window id (@N); survives renumbering. */
+  windowId: string
   windowName: string
   paneIndex: number
   name: string

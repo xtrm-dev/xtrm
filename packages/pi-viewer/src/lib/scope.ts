@@ -11,15 +11,17 @@ import type { ViewerAgent, ViewerEvent, ViewerSession } from "@/shared/types"
  */
 export type Scope =
   | { kind: "session"; session: string }
-  | { kind: "window"; session: string; window: number }
+  /** `windowId` is the stable tmux id (@N); `window` is the current index, for display. */
+  | { kind: "window"; session: string; window: number | null; windowId?: string | null }
   /** `window` is where the pane was last seen; it is the fallback when the pane vanishes. */
-  | { kind: "pane"; session: string; window: number | null; paneId: string }
+  | { kind: "pane"; session: string; window: number | null; windowId?: string | null; paneId: string }
 
 // ---------------------------------------------------------------------------
-// URL: ?s=<session>[&w=<windowIndex>[&p=<paneId>]]
-//   ?s=xx                 session scope
-//   ?s=xx&w=2             window scope
-//   ?s=xx&w=2&p=%2512     pane scope (the pane id %12, percent-encoded)
+// URL: ?s=<session>[&w=<windowId>[&p=<paneId>]]
+//   ?s=xx                    session scope
+//   ?s=xx&w=%403             window scope (tmux window id @3, percent-encoded)
+//   ?s=xx&w=%403&p=%2512     pane scope (pane id %12)
+// Old URLs with an index (?s=xx&w=2) still parse; the first poll resolves and rewrites them.
 // A pane scope without a window (?s=xx&p=%2512) is accepted; its fallback is the session.
 // ---------------------------------------------------------------------------
 
@@ -30,19 +32,30 @@ export function parseScope(search: string): Scope | null {
   const session = params.get("s")
   if (!session) return null
   const rawWindow = params.get("w")
+  const windowId = rawWindow !== null && /^@\d+$/.test(rawWindow) ? rawWindow : null
   const window = rawWindow !== null && /^\d+$/.test(rawWindow) ? Number(rawWindow) : null
   const paneId = params.get("p")
-  if (paneId !== null && PANE_ID.test(paneId)) return { kind: "pane", session, window, paneId }
-  if (window !== null) return { kind: "window", session, window }
+  if (paneId !== null && PANE_ID.test(paneId)) {
+    return windowId
+      ? { kind: "pane", session, window, windowId, paneId }
+      : { kind: "pane", session, window, paneId }
+  }
+  if (window !== null || windowId !== null) {
+    return windowId ? { kind: "window", session, window, windowId } : { kind: "window", session, window }
+  }
   return { kind: "session", session }
 }
 
 export function serialiseScope(scope: Scope): string {
   const params = new URLSearchParams()
   params.set("s", scope.session)
-  if (scope.kind === "window") params.set("w", String(scope.window))
+  if (scope.kind === "window") {
+    if (scope.windowId) params.set("w", scope.windowId)
+    else if (scope.window !== null) params.set("w", String(scope.window))
+  }
   if (scope.kind === "pane") {
-    if (scope.window !== null) params.set("w", String(scope.window))
+    if (scope.windowId) params.set("w", scope.windowId)
+    else if (scope.window !== null) params.set("w", String(scope.window))
     params.set("p", scope.paneId)
   }
   return `?${params.toString()}`
@@ -55,7 +68,7 @@ export function serialiseScope(scope: Scope): string {
 export function sameScope(a: Scope | null, b: Scope | null): boolean {
   if (a === b) return true
   if (!a || !b || a.kind !== b.kind || a.session !== b.session) return false
-  if (a.kind === "window" && b.kind === "window") return a.window === b.window
+  if (a.kind === "window" && b.kind === "window") return (a.windowId ?? a.window) === (b.windowId ?? b.window)
   if (a.kind === "pane" && b.kind === "pane") return a.paneId === b.paneId
   return true
 }
@@ -66,10 +79,18 @@ export function identicalScope(a: Scope | null, b: Scope | null): boolean {
   return !!a && !!b && serialiseScope(a) === serialiseScope(b)
 }
 
+/** Same target and same current placement: the object a poll should keep. */
+export function sameScopeState(a: Scope | null, b: Scope | null): boolean {
+  if (a === b) return true
+  if (!sameScope(a, b) || !a || !b) return false
+  if (a.kind === "session") return true
+  return a.window === (b as typeof a).window
+}
+
 /** The sidebar row key of a scope; matches the keys `buildTree` assigns. */
 export function scopeRowKey(scope: Scope): string {
   if (scope.kind === "session") return `s:${scope.session}`
-  if (scope.kind === "window") return `w:${scope.session}:${scope.window}`
+  if (scope.kind === "window") return `w:${scope.session}:${scope.windowId ?? scope.window}`
   return `p:${scope.paneId}`
 }
 
@@ -99,7 +120,10 @@ export function agentsInScope(sessions: ViewerSession[], scope: Scope | null): V
   if (!session) return []
   const live = session.agents.filter((agent) => agent.paneId)
   if (scope.kind === "session") return inOrder(live)
-  if (scope.kind === "window") return inOrder(live.filter((agent) => agent.windowIndex === scope.window))
+  if (scope.kind === "window") {
+    if (scope.windowId) return inOrder(live.filter((agent) => agent.windowId === scope.windowId))
+    return inOrder(live.filter((agent) => agent.windowIndex === scope.window))
+  }
   return live.filter((agent) => agent.paneId === scope.paneId)
 }
 
@@ -126,12 +150,19 @@ export function resolveScope(current: Scope | null, sessions: ViewerSession[], p
   while (scope) {
     const found = agentsInScope(sessions, scope)
     if (found.length) {
-      // The pane's own window is the truth; a URL may carry a stale one.
-      if (scope.kind === "pane" && scope.window !== found[0].windowIndex) return { ...scope, window: found[0].windowIndex }
-      return scope
+      // The pane's own window is the truth; a URL may carry a stale index, and tmux may renumber.
+      if (scope.kind === "session") return scope
+      const agent = found[0]
+      if (scope.window === agent.windowIndex && scope.windowId === agent.windowId) return scope
+      return { ...scope, window: agent.windowIndex, windowId: agent.windowId }
     }
     if (scope.kind === "pane") {
-      scope = scope.window !== null ? { kind: "window", session: scope.session, window: scope.window } : { kind: "session", session: scope.session }
+      scope =
+        scope.windowId !== null && scope.windowId !== undefined
+          ? { kind: "window", session: scope.session, window: null, windowId: scope.windowId }
+          : scope.window !== null
+            ? { kind: "window", session: scope.session, window: scope.window, windowId: null }
+            : { kind: "session", session: scope.session }
     } else if (scope.kind === "window") {
       scope = { kind: "session", session: scope.session }
     } else {
@@ -178,7 +209,7 @@ export function trackScope(
   if (!want) return { scope: defaultScope(sessions, preferred), absent: 0 }
   if (agentsInScope(sessions, want).length) {
     const resolved = resolveScope(want, sessions, preferred)
-    return { scope: identicalScope(resolved, track.scope) ? track.scope : resolved, absent: 0 }
+    return { scope: track.scope && sameScopeState(resolved, track.scope) ? track.scope : resolved, absent: 0 }
   }
   const absent = track.absent + 1
   if (track.scope && absent < grace) return { scope: track.scope, absent }
@@ -214,8 +245,9 @@ export function describeScope(scope: Scope | null, agents: ViewerAgent[]): Scope
   const count = `${agents.length} ${agents.length === 1 ? "agent" : "agents"}`
   if (scope.kind === "session") return { kind: "session", title: scope.session, detail: `session · ${count}`, role: null }
   if (scope.kind === "window") {
-    const name = agents[0]?.windowName || `window ${scope.window}`
-    return { kind: "window", title: name, detail: `${scope.session} · window ${scope.window} · ${count}`, role: null }
+    const index = scope.window ?? agents[0]?.windowIndex ?? null
+    const name = agents[0]?.windowName || `window ${index ?? "?"}`
+    return { kind: "window", title: name, detail: `${scope.session} · window ${index ?? "?"} · ${count}`, role: null }
   }
   const agent = agents[0]
   const place = agent ? `${scope.session} · ${agent.windowName || `window ${agent.windowIndex}`}` : scope.session

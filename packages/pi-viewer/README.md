@@ -63,14 +63,15 @@ is not asked for a scope.
 The scope is in the URL, so a reload, a bookmark and Back/Forward keep it:
 
 ```
-?s=xx                 session scope
-?s=xx&w=3             window scope (window index 3)
-?s=xx&w=3&p=%2527     pane scope: pane id %27 (percent-encoded), last seen in window 3
+?s=xx                    session scope
+?s=xx&w=%403             window scope (tmux window id @3, percent-encoded)
+?s=xx&w=%403&p=%2527     pane scope: pane id %27, last seen in window @3
 ```
 
-`p` needs a `%`-prefixed pane id and `w` a non-negative integer; a malformed value is ignored and the URL degrades to
-the nearest valid scope. A scope whose target has vanished falls back one level: a vanished pane to its window
-(`w` is why the pane scope carries it), a vanished window to its session, a vanished session to the default.
+`p` needs a `%`-prefixed pane id and `w` a tmux window id (`@N`); old URLs with a numeric window index still
+resolve once and are rewritten to the stable id. A malformed value is ignored and the URL degrades to the nearest
+valid scope. A scope whose target has vanished falls back one level: a vanished pane to its window (the stable
+window id is why the pane scope carries it), a vanished window to its session, a vanished session to the default.
 A click on the sidebar adds a history entry; a fallback replaces the current one. Clicking the pane that is
 already selected adds none (a pane is identified by its id; `w` is only where it was last seen), and Back or
 Forward to a stale or invalid URL rewrites the address bar to the scope it resolved to.
