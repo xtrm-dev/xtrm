@@ -78,8 +78,7 @@ sticky header; `bg-inset` on the four quiet panels; `xtrm-composer-box` on the c
 `npm run test:contrast` resolves the tokens for all six sets (Threads, Console and Desktop, dark and light)
 and checks ink, ink at 90%, read (thread prose), ink-muted, accent-ink and danger against deep, surface,
 raised, control, canvas, sidebar, composer-focus, code, inset, the sidebar's selected row and the segmented
-track: every pair is at least 4.5:1, except the six Desktop dark muted-text pairs listed under Desktop
-(printed WARN, not waived silently). Thread prose is also held to 7:1 on the canvas in every palette.
+track: every pair is at least 4.5:1. Thread prose is also held to 7:1 on the canvas in every palette.
 `ink-faint` stays a glyph role (INFO lines).
 
 ## Desktop palette (XTRM-1051)
@@ -103,9 +102,9 @@ row). Both equal `ink` and `hover` in Threads and Console, so nothing changes th
 | input | `#383838` | `--x-control`, and the focused composer fill (`--x-composer-focus`) |
 | text primary | `#e4e4e4` | `--x-ink` (names, titles, selected rows) |
 | text secondary | `#c8c8c8` | `--x-read` (thread prose, operator bubble text); also the "icon primary" value |
-| text muted | `#8e8e8e` | `--x-ink-muted` (meta, time, unselected labels, resting icons) |
+| text muted | `#8e8e8e`, ruled up to `#a1a1a1` (see below) | `--x-ink-muted` (meta, time, unselected labels, resting icons); inside a selected row `--x-ink-muted-selected` = `#c8c8c8` |
 | border | `#383838` | `--x-border` (and the code frame edge) |
-| icon primary / muted | `#c8c8c8` / `#8e8e8e` | icons use `ink-muted` at rest and `ink` on hover; no separate token |
+| icon primary / muted | `#c8c8c8` / `#8e8e8e` (muted ruled up to `#a1a1a1`) | icons use `ink-muted` at rest and `ink` on hover; no separate token |
 
 ### Tokens, dark: Threads, Console, Desktop
 
@@ -121,7 +120,7 @@ row). Both equal `ink` and `hover` in Threads and Console, so nothing changes th
 | `--x-selected` | hover wash | hover wash | `#454545` |
 | `--x-ink` | `#ececef` | `#ececef` | `#e4e4e4` |
 | `--x-read` | ink `#ececef` | ink `#ececef` | `#c8c8c8` |
-| `--x-ink-muted` | `#a0a0a8` | `#a0a0a8` | `#8e8e8e` |
+| `--x-ink-muted` | `#a0a0a8` | `#a0a0a8` | `#a1a1a1` (inside a selected row: `#c8c8c8`) |
 | `--x-border` | `rgb(255 255 255 / .12)` | same | `#383838` |
 | `--x-composer-focus` | raised `#1e1e1e` | surface `#151515` | control `#383838` |
 | `--x-composer-edge` | none | border | none (as Threads) |
@@ -131,10 +130,17 @@ row). Both equal `ink` and `hover` in Threads and Console, so nothing changes th
 
 Light: Desktop equals the Threads light column of the light table above.
 
+**Muted ruling (operator, 2026-11-26).** The supplied muted `#8e8e8e` was below 4.5:1 on the lighter planes
+(3.86 on `#333333`, 3.58 on `#383838`, 2.93 on `#454545`). The operator ruled `#a0a0a0`; the viewer uses
+`#a1a1a1`, one step up, because `#a0a0a0` is 4.48:1 on the input fill `#383838` (below 4.5) and `#a1a1a1` is
+4.54:1. Reverting is one token (`--x-ink-muted`). On the selected row and segment (`#454545`, 3.7:1 at best
+with any muted grey) muted text reads in the secondary colour through a scoped rule
+(`[aria-selected="true"]` redefines `--x-ink-muted` as `--x-ink-muted-selected`).
+
 Not supplied, so left as in Threads and **inferred**: `border-muted`, `border-subtle`, `border-strong`,
 `ink-faint`, `hover`, `pressed`, `accent`, the role chips, the success and diff colours. `danger` is the one
 inferred change: `#f07171` is 4.1:1 on the focused composer fill, so Desktop uses `#f58f8f` (5.1:1). The code
-frame is a well cut into the canvas (deep plus the border) because muted text on `#333333` is below 4.5:1.
+frame is a well cut into the canvas (deep plus the border), as in Console.
 
 The adapter's two segmented controls and the sidebar need no Desktop rule: their `in-data-[palette=console]`
 classes do not match, so they take the Threads behaviour with the Desktop planes (pill `#454545` on the
@@ -147,16 +153,12 @@ pressed track).
 | prose `#c8c8c8` on canvas `#1f1f1f` | 9.85 (7:1 required) |
 | prose on surface / control (user bubble) / selected row | 7.55 / 7.01 / 5.73 |
 | ink `#e4e4e4` at 90% on canvas / surface / control / selected | 10.69 / 8.36 / 7.83 / 6.47 |
-| muted `#8e8e8e` on canvas / sidebar / code / inset | all at least 4.5 (PASS) |
-| muted on surface and raised | 3.86 (WARN) |
-| muted on control and the focused composer | 3.58 (WARN) |
-| muted on the selected sidebar row | 2.93 (WARN) |
-| muted on the segmented pressed track | 4.26 (WARN) |
+| muted `#a1a1a1` on canvas / sidebar / code / inset | 6.38 / 6.01 / 6.38 / 5.78 |
+| muted on surface and raised / control and the focused composer | 4.89 / 4.54 |
+| muted on the segmented pressed track | 5.41 |
+| muted in a selected row (`#c8c8c8` on `#454545`) | 5.73 |
 
-The six WARN pairs come from the operator's own values and are not tuned away. Rule for builders: in Desktop,
-do not put muted text on surface, control or a selected row without a decision; the second line of a
-selected sidebar row is the live case (2.93:1). Candidates, for the operator: read text (`#c8c8c8`) on those
-planes, or a lighter muted (`#a0a0a0` is 4.8:1 on `#333333` and 4.5:1 on `#383838`).
+Every pair is at least 4.5:1; the contrast check has no waived pairs.
 
 ## Presence pill edge (XTRM-1047)
 
