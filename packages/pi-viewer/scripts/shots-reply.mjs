@@ -54,7 +54,7 @@ for (const [name, width, height] of [["1440", 1440, 900], ["390", 390, 844]]) {
       focused: document.activeElement?.hasAttribute("data-composer-input") ?? false,
       draft: document.querySelector("[data-composer-input]").value,
       bar: document.querySelector("[data-reply-bar]")?.textContent ?? null,
-      to: Array.from(document.querySelectorAll("button")).find((b) => /^To/.test(b.textContent ?? ""))?.textContent ?? null,
+      to: document.querySelector("[data-composer-under-row] button")?.textContent ?? null,
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     }))
     await page.screenshot({ path: `${out}live-${name}-${theme}.png` })

@@ -81,9 +81,10 @@
   /* Region roles (XTRM-1046): which plane each region wears. These are the Threads assignment; the
      console palette below swaps them on a root data-palette attribute. Sources: docs/design/palette-console.md. */
   --x-canvas: var(--x-deep); /* page, header, thread, presence line, composer margin */
-  --x-composer-focus: var(--x-raised); /* composer fill while focused */
-  --x-composer-edge: transparent; /* composer hairline */
-  --x-composer-edge-focus: transparent;
+  --x-composer-fill: var(--x-surface); /* the composer: one quiet step up from the canvas where the palette has one */
+  --x-composer-focus: var(--x-surface); /* focused fill: the inset ring carries the focus, so the fill does not jump */
+  --x-composer-edge: transparent; /* composer hairline: only where a fill step is impossible (console light) */
+  --x-composer-edge-focus: var(--x-border-strong); /* the focus ring, inset so the box keeps its geometry */
   --x-inset: var(--x-surface); /* quiet panels inside the thread: activity detail, intercom card */
   --x-code: var(--x-surface); /* rendered code frame */
   --x-code-edge: var(--x-border-muted);
@@ -147,15 +148,16 @@
    Only the assignments and the dark sidebar differ from Threads; every other token already equals the console's. */
 :root[data-palette="console"] {
   --x-canvas: var(--x-surface);
-  --x-composer-focus: var(--x-surface);
-  --x-composer-edge: var(--x-border);
-  --x-composer-edge-focus: var(--x-border-strong);
+  --x-composer-fill: var(--x-raised); /* the page canvas is the surface here, so the box steps up to raised */
+  --x-composer-focus: var(--x-raised);
+  --x-composer-edge: var(--x-border-muted); /* no fill step exists in console light, so the box keeps a barely visible hairline */
   --x-inset: var(--x-control);
   --x-code: var(--x-deep);
   --x-code-edge: var(--x-border-muted);
 }
 :root[data-palette="console"][data-theme="dark"] {
   --x-sidebar: #232323; /* console src/styles.css:79 */
+  --x-composer-edge: transparent; /* the raised fill is the step here; no hairline */
 }
 
 /* Desktop palette (XTRM-1051), dark only. The values are the operator's, extracted from Claude Desktop
@@ -697,10 +699,12 @@
   border: 1px solid var(--x-code-edge);
 }
 
-/* Composer box. Threads: surface fill, raised on focus, no edge. Console: surface fill with the
-   console's border and border-strong on focus. An inset ring, so the box keeps its geometry. */
+/* Composer box (XTRM-1054). The box carries no visible border: a fill one step up from the canvas
+   separates it, and where a palette has no step (console light) a barely visible hairline does.
+   Focus is an inset ring in --x-border-strong, so the box keeps its geometry and the keyboard
+   always sees the change; desktop additionally steps its fill to the input colour. */
 .xtrm-composer-box {
-  background: var(--x-surface);
+  background: var(--x-composer-fill);
   box-shadow: inset 0 0 0 1px var(--x-composer-edge);
   transition:
     background-color 150ms,
