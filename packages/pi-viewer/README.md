@@ -210,10 +210,15 @@ from `packages/xtrm-app/src/styles.css`.
 npm test
 npm run typecheck
 npm run build
+npm run test:anchor
 ```
 
 `npm test` covers the ordering invariant (settle anchors, pending last, stable
-ties) and intercom pairing.
+ties) and intercom pairing. `npm run test:anchor` starts an isolated Vite
+instance on port 5198 with a deterministic fixture and drives headless Chromium
+to prove that a poll growing or appending content above the viewport does not
+move the reader's anchor, and that the bottom stays pinned. It needs the
+Playwright Chromium download (`npx playwright install chromium`).
 
 Live API checks:
 

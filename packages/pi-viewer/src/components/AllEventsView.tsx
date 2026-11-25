@@ -1,9 +1,8 @@
 import { ChevronRightIcon } from "lucide-react"
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { Fragment, useMemo, useState } from "react"
 
 import { EventBody } from "@/components/EventDetail"
 import { RoleChip } from "@/components/RoleChip"
-import { useMessageScroller } from "@/components/ui/message-scroller"
 import { useDetail } from "@/lib/details"
 import { clockWithSeconds, dayKey, dayLabel } from "@/lib/format"
 import type { ViewerAgent, ViewerEvent } from "@/shared/types"
@@ -94,12 +93,6 @@ export function AllEventsView({
   session: string
 }) {
   const [filter, setFilter] = useState<string>("all")
-  const { scrollToEnd } = useMessageScroller()
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => scrollToEnd())
-    return () => cancelAnimationFrame(frame)
-  }, [scrollToEnd])
 
   const counts = useMemo(() => {
     const map = new Map<string, number>()
