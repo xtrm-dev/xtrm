@@ -79,7 +79,7 @@ export function ActivityRow({
             error ? "text-danger" : "text-ink-muted",
           )}
         >
-          <Icon className="size-[0.8125rem]" />
+          <Icon className="size-3.5" />
         </span>
         <span className={cn("shrink-0 font-medium", error ? "text-danger" : "text-ink-muted")}>
           {live ? <Shimmer>{item.label}</Shimmer> : item.label}
@@ -90,7 +90,7 @@ export function ActivityRow({
           {clock(item.at)}
         </span>
         <ChevronRightIcon
-          className={cn("size-3 shrink-0 text-ink-muted transition-transform", expanded && "rotate-90")}
+          className={cn("size-3.5 shrink-0 text-ink-muted transition-transform", expanded && "rotate-90")}
         />
       </button>
       {expanded ? (
@@ -161,7 +161,7 @@ function GroupRow({
         className="flex min-h-6 min-w-0 items-center gap-1.5 rounded-sm px-0.5 text-left text-sm transition-colors hover:bg-hover"
       >
         <span className="flex size-6 shrink-0 items-center justify-center text-ink-muted">
-          <WrenchIcon className="size-[0.8125rem]" />
+          <WrenchIcon className="size-3.5" />
         </span>
         <span className="min-w-0 truncate text-ink-muted">
           <span className="font-medium">{group.items.length} tool calls</span> · {group.summary}
@@ -173,7 +173,7 @@ function GroupRow({
           </span>
         ) : null}
         <ChevronRightIcon
-          className={cn("ml-auto size-3 shrink-0 text-ink-muted transition-transform", open && "rotate-90")}
+          className={cn("ml-auto size-3.5 shrink-0 text-ink-muted transition-transform", open && "rotate-90")}
         />
       </button>
       {open ? <div className="ml-3 flex flex-col">{children}</div> : null}
