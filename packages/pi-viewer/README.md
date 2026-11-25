@@ -37,7 +37,7 @@ that closes on Escape, on a click outside, or when a pane is chosen; only the de
 persisted.
 
 It is built from the console's primitives, not ReUI or shadcn Sidebar. The values (28px row, type ladder,
-`--x-hover` selected fill with the 2px accent marker) are) are
+`--x-hover` selected fill, no accent marker) are) are
 copied from `packages/xtrm-app` (`docs/design/console-ui-system.md` §3, §4.2, §4.3, §6, §11 and
 `src/agent/AgentSidebar.tsx`, `src/ui/sidebar.tsx`, `src/ui/nav-rail.tsx`), except two deliberate narrowings: the plane is 240px (the console's is 264px) and the
 indent step is 0.75rem (the console's `INDENT_REM` is 1.25). `src/components/sidebar/geometry.ts`

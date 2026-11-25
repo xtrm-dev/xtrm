@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils"
 import {
   DISCLOSURE,
   INDENT_REM,
-  MARKER,
   ROW_BASE,
   ROW_ONE_LINE,
   ROW_SELECTED,
@@ -56,7 +55,6 @@ function GroupRow({
   const count = node.kind === "session" ? node.count : node.panes.length
   return (
     <>
-      {selected && <span aria-hidden className={MARKER} />}
       <span
         className={cn("min-w-0 truncate text-sm", isSession ? "font-semibold text-ink" : "font-medium text-ink-muted")}
         style={{ marginLeft: "var(--row-indent)" }}
@@ -86,7 +84,6 @@ function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) 
   const state = stateOf(agent.status)
   return (
     <>
-      {selected && <span aria-hidden className={MARKER} />}
       <span className="flex min-w-0 flex-1 flex-col" style={{ marginLeft: "var(--row-indent)" }}>
         <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
         {/* Line 2: the role, then which runtime the agent is and its state. */}

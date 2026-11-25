@@ -39,7 +39,6 @@ export const ROW_ONE_LINE = "h-7"
  */
 export const ROW_TWO_LINE = "items-start rounded-lg py-1.5"
 
-/** Selected row: --x-hover fill (§3.1) plus the 2px accent marker of AgentSidebar's SessionRow. */
+/** Selected row: the --x-hover fill alone (§3.1). No accent marker: the operator asked for it removed. */
 export const ROW_SELECTED = "bg-hover text-ink"
-export const MARKER = "absolute top-2 bottom-2 left-0 w-0.5 rounded-full bg-accent"
 
