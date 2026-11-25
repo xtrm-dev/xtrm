@@ -14,7 +14,7 @@ Side-by-side screenshots (console `/agent` on a private vite server, viewer on `
 | frame | `src/shell/AppShell.tsx` `ShellLayout` | One `motion-panels` `Group`: sidebar panel, 8px resize handle, fill panel. The main column has a 44px top bar (`h-11`). |
 | sidebar state | `src/shell/layout.ts` | `SIDEBAR = {default 264, min 220, max 360}`. `sidebar/toggle` keeps `lastExpandedWidth`; `sidebar/resize` clamps. Persisted under `xtrm.console.layout.v1` as `sidebarOpen`, `sidebarWidth`. Motion 250ms, `cubic-bezier(0.32,0.72,0,1)`. |
 | collapse | `ContextSidebar.tsx`, `TopBar` | The collapse `IconButton` (`sidebar` icon, label "Collapse sidebar", hint Ctrl B) sits in the 44px sidebar header beside the switcher. **Collapsed is width 0**: there is no icon rail. The reopen button ("Open sidebar") appears at the left of the top bar. The panel is `inert` while collapsed. Ctrl/Cmd+B toggles (`context.tsx`). |
-| top switcher | `ContextSidebar.tsx` `HalfSwitch` | A `radiogroup` "Workspace": **Work** and **Agent**, in a `bg-pressed` track, 28px high. Agent is the half that holds the agents. |
+| top switcher | `ContextSidebar.tsx` `HalfSwitch` | A `radiogroup` "Workspace": **Work** and **Agent**, in a `bg-pressed` track, 28px high. Agent is the half that holds the agents. Its other entry has a "Switch to ..." tooltip with the Mod+. hint. |
 | resize | `ui/resizable.tsx` | Thin adapter over `motion-panels` 0.5.2. The handle is a labelled `separator` ("Resize sidebar"), 8px hit area, 1px line on hover and focus, keyboard resizable. |
 | icons | `ui/icon.tsx` | Lucide registry by name, size ladder `micro 12 / text 13 / xs 14 / sm,nav 16 / md 18 / lg 20` px (rem classes), stroke 2.25 except 2 at `text` and `micro`. |
 | button | `ui/primitives.tsx` `IconButton` | 28px square, `text` glyph, `text-ink-muted`, hover and pressed fills, tooltip with the label and a key hint. |
@@ -36,7 +36,7 @@ Each copied file names its source on its first lines.
 | `IconButton` | `src/shell/IconButton.tsx` | **copy** of the classes in `ui/primitives.tsx`. The tooltip is Radix (a viewer dependency), not base-ui. |
 | resize adapter | `src/shell/resizable.tsx` | **copy** of `ui/resizable.tsx`, with `motion-panels` 0.5.2 (exact pin, as the console) and `motion` ^13.4.0 added to `package.json`. `cx` becomes the viewer's `cn`. |
 | limits, clamp, persistence key and shape, motion, Mod+B rule, `isShortcutSuppressed`, `modShortcut` | `src/shell/layout.ts` | **copy** of `shell/layout.ts`, sidebar half only. The reducer is a small hook, since the viewer has no inspector. The stored object keeps unknown fields. |
-| top switcher | `src/shell/HalfSwitch.tsx` | **copy** of `HalfSwitch`. Agent is selected; Work is inert (no route to it from the viewer yet), with a title that says so. |
+| top switcher | `src/shell/HalfSwitch.tsx` | **copy** of `HalfSwitch`, including the "Switch to ..." tooltip. The viewer's entry is named **Threads** (operator ruling) and selected; Work looks as in the console and is inert (no route to it from the viewer yet). |
 | shell frame | `src/shell/ConsoleShell.tsx` | **copy of the structure** of `ShellLayout`; the console's inspector panel and search are not part of it. |
 | sidebar header (44px, switcher, collapse button) | `src/components/sidebar/Sidebar.tsx` | **copy** of the `ContextSidebar` header. |
 | top bar 44px, reopen button, theme button | `src/components/ViewerHeader.tsx` | **copy** of the `TopBar` height and reopen rule; the viewer's own scope title and view tabs stay. Theme toggle uses the console's `IconButton` and `sun`/`moon`. |
@@ -53,28 +53,41 @@ dark plane, the `border-r border-border-subtle` edge, and the `Sessions` section
 | drag minimum / maximum | 220 / 360 | 220 / 360 |
 | collapsed width | 0 | 0 |
 | header height (sidebar and top bar) | 44 | 44 |
-| switcher | Work / Agent, 28px track | same, Agent selected |
+| switcher | Work / Agent, 28px track | Work / Threads, 28px track, Threads selected |
+| header icon button | 28px box, 13px glyph (`text`), stroke 2 | same: collapse, reopen, theme and chat-width |
 | persistence | `xtrm.console.layout.v1` | same key, same fields |
 
-## Deviations and decisions for the operator
+## Icon buttons: source values
 
-1. **The icon rail is gone on desktop.** The viewer had a 44px rail of status dots when collapsed. The console
-   has none (collapsed is 0), and the brief says the same collapse behaviour. The reopen button is in the top bar.
-   The rail code was removed from the sidebar; `railNext` stays in `lib/tree.ts` with its test.
-2. **The plane is 264px by default, not 240.** An earlier ruling narrowed it to 240 because the indent read too
-   wide. The brief asks for the console's width, and the operator can drag to 220. The indent (0.5rem), the row
-   heights and the dots are unchanged.
-3. **Dark plane colour stays `#181818`** (operator ruling), the console's is `#232323`. The screenshots show the step.
-4. **Narrow (390):** the console has no mobile pattern. The viewer keeps its overlay: closed by default, never
-   persisted, opened from the reopen button, closed by Escape, a click outside, or choosing a row. It is 264px
-   wide and at most 85vw.
-5. **Work is inert.** The console's other entries do not exist in the viewer. The second radio says so in its title.
-6. **Not adopted:** the console's search pill, command button, account control, settings button, inspector
-   drawer and source footer. The viewer has no data behind them.
-7. **A dependency change:** `motion-panels` 0.5.2 and `motion` ^13.4.0 in `package.json` and the lockfile.
+Source: `ui/primitives.tsx` `IconButton` (default `size="sm"`: `size-7`, glyph `iconSize ?? "text"`) and
+`ui/icon.tsx` (`SIZE_CLASS.text = size-[0.8125rem]`, `defaultStroke("text") = 2`). The console's top bar and
+sidebar header use that default everywhere (`ContextSidebar.tsx` collapse; `AppShell.tsx` `TopBar`:
+commands, theme, settings). Both apps use the same type and rem scale (`--text-sm` 0.8125rem), so rem values match.
+
+Measured in the browser, 1440 wide, console `/agent` (read-only dev server) against the viewer, same day:
+
+| button | console (box, glyph, stroke) | viewer (box, glyph, stroke) |
+|---|---|---|
+| collapse sidebar | 28x28, 13, 2 | 28x28, 13, 2 |
+| theme | 28x28, 13, 2 | 28x28, 13, 2 |
+| commands / settings | 28x28, 13, 2 | not in the viewer |
+| chat width | not in the console | 28x28, 13, 2 (was 14, now the `text` step) |
+
+The console's larger glyph is `New session` (`sm`, 16px, stroke 2.25) and the 14px `xs` glyphs of search and rows. The header
+buttons are the same size in both apps. The sidebar-gate asserts the 28px box and 13px glyph.
+
+## Decisions (operator, 2026-11-25) and remaining deviations
+
+1. Collapse is the console's: width 0, reopened by the top-bar button or Ctrl/Cmd+B. No dot rail. (Done.)
+2. Default width 264, drag 220 to 360. (Done.)
+3. The switcher shows Work and Threads, complete as in the console, Threads selected, Work inert. (Done.)
+4. Header icon buttons match the console's size, glyph and hit area exactly (table above).
+
+Still different from the console, on purpose: the `#181818` dark plane (the console's is `#232323`); at 390 wide the sidebar is an
+overlay (the console has no narrow pattern); no search pill, command button, account control, settings, inspector drawer or source footer
+(no data behind them); `motion-panels` 0.5.2 and `motion` ^13.4.0 are added to `package.json`.
 
 ## Checks
-
 `typecheck`, `npm test`, `npm run build`, and `scripts/sidebar-gate.mjs` (the gate gained the console-shell
 checks: width, drag limits, persistence, collapse and reopen focus, Ctrl+B, reload, narrow overlay; the
 "collapse to a 44px rail" and "expand to 240px" expectations became "collapse to 0" and "264px").
