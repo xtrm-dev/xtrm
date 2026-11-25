@@ -77,3 +77,27 @@ sticky header; `bg-inset` on the four quiet panels; `xtrm-composer-box` on the c
 `npm run test:contrast` resolves the tokens for all four sets (Threads and Console, dark and light) and checks
 ink, ink at 90%, ink-muted, accent-ink and danger against deep, surface, raised, control, canvas, sidebar,
 composer-focus, code and inset: every pair is at least 4.5:1. `ink-faint` stays a glyph role (INFO lines).
+
+## Presence pill edge (XTRM-1047)
+
+The monogram pills in the presence line above the composer wear a 2px ring (`ring-2 ring-canvas`,
+`src/components/presence/PresenceLine.tsx`). The ring equals the surrounding background, the console's
+cut-out trick, so a pill reads as a cut-out and overlapping pills separate without an outline. It follows
+the canvas token, so each combination uses its own surround (asserted by `npm run test:palette`):
+
+| Palette / theme | Canvas, so the pill edge |
+|---|---|
+| Threads dark | `#0d0d0d` |
+| Threads light | `#f4f4f5` |
+| Console dark | `#151515` |
+| Console light | `#ffffff` (it was `#f4f4f5`, the deep token, which outlined the pill) |
+
+The edge does not follow the line's hover fill (`bg-hover`, a translucent wash), so on hover the ring is
+a hair lighter than the wash. The cut-out effect holds at rest, which is the state the operator compared.
+
+## One-line action rows (XTRM-1047)
+
+Rows marked `data-action-row` (`user`, `agent`, `code`) never take two lines. The user row puts the fold
+control on the left and the meta actions (time, "to agent", delivery, Reply/Copy) on the right. Labels
+shorten first ("Show full message" becomes "Show more" below 640px), then truncate (agent name, delivery
+text, code language); icons and the time never shrink. `npm run test:rows` asserts it at 390 and 1440.
