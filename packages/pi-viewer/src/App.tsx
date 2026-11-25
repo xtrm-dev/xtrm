@@ -449,6 +449,7 @@ export default function App() {
                           events={scopeEvents}
                           agents={agents}
                           session={branch.session}
+                          readKey={scope ? scopeRowKey(scope) : branch.session}
                           optimistic={scopeOptimistic}
                           onDismissOptimistic={(id) =>
                             setOptimistic((previous) => previous.filter((entry) => entry.id !== id))

@@ -28,7 +28,7 @@ function agent(file: string, count: number): ViewerAgent {
     provider: "pi",
     model: null,
     thinkingLevel: null,
-    modifiedAt: Date.now(),
+    modifiedAt: Date.now(), lastWriteAt: Date.now(),
     eventCount: count,
     status: "idle",
     statusNote: null,

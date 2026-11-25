@@ -17,7 +17,7 @@ import {
   withPaneAttention,
 } from "../server/attention.ts"
 import { claudeStatusOf, parseClaudeFile } from "../server/claude.ts"
-import { QUIET_MS, statusOf, type ParsedFile } from "../server/session.ts"
+import { COMPACTION_RETRY_MS, QUIET_MS, statusOf, type ParsedFile } from "../server/session.ts"
 import type { ViewerAgent } from "../src/shared/types.ts"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -160,6 +160,43 @@ test("a compaction newer than every message closes the turn: waiting, then idle"
   assert.equal(claudeStatusOf(parseClaudeFile(file)).status, "waiting")
 })
 
+test("a compaction inside an open tool loop keeps the turn working, then closes after the retry window", () => {
+  const at = NOW - 5_000
+  const tool = { type: "message", id: "e0", timestamp: at, message: toolUse("Bash", { command: "build" }) }
+  const compact = { type: "compaction", id: "c1", timestamp: new Date(NOW).toISOString(), summary: "…" }
+  const mid: ParsedFile = { ...parsed([], NOW), events: [tool, compact] }
+  assert.deepEqual(statusOf(mid, NOW), { status: "working", note: "compacting context" })
+  assert.equal(statusOf(mid, NOW + COMPACTION_RETRY_MS + 1).status, "waiting", "the retry window ended")
+
+  // Claude auto-compact mid tool loop: the compact summary is followed by /compact and its output.
+  const now = new Date(NOW).toISOString()
+  const rec = (value: Record<string, unknown>) => `${JSON.stringify({ timestamp: now, ...value })}\n`
+  const file = join(SCRATCH, "compact-tool.jsonl")
+  writeFileSync(
+    file,
+    rec({ type: "user", uuid: "u1", message: { role: "user", content: "build it" } }) +
+      rec({ type: "assistant", uuid: "a1", parentUuid: "u1", message: { id: "m1", role: "assistant", stop_reason: "tool_use", content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: "build" } }] } }) +
+      rec({ type: "user", uuid: "s1", parentUuid: "a1", isCompactSummary: true, message: { role: "user", content: "This session is being continued…" } }) +
+      rec({ type: "user", uuid: "c1", parentUuid: "s1", message: { role: "user", content: "<command-name>/compact</command-name>" } }) +
+      rec({ type: "user", uuid: "c2", parentUuid: "c1", message: { role: "user", content: "<local-command-stdout>Compacted</local-command-stdout>" } }),
+  )
+  assert.equal(claudeStatusOf(parseClaudeFile(file), NOW + 1_000).status, "working")
+})
+
+test("Claude bash mode is a local command, not a user turn", () => {
+  const now = new Date(NOW).toISOString()
+  const rec = (value: Record<string, unknown>) => `${JSON.stringify({ timestamp: now, ...value })}\n`
+  const file = join(SCRATCH, "bash-mode.jsonl")
+  writeFileSync(
+    file,
+    rec({ type: "user", uuid: "u1", message: { role: "user", content: "go" } }) +
+      rec({ type: "assistant", uuid: "a1", parentUuid: "u1", message: { id: "m1", role: "assistant", stop_reason: "end_turn", content: [{ type: "text", text: "done" }] } }) +
+      rec({ type: "user", uuid: "b1", parentUuid: "a1", message: { role: "user", content: "<bash-input>ls</bash-input>" } }) +
+      rec({ type: "user", uuid: "b2", parentUuid: "b1", message: { role: "user", content: "<bash-stdout>a\nb</bash-stdout>" } }),
+  )
+  assert.deepEqual(claudeStatusOf(parseClaudeFile(file)), { status: "waiting", note: "awaiting input" })
+})
+
 // ── quiet ──
 
 test("an open turn with no write for 15 minutes is quiet, not idle", () => {
@@ -253,6 +290,7 @@ function agent(over: Partial<ViewerAgent> = {}): ViewerAgent {
     model: null,
     thinkingLevel: null,
     modifiedAt: NOW - CAPTURE_AFTER_MS,
+    lastWriteAt: NOW - CAPTURE_AFTER_MS,
     eventCount: 0,
     status: "working",
     statusNote: "running tools",
@@ -307,6 +345,24 @@ test("withPaneAttention turns a working agent into attention · permission with 
   withPaneAttention(plain, NOW, async () => null)
   await settlePaneReads()
   assert.equal(withPaneAttention(plain, NOW + 1_500, async () => null), plain, "a failed capture changes nothing")
+})
+
+test("a late capture cannot repopulate a pane after it was pruned or answered", async () => {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const slow = agent({ paneId: "%9" })
+  assert.equal(panePrompt(slow, NOW, async () => {
+    await gate
+    return pane("claude-bash.txt")
+  }), null)
+  prunePaneReads(new Set())
+  release()
+  await settlePaneReads()
+  // The pruned pane's slow read finished, but its result must be discarded. A fresh call
+  // starts a new read; it must not see the expired prompt from the cache.
+  assert.equal(panePrompt(agent({ paneId: "%9" }), NOW + 1, async () => null), null)
 })
 
 test("at most four reads run at once; reads of panes that are gone are dropped", async () => {

@@ -37,3 +37,10 @@ export function remember(threadKey: string, value: Remembered): void {
 export function recall(threadKey: string): Remembered | undefined {
   return remembered.get(threadKey)
 }
+
+/** A remembered row that never appeared (pruned history) must not be searched forever. */
+export const MAX_RESTORE_SYNCS = 120
+
+export function restoreExpired(syncs: number, now: number, deadline: number, max = MAX_RESTORE_SYNCS): boolean {
+  return syncs > max || now > deadline
+}

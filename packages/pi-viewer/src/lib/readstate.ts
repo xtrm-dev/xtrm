@@ -39,6 +39,21 @@ export function newSinceIndex(items: readonly Timed[], lastSeen: number): number
   return index > 0 ? index : -1
 }
 
+/** True only once the scroller has applied the remembered position and the reader is at the end. */
+export function shouldSaveLastSeen(input: {
+  ready: boolean
+  atBottom: boolean
+  visible: boolean
+  newest: number
+}): boolean {
+  return input.ready && input.atBottom && input.visible && input.newest > 0
+}
+
+/** The scroll pill counts new events, not rendered rows: one turn row can carry many events. */
+export function unseenEventCount(current: number, base: number, atBottom: boolean): number {
+  return atBottom ? 0 : Math.max(0, current - base)
+}
+
 /** Rows after the divider, excluding the operator's own. */
 export function newCount(items: readonly Timed[], lastSeen: number): number {
   if (lastSeen <= 0) return 0

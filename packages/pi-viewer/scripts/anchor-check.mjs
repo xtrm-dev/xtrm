@@ -62,7 +62,7 @@ const agent = {
   thinkingLevel: null,
   role: null,
   provider: "pi",
-  modifiedAt: Date.now(),
+  modifiedAt: Date.now(), lastWriteAt: Date.now(),
   eventCount: 100,
   status: "idle",
   statusNote: null,
@@ -73,7 +73,8 @@ const baseEvents = makeFixture()
 let metaCalls = 0
 let fullCalls = 0
 let armed = false
-let appended = 0
+// 0: fixture; 1: a row above grows and one row is appended; 2: one more row is appended.
+let stage = 0
 
 const server = await createServer({
   root: process.cwd(),
@@ -82,6 +83,11 @@ const server = await createServer({
 })
 await server.listen()
 const base = `http://127.0.0.1:${PORT}`
+
+/** Layout has happened when two animation frames have passed; no fixed sleep. */
+async function settle(page) {
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+}
 
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
@@ -111,7 +117,7 @@ await page.route("**/api/**", async (route) => {
 
   fullCalls += 1
   const events = baseEvents.map((event) => ({ ...event }))
-  if (armed && appended === 0) {
+  if (armed && stage >= 1) {
     const firstFinal = events.find((event) => event.kind === "assistant" && event.stopReason === "stop")
     firstFinal.text += `\n\n${Array.from({ length: 60 }, (_, line) => `Poll growth above the reader, line ${line + 1}.`).join("\n\n")}`
     events.push({
@@ -127,8 +133,8 @@ await page.route("**/api/**", async (route) => {
       onBranch: true,
       raw: null,
     })
-    appended += 1
-  } else if (armed && appended === 1) {
+  }
+  if (armed && stage >= 2) {
     events.push({
       id: "a1:new-bottom",
       agentId: "a1",
@@ -142,19 +148,30 @@ await page.route("**/api/**", async (route) => {
       onBranch: true,
       raw: null,
     })
-    appended += 1
   }
   return route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: JSON.stringify({ session: SESSION, version: `v${metaCalls}`, agents: [agent], capturedAt: Date.now(), events }),
+    body: JSON.stringify({
+      session: SESSION,
+      version: `v${metaCalls}`,
+      agents: [agent],
+      capturedAt: Date.now(),
+      events,
+      cursor: events.length,
+      revision: "fixture-r1",
+      hasEarlier: false,
+      earlier: null,
+      earlierTurns: 0,
+    }),
   })
 })
 
 try {
   await page.goto(`${base}/?s=${SESSION}`, { waitUntil: "domcontentloaded" })
   await page.locator('[data-slot="message-scroller-item"]').first().waitFor({ state: "visible" })
-  await page.waitForTimeout(500)
+  await page.evaluate(() => document.fonts.ready)
+  await settle(page)
 
   const before = await page.evaluate(() => {
     const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
@@ -173,8 +190,19 @@ try {
   })
 
   armed = true
+  stage = 1
   await page.getByText("ANCHOR POLL APPEND").waitFor({ state: "visible", timeout: 8_000 })
-  await page.waitForTimeout(500)
+  await page.waitForFunction(
+    (id) => {
+      const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+      return Array.from(document.querySelectorAll('[data-slot="message-scroller-item"]')).some(
+        (item) => item.dataset.messageId === id && item.getBoundingClientRect().top >= viewport.getBoundingClientRect().top,
+      )
+    },
+    before.id,
+    { timeout: 8_000 },
+  )
+  await settle(page)
 
   const after = await page.evaluate(() => {
     const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
@@ -200,8 +228,17 @@ try {
     viewport.scrollTop = viewport.scrollHeight
     return { scrollTop: viewport.scrollTop, scrollHeight: viewport.scrollHeight, clientHeight: viewport.clientHeight }
   })
+  stage = 2
   await page.getByText("ANCHOR BOTTOM APPEND").waitFor({ state: "visible", timeout: 8_000 })
-  await page.waitForTimeout(500)
+  await page.waitForFunction(
+    () => {
+      const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+      return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 2
+    },
+    undefined,
+    { timeout: 8_000 },
+  )
+  await settle(page)
   const bottomAfter = await page.evaluate(() => {
     const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
     return {
@@ -218,7 +255,7 @@ try {
     const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
     viewport.scrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight - 400)
   })
-  await page.waitForTimeout(150)
+  await settle(page)
   await page.getByRole("button", { name: "Scroll to end" }).click()
   await page.evaluate(() => {
     const content = document.querySelector('[data-slot="message-scroller-content"]')
@@ -227,7 +264,14 @@ try {
     spacer.style.height = "1200px"
     content.append(spacer)
   })
-  await page.waitForTimeout(700)
+  await page.waitForFunction(
+    () => {
+      const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+      return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 2
+    },
+    undefined,
+    { timeout: 4_000 },
+  )
   const smoothAfter = await page.evaluate(() => {
     const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
     return {
@@ -241,16 +285,23 @@ try {
     `smooth scroll lost its pin while content grew (${smoothAfter.distance}px from the bottom)`,
   )
   await page.evaluate(() => document.getElementById("anchor-smooth-growth")?.remove())
-  await page.waitForTimeout(100)
+  await settle(page)
 
   // A viewport-only resize (composer growth, window resize) at the bottom must re-pin.
   await page.evaluate(() => {
     const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
     viewport.scrollTop = viewport.scrollHeight
   })
-  await page.waitForTimeout(100)
+  await settle(page)
   await page.setViewportSize({ width: 1440, height: 600 })
-  await page.waitForTimeout(400)
+  await page.waitForFunction(
+    () => {
+      const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+      return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 2
+    },
+    undefined,
+    { timeout: 4_000 },
+  )
   const resizedAfter = await page.evaluate(() => {
     const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
     return {
@@ -265,7 +316,7 @@ try {
     `a viewport-only resize left the reader ${resizedAfter.distance}px above the bottom`,
   )
   await page.setViewportSize({ width: 1440, height: 1000 })
-  await page.waitForTimeout(300)
+  await settle(page)
 
   assert.equal(errors.length, 0, `console errors: ${errors.join(" | ")}`)
 

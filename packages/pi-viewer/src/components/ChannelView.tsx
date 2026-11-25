@@ -16,7 +16,7 @@ import { dayKey, dayLabel, fullDate, monogram, stamp } from "@/lib/format"
 import type { OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
 import { channelTimeline, type Turn } from "@/lib/thread"
-import { loadLastSeen, newCount, newSinceIndex, saveLastSeen } from "@/lib/readstate"
+import { loadLastSeen, newCount, newSinceIndex, saveLastSeen, shouldSaveLastSeen, unseenEventCount } from "@/lib/readstate"
 import { cn } from "@/lib/utils"
 import type { ViewerAgent, ViewerEvent } from "@/shared/types"
 
@@ -229,6 +229,7 @@ export function ChannelView({
   events,
   agents,
   session,
+  readKey,
   optimistic,
   onDismissOptimistic,
   hasEarlier = false,
@@ -239,6 +240,8 @@ export function ChannelView({
   events: ViewerEvent[]
   agents: ViewerAgent[]
   session: string
+  /** Stable identity of the scope: session, window id, or pane id. */
+  readKey: string
   optimistic: OptimisticMessage[]
   onDismissOptimistic: (id: string) => void
   hasEarlier?: boolean
@@ -255,20 +258,20 @@ export function ChannelView({
   const latestUsers = useMemo(() => latestUserIds(channel), [channel])
 
   // The scroller glides smoothly only while an agent in this thread works.
-  const { setWorking, reportNew, atBottom } = useMessageScroller()
+  const { setWorking, reportNew, atBottom, ready } = useMessageScroller()
   const anyWorking = agents.some((agent) => agent.status === "working")
   useEffect(() => setWorking(anyWorking), [anyWorking, setWorking])
 
-  // Rows that arrived while the reader was scrolled away from the end, for the scroll pill.
-  const awayBase = useRef(items.length)
+  // Events that arrived while the reader was scrolled away from the end, for the scroll pill.
+  // One turn row can carry many events, so the count is the event count, not the row count.
+  const awayBase = useRef(events.length)
   useEffect(() => {
-    if (atBottom) awayBase.current = items.length
-    reportNew(atBottom ? 0 : Math.max(0, items.length - awayBase.current))
-  }, [atBottom, items.length, reportNew])
+    if (atBottom) awayBase.current = events.length
+    reportNew(unseenEventCount(events.length, awayBase.current, atBottom))
+  }, [atBottom, events.length, reportNew])
 
-  // "New since you looked": the baseline is the last-read time of this thread when it was opened.
+  // "New since you looked": the baseline is the last-read time of this scope when it was opened.
   // It stays frozen for the visit, so the divider does not walk away while the reader reads.
-  const [readKey] = useState(() => `${session}:${Array.from(new Set(events.map((e) => e.agentId))).sort().join(",")}`)
   const [baseline] = useState(() => loadLastSeen(readKey))
   const dividerAt = newSinceIndex(items, baseline)
   const unread = newCount(items, baseline)
@@ -280,8 +283,9 @@ export function ChannelView({
   }, [])
   const newest = items.reduce((max, item) => Math.max(max, item.at), 0)
   useEffect(() => {
-    if (atBottom && visible && newest > 0) saveLastSeen(readKey, newest)
-  }, [atBottom, visible, newest, readKey])
+    // The scroll provider has applied (or given up on) the remembered position by now.
+    if (shouldSaveLastSeen({ ready, atBottom, visible, newest })) saveLastSeen(readKey, newest)
+  }, [ready, atBottom, visible, newest, readKey])
 
   // Rows that arrive after the first paint fade in; the rows present at mount never animate.
   const known = useRef<Set<string> | null>(null)

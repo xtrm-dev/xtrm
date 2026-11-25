@@ -62,7 +62,7 @@ const agent = {
   thinkingLevel: null,
   role: null,
   provider: "pi",
-  modifiedAt: Date.now(),
+  modifiedAt: Date.now(), lastWriteAt: Date.now(),
   eventCount: 100,
   status: "working",
   statusNote: null,
@@ -82,6 +82,11 @@ const server = await createServer({
 })
 await server.listen()
 const base = `http://127.0.0.1:${PORT}`
+
+/** Layout has happened when two animation frames have passed; no fixed sleep. */
+async function settle(page) {
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+}
 
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
@@ -147,14 +152,26 @@ await page.route("**/api/**", async (route) => {
   return route.fulfill({
     status: 200,
     contentType: "application/json",
-    body: JSON.stringify({ session: SESSION, version: `v${metaCalls}`, agents: [agent], capturedAt: Date.now(), events }),
+    body: JSON.stringify({
+      session: SESSION,
+      version: `v${metaCalls}`,
+      agents: [agent],
+      capturedAt: Date.now(),
+      events,
+      cursor: events.length,
+      revision: "fixture-r1",
+      hasEarlier: false,
+      earlier: null,
+      earlierTurns: 0,
+    }),
   })
 })
 
 try {
   await page.goto(`${base}/?s=${SESSION}`, { waitUntil: "domcontentloaded" })
   await page.locator('[data-slot="message-scroller-item"]').first().waitFor({ state: "visible" })
-  await page.waitForTimeout(800)
+  await page.evaluate(() => document.fonts.ready)
+  await settle(page)
 
   const state = () =>
     page.evaluate(() => {
@@ -178,7 +195,12 @@ try {
     const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
     viewport.scrollTop = 0
   })
-  await page.waitForTimeout(1200)
+  await page.waitForFunction(
+    () => document.querySelector('[data-slot="message-scroller-button"]')?.getAttribute("data-active") === "true",
+    undefined,
+    { timeout: 8_000 },
+  )
+  await settle(page)
   const away = await state()
   assert.ok(away.scrollTop < 4, `reader was pulled back to ${away.scrollTop}px`)
   assert.equal(away.pill, "true", "pill hidden while scrolled away")
@@ -186,7 +208,15 @@ try {
 
   // 3. The pill returns to the end.
   await page.locator('[data-slot="message-scroller-button"]').click()
-  await page.waitForTimeout(1500)
+  await page.waitForFunction(
+    () => {
+      const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+      return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 2
+    },
+    undefined,
+    { timeout: 8_000 },
+  )
+  await settle(page)
   const back = await state()
   assert.ok(back.distance <= 2, `pill did not return to the end: ${back.distance}px`)
   assert.equal(back.pill, "false")

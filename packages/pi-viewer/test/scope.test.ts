@@ -43,7 +43,7 @@ function agent(paneId: string, windowIndex: number, paneIndex: number, extra: Pa
     sessionName: null,
     model: null,
     thinkingLevel: null,
-    modifiedAt: 0,
+    modifiedAt: 0, lastWriteAt: 0,
     eventCount: 0,
     status: "idle",
     statusNote: null,
