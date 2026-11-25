@@ -396,8 +396,9 @@ written before the records above it, so its write time is the newest timestamp u
 maximum, computed once per parse). For Pi the timestamp is the entry `timestamp`, written when the entry
 is appended at stream end; `message.timestamp` is the stream start. For Claude it is the record
 `timestamp`. Claude stamps a compaction summary and a typed command with an earlier time than their write
-(e9rd line 8101: 10:03:20, written at 10:37:56); the running maximum absorbs that. It is never a batch
-read's file time. The old
+(e9rd line 8101: 10:03:20, written at 10:37:56); the running maximum absorbs that. The result is
+clamped to the file time: a record stamped in the future cannot keep an agent working. It is never a
+batch read's file time. The old
 `nonMetaWriteAt` stamped the file time of a whole read. A fresh parse (a viewer restart, a first view)
 therefore differed from an incremental one, and a `!ls` turn stayed in presence as working.
 
@@ -423,8 +424,9 @@ phase is `open`:
   This fixes the idle compaction row and the Pi notice row that vanished on the next record.
 
 When a peer message merges into a card already shown, either as a duplicate or as the receiver's copy
-of a sent card, `dedupeIntercoms` still hands the grouping an invisible stand-in with the copy's effect. A
-duplicate wake-up therefore still opens its agent's turn (Pi `w2w9` line 3381: the same text sent twice
+of a sent card, `dedupeIntercoms` still hands the grouping an invisible stand-in when the copy opens or continues a
+turn (`open`, `step`); a stand-in never closes a turn or draws a row. A duplicate wake-up therefore
+still opens its agent's turn (Pi `w2w9` line 3381: the same text sent twice
 under two message ids).
 
 The browser receives meta events that carry an effect: an interrupt marker, a Claude wake-up, a Pi
@@ -485,7 +487,11 @@ replays any transcript, redacted or real, and prints its status transitions and 
   local-command caveat (`/goal`) reads as a prompt until its output arrives, usually in the same write.
   Then the command, and a typed record before it, become local.
 - **Overflow before its compaction.** A context-overflow error reads as `error` until the compaction is written
-  (Pi `019df732`: 32 s). The failed turn then reopens.
+  (Pi `019df732`: 32 s). The failed turn then reopens. Two overflow errors in a row, with no prompt
+  between them, reopen the same turn.
+- **`/compact` after an unanswered prompt.** A compaction inside an open turn keeps the turn open (rule
+  `compact`). When the operator types `/compact` after a prompt that the agent never answered, the agent
+  reads as `working` ("compacting context") until the 15-minute quiet period, then `quiet`.
 - **Local row wording.** An automatic compaction with no turn open shows as a local row whose text is
   "Ran in the pane, no agent turn". The row is stable. Better wording is a visual change and is out of
   scope.

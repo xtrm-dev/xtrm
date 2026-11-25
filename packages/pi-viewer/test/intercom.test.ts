@@ -400,3 +400,20 @@ test("a delivery-failed card does not rely on the entry-level error flag", () =>
     [false, true],
   )
 })
+
+test("a merged copy hands on an invisible carrier only when it opens or continues a turn", () => {
+  const sent = intercom("a", 1, 1_000, "sent", "the same body")
+  // Retries of the same send, cut from messages that ended the turn: no carrier, so no stopped
+  // row from an invisible event and no reply that a meta event cannot apply.
+  const aborted = { ...intercom("a", 2, 2_000, "sent", "the same body"), effect: "abort" as const }
+  const replied = { ...intercom("a", 3, 3_000, "sent", "the same body"), effect: "reply" as const }
+  // The receiver's copy wakes the receiver: it is carried.
+  const received = { ...intercom("b", 1, 4_000, "received", "the same body"), effect: "open" as const }
+  const carriers: ViewerEvent[] = []
+  const out = dedupeIntercoms([sent, aborted, replied, received], carriers)
+  assert.equal(out.length, 1)
+  assert.deepEqual(
+    carriers.map((carrier) => [carrier.agentId, carrier.kind, carrier.effect]),
+    [["b", "meta", "open"]],
+  )
+})
