@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils"
 
 const COLOURS: Record<AgentStatus, string> = {
   working: "bg-accent viewer-pulse",
+  attention: "bg-accent",
+  quiet: "bg-ink-faint",
   waiting: "bg-success",
   error: "bg-danger",
   idle: "bg-ink-faint/50",
@@ -11,6 +13,8 @@ const COLOURS: Record<AgentStatus, string> = {
 
 const WORDS: Record<AgentStatus, string> = {
   working: "working",
+  attention: "needs you",
+  quiet: "quiet",
   waiting: "waiting",
   error: "failed",
   idle: "idle",
