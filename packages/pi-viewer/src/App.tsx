@@ -13,7 +13,7 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
-import { fetchMeta, fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
+import { fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
 import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
 import { channelTimeline } from "@/lib/thread"
@@ -42,6 +42,27 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function mergeEvents(previous: ViewerEvent[], incoming: ViewerEvent[]): ViewerEvent[] {
+  const byId = new Map(previous.map((event) => [event.id, event]))
+  for (const event of incoming) byId.set(event.id, event)
+  return [...byId.values()].sort(
+    (a, b) => a.at - b.at || a.agentId.localeCompare(b.agentId) || a.seq - b.seq,
+  )
+}
+
+/** Incremental polls carry new/changed events; the window and its earlier boundary stay put. */
+function mergePayload(previous: ThreadPayload | null, incoming: ThreadPayload): ThreadPayload {
+  if (!previous || previous.revision !== incoming.revision) return incoming
+  return {
+    ...previous,
+    ...incoming,
+    events: mergeEvents(previous.events, incoming.events),
+    hasEarlier: previous.hasEarlier,
+    earlier: previous.earlier,
+    earlierTurns: previous.earlierTurns,
+  }
+}
+
 export default function App() {
   const [sessions, setSessions] = useState<ViewerSession[]>([])
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
@@ -53,11 +74,11 @@ export default function App() {
   const [view, setView] = useState<"channel" | "all">("channel")
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([])
   const [threadError, setThreadError] = useState<string | null>(null)
+  const [earlierLoading, setEarlierLoading] = useState(false)
   const [kick, setKick] = useState(0)
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     document.documentElement.dataset.theme === "light" ? "light" : "dark",
   )
-  const viewRef = useRef(view)
   const sessionName = scope?.session ?? null
   // Remount keys use the scope's identity, not its URL: a pane scope with or without its window is one scope.
   const scopeKey = scope ? scopeRowKey(scope) : "none"
@@ -73,10 +94,6 @@ export default function App() {
   // How the next URL write is made: a click on the sidebar adds a history entry (Back works);
   // a fallback or a first resolution replaces the current one.
   const urlMode = useRef<"push" | "replace">("replace")
-
-  useEffect(() => {
-    viewRef.current = view
-  }, [view])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -163,61 +180,99 @@ export default function App() {
       setMeta(null)
       return
     }
+    const activeScope: "branch" | "all" = view === "all" ? "all" : "branch"
+    const setPayload = activeScope === "all" ? setAll : setBranch
+    const controller = new AbortController()
     let cancelled = false
-    let known: string | null = null
-    setBranch(null)
-    setAll(null)
-    setMeta(null)
+    let revision: string | null = null
+    let cursor: number | null = null
+    let delay = 1_500
+    let timer: number | undefined
+    setPayload(null)
     setThreadError(null)
+    setEarlierLoading(false)
     setOptimistic([])
     invalidateDetails(sessionName)
 
     async function tick() {
+      const started = performance.now()
       try {
-        const nextMeta = await fetchMeta(sessionName!)
+        const payload = await fetchThread(
+          sessionName!,
+          cursor == null || revision == null
+            ? { scope: activeScope, limit: 150, signal: controller.signal }
+            : { scope: activeScope, since: cursor, revision, signal: controller.signal },
+        )
         if (cancelled) return
-        setMeta(nextMeta)
-        observe(mergeLive(sessionsRef.current, nextMeta.session, nextMeta))
-        if (nextMeta.version === known) return
-        known = nextMeta.version
-        const payload = await fetchThread(sessionName!, "branch")
-        if (cancelled) return
-        setBranch(payload)
-        setThreadError(null)
-        if (viewRef.current === "all") {
-          const everything = await fetchThread(sessionName!, "all")
-          if (!cancelled) setAll(everything)
-        } else {
-          setAll(null)
+        if (cursor == null || revision == null || payload.reset) {
+          setPayload(payload)
+        } else if (!payload.unchanged) {
+          setPayload((previous) => mergePayload(previous, payload))
         }
+        cursor = payload.cursor
+        revision = payload.revision
+        const nextMeta: ThreadMeta = {
+          session: payload.session,
+          version: payload.version,
+          agents: payload.agents,
+          capturedAt: payload.capturedAt,
+        }
+        setMeta(nextMeta)
+        observe(mergeLive(sessionsRef.current, payload.session, nextMeta))
+        setThreadError(null)
+        delay = 1_500
       } catch (error) {
-        if (!cancelled) setThreadError(errorText(error))
+        if (cancelled) return
+        setThreadError(errorText(error))
+        delay = Math.min(10_000, Math.max(1_500, delay * 2))
       }
+      const elapsed = performance.now() - started
+      if (elapsed > 2_000) delay = Math.max(delay, 10_000)
+      else if (elapsed > 800) delay = Math.max(delay, 5_000)
+      if (!cancelled) timer = window.setTimeout(() => void tick(), delay)
     }
 
     void tick()
-    const timer = window.setInterval(() => void tick(), 1_500)
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      controller.abort()
+      if (timer != null) window.clearTimeout(timer)
     }
-  }, [sessionName, kick])
+  }, [sessionName, view, kick])
 
-  useEffect(() => {
-    if (view !== "all" || !sessionName) return
-    if (all && branch && all.version === branch.version) return
-    let live = true
-    fetchThread(sessionName, "all")
-      .then((payload) => {
-        if (live) setAll(payload)
+  async function loadEarlier() {
+    const active = view === "all" ? all : branch
+    if (!sessionName || !active || active.earlier == null || earlierLoading) return
+    setEarlierLoading(true)
+    try {
+      const payload = await fetchThread(sessionName, {
+        scope: view === "all" ? "all" : "branch",
+        before: active.earlier,
+        revision: active.revision,
+        limit: 150,
       })
-      .catch((error: unknown) => {
-        if (live) setThreadError(errorText(error))
-      })
-    return () => {
-      live = false
+      if (payload.reset) {
+        setKick((value) => value + 1)
+        return
+      }
+      const merge = (previous: ThreadPayload | null): ThreadPayload | null =>
+        previous
+          ? {
+              ...previous,
+              events: mergeEvents(previous.events, payload.events),
+              hasEarlier: payload.hasEarlier,
+              earlier: payload.earlier,
+              earlierTurns: payload.earlierTurns,
+            }
+          : previous
+      if (view === "all") setAll(merge)
+      else setBranch(merge)
+    } catch (error) {
+      setThreadError(errorText(error))
+    } finally {
+      setEarlierLoading(false)
     }
-  }, [view, sessionName, all, branch])
+  }
 
   useEffect(() => {
     if (!branch) return
@@ -398,6 +453,10 @@ export default function App() {
                           onDismissOptimistic={(id) =>
                             setOptimistic((previous) => previous.filter((entry) => entry.id !== id))
                           }
+                          hasEarlier={branch.hasEarlier}
+                          earlierTurns={branch.earlierTurns}
+                          earlierLoading={earlierLoading}
+                          onLoadEarlier={() => void loadEarlier()}
                         />
                       ) : (
                         <div className="py-20 text-center text-xs text-ink-muted">Loading thread…</div>
@@ -408,6 +467,10 @@ export default function App() {
                         events={scopeAllEvents}
                         agents={agents}
                         session={all.session}
+                        hasEarlier={all.hasEarlier}
+                        earlierTurns={all.earlierTurns}
+                        earlierLoading={earlierLoading}
+                        onLoadEarlier={() => void loadEarlier()}
                       />
                     ) : (
                       <div className="py-20 text-center text-xs text-ink-muted">Loading events…</div>

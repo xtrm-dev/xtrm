@@ -343,30 +343,38 @@ function metaDetail(entry: Raw): { kind: EventKind; summary: string; text?: stri
   return { kind: "meta", summary: type }
 }
 
+export interface NormalizeOptions {
+  /** Bulk payloads do not need the capped raw JSON; detail requests do. */
+  raw?: boolean
+}
+
 export function normalizeEvent(
   entry: Raw,
   agent: { id: string; name: string },
   seq: number,
   onBranch: boolean,
+  options: NormalizeOptions = {},
 ): ViewerEvent {
   const at = atOf(entry)
-  const base = {
+  const base: Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch"> & {
+    raw?: string
+  } = {
     id: `${agent.id}:${seq}`,
     agentId: agent.id,
     agentName: agent.name,
     seq,
     at,
     onBranch,
-    raw: (() => {
-      let json = ""
-      try {
-        json = JSON.stringify(entry)
-      } catch {
-        json = String(entry)
-      }
-      return cap(json, RAW_CAP).text
-    })(),
-  } satisfies Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "raw">
+  }
+  if (options.raw !== false) {
+    let json = ""
+    try {
+      json = JSON.stringify(entry)
+    } catch {
+      json = String(entry)
+    }
+    base.raw = cap(json, RAW_CAP).text
+  }
 
   const intercoms = intercomsFromEntry(entry, agent)
   const assistantMessage =

@@ -25,10 +25,46 @@ export function fetchMeta(session: string): Promise<ThreadMeta> {
   return request<ThreadMeta>(`/api/thread?session=${encodeURIComponent(session)}&meta=1`)
 }
 
-export function fetchThread(session: string, scope: "branch" | "all"): Promise<ThreadPayload> {
-  return request<ThreadPayload>(
-    `/api/thread?session=${encodeURIComponent(session)}&scope=${scope}`,
+export interface ThreadRequest {
+  scope: "branch" | "all"
+  limit?: number
+  before?: number | null
+  since?: number | null
+  revision?: string | null
+  signal?: AbortSignal
+}
+
+// One thread request at a time, across sessions and views. A slow poll delays the next one
+// instead of stacking a second request on an overloaded server.
+let threadQueue: Promise<unknown> = Promise.resolve()
+
+export function fetchThread(session: string, options: ThreadRequest | "branch" | "all"): Promise<ThreadPayload> {
+  const requestOptions: ThreadRequest =
+    typeof options === "string" ? { scope: options } : options
+  const params = new URLSearchParams({
+    session,
+    scope: requestOptions.scope,
+  })
+  if (requestOptions.limit != null) params.set("limit", String(requestOptions.limit))
+  if (requestOptions.before != null) params.set("before", String(requestOptions.before))
+  if (requestOptions.since != null) params.set("since", String(requestOptions.since))
+  if (requestOptions.revision) params.set("revision", requestOptions.revision)
+  const signal = requestOptions.signal
+  const run = threadQueue.then(
+    () => {
+      if (signal?.aborted) throw new DOMException("aborted", "AbortError")
+      return request<ThreadPayload>(`/api/thread?${params.toString()}`, { signal })
+    },
+    () => {
+      if (signal?.aborted) throw new DOMException("aborted", "AbortError")
+      return request<ThreadPayload>(`/api/thread?${params.toString()}`, { signal })
+    },
   )
+  threadQueue = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
 }
 
 const detailCache = new Map<string, Promise<ViewerEvent>>()

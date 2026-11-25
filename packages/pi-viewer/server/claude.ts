@@ -729,8 +729,9 @@ export function normalizeClaudeEvent(
   agent: { id: string; name: string },
   seq: number,
   onBranch: boolean,
+  options: { raw?: boolean } = {},
 ): ViewerEvent {
-  const event = normalizeEvent(entry, agent, seq, onBranch)
+  const event = normalizeEvent(entry, agent, seq, onBranch, options)
   if (entry.type === "claude-event") {
     event.kind = "meta"
     event.summary = typeof entry._summary === "string" ? entry._summary : event.summary
