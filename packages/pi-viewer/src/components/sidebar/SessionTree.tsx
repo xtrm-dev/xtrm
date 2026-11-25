@@ -1,5 +1,5 @@
 import { ChevronDownIcon } from "lucide-react"
-import { useCallback, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react"
 
 import {
   STATE_LABEL,
@@ -7,6 +7,7 @@ import {
   navigate,
   paneKey,
   stateOf,
+  survivingFocus,
   type FlatRow,
   type PaneNode,
   type Selection,
@@ -54,7 +55,6 @@ function Rails({ level }: { level: number }) {
 function GroupRow({ row, node }: { row: FlatRow; node: SessionNode | WindowNode }) {
   const isSession = node.kind === "session"
   const count = node.kind === "session" ? node.count : node.panes.length
-  const label = node.kind === "session" ? node.name : node.name
   return (
     <>
       <Rails level={row.level} />
@@ -65,7 +65,7 @@ function GroupRow({ row, node }: { row: FlatRow; node: SessionNode | WindowNode 
         className={cn("min-w-0 truncate text-sm", isSession ? "font-semibold text-ink" : "font-medium text-ink-muted")}
         title={node.kind === "window" ? `window ${node.index}` : undefined}
       >
-        {label}
+        {node.name}
       </span>
       <span className="ml-auto shrink-0 text-xs text-ink-faint tabular">{count}</span>
     </>
@@ -109,6 +109,11 @@ export function SessionTree({
   const rows = useMemo(() => flatten(tree, collapsed), [tree, collapsed])
   const refs = useRef(new Map<string, HTMLDivElement>())
   const [focusKey, setFocusKey] = useState<string | null>(null)
+  // The row that holds focus now, and the parents seen so far. When a render removes the focused
+  // row (a collapsed ancestor, a pane that left tmux) focus moves to its nearest visible ancestor
+  // instead of falling to the page.
+  const focusedRef = useRef<string | null>(null)
+  const parents = useRef(new Map<string, string | null>())
   const selectedKey = selection ? paneKey(selection.paneId) : null
 
   // Roving tabindex: one row is tabbable. The remembered row if it is still visible, else the
@@ -123,6 +128,17 @@ export function SessionTree({
     setFocusKey(key)
     refs.current.get(key)?.focus()
   }, [])
+
+  useLayoutEffect(() => {
+    for (const row of rows) parents.current.set(row.key, row.parentKey)
+    const held = focusedRef.current
+    if (!held || rows.some((row) => row.key === held)) return
+    const active = document.activeElement
+    if (active && active !== document.body) return
+    const target = survivingFocus(parents.current, rows, held)
+    focusedRef.current = target
+    if (target) focus(target)
+  }, [rows, focus])
 
   const activate = useCallback(
     (row: FlatRow) => {
@@ -175,7 +191,18 @@ export function SessionTree({
               setFocusKey(row.key)
               activate(row)
             }}
-            onFocus={() => setFocusKey(row.key)}
+            onFocus={() => {
+              focusedRef.current = row.key
+              setFocusKey(row.key)
+            }}
+            onBlur={() => {
+              // A blur that leaves the row in the document is the user moving away; a row that was
+              // removed while focused stays remembered so the layout effect can recover focus.
+              const key = row.key
+              window.setTimeout(() => {
+                if (focusedRef.current === key && refs.current.get(key)?.isConnected) focusedRef.current = null
+              }, 0)
+            }}
             onKeyDown={(event) => handleKeyDown(event, row)}
             style={{ "--row-indent": `${(row.level - 1) * INDENT_REM}rem` } as CSSProperties}
             className={cn(ROW_BASE, pane ? ROW_TWO_LINE : ROW_ONE_LINE, selected && ROW_SELECTED)}

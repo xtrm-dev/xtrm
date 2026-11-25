@@ -7,10 +7,13 @@ import { fileURLToPath } from "node:url"
 import {
   buildTree,
   flatten,
+  mergeLive,
   navigate,
   paneKey,
+  railNext,
   resolveSelection,
   stateOf,
+  survivingFocus,
   type FlatRow,
 } from "../src/lib/tree.ts"
 import type { ViewerAgent, ViewerSession } from "../src/shared/types.ts"
@@ -109,12 +112,14 @@ test("when the selected pane disappears the selection falls back deterministical
   assert.equal(resolveSelection({ session: "xx", paneId: "%1" }, []), null)
 })
 
-test("a pane shows one of four states and nothing else", () => {
+test("a pane shows one of three states: a finished turn awaiting input is idle, not attention", () => {
   assert.equal(stateOf("working"), "running")
-  assert.equal(stateOf("waiting"), "attention")
+  assert.equal(stateOf("waiting"), "idle", "the server's waiting is a finished turn")
   assert.equal(stateOf("error"), "error")
   assert.equal(stateOf("idle"), "idle")
   assert.equal(stateOf("unknown"), "idle")
+  const states = new Set((["working", "waiting", "error", "idle", "unknown"] as const).map(stateOf))
+  assert.deepEqual([...states].sort(), ["error", "idle", "running"])
 })
 
 test("collapsing a session or window hides its rows and keeps the others", () => {
@@ -166,4 +171,52 @@ test("the sidebar sources follow the console unit rule: rem indents and type, no
     for (const pattern of patterns) if (pattern.test(source)) offenders.push(`${name}: ${pattern}`)
   }
   assert.deepEqual(offenders, [])
+})
+
+test("a thread payload of another session never overrides a session's agents", () => {
+  const mine = FIXTURE[0]
+  const other = FIXTURE[2]
+  const fresh = { session: "yy", agents: [agent({ paneId: "%99", name: "stale-from-yy" })] }
+  // Reading xx while the payload in state still belongs to yy: sessions come back untouched.
+  assert.equal(mergeLive(FIXTURE, "xx", fresh), FIXTURE)
+  // Reading yy with its own payload: only yy changes.
+  const merged = mergeLive(FIXTURE, "yy", fresh)
+  assert.equal(merged[0], mine)
+  assert.deepEqual(merged[2].agents.map((entry) => entry.paneId), ["%99"])
+  assert.notEqual(merged[2], other)
+  // No payload, no session, or both: untouched.
+  assert.equal(mergeLive(FIXTURE, "xx", null), FIXTURE)
+  assert.equal(mergeLive(FIXTURE, null, fresh), FIXTURE)
+  // After a merge no pane key repeats across the tree.
+  const keys = flatten(buildTree(mergeLive(FIXTURE, "xx", { session: "xx", agents: mine.agents })), new Set()).map((row) => row.key)
+  assert.equal(new Set(keys).size, keys.length)
+})
+
+test("focus on a vanished row goes to its nearest visible ancestor", () => {
+  const tree = buildTree(FIXTURE)
+  const open = flatten(tree, new Set())
+  const parents = new Map(open.map((row) => [row.key, row.parentKey] as const))
+  // The window collapses: its pane is gone, the window row remains.
+  const windowClosed = flatten(tree, new Set(["w:xx:0"]))
+  assert.equal(survivingFocus(parents, windowClosed, paneKey("%1")), "w:xx:0")
+  // The whole session collapses: the nearest visible ancestor is the session row.
+  const sessionClosed = flatten(tree, new Set(["s:xx"]))
+  assert.equal(survivingFocus(parents, sessionClosed, paneKey("%1")), "s:xx")
+  // A visible row keeps focus; an unknown row has no ancestor.
+  assert.equal(survivingFocus(parents, open, paneKey("%1")), paneKey("%1"))
+  assert.equal(survivingFocus(parents, open, "p:%never-seen"), null)
+  // A pane that left tmux entirely falls back through the remembered parent.
+  const gone = flatten(buildTree([session("xx", [agent({ paneId: "%2", windowIndex: 0, windowName: "first" })]), FIXTURE[2]]), new Set())
+  assert.equal(survivingFocus(parents, gone, paneKey("%1")), "w:xx:0")
+})
+
+test("the rail toolbar moves one agent at a time and stops at the ends", () => {
+  assert.equal(railNext(4, 0, "ArrowDown"), 1)
+  assert.equal(railNext(4, 3, "ArrowDown"), 3)
+  assert.equal(railNext(4, 0, "ArrowUp"), 0)
+  assert.equal(railNext(4, 2, "ArrowUp"), 1)
+  assert.equal(railNext(4, 2, "Home"), 0)
+  assert.equal(railNext(4, 1, "End"), 3)
+  assert.equal(railNext(4, 1, "Enter"), null)
+  assert.equal(railNext(0, 0, "ArrowDown"), null)
 })

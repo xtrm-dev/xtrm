@@ -6,12 +6,16 @@ import type { AgentStatus, ViewerAgent, ViewerSession } from "@/shared/types"
  * empty panes, and windows or sessions left with no agent, never appear.
  */
 
-export type SidebarState = "idle" | "running" | "attention" | "error"
+export type SidebarState = "idle" | "running" | "error"
 
-/** The four states a pane row can show, and nothing else. */
+/**
+ * The states a pane row can show, and nothing else. The server's `waiting` means a finished
+ * turn that awaits input, which is idle. "Needs attention" is not a state today: the server
+ * proves no condition for it (no permission prompt, no question), so the set is idle, running
+ * and error, and `unknown` reads as idle.
+ */
 export function stateOf(status: AgentStatus): SidebarState {
   if (status === "working") return "running"
-  if (status === "waiting") return "attention"
   if (status === "error") return "error"
   return "idle"
 }
@@ -19,7 +23,6 @@ export function stateOf(status: AgentStatus): SidebarState {
 export const STATE_LABEL: Record<SidebarState, string> = {
   idle: "idle",
   running: "running",
-  attention: "needs attention",
   error: "error",
 }
 
@@ -85,6 +88,20 @@ export function buildTree(sessions: ViewerSession[]): SessionNode[] {
     tree.push({ kind: "session", key: `s:${session.name}`, name: session.name, windows, count })
   }
   return tree
+}
+
+/**
+ * The session being read refreshes with the thread poll; the others keep the discovery poll.
+ * A thread payload that belongs to another session (a stale one, right after a cross-session
+ * select) is ignored, so no session shows another session's agents and no pane key repeats.
+ */
+export function mergeLive(
+  sessions: ViewerSession[],
+  current: string | null,
+  fresh: { session: string; agents: ViewerAgent[] } | null,
+): ViewerSession[] {
+  if (!fresh || !current || fresh.session !== current) return sessions
+  return sessions.map((entry) => (entry.name === current ? { ...entry, agents: fresh.agents } : entry))
 }
 
 export interface Selection {
@@ -223,4 +240,34 @@ export function navigate(rows: FlatRow[], currentKey: string, key: string): Tree
     default:
       return null
   }
+}
+
+/**
+ * Where focus goes when the focused row is no longer visible: its nearest visible ancestor,
+ * found through the parents remembered from earlier renders. Null when none is left.
+ */
+export function survivingFocus(
+  parents: ReadonlyMap<string, string | null>,
+  rows: readonly FlatRow[],
+  key: string,
+): string | null {
+  const visible = new Set(rows.map((row) => row.key))
+  let cursor: string | null | undefined = key
+  const seen = new Set<string>()
+  while (cursor && !seen.has(cursor)) {
+    if (visible.has(cursor)) return cursor
+    seen.add(cursor)
+    cursor = parents.get(cursor)
+  }
+  return null
+}
+
+/** One-axis roving focus for the rail toolbar. Returns the next index, or null for a key it does not own. */
+export function railNext(count: number, index: number, key: string): number | null {
+  if (count <= 0) return null
+  if (key === "ArrowDown") return Math.min(index + 1, count - 1)
+  if (key === "ArrowUp") return Math.max(index - 1, 0)
+  if (key === "Home") return 0
+  if (key === "End") return count - 1
+  return null
 }

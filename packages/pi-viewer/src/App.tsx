@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/message-scroller"
 import { fetchMeta, fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
 import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
-import { resolveSelection, type Selection } from "@/lib/tree"
+import { mergeLive, resolveSelection, type Selection } from "@/lib/tree"
 import type { ThreadMeta, ThreadPayload, ViewerAgent, ViewerEvent, ViewerSession } from "@/shared/types"
 
 function errorText(error: unknown): string {
@@ -149,18 +149,25 @@ export default function App() {
     })
   }, [branch])
 
-  const agents = useMemo<ViewerAgent[]>(
-    () => branch?.agents ?? meta?.agents ?? sessions.find((entry) => entry.name === sessionName)?.agents ?? [],
-    [branch, meta, sessions, sessionName],
-  )
+  // A thread payload belongs to one session. Right after a cross-session select the previous
+  // payload is still in state; it is used only while it names the session being read.
+  const freshAgents = useMemo(() => {
+    if (meta && meta.session === sessionName) return { session: meta.session, agents: meta.agents }
+    if (branch && branch.session === sessionName) return { session: branch.session, agents: branch.agents }
+    return null
+  }, [meta, branch, sessionName])
 
   // The sidebar lists every session; the one being read refreshes with the thread poll, the
   // rest with the 10 s discovery poll.
-  const liveSessions = useMemo<ViewerSession[]>(() => {
-    const fresh = meta?.agents ?? branch?.agents
-    if (!fresh || !sessionName) return sessions
-    return sessions.map((entry) => (entry.name === sessionName ? { ...entry, agents: fresh } : entry))
-  }, [sessions, meta, branch, sessionName])
+  const liveSessions = useMemo<ViewerSession[]>(
+    () => mergeLive(sessions, sessionName, freshAgents),
+    [sessions, sessionName, freshAgents],
+  )
+
+  const agents = useMemo<ViewerAgent[]>(
+    () => freshAgents?.agents ?? sessions.find((entry) => entry.name === sessionName)?.agents ?? [],
+    [freshAgents, sessions, sessionName],
+  )
 
   const target = agents.find((agent) => agent.id === selectedPaneId) ?? null
 
@@ -283,7 +290,7 @@ export default function App() {
                       )
                     ) : all ? (
                       <AllEventsView
-                        key={sessionName}
+                        key={`${sessionName}:${selectedPaneId}`}
                         events={paneAllEvents}
                         agents={paneAgents}
                         session={all.session}

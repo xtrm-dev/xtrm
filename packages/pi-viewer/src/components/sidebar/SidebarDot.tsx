@@ -6,13 +6,12 @@ import { STATE_LABEL, type SidebarState } from "@/lib/tree"
  * src/ui/primitives.tsx: a 14px box around an 8px dot, colour only for accent and danger.
  *   idle      neutral  ring in muted ink
  *   running   active   ring in accent
- *   attention accent   solid accent
  *   error     danger   solid danger
+ * There is no "needs attention" dot: the server proves no such state (see `stateOf`).
  */
 const DOT: Record<SidebarState, string> = {
   idle: "border border-ink-muted bg-transparent",
   running: "border-[1.5px] border-accent bg-transparent",
-  attention: "bg-accent",
   error: "bg-danger",
 }
 

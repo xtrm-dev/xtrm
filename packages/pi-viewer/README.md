@@ -29,8 +29,11 @@ The server binds to `127.0.0.1` only and has no authentication.
 The left sidebar is a tree of tmux session > window > pane. Only panes that hold a pi or claude agent are
 listed; windows and sessions without an agent are omitted. Session and window rows are one line with an
 agent count and expand/collapse. A pane row has two lines: the agent name, then `role · state`, with one
-status dot (idle, running, needs attention, error). Clicking a pane loads that agent's thread. The sidebar
-collapses to an icon rail of status dots; on a narrow screen it starts as the rail and opens over the thread.
+status dot (idle, running, error; the server's `waiting` is a finished turn, so it reads as idle, and no state
+is proven to "need attention"). Clicking a pane loads that agent's thread. The sidebar collapses to an icon
+rail of status dots (one Tab stop, arrow keys). On a narrow screen it starts as the rail and opens as an overlay
+that closes on Escape, on a click outside, or when a pane is chosen; only the desktop rail/open choice is
+persisted.
 
 It is built from the console's primitives, not ReUI or shadcn Sidebar. The values (28px row, 264px plane,
 `INDENT_REM` 1.25, type ladder, `--x-hover` selected fill with the 2px accent marker, hairline rails) are
