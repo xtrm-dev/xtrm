@@ -210,9 +210,20 @@ test("the rail toolbar moves one agent at a time and stops at the ends", () => {
 
 test("buildTree: two agents on one pane id give one row, so no key repeats", () => {
   const first = agent({ paneId: "%1", name: "first" })
-  const second = agent({ paneId: "%1", name: "second", provider: "claude" })
+  const second = agent({ paneId: "%1", id: "claude-1", name: "second", provider: "claude" })
   const other = agent({ paneId: "%2", paneIndex: 1 })
-  const tree = buildTree([{ name: "xx", agents: [first, second, other] } as unknown as ViewerSession])
+  const warnings: string[] = []
+  const original = console.warn
+  console.warn = (message: string) => void warnings.push(message)
+  let tree: ReturnType<typeof buildTree>
+  try {
+    tree = buildTree([{ name: "xx", agents: [first, second, other] } as unknown as ViewerSession])
+    buildTree([{ name: "xx", agents: [first, second, other] } as unknown as ViewerSession])
+  } finally {
+    console.warn = original
+  }
+  assert.equal(warnings.length, 1, "warned once, naming both agents")
+  assert.ok(warnings[0].includes(first.id) && warnings[0].includes(second.id))
   const keys = flatten(tree, new Set()).map((row) => row.key)
   assert.equal(new Set(keys).size, keys.length)
   assert.equal(tree[0].count, 2)
