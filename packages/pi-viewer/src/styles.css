@@ -609,3 +609,26 @@
     transition: none;
   }
 }
+
+/* ── Chat lane (XTRM-1042) ─────────────────────────────────────────────────────
+   One variable drives the thread lane, the composer and the presence line, so they always
+   align. Set on the root from src/lib/chat-width.ts; 46rem is Comfortable, the default.
+   Below 640px the lane is the full column and the setting has no effect. */
+:root {
+  --chat-lane: 46rem;
+}
+/* .xtrm-lane: the composer and the presence line. Their parents hold the side padding, so the
+   box is the lane. .xtrm-lane-padded: the thread content, which carries its own 3rem side
+   padding (sm:px-12), so its box is the lane plus 6rem and the text column equals the lane. */
+.xtrm-lane,
+.xtrm-lane-padded {
+  max-width: none;
+}
+@media (min-width: 640px) {
+  .xtrm-lane {
+    max-width: var(--chat-lane);
+  }
+  .xtrm-lane-padded {
+    max-width: min(100%, calc(var(--chat-lane) + 6rem));
+  }
+}

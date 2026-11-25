@@ -112,7 +112,7 @@ export function Composer({
 
   return (
     <div className="shrink-0 bg-deep px-3 pt-2 pb-4 sm:px-12">
-      <div ref={rootRef} className="relative mx-auto w-full max-w-[46rem]">
+      <div ref={rootRef} className="xtrm-lane relative mx-auto w-full">
         <div
           className={cn(
             "relative rounded-lg bg-surface transition-colors focus-within:bg-raised",

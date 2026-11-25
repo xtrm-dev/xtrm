@@ -332,7 +332,7 @@ export function PresenceLine({
     )
 
   return (
-    <div ref={rootRef} className="relative mx-auto w-full max-w-3xl">
+    <div ref={rootRef} className="xtrm-lane relative mx-auto w-full">
       {open && !narrow ? (
         <div
           id={panelId}
