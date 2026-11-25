@@ -19,36 +19,12 @@ import {
   DISCLOSURE,
   INDENT_REM,
   MARKER,
-  RAIL_ORIGIN_REM,
   ROW_BASE,
   ROW_ONE_LINE,
   ROW_SELECTED,
+  ROW_TWO_LINE,
 } from "./geometry"
 import { SidebarDot } from "./SidebarDot"
-
-function Disclosure({ expanded }: { expanded: boolean }) {
-  return (
-    <span aria-hidden className={cn("flex shrink-0 items-center justify-center text-ink-faint", DISCLOSURE)}>
-      <ChevronDownIcon className={cn("size-[0.75rem] transition-transform", !expanded && "-rotate-90")} />
-    </span>
-  )
-}
-
-/** Vertical hairlines of the open ancestors (design doc §11, "a tree rail"). */
-function Rails({ level }: { level: number }) {
-  return (
-    <>
-      {Array.from({ length: level - 1 }, (_, depth) => (
-        <span
-          key={depth}
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 border-l border-border-muted"
-          style={{ left: `${RAIL_ORIGIN_REM + depth * INDENT_REM}rem` }}
-        />
-      ))}
-    </>
-  )
-}
 
 function GroupRow({
   row,
@@ -65,43 +41,45 @@ function GroupRow({
   const count = node.kind === "session" ? node.count : node.panes.length
   return (
     <>
-      <Rails level={row.level} />
       {selected && <span aria-hidden className={MARKER} />}
-      {/* The row selects its scope; the chevron alone expands and collapses (the arrow keys do too). */}
       <span
-        className="flex min-w-0 items-center"
-        style={{ paddingLeft: "var(--row-indent)" }}
+        className={cn("min-w-0 truncate text-sm", isSession ? "font-semibold text-ink" : "font-medium text-ink-muted")}
+        style={{ marginLeft: "var(--row-indent)" }}
+        title={node.kind === "window" ? `window ${node.index}` : undefined}
+      >
+        {node.name}
+      </span>
+      {/* The chevron sits right after the label, as in the Claude Code sidebar. The row selects its
+          scope; the chevron alone expands and collapses (the arrow keys do too). */}
+      <span
+        aria-hidden
+        className={cn("flex shrink-0 items-center justify-center text-ink-faint", DISCLOSURE)}
         onClick={(event) => {
           event.stopPropagation()
           onToggle(row.key, !row.expanded)
         }}
       >
-        <Disclosure expanded={row.expanded} />
-      </span>
-      <span
-        className={cn("min-w-0 truncate text-sm", isSession ? "font-semibold text-ink" : "font-medium text-ink-muted")}
-        title={node.kind === "window" ? `window ${node.index}` : undefined}
-      >
-        {node.name}
+        <ChevronDownIcon className={cn("size-[0.75rem] transition-transform", !row.expanded && "-rotate-90")} />
       </span>
       <span className="ml-auto shrink-0 text-xs text-ink-faint tabular">{count}</span>
     </>
   )
 }
 
-function PaneRowBody({ row, pane, selected }: { row: FlatRow; pane: PaneNode; selected: boolean }) {
+function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) {
   const { agent } = pane
   const state = stateOf(agent.status)
   return (
     <>
-      <Rails level={row.level} />
       {selected && <span aria-hidden className={MARKER} />}
-      {/* The status dot is the pane's bullet: it sits in the chevron column, so labels line up. */}
-      <span className="flex shrink-0" style={{ paddingLeft: "var(--row-indent)" }}>
-        <SidebarDot state={state} />
+      <span className="flex min-w-0 flex-1 flex-col" style={{ marginLeft: "var(--row-indent)" }}>
+        <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
+        <span className="truncate text-2xs text-ink-faint">
+          {agent.role ? `${agent.role} · ` : ""}
+          {STATE_LABEL[state]}
+        </span>
       </span>
-      <span className={cn("min-w-0 truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
-      {agent.role ? <span className="ml-auto shrink-0 text-2xs text-ink-faint">{agent.role}</span> : null}
+      <SidebarDot state={state} className="mt-[0.1875rem]" />
     </>
   )
 }
@@ -228,10 +206,10 @@ export function SessionTree({
             }}
             onKeyDown={(event) => handleKeyDown(event, row)}
             style={{ "--row-indent": `${(row.level - 1) * INDENT_REM}rem` } as CSSProperties}
-            className={cn(ROW_BASE, ROW_ONE_LINE, selected && ROW_SELECTED)}
+            className={cn(ROW_BASE, row.node.kind === "pane" ? ROW_TWO_LINE : ROW_ONE_LINE, selected && ROW_SELECTED)}
           >
             {row.node.kind === "pane" ? (
-              <PaneRowBody row={row} pane={row.node} selected={selected} />
+              <PaneRowBody pane={row.node} selected={selected} />
             ) : (
               <GroupRow row={row} node={row.node} selected={selected} onToggle={onToggle} />
             )}

@@ -6,9 +6,9 @@
 
 /**
  * One tree indent step. The console's INDENT_REM is 1.25 (xtrm-app src/issues/issue-table.ts, design
- * doc §4.3); this sidebar is narrower and nests three levels, so it uses 0.75. Deliberate deviation.
+ * doc §4.3); this sidebar is narrower, has no rails and nests three levels, so it uses 0.5. Deliberate deviation.
  */
-export const INDENT_REM = 0.75
+export const INDENT_REM = 0.5
 
 /** Sidebar plane width: 240px at a 16px root. The console's is 264px; this one only lists names. Deliberate deviation. */
 export const SIDEBAR_WIDTH = "w-[15rem]"
@@ -34,13 +34,12 @@ export const ROW_ONE_LINE = "h-7"
 
 /**
  * A two-line pane row is the ruled exception to the 32px list density (§4.2): the second line
- * is text-2xs. The row grows to its content, 1.25rem + 0.875rem of line height + py-1 = 2.625rem.
+ * is text-2xs. The row grows to its content: 1.25rem + 0.875rem of line height + py-1.5 = 2.875rem (46px,
+ * the console AgentSidebar's ROW_H). Pane rows are rounded-lg for a softer selection; groups stay one line.
  */
-export const ROW_TWO_LINE = "items-start py-1"
+export const ROW_TWO_LINE = "items-start rounded-lg py-1.5"
 
 /** Selected row: --x-hover fill (§3.1) plus the 2px accent marker of AgentSidebar's SessionRow. */
 export const ROW_SELECTED = "bg-hover text-ink"
 export const MARKER = "absolute top-2 bottom-2 left-0 w-0.5 rounded-full bg-accent"
 
-/** Marker and rail x positions: row px-2 plus the centre of the 20px disclosure box. */
-export const RAIL_ORIGIN_REM = 0.5 + 0.875 / 2
