@@ -43,6 +43,13 @@ copied from `packages/xtrm-app` (`docs/design/console-ui-system.md` §3, §4.2, 
 names the source of each. The tree is keyboard operable (`role="tree"`, `aria-expanded`, roving focus; arrows,
 Home, End, Enter, Space).
 
+### Browser gate
+
+`scripts/sidebar-gate.mjs` checks the sidebar against a running viewer at 1440 and 390 wide, dark and light
+(28px rows, contiguous rails, scopes, URL, reload, keyboard, icon rail, mobile overlay, no console errors or
+warnings). It only clicks the UI. Usage: `PI_VIEWER_URL=http://127.0.0.1:5199/ node scripts/sidebar-gate.mjs [screenshot-dir]`;
+set `PLAYWRIGHT_MODULE` and `CHROMIUM_PATH` if playwright or its browser are not installed here.
+
 ## Scope and URL
 
 Each sidebar level is a scope, and the thread, All events, composer and @-mention list all follow it:
