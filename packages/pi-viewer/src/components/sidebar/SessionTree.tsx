@@ -29,7 +29,7 @@ import { SidebarDot } from "./SidebarDot"
 function Disclosure({ expanded }: { expanded: boolean }) {
   return (
     <span aria-hidden className={cn("flex shrink-0 items-center justify-center text-ink-faint", DISCLOSURE)}>
-      <ChevronDownIcon className={cn("size-[0.875rem] transition-transform", !expanded && "-rotate-90")} />
+      <ChevronDownIcon className={cn("size-[0.75rem] transition-transform", !expanded && "-rotate-90")} />
     </span>
   )
 }
@@ -96,11 +96,12 @@ function PaneRowBody({ row, pane, selected }: { row: FlatRow; pane: PaneNode; se
     <>
       <Rails level={row.level} />
       {selected && <span aria-hidden className={MARKER} />}
-      {/* Same leading box as a group row's disclosure, so names line up with group labels. */}
-      <span aria-hidden className={cn("shrink-0", DISCLOSURE)} style={{ marginLeft: "var(--row-indent)" }} />
+      {/* The status dot is the pane's bullet: it sits in the chevron column, so labels line up. */}
+      <span className="flex shrink-0" style={{ paddingLeft: "var(--row-indent)" }}>
+        <SidebarDot state={state} />
+      </span>
       <span className={cn("min-w-0 truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
-      {agent.role ? <span className="shrink-0 text-2xs text-ink-faint">{agent.role}</span> : null}
-      <SidebarDot state={state} className="ml-auto" />
+      {agent.role ? <span className="ml-auto shrink-0 text-2xs text-ink-faint">{agent.role}</span> : null}
     </>
   )
 }

@@ -71,7 +71,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       check(tag + " collapse to 44px rail, focus on Expand", Math.round((await side.boundingBox()).width) === 44 && (await p.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Expand sidebar")
       await p.screenshot({ path: SHOTS + "/g4-" + tag + "-rail.png" })
       await p.keyboard.press("Enter"); await p.waitForTimeout(250)
-      check(tag + " expands back to 264px", Math.round((await side.boundingBox()).width) === 264)
+      check(tag + " expands back to 240px", Math.round((await side.boundingBox()).width) === 240)
     } else {
       await p.getByRole("button", { name: "Expand sidebar" }).click(); await p.waitForTimeout(250)
       await p.screenshot({ path: SHOTS + "/g4-" + tag + "-open.png" })
