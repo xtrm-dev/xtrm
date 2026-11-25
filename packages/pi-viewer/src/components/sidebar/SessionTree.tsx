@@ -1,10 +1,8 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react"
 
 import {
-  STATE_LABEL,
   flatten,
   navigate,
-  stateOf,
   survivingFocus,
   type FlatRow,
   type PaneNode,
@@ -12,6 +10,7 @@ import {
   type WindowNode,
 } from "@/lib/tree"
 import { scopeRowKey, type Scope } from "@/lib/scope"
+import { sidebarDotLabel } from "@/lib/status-dot"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/shell/icon"
 
@@ -79,21 +78,25 @@ function GroupRow({
 
 function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) {
   const { agent } = pane
-  const state = stateOf(agent.status)
   return (
     <>
       <span className="flex min-w-0 flex-1 flex-col" style={{ marginLeft: "var(--row-indent)" }}>
         <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
-        {/* Line 2: the role, the repo the agent works in, then which runtime the agent is and its state. */}
-        <span className="flex min-w-0 items-center gap-1 text-2xs text-ink-faint">
+        {/* Line 2, in the operator's order (XTRM-1048): the role, then the runtime, then the folder and
+            the repo. Spacing only, no separators; the state rides on the dot alone and is not written
+            here a second time. */}
+        <span data-testid="pane-row-line2" className="flex min-w-0 items-center gap-1.5 text-2xs text-ink-faint">
           <RoleLabel role={agent.role} />
-          {agent.repo ? <span className="min-w-0 truncate" title={agent.cwd}>{agent.repo}</span> : null}
-          <span className="shrink-0">
-            {agent.repo ? "· " : ""}{PROVIDER_LABEL[agent.provider]} · {STATE_LABEL[state]}
-          </span>
+          <span className="shrink-0">{PROVIDER_LABEL[agent.provider]}</span>
+          {agent.repo ? (
+            <span className="flex min-w-0 items-center gap-0.5" title={agent.cwd}>
+              <Icon name="folder" size="micro" className="shrink-0" />
+              <span className="min-w-0 truncate">{agent.repo}</span>
+            </span>
+          ) : null}
         </span>
       </span>
-      <SidebarDot state={state} className="mt-[0.1875rem]" />
+      <SidebarDot status={agent.status} note={agent.statusNote} className="mt-[0.1875rem]" />
     </>
   )
 }
@@ -185,7 +188,7 @@ export function SessionTree({
         const selected = row.key === selectedKey
         const label =
           row.node.kind === "pane"
-            ? `${row.node.agent.name}, ${row.node.agent.role ? `${row.node.agent.role}, ` : ""}${PROVIDER_LABEL[row.node.agent.provider]}, ${STATE_LABEL[stateOf(row.node.agent.status)]}`
+            ? `${row.node.agent.name}, ${row.node.agent.role ? `${row.node.agent.role}, ` : ""}${PROVIDER_LABEL[row.node.agent.provider]}, ${sidebarDotLabel(row.node.agent.status, row.node.agent.statusNote)}`
             : row.node.kind === "session"
               ? `${row.node.name}, ${row.node.count} agents`
               : `${row.node.name}, ${row.node.panes.length} agents`
