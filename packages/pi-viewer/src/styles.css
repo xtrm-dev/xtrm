@@ -666,12 +666,28 @@
   }
 }
 
+/* The fade of a folded message (operator, 2026-11-26): the text itself fades out through an eased mask,
+   so no overlay colour has to match the bubble or card behind it, and the cut has no visible edge.
+   Eased stops over 4rem instead of one linear ramp. Shared by the operator bubble and the intercom card. */
+.xtrm-fold-fade {
+  --xtrm-fold-mask: linear-gradient(
+    to bottom,
+    #000 calc(100% - 4rem),
+    rgb(0 0 0 / 0.92) calc(100% - 3.25rem),
+    rgb(0 0 0 / 0.74) calc(100% - 2.5rem),
+    rgb(0 0 0 / 0.48) calc(100% - 1.75rem),
+    rgb(0 0 0 / 0.22) calc(100% - 1rem),
+    rgb(0 0 0 / 0.06) calc(100% - 0.4rem),
+    transparent
+  );
+  -webkit-mask-image: var(--xtrm-fold-mask);
+  mask-image: var(--xtrm-fold-mask);
+}
+
 /* Long operator message: clamp at 11rem (176px at a 16px root) and fade the cut. */
 .xtrm-bubble-fold {
   max-height: 11rem;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
 }
 
 /* Code frame: Threads is a surface fill, a hairline in light only (audit 3.6); Console is the deep well

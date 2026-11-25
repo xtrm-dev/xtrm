@@ -98,8 +98,6 @@ export function EventBody({ event, className }: { event: ViewerEvent; className?
               ) : meta.delivery ? (
                 <span>{meta.delivery}</span>
               ) : null}
-              {meta.messageId ? <span className="font-mono">{meta.messageId}</span> : null}
-              {meta.runtime ? <span>{meta.runtime}</span> : null}
             </div>
           </div>
         ))}
@@ -126,8 +124,6 @@ export function EventBody({ event, className }: { event: ViewerEvent; className?
           ) : meta.delivery ? (
             <span>{meta.delivery}</span>
           ) : null}
-          {meta.messageId ? <span className="font-mono">{meta.messageId}</span> : null}
-          {meta.runtime ? <span>{meta.runtime}</span> : null}
         </div>
       </div>
     )

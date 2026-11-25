@@ -30,19 +30,13 @@ function IntercomBody({ text }: { text: string }) {
     <div>
       <div
         id={bodyId}
-        className="relative overflow-hidden"
+        className={cn("relative overflow-hidden", !expanded && canExpand && "xtrm-fold-fade")}
         style={!expanded ? { maxHeight: COLLAPSED_HEIGHT } : undefined}
         data-slot="intercom-body"
       >
         <div ref={bodyRef}>
           <Markdown text={text} />
         </div>
-        {!expanded && canExpand ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-inset/70 to-transparent"
-            aria-hidden
-          />
-        ) : null}
       </div>
       {canExpand ? (
         <FoldToggle className="mt-1" expanded={expanded} controls={bodyId} onToggle={() => setExpanded((value) => !value)} />
@@ -84,7 +78,8 @@ export function IntercomCard({
         : sent
           ? "Sent"
           : "Received"
-  const hasFooter = Boolean(failed || meta.expectsReply || meta.messageId || meta.runtime)
+  // The message id and the runtime are transport detail, not reading content (operator, 2026-11-26).
+  const hasFooter = Boolean(meta.expectsReply)
 
   return (
     <div className={cn("flex gap-3", className)} data-slot="intercom-card">
@@ -134,12 +129,6 @@ export function IntercomCard({
                   reply requested
                 </span>
               ) : null}
-              {meta.messageId ? (
-                <span className="font-mono" title={meta.messageId}>
-                  {meta.messageId.slice(0, 8)}
-                </span>
-              ) : null}
-              {meta.runtime ? <span>{meta.runtime}</span> : null}
             </div>
           </div>
         ) : null}

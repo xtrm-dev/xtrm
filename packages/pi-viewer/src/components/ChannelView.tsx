@@ -132,7 +132,7 @@ function UserMessage({
               joinsBelow && "rounded-br-sm",
             )}
           >
-            <div ref={ref} className={cn(folded && "xtrm-bubble-fold")}>
+            <div ref={ref} className={cn(folded && "xtrm-bubble-fold xtrm-fold-fade")}>
               {body}
             </div>
             {tall ? <FoldToggle className="mt-2" expanded={expanded} onToggle={() => setExpanded((value) => !value)} /> : null}
