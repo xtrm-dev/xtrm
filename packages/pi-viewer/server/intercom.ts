@@ -1,4 +1,4 @@
-import type { IntercomMeta } from "../src/shared/types.ts"
+import type { IntercomMeta, ViewerEvent } from "../src/shared/types.ts"
 import { peerLabel, resolvePeer } from "./peers.ts"
 
 type Raw = Record<string, unknown>
@@ -157,6 +157,7 @@ function sentMeta(input: {
   toRaw?: string
   body: string
   messageId?: string
+  toolCallId?: string
   expectsReply?: boolean
   summary?: string
   agentName: string
@@ -170,6 +171,7 @@ function sentMeta(input: {
     fromId: undefined,
     toId: input.toRaw,
     messageId: input.messageId,
+    toolCallId: input.toolCallId,
     expectsReply: input.expectsReply || undefined,
     summary: input.summary?.trim() || oneLine(input.body),
     body: input.body,
@@ -182,6 +184,7 @@ function intercomCall(
   name: string,
   args: Raw,
   agent: { name: string },
+  toolCallId?: string,
 ): IntercomMeta | null {
   if (name === "SendMessage") {
     const body = asString(args.message)
@@ -190,6 +193,7 @@ function intercomCall(
       toRaw: asString(args.to),
       body,
       messageId: asString(args.messageId),
+      toolCallId,
       expectsReply: args.expect_reply === true || args.expects_reply === true,
       summary: asString(args.summary),
       agentName: agent.name,
@@ -208,6 +212,7 @@ function intercomCall(
       asString(args.name),
     body,
     messageId: asString(args.messageId),
+    toolCallId,
     expectsReply: args.expectsReply === true || args.expects_reply === true,
     summary: asString(args.summary),
     agentName: agent.name,
@@ -233,7 +238,7 @@ function fromAssistantContent(content: unknown, agent: { name: string }): Interc
       }
     }
     if (!args) continue
-    const meta = intercomCall(name, args, agent)
+    const meta = intercomCall(name, args, agent, asString(part.id))
     if (meta) return meta
   }
   return null
@@ -299,4 +304,47 @@ export function intercomFromEntry(entry: Raw, agent: { name: string }): Intercom
 
 export function isIntercomTool(name: string | undefined): boolean {
   return name === "SendMessage" || name === "intercom"
+}
+
+/**
+ * Attach the SendMessage/intercom tool result to the sent card it belongs to.
+ * A failed send is still a real event: keep it in the thread and mark it red.
+ */
+export function applyIntercomResults(events: ViewerEvent[]): ViewerEvent[] {
+  const results = new Map<string, { isError: boolean; output: string }>()
+  for (const event of events) {
+    if (event.kind !== "meta" || !isIntercomTool(event.toolName) || !event.toolCallId) continue
+    results.set(event.toolCallId, {
+      isError: event.isError === true,
+      output: event.output ?? "",
+    })
+  }
+  if (!results.size) return events
+
+  return events.map((event) => {
+    const meta = event.intercom
+    if (!meta || meta.direction !== "sent" || !meta.toolCallId) return event
+    const result = results.get(meta.toolCallId)
+    if (!result) return event
+    if (result.isError) {
+      return {
+        ...event,
+        isError: true,
+        summary: `${event.summary.replace(/\s*· failed$/, "")} · failed`,
+        intercom: {
+          ...meta,
+          failed: true,
+          delivery: "failed",
+          error: oneLine(result.output || "delivery failed", 240),
+        },
+      }
+    }
+    const confirmed = /(?:message|reply)\s+sent|delivered|injected|queued|accepted/i.test(
+      result.output,
+    )
+    return {
+      ...event,
+      intercom: { ...meta, failed: false, delivery: confirmed ? "delivered" : meta.delivery },
+    }
+  })
 }

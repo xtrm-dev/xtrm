@@ -88,8 +88,15 @@ export function EventBody({ event, className }: { event: ViewerEvent; className?
           {meta.expectsReply ? <span className="text-accent">reply requested</span> : null}
         </div>
         <Markdown text={meta.body || event.text || event.summary} />
+        {meta.failed && meta.error ? (
+          <div className="text-2xs text-danger">{meta.error}</div>
+        ) : null}
         <div className="flex flex-wrap gap-x-3 text-2xs text-ink-faint">
-          {meta.delivery ? <span>{meta.delivery}</span> : null}
+          {meta.failed ? (
+            <span className="text-danger">failed</span>
+          ) : meta.delivery ? (
+            <span>{meta.delivery}</span>
+          ) : null}
           {meta.messageId ? <span className="font-mono">{meta.messageId}</span> : null}
           {meta.runtime ? <span>{meta.runtime}</span> : null}
         </div>

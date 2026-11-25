@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 
-import { intercomFromEntry } from "../server/intercom.ts"
+import { applyIntercomResults, intercomFromEntry } from "../server/intercom.ts"
 import { channelTimeline, dedupeIntercoms } from "../src/lib/thread.ts"
 import type { IntercomDirection, ViewerEvent } from "../src/shared/types.ts"
 
@@ -37,7 +37,14 @@ function intercom(
   const from = direction === "sent" ? agentId : "a"
   const to = direction === "sent" ? "b" : agentId
   return event(agentId, seq, at, "intercom", {
-    intercom: { direction, from, to, body, ...extra },
+    intercom: {
+      direction,
+      from,
+      to,
+      body,
+      delivery: direction === "sent" ? "sent" : "received",
+      ...extra,
+    },
   })
 }
 
@@ -121,4 +128,46 @@ test("a sent card needs no turn row and a pending turn stays last", () => {
   assert.equal(turns[0].kind === "turn" && turns[0].turn.pending, true)
   assert.equal(items.at(-1)?.kind, "turn")
   assert.equal(items.filter((item) => item.kind === "intercom").length, 2)
+})
+
+test("a failed SendMessage result marks its sent card", () => {
+  const sent = intercom("a", 1, 1_000, "sent", "hello", { toolCallId: "call-1" })
+  const result = event("a", 2, 1_100, "meta", {
+    toolName: "SendMessage",
+    toolCallId: "call-1",
+    isError: true,
+    output: 'Message to "gone" was not delivered: Session not found',
+  })
+  const [out] = applyIntercomResults([sent, result])
+  assert.equal(out.intercom?.failed, true)
+  assert.equal(out.intercom?.delivery, "failed")
+  assert.match(out.intercom?.error ?? "", /not delivered/)
+  assert.equal(out.isError, true)
+})
+
+test("a successful SendMessage result leaves the card sent", () => {
+  const sent = intercom("a", 1, 1_000, "sent", "hello", { toolCallId: "call-2" })
+  const result = event("a", 2, 1_100, "meta", {
+    toolName: "SendMessage",
+    toolCallId: "call-2",
+    isError: false,
+    output: "Delivered to Pi session b",
+  })
+  const [out] = applyIntercomResults([sent, result])
+  assert.equal(out.intercom?.failed, false)
+  assert.equal(out.intercom?.delivery, "delivered")
+})
+
+test("dedupe keeps a failure when the received copy arrives", () => {
+  const sent = intercom("a", 1, 1_000, "sent", "hello", {
+    toolCallId: "call-3",
+    failed: true,
+    delivery: "failed",
+    error: "Session not found",
+  })
+  const received = intercom("b", 1, 2_000, "received", "hello", { messageId: "m-3" })
+  const [out] = dedupeIntercoms([sent, received])
+  assert.equal(out.intercom?.failed, true)
+  assert.equal(out.intercom?.delivery, "failed")
+  assert.equal(out.intercom?.error, "Session not found")
 })

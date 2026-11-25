@@ -298,13 +298,16 @@ export function dedupeIntercoms(events: ViewerEvent[]): ViewerEvent[] {
     }
     const existing = out[index]
     if (existing.intercom?.direction === "sent" && event.intercom.direction === "received") {
+      const failed = Boolean(existing.intercom.failed || event.intercom.failed)
       out[index] = {
         ...existing,
         intercom: {
           ...existing.intercom,
           messageId: existing.intercom.messageId ?? event.intercom.messageId,
           expectsReply: existing.intercom.expectsReply || event.intercom.expectsReply,
-          delivery: "delivered",
+          failed: failed || undefined,
+          error: existing.intercom.error ?? event.intercom.error,
+          delivery: failed ? "failed" : "delivered",
         },
       }
       byBody.set(bodyKey, index)

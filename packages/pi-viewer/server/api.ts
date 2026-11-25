@@ -11,6 +11,7 @@ import type {
   ViewerSession,
 } from "../src/shared/types.ts"
 import { discover } from "./discover.ts"
+import { applyIntercomResults } from "./intercom.ts"
 import { normalizeEvent, parseSessionFile } from "./session.ts"
 
 const MAX_TEXT = 20_000
@@ -99,7 +100,7 @@ function lite(event: ViewerEvent): ViewerEvent {
 }
 
 function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayload {
-  const events: ViewerEvent[] = []
+  const normalized: ViewerEvent[] = []
   for (const agent of session.agents) {
     if (!agent.sessionFile) continue
     let parsed: ReturnType<typeof parseSessionFile>
@@ -112,9 +113,10 @@ function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayloa
       const id = typeof entry.id === "string" ? entry.id : null
       const onBranch = id === null || parsed.branchIds.has(id)
       if (scope === "branch" && !onBranch) return
-      events.push(lite(normalizeEvent(entry, { id: agent.id, name: agent.name }, index, onBranch)))
+      normalized.push(normalizeEvent(entry, { id: agent.id, name: agent.name }, index, onBranch))
     })
   }
+  const events = applyIntercomResults(normalized).map(lite)
   events.sort((a, b) => a.at - b.at || a.agentId.localeCompare(b.agentId) || a.seq - b.seq)
   return {
     session: session.name,
@@ -140,11 +142,14 @@ function resolveSession(name: string | null): { session: ViewerSession; all: Vie
 function detailOf(agent: ViewerAgent, seq: number): ViewerEvent {
   if (!agent.sessionFile) throw new ApiError(404, "agent has no session file")
   const parsed = parseSessionFile(agent.sessionFile)
-  const entry = parsed.events[seq]
-  if (!entry) throw new ApiError(404, `event ${seq} not found`)
-  const id = typeof entry.id === "string" ? entry.id : null
+  const id = typeof parsed.events[seq]?.id === "string" ? parsed.events[seq].id : null
   const onBranch = id === null || parsed.branchIds.has(id)
-  return normalizeEvent(entry, { id: agent.id, name: agent.name }, seq, onBranch)
+  const events = parsed.events.map((entry, index) =>
+    normalizeEvent(entry, { id: agent.id, name: agent.name }, index, onBranch),
+  )
+  const event = applyIntercomResults(events)[seq]
+  if (!event) throw new ApiError(404, `event ${seq} not found`)
+  return event
 }
 
 

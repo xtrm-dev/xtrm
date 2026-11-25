@@ -57,12 +57,18 @@ export interface IntercomMeta {
   /** Raw recipient address when it differs from the display name (socket, id). */
   toId?: string
   messageId?: string
+  /** Tool call that produced this send, used to attach its delivery result. */
+  toolCallId?: string
   expectsReply?: boolean
   summary?: string
   /** The complete message body. */
   body: string
   runtime?: "pi" | "claude"
   delivery?: string
+  /** True when the send tool reported an error. */
+  failed?: boolean
+  /** Short error text from the failed delivery result. */
+  error?: string
   legacy?: boolean
 }
 

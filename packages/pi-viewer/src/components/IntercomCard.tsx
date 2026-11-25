@@ -1,13 +1,69 @@
-import { ArrowRightIcon } from "lucide-react"
+import { useId, useLayoutEffect, useRef, useState } from "react"
+import { ArrowRightIcon, ChevronDownIcon, CircleCheckIcon, CircleXIcon } from "lucide-react"
 
 import { Markdown } from "@/components/Markdown"
 import { clock, monogram } from "@/lib/format"
 import type { ViewerEvent } from "@/shared/types"
 import { cn } from "@/lib/utils"
 
+/** Five rendered lines at the .xtrm-prose line-height. */
+const COLLAPSED_HEIGHT = 5 * 25.6
+
+function IntercomBody({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [canExpand, setCanExpand] = useState(false)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const bodyId = useId()
+
+  useLayoutEffect(() => {
+    const element = bodyRef.current
+    if (!element) return
+    const measure = () => setCanExpand(element.scrollHeight > COLLAPSED_HEIGHT + 2)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [text])
+
+  return (
+    <div>
+      <div
+        id={bodyId}
+        className={cn("relative overflow-hidden", !expanded && "max-h-32")}
+        data-slot="intercom-body"
+      >
+        <div ref={bodyRef}>
+          <Markdown text={text} />
+        </div>
+        {!expanded && canExpand ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-surface/70 to-transparent"
+            aria-hidden
+          />
+        ) : null}
+      </div>
+      {canExpand ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          onClick={() => setExpanded((value) => !value)}
+          className="mt-1 flex items-center gap-1 rounded-sm text-2xs text-ink-faint transition-colors hover:text-ink-muted"
+        >
+          {expanded ? "Show less" : "Show more"}
+          <ChevronDownIcon
+            className={cn("size-3 transition-transform", expanded && "rotate-180")}
+            aria-hidden
+          />
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 /**
- * A peer message is a dispatch, not a chat bubble. The hairline rail and the
- * from → to line make it scannable next to an agent's answer.
+ * A peer message is a dispatch, not a chat bubble. The from → to line and a
+ * small delivery mark make it scannable next to an agent's answer.
  */
 export function IntercomCard({
   event,
@@ -20,9 +76,23 @@ export function IntercomCard({
   if (!meta) return null
   const sent = meta.direction === "sent"
   const body = meta.body || event.text || event.summary
-  const delivery =
-    meta.delivery && meta.delivery !== (sent ? "sent" : "received") ? meta.delivery : null
-  const hasFooter = Boolean(delivery || meta.messageId || meta.runtime)
+  const failed = Boolean(meta.failed || meta.delivery === "failed" || event.isError)
+  const delivered =
+    meta.delivery === "delivered" ||
+    meta.delivery === "received" ||
+    Boolean(meta.delivery?.startsWith("injected"))
+  const status = failed ? "failed" : delivered ? "delivered" : sent ? "sent" : "received"
+  const statusLabel =
+    status === "failed"
+      ? meta.error
+        ? `Delivery failed: ${meta.error}`
+        : "Delivery failed"
+      : status === "delivered"
+        ? "Delivered"
+        : sent
+          ? "Sent"
+          : "Received"
+  const hasFooter = Boolean(failed || meta.expectsReply || meta.messageId || meta.runtime)
 
   return (
     <div className={cn("flex gap-3", className)} data-slot="intercom-card">
@@ -34,34 +104,52 @@ export function IntercomCard({
           <span className="truncate text-xs font-medium text-ink">{meta.from}</span>
           <ArrowRightIcon className="size-3 shrink-0 self-center text-ink-faint" aria-hidden />
           <span className="truncate text-xs text-ink-muted">{meta.to}</span>
+          {failed ? (
+            <CircleXIcon
+              className="size-3 shrink-0 self-center text-danger"
+              role="img"
+              aria-label={statusLabel}
+            >
+              <title>{statusLabel}</title>
+            </CircleXIcon>
+          ) : (
+            <CircleCheckIcon
+              className={cn(
+                "size-3 shrink-0 self-center",
+                delivered ? "text-success" : "text-ink-faint",
+              )}
+              role="img"
+              aria-label={statusLabel}
+            >
+              <title>{statusLabel}</title>
+            </CircleCheckIcon>
+          )}
           <time className="ml-auto shrink-0 text-2xs text-ink-faint">{clock(event.at)}</time>
         </div>
 
-        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs tracking-wide text-ink-faint uppercase">
-          <span>Agent message</span>
-          <span className="text-border-strong">·</span>
-          <span>{sent ? "sent" : "received"}</span>
-          {meta.expectsReply ? (
-            <>
-              <span className="ml-1 size-1.5 rounded-full bg-accent" aria-hidden />
-              <span className="text-accent">reply requested</span>
-            </>
-          ) : null}
-        </div>
-
         <div className="mt-1.5">
-          <Markdown text={body} />
+          <IntercomBody text={body} />
         </div>
 
         {hasFooter ? (
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-ink-faint">
-            {delivery ? <span>{delivery}</span> : null}
-            {meta.messageId ? (
-              <span className="font-mono" title={meta.messageId}>
-                {meta.messageId.slice(0, 8)}
-              </span>
+          <div className="mt-2 space-y-1">
+            {failed && meta.error ? (
+              <div className="text-2xs text-danger">{meta.error}</div>
             ) : null}
-            {meta.runtime ? <span>{meta.runtime}</span> : null}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-ink-faint">
+              {meta.expectsReply ? (
+                <span className="flex items-center gap-1 text-accent">
+                  <span className="size-1.5 rounded-full bg-accent" aria-hidden />
+                  reply requested
+                </span>
+              ) : null}
+              {meta.messageId ? (
+                <span className="font-mono" title={meta.messageId}>
+                  {meta.messageId.slice(0, 8)}
+                </span>
+              ) : null}
+              {meta.runtime ? <span>{meta.runtime}</span> : null}
+            </div>
           </div>
         ) : null}
       </div>
