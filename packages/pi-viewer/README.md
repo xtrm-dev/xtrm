@@ -28,8 +28,9 @@ The server binds to `127.0.0.1` only and has no authentication.
 
 The left sidebar is a tree of tmux session > window > pane. Only panes that hold a pi or claude agent are
 listed; windows and sessions without an agent are omitted. Session and window rows are one line with an
-agent count and expand/collapse. A pane row has two lines: the agent name, then `role · state`, with one
-status dot (idle, running, error; the server's `waiting` is a finished turn, so it reads as idle, and no state
+agent count and expand/collapse. Every row is one 28px line (the console's sidebar density). A window that holds a single pane has no row of
+its own: its pane sits directly under the session, and the window name is in the pane's tooltip. A pane row is
+the agent name, a faint role, and one trailing status dot (idle, running, error; the server's `waiting` is a finished turn, so it reads as idle, and no state
 is proven to "need attention"). Every level is a selectable scope (see Scope and URL below). The sidebar collapses to an icon
 rail of status dots (one Tab stop, arrow keys). On a narrow screen it starts as the rail and opens as an overlay
 that closes on Escape, on a click outside, or when a pane is chosen; only the desktop rail/open choice is

@@ -133,7 +133,23 @@ export function flatten(tree: SessionNode[], collapsed: ReadonlySet<string>): Fl
       siblings: tree.length,
     })
     if (!sessionOpen) return
+    // A window with one pane adds nothing the pane row does not say: the row is left out and its
+    // pane sits one level up, directly under the session. Its window stays a selectable scope in
+    // the URL and the header; the window name is in the pane row's tooltip.
     session.windows.forEach((window, windowIndex) => {
+      if (window.panes.length === 1) {
+        rows.push({
+          key: window.panes[0].key,
+          level: 2,
+          node: window.panes[0],
+          parentKey: session.key,
+          expandable: false,
+          expanded: false,
+          index: windowIndex,
+          siblings: session.windows.length,
+        })
+        return
+      }
       const windowOpen = !collapsed.has(window.key)
       rows.push({
         key: window.key,
