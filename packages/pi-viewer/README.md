@@ -1,7 +1,7 @@
 # pi viewer
 
 A small, read-only web viewer for pi agent sessions that run inside tmux.
-One tmux session is one channel. Agents are the pi panes in that tmux session.
+One tmux session is one channel. Agents are the pi and Claude Code panes in that tmux session.
 
 The viewer reads session JSONL files and injects prompts with `tmux send-keys`.
 It never attaches to a pane, never proxies the agent, and never takes process
@@ -50,6 +50,26 @@ tmux send-keys -t <pane-id> Enter
 Newlines are flattened to spaces for this version. `@` opens an agent list.
 The user message is appended optimistically and disappears when the matching
 user event appears in the session file.
+
+## Claude Code agents
+
+A tmux pane that runs `claude` appears beside the pi panes with `provider: "claude"`.
+The viewer reads the transcript under `<config>/projects/<cwd, non-alphanumerics as "-">/<session-id>.jsonl`
+(`CLAUDE_CONFIG_DIR` of the claude process, else `~/.claude`). It never attaches.
+
+Pane to transcript matching, in order:
+
+1. **registry**: `<config>/sessions/<pid>.json` names the session id of that claude pid. The entry counts
+   only when its `procStart` equals the process start time in `/proc/<pid>/stat`.
+2. **newest-since-start**: otherwise the newest transcript in the cwd's project directory that was written
+   after the process started and that no other pane or live claude process owns.
+
+Transcript records are converted to the Pi event model in `server/claude.ts`: one assistant message spread
+over several records becomes one event; each `tool_use` gets its own event and its `tool_result` pairs by
+`tool_use_id`; `isSidechain` records are off-branch (All events only); hook and `<system-reminder>` user
+records are meta; the `<cross-session-message>` envelope goes through `server/intercom.ts`; wire telemetry
+(`api-request*`, `data-flow-*`, `mode`, …) is dropped. The pane name is the transcript's `custom-title`,
+else `agent-name`, else the cwd basename plus the short session id.
 
 ## Roles
 

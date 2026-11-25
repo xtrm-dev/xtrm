@@ -10,6 +10,7 @@ import type {
   ViewerEvent,
   ViewerSession,
 } from "../src/shared/types.ts"
+import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
 import { discover } from "./discover.ts"
 import { normalizeEvent, parseSessionFile } from "./session.ts"
 
@@ -98,13 +99,24 @@ function lite(event: ViewerEvent): ViewerEvent {
   return { ...rest, text: undefined, parts: undefined, output: undefined, input: undefined }
 }
 
+/** Pick the transcript parser and event normalizer for the agent's runtime. */
+function readerFor(agent: ViewerAgent): {
+  parse: typeof parseSessionFile
+  normalize: typeof normalizeEvent
+} {
+  return agent.provider === "claude"
+    ? { parse: parseClaudeFile, normalize: normalizeClaudeEvent }
+    : { parse: parseSessionFile, normalize: normalizeEvent }
+}
+
 function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayload {
   const events: ViewerEvent[] = []
   for (const agent of session.agents) {
     if (!agent.sessionFile) continue
+    const reader = readerFor(agent)
     let parsed: ReturnType<typeof parseSessionFile>
     try {
-      parsed = parseSessionFile(agent.sessionFile)
+      parsed = reader.parse(agent.sessionFile)
     } catch {
       continue
     }
@@ -112,7 +124,7 @@ function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayloa
       const id = typeof entry.id === "string" ? entry.id : null
       const onBranch = id === null || parsed.branchIds.has(id)
       if (scope === "branch" && !onBranch) return
-      events.push(lite(normalizeEvent(entry, { id: agent.id, name: agent.name }, index, onBranch)))
+      events.push(lite(reader.normalize(entry, { id: agent.id, name: agent.name }, index, onBranch)))
     })
   }
   events.sort((a, b) => a.at - b.at || a.agentId.localeCompare(b.agentId) || a.seq - b.seq)
@@ -128,23 +140,24 @@ function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayloa
 function resolveSession(name: string | null): { session: ViewerSession; all: ViewerSession[] } {
   const found = discover()
   if (!found.sessions.length) {
-    throw new ApiError(404, found.error || "no tmux session with a running pi pane found")
+    throw new ApiError(404, found.error || "no tmux session with a running pi or claude pane found")
   }
   const session = name
     ? found.sessions.find((entry) => entry.name === name)
     : (found.sessions.find((entry) => entry.name === "xx") ?? found.sessions[0])
-  if (!session) throw new ApiError(404, `tmux session ${name} has no running pi pane`)
+  if (!session) throw new ApiError(404, `tmux session ${name} has no running pi or claude pane`)
   return { session, all: found.sessions }
 }
 
 function detailOf(agent: ViewerAgent, seq: number): ViewerEvent {
   if (!agent.sessionFile) throw new ApiError(404, "agent has no session file")
-  const parsed = parseSessionFile(agent.sessionFile)
+  const reader = readerFor(agent)
+  const parsed = reader.parse(agent.sessionFile)
   const entry = parsed.events[seq]
   if (!entry) throw new ApiError(404, `event ${seq} not found`)
   const id = typeof entry.id === "string" ? entry.id : null
   const onBranch = id === null || parsed.branchIds.has(id)
-  return normalizeEvent(entry, { id: agent.id, name: agent.name }, seq, onBranch)
+  return reader.normalize(entry, { id: agent.id, name: agent.name }, seq, onBranch)
 }
 
 
@@ -214,7 +227,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
     const target = discover().sessions.some((session) =>
       session.agents.some((agent) => agent.paneId === paneId),
     )
-    if (!target) throw new ApiError(404, "pane is not a pi agent in an open tmux session")
+    if (!target) throw new ApiError(404, "pane is not a pi or claude agent in an open tmux session")
     if (text.length > MAX_TEXT) throw new ApiError(400, "message too long")
 
     // One line per send: a literal newline would submit the prompt early.

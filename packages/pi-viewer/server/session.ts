@@ -7,7 +7,7 @@ import { intercomFromEntry, isIntercomTool } from "./intercom.ts"
 
 type Raw = Record<string, unknown>
 
-interface FileCache {
+export interface FileCache {
   offset: number
   decoder: StringDecoder
   carry: string
@@ -23,7 +23,7 @@ const THINKING_CAP = 6_000
 const TOOL_OUTPUT_CAP = 6_000
 const TOOL_INPUT_CAP = 2_000
 const INTERCOM_CAP = 40_000
-const RAW_CAP = 6_000
+export const RAW_CAP = 6_000
 
 export interface ParsedFile {
   events: Raw[]
@@ -40,12 +40,12 @@ function isRecord(value: unknown): value is Raw {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-function cap(value: string, limit: number): { text: string; truncated: boolean } {
+export function cap(value: string, limit: number): { text: string; truncated: boolean } {
   if (value.length <= limit) return { text: value, truncated: false }
   return { text: `${value.slice(0, limit)}\n… [truncated ${value.length - limit} chars]`, truncated: true }
 }
 
-function contentText(content: unknown): string {
+export function contentText(content: unknown): string {
   if (typeof content === "string") return content
   if (!Array.isArray(content)) return ""
   const chunks: string[] = []
@@ -95,7 +95,7 @@ function assistantParts(content: unknown): ViewerPart[] {
   return parts
 }
 
-function firstLine(value: string, limit = 180): string {
+export function firstLine(value: string, limit = 180): string {
   const line = value.replace(/\s+/g, " ").trim()
   return line.length > limit ? `${line.slice(0, limit - 1)}…` : line
 }
@@ -146,7 +146,7 @@ function atOf(entry: Raw): number {
   return 0
 }
 
-function mergeFile(file: string): FileCache {
+export function mergeFile(file: string): FileCache {
   const stat = statSync(file)
   let cache = fileCache.get(file)
   if (!cache || stat.size < cache.offset) {
