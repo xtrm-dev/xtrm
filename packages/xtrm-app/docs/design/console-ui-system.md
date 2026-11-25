@@ -307,7 +307,8 @@ share the anatomy and differ by density.
 | `list` | `h-8 px-3 rounded-md` | 32px | **the default**: Project rows, Activity rows, Follow-ups, Questions, Workers, Research lists |
 | `table` | `h-full rounded-none` | the list's `rowHeight` | a virtualised table row: Issues, Pulls, GitHub issues (three rows). Four virtual lists pass `rowHeight={32}`; Repositories uses it with `list` density |
 
-Two documented overrides, both at the call site with their reason:
+Two documented overrides, both at the call site with their reason, and one scoped exception that is not
+a fourth density:
 
 - `SidebarRow` (top-level destination) passes `h-[30px]`: 30px, because it carries a 16px `nav` glyph
   and a 13px semibold label (asserted by `src/ui/sidebar.test.tsx` "renders the 30px sidebar
@@ -315,6 +316,8 @@ Two documented overrides, both at the call site with their reason:
 - `src/surfaces/research-semantic.tsx` `Row density="list" className="h-auto items-start py-1.5"`:
   a definition block that wraps, so it grows. This is the one `list` row in `src/` outside `src/agent`
   that is not 32px.
+- Transcript lines in the pi-viewer chat thread are 24px. This is a scoped exception, not a density:
+  see §4.2.1 for the three lines it covers and why. No console row uses it.
 
 **32px is the row height** for list and table density. A row that needs a second line keeps 32px and
 puts the second line at `text-2xs` (the Questions row does exactly this;
@@ -326,16 +329,25 @@ Enforcement: `e2e/project-questions.spec.ts` (32px row, 10px detail line), `e2e/
 
 #### 4.2.1 Transcript exception: 24px lines (operator ruling 2026-11-25, XTRM-1034)
 
-Inside a chat thread (the pi-viewer channel view), three lines are **24px** (`min-h-6`), not 28 or 32px:
-the tool-call line, the working row and the turn-fold line ("Worked for 1m 12s").
+**Surface bound:** the pi-viewer chat thread (`packages/pi-viewer`, the channel view). `packages/xtrm-app/src`
+has no chat thread yet, so this section is **prospective** for the console: it binds nothing there until the
+viewer joins the console, and no console test or review checks it.
+
+In that thread, three lines are **24px** (`min-h-6`), not 28 or 32px: the tool-call line, the working row
+and the turn-fold line ("Worked for 1m 12s").
 
 Reason: these lines are a log read in sequence. A reader scans them, never picks one from a list, so
 they need no 28–32px pointer target, and a turn with 20 tool calls must fit on one screen. The ruling
-follows `packages/pi-viewer/docs/design/t3code-chat-audit.md` §3.3 and §10 row 16.
+follows `packages/pi-viewer/docs/design/t3code-chat-audit.md` §3.3 and §10 row 16. That audit is
+**external to this document's gate** (§16): it is cited as the source of the ruling, it is not validated
+here, and a change to it does not change this section.
 
 Scope of the exception, and nothing wider:
 
 - it applies to those three lines inside the chat thread only;
+- **the exception is height-only.** It adds no type step: the type ladder (§3.3) and colour (§3.1) apply
+  unchanged. The labels stay `text-sm` (20px line height fits the 24px box), the hover time stays
+  `text-xs`, and `text-2xs` is already "a dense detail line" (§3.3). A 24px box does not shrink its text;
 - every list, table and sidebar row keeps §4.2 (28px `sidebar`, 32px `list` and `table`);
 - the row glyph still follows §3.4 (a glyph never exceeds its row text: the `text` step, 0.8125rem),
   so the 24px box holds a 0.8125rem glyph, not a 16px icon;
@@ -881,7 +893,8 @@ statement at `xt/1qkh`/`e9a4a6da`; "replacement" is the export in the shipped tr
 
 ## 18. Motion (added 2026-11-25, XTRM-1034)
 
-Source: `packages/pi-viewer/docs/design/t3code-chat-audit.md` §1.5 and §4.4. Before this section the
+Source: `packages/pi-viewer/docs/design/t3code-chat-audit.md` §1.5 and §4.4 (external to this
+document's gate, as in §4.2.1). Before this section the
 document named one motion only (the toolbar filter, §5.3: 150ms, instant under reduced motion). The
 rules below are the ones the chat thread ships; any surface may use them, none must.
 
