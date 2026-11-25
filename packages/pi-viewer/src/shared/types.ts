@@ -110,6 +110,11 @@ export interface ViewerEvent {
   stopReason?: string
   /** Present when this event is a peer message, not a chat turn or tool step. */
   intercom?: IntercomMeta
+  /**
+   * Several peer messages issued by one assistant entry. The Channel expands each into
+   * its own card; `intercom` stays unset for these so a single event is never counted twice.
+   */
+  intercoms?: IntercomMeta[]
   /** False for events that belong to an abandoned branch of the session tree. */
   onBranch: boolean
   /** Compact, capped JSON of the original line for inspection. */

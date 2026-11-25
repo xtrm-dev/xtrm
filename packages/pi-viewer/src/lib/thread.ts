@@ -267,6 +267,54 @@ function intercomBodyKey(event: ViewerEvent): string {
   return `${pair}|${meta.body.replace(/\s+/g, " ").trim()}`
 }
 
+function isIntercomPart(part: ViewerPart): boolean {
+  return part.type === "tool-call" && (part.toolName === "SendMessage" || part.toolName === "intercom")
+}
+
+function intercomCard(event: ViewerEvent, meta: NonNullable<ViewerEvent["intercom"]>, index: number): ViewerEvent {
+  const summary =
+    meta.direction === "sent"
+      ? `→ ${meta.to} · ${meta.summary ?? firstLine(meta.body)}`
+      : `← ${meta.from} · ${meta.summary ?? firstLine(meta.body)}`
+  return {
+    ...event,
+    id: `${event.id}:intercom:${String(index).padStart(3, "0")}`,
+    kind: "intercom",
+    role: "intercom",
+    summary,
+    text: undefined,
+    parts: undefined,
+    intercom: meta,
+    intercoms: undefined,
+    detail:
+      meta.direction === "sent"
+        ? `intercom sent to ${meta.to}`
+        : `intercom received from ${meta.from}`,
+  }
+}
+
+/** One assistant entry can issue several peer messages; each becomes its own card. */
+export function expandIntercomCalls(events: ViewerEvent[]): ViewerEvent[] {
+  return events.flatMap((event) => {
+    const metas = event.intercoms
+    if (!metas?.length) return [event]
+    const parts = event.parts?.filter((part) => !isIntercomPart(part))
+    const first = parts?.find((part) => part.type === "tool-call")
+    // Keep the entry only when it still carries non-intercom tool work. A text-only
+    // preamble must not settle the turn before the cards it belongs to.
+    const base = first
+      ? {
+          ...event,
+          intercoms: undefined,
+          parts,
+          summary: `${first.toolName ?? "tool"}${first.summary ? ` · ${first.summary}` : ""}`,
+        }
+      : null
+    const cards = metas.map((meta, index) => intercomCard(event, meta, index))
+    return base ? [base, ...cards] : cards
+  })
+}
+
 /**
  * A message between two viewers is written twice, once on each side. Keep the send
  * position and time, but borrow the receiver's message id and delivery proof.
@@ -276,7 +324,7 @@ export function dedupeIntercoms(events: ViewerEvent[]): ViewerEvent[] {
   const byBody = new Map<string, number>()
   const byId = new Map<string, number>()
 
-  for (const event of events) {
+  for (const event of expandIntercomCalls(events)) {
     if (event.kind !== "intercom" || !event.intercom) {
       out.push(event)
       continue
