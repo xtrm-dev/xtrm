@@ -324,6 +324,23 @@ Enforcement: `e2e/project-questions.spec.ts` (32px row, 10px detail line), `e2e/
 32px table header), `src/ui/section.test.tsx` (the list-inset header is the `h-8 px-3` row box).
 `Row`'s own density classes are **review only** — no unit test renders each density.
 
+#### 4.2.1 Transcript exception: 24px lines (operator ruling 2026-11-25, XTRM-1034)
+
+Inside a chat thread (the pi-viewer channel view), three lines are **24px** (`min-h-6`), not 28 or 32px:
+the tool-call line, the working row and the turn-fold line ("Worked for 1m 12s").
+
+Reason: these lines are a log read in sequence. A reader scans them, never picks one from a list, so
+they need no 28–32px pointer target, and a turn with 20 tool calls must fit on one screen. The ruling
+follows `packages/pi-viewer/docs/design/t3code-chat-audit.md` §3.3 and §10 row 16.
+
+Scope of the exception, and nothing wider:
+
+- it applies to those three lines inside the chat thread only;
+- every list, table and sidebar row keeps §4.2 (28px `sidebar`, 32px `list` and `table`);
+- the row glyph still follows §3.4 (a glyph never exceeds its row text: the `text` step, 0.8125rem),
+  so the 24px box holds a 0.8125rem glyph, not a 16px icon;
+- text on these lines is `ink-muted`, never `ink-faint` (audit §1.6: `ink-faint` fails 4.5:1 as text).
+
 ### 4.3 Tree indentation
 
 One step: `INDENT_REM` (`src/issues/issue-table.ts`, `1.25rem`), consumed as a `--row-indent`
@@ -861,3 +878,33 @@ statement at `xt/1qkh`/`e9a4a6da`; "replacement" is the export in the shipped tr
 | 33 | `Badge` forcing `shrink-0` so a caller could not let a chip truncate (measured 142px overflow) | `shrink` opt-in that swaps `shrink-0` for `min-w-0 shrink` | XTRM-952 |
 | 34 | five labelled card dialects for a record box (issue board, provenance, issue details) | one `Card` / `CARD_FRAME`, with a test that refuses a caller override per axis | XTRM-989, XTRM-998 |
 | 35 | `Kbd`'s `text-[0.68rem]` literal | `text-2xs`, the smallest ladder step | XTRM-934 |
+
+## 18. Motion (added 2026-11-25, XTRM-1034)
+
+Source: `packages/pi-viewer/docs/design/t3code-chat-audit.md` §1.5 and §4.4. Before this section the
+document named one motion only (the toolbar filter, §5.3: 150ms, instant under reduced motion). The
+rules below are the ones the chat thread ships; any surface may use them, none must.
+
+1. **Opacity plus a 4px translate, nothing else.** An element may fade, and may move by at most 4px
+   while it fades (the scroll pill: `translate` and `scale` 0.95 to 1 with opacity). No animation of
+   `width`, `height`, `top`, `margin`, `padding` or any property that changes layout. The one existing
+   exception is the filter widen in §5.3.
+2. **Hover reveal: 200ms opacity.** Secondary metadata (timestamps, copy) appears on hover and on
+   `:focus-within`, so it stays reachable by keyboard. A coarse pointer shows it always. The last row
+   of a thread keeps it visible.
+3. **Stream fade: 600ms, `ease-out`.** A block that arrives after the first paint fades from 0 to 1.
+   Rows present at mount never animate, so reopening a thread never replays it.
+4. **Stepped loops, paused off-screen.** A continuous animation (the label shimmer, 2.2s `steps(30)`)
+   steps rather than eases, and pauses while its element is outside the viewport
+   (`IntersectionObserver`). A thread of many live rows must cost nothing off-screen. Never a spinner,
+   a bouncing dot or a pulsing avatar.
+5. **Every animation has a `prefers-reduced-motion: reduce` branch**: transitions drop to none, loops
+   stop, and the element shows its final state (the shimmer text keeps its muted colour).
+6. **Smooth scrolling is the scroller's job.** A thread follows new content smoothly only while an
+   agent works and the reader is at the end; it never moves a reader who scrolled up, and a reader's
+   own input (wheel, touch, key, pointer) ends any follow at once.
+
+Implementation: `.xtrm-shimmer`, `.xtrm-fade-in`, `.xtrm-meta` and the `@media (prefers-reduced-motion)`
+block at the foot of `packages/pi-viewer/src/styles.css` ("Chat restyle (XTRM-1034)").
+Enforcement: **review only**, except the follow rule, which `npm run test:follow` and
+`npm run test:anchor` in `packages/pi-viewer` assert.
