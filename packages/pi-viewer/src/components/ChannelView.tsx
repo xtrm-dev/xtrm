@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Icon } from "@/shell/icon"
 import { ActivityDisclosure } from "@/components/ActivityDisclosure"
 import { EarlierTurns } from "@/components/EarlierTurns"
+import { FoldToggle } from "@/components/FoldToggle"
 import { IntercomCard } from "@/components/IntercomCard"
 import { Markdown } from "@/components/Markdown"
 import { RoleChip } from "@/components/RoleChip"
@@ -124,6 +125,7 @@ function UserMessage({
       <MessageContent className="items-end gap-1">
         <Bubble variant="muted" align="end" className="max-w-[80%]">
           <BubbleContent
+            data-fold-host="user"
             className={cn(
               "rounded-lg border-0 bg-control px-3 py-3 text-[0.875rem] leading-[1.625] whitespace-pre-wrap text-read",
               joinsAbove && "rounded-tr-sm",
@@ -133,31 +135,15 @@ function UserMessage({
             <div ref={ref} className={cn(folded && "xtrm-bubble-fold")}>
               {body}
             </div>
+            {tall ? <FoldToggle className="mt-2" expanded={expanded} onToggle={() => setExpanded((value) => !value)} /> : null}
           </BubbleContent>
         </Bubble>
-        {/* One line at any width (XTRM-1047): the fold control sits on the left, the meta actions on the
-            right. The labels shorten, then truncate; nothing wraps. */}
+        {/* One line at any width (XTRM-1047): time, recipient or delivery, Reply, Copy, right aligned. The fold
+            control lives inside the bubble (XTRM-1055). Labels truncate; nothing wraps. */}
         <div
           data-action-row="user"
-          className="flex w-full min-w-0 items-center justify-between gap-2 text-xs whitespace-nowrap"
+          className="flex w-full min-w-0 items-center justify-end gap-2 text-xs whitespace-nowrap"
         >
-          {tall ? (
-            <button
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-              aria-expanded={expanded}
-              className="min-w-0 shrink-0 truncate rounded-sm px-1 text-ink-muted hover:text-ink"
-            >
-              {expanded ? (
-                "Show less"
-              ) : (
-                <>
-                  <span className="sm:hidden">Show more</span>
-                  <span className="hidden sm:inline">Show full message</span>
-                </>
-              )}
-            </button>
-          ) : null}
           <div
             className="xtrm-meta ml-auto flex min-w-0 items-center gap-1.5 pr-1 tabular text-ink-muted"
             data-pinned={pinned || delivery === "failed" ? "true" : undefined}
@@ -265,11 +251,11 @@ function DayDivider({ at }: { at: number }) {
 function NewDivider({ count }: { count: number }) {
   return (
     <div className="flex items-center gap-3" role="separator" aria-label={`${count} new since you looked`}>
-      <span className="h-px flex-1 bg-accent/30" />
-      <span className="text-2xs tracking-wide text-accent-ink uppercase tabular">
+      <span className="h-px flex-1 bg-border" />
+      <span className="text-2xs tracking-wide text-ink-muted uppercase tabular">
         New{count > 0 ? ` · ${count}` : ""}
       </span>
-      <span className="h-px flex-1 bg-accent/30" />
+      <span className="h-px flex-1 bg-border" />
     </div>
   )
 }

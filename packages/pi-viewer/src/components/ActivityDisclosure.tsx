@@ -232,7 +232,7 @@ export function ActivityDisclosure({
   }
 
   return (
-    <div className="mt-0.5 border-b border-border-muted pb-2">
+    <div className="mt-0.5 pb-0.5">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}

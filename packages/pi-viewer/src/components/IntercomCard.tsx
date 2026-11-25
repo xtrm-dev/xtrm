@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from "react"
-import { ArrowRightIcon, ChevronDownIcon, CircleCheckIcon, CircleXIcon } from "lucide-react"
+import { ArrowRightIcon, CircleCheckIcon, CircleXIcon } from "lucide-react"
 
+import { FoldToggle } from "@/components/FoldToggle"
 import { Markdown } from "@/components/Markdown"
 import { clock, monogram } from "@/lib/format"
 import type { ViewerEvent } from "@/shared/types"
@@ -38,25 +39,13 @@ function IntercomBody({ text }: { text: string }) {
         </div>
         {!expanded && canExpand ? (
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-surface/70 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-inset/70 to-transparent"
             aria-hidden
           />
         ) : null}
       </div>
       {canExpand ? (
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-controls={bodyId}
-          onClick={() => setExpanded((value) => !value)}
-          className="mt-1 flex items-center gap-1 rounded-sm text-2xs text-ink-muted transition-colors hover:text-ink"
-        >
-          {expanded ? "Show less" : "Show more"}
-          <ChevronDownIcon
-            className={cn("size-3.5 transition-transform", expanded && "rotate-180")}
-            aria-hidden
-          />
-        </button>
+        <FoldToggle className="mt-1" expanded={expanded} controls={bodyId} onToggle={() => setExpanded((value) => !value)} />
       ) : null}
     </div>
   )
@@ -102,7 +91,7 @@ export function IntercomCard({
       <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-control font-mono text-2xs text-ink-muted">
         {monogram(meta.from)}
       </div>
-      <div className="min-w-0 flex-1 rounded-md bg-inset/70 py-2.5 pr-3 pl-3.5">
+      <div data-fold-host="intercom" className="min-w-0 flex-1 rounded-md bg-inset/70 py-2.5 pr-3 pl-3.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="truncate text-xs font-medium text-ink">{meta.from}</span>
           <ArrowRightIcon className="size-3 shrink-0 self-center text-ink-muted" aria-hidden />

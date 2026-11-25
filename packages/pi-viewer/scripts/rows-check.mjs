@@ -9,6 +9,9 @@
 // - nothing overflows the row horizontally (scrollWidth <= clientWidth);
 // - the fold control, when shown, is left of the meta actions on the same line.
 // The row also stays one line expanded, with the row revealed (hover) and with the delivery text long.
+// XTRM-1055: the fold control ("Show more" / "Show less", one wording) lies INSIDE its bubble or card box, within
+// the box's padding, for the operator's bubble and for an intercom card, at 390 and 1440, folded and expanded;
+// the user action row holds no fold control.
 import assert from "node:assert/strict"
 import { createServer } from "vite"
 import { chromium } from "playwright"
@@ -54,6 +57,17 @@ for (const [index, name] of [[1, "agent-alpha"], [2, LONG_NAME]]) {
   events.push(ev(index, name, 2, at + 60_000, "user", { text: "short one", summary: "short" }))
   events.push(ev(index, name, 3, at + 65_000, "assistant", { parts: [{ type: "text", text: "Short reply." }], stopReason: "stop", text: "Short reply." }))
 }
+
+// A long peer message: its card folds too.
+const longPeer = Array.from({ length: 12 }, (_, i) => `Peer paragraph ${i}. ${"A dispatch sentence with enough words to wrap. ".repeat(4)}`).join("\n\n")
+events.push(
+  ev(2, LONG_NAME, 4, T0 + 40 * 60_000, "intercom", {
+    role: "intercom",
+    text: longPeer,
+    summary: "peer",
+    intercom: { direction: "received", from: "agent-alpha", to: LONG_NAME, body: longPeer, delivery: "delivered" },
+  }),
+)
 
 const server = await createServer({ root: process.cwd(), logLevel: "error", server: { host: "127.0.0.1", port: PORT, strictPort: true } })
 await server.listen()
@@ -150,22 +164,44 @@ try {
     assertOneLine(rows, `${label} folded`)
     const folds = await page.getByRole("button", { name: /^Show (more|full message)$/ }).count()
     assert.ok(folds >= 1, `${label}: a long user message shows the fold control`)
-    // The fold control is left of the meta actions, on the same line.
-    const geo = await page.evaluate(() => {
-      const row = document.querySelector('[data-action-row="user"]:has(button[aria-expanded])')
-      const fold = row.querySelector("button[aria-expanded]").getBoundingClientRect()
-      const meta = row.querySelector(".xtrm-meta").getBoundingClientRect()
-      return { foldRight: fold.right, metaLeft: meta.left, foldTop: fold.top, metaTop: meta.top, foldBottom: fold.bottom, metaBottom: meta.bottom, rowLeft: row.getBoundingClientRect().left }
-    })
-    assert.ok(geo.foldRight <= geo.metaLeft + 0.5, `${label}: fold control is left of the meta actions`)
-    assert.ok(Math.abs(geo.foldTop - geo.metaTop) < 8, `${label}: fold control and meta actions share the line`)
+    // The fold control lies inside its bubble or card box, within the padding, for user and intercom.
+    const inside = (state) =>
+      page.evaluate(() => {
+        const out = {}
+        for (const host of document.querySelectorAll("[data-fold-host]")) {
+          const fold = host.querySelector("[data-fold]")
+          if (!fold) continue
+          const box = host.getBoundingClientRect()
+          const f = fold.getBoundingClientRect()
+          const pad = getComputedStyle(host)
+          out[host.dataset.foldHost] = {
+            inside: f.left >= box.left + parseFloat(pad.paddingLeft) - 0.5 && f.right <= box.right - parseFloat(pad.paddingRight) + 0.5 && f.top >= box.top && f.bottom <= box.bottom - parseFloat(pad.paddingBottom) + 0.5,
+            text: fold.textContent.trim(),
+            hostWidth: Math.round(box.width),
+            foldWidth: Math.round(f.width),
+          }
+        }
+        // The user action row holds no fold control.
+        out.rowHasFold = Boolean(document.querySelector("[data-action-row=user] [data-fold]"))
+        return out
+      })
+    await page.locator("[data-fold-host=intercom]").first().scrollIntoViewIfNeeded()
+    let state = await inside()
+    assert.ok(state.user?.inside, `${label} folded: the user fold control lies inside its bubble ${JSON.stringify(state.user)}`)
+    assert.ok(state.intercom?.inside, `${label} folded: the intercom fold control lies inside its card ${JSON.stringify(state.intercom)}`)
+    assert.equal(state.user.text, "Show more", `${label}: user fold wording`)
+    assert.equal(state.intercom.text, "Show more", `${label}: intercom fold wording`)
+    assert.equal(state.rowHasFold, false, `${label}: the action row holds no fold control`)
 
-    // Expanded: the label is "Show less" and the row is still one line.
-    await page.getByRole("button", { name: /^Show (more|full message)$/ }).first().click()
-    await page.waitForTimeout(150)
+    // Expanded: "Show less", still inside, rows still one line.
+    for (const button of await page.locator("[data-fold]").all()) await button.click()
+    await page.waitForTimeout(200)
     rows = await measure(page)
     assertOneLine(rows, `${label} expanded`)
-    assert.ok((await page.getByRole("button", { name: "Show less" }).count()) >= 1, `${label}: expanded shows Show less`)
+    state = await inside()
+    assert.ok(state.user?.inside && state.intercom?.inside, `${label} expanded: the fold controls stay inside ${JSON.stringify(state)}`)
+    assert.equal(state.user.text, "Show less", `${label}: user fold wording expanded`)
+    assert.equal(state.intercom.text, "Show less", `${label}: intercom fold wording expanded`)
 
     // Scroll to the end so the long-reply rows and the code frame headers are measured as laid out.
     await viewport.evaluate((node) => (node.scrollTop = node.scrollHeight))
