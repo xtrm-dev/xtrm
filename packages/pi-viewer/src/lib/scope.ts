@@ -48,12 +48,22 @@ export function serialiseScope(scope: Scope): string {
   return `?${params.toString()}`
 }
 
+/**
+ * Same target. A pane is identified by its id alone: `window` is only where it was last seen
+ * (the fallback), so opening ?s=xx&p=%12 and then clicking pane %12 is not a new selection.
+ */
 export function sameScope(a: Scope | null, b: Scope | null): boolean {
   if (a === b) return true
   if (!a || !b || a.kind !== b.kind || a.session !== b.session) return false
   if (a.kind === "window" && b.kind === "window") return a.window === b.window
-  if (a.kind === "pane" && b.kind === "pane") return a.paneId === b.paneId && a.window === b.window
+  if (a.kind === "pane" && b.kind === "pane") return a.paneId === b.paneId
   return true
+}
+
+/** Same target and same URL: when false, the state (and the address bar) should take the new object. */
+export function identicalScope(a: Scope | null, b: Scope | null): boolean {
+  if (a === b) return true
+  return !!a && !!b && serialiseScope(a) === serialiseScope(b)
 }
 
 /** The sidebar row key of a scope; matches the keys `buildTree` assigns. */
@@ -114,7 +124,12 @@ export function defaultScope(sessions: ViewerSession[], preferred = "xx"): Scope
 export function resolveScope(current: Scope | null, sessions: ViewerSession[], preferred = "xx"): Scope | null {
   let scope: Scope | null = current
   while (scope) {
-    if (agentsInScope(sessions, scope).length) return scope
+    const found = agentsInScope(sessions, scope)
+    if (found.length) {
+      // The pane's own window is the truth; a URL may carry a stale one.
+      if (scope.kind === "pane" && scope.window !== found[0].windowIndex) return { ...scope, window: found[0].windowIndex }
+      return scope
+    }
     if (scope.kind === "pane") {
       scope = scope.window !== null ? { kind: "window", session: scope.session, window: scope.window } : { kind: "session", session: scope.session }
     } else if (scope.kind === "window") {
@@ -124,6 +139,59 @@ export function resolveScope(current: Scope | null, sessions: ViewerSession[], p
     }
   }
   return defaultScope(sessions, preferred)
+}
+
+/** True when discovery found at least one agent: an empty or failed poll proves nothing about a scope. */
+export function hasAgents(sessions: ViewerSession[]): boolean {
+  return sessions.some((session) => session.agents.length > 0)
+}
+
+/** Polls a scope's target may be absent before the scope degrades along the fallback chain. */
+export const SCOPE_GRACE = 3
+
+export interface ScopeTrack {
+  scope: Scope | null
+  /** Consecutive polls in which the scope's target was absent. */
+  absent: number
+}
+
+/**
+ * Advance the scope by one poll.
+ * - A poll with no agents at all (an empty or failed discovery) changes nothing, and does not
+ *   count as absence: the last good scope is kept.
+ * - A scope whose target is present is kept (a stale window in a pane scope is corrected).
+ * - A scope whose target is absent is kept for SCOPE_GRACE - 1 polls, so one poll that drops a
+ *   pane or window cannot downgrade it; if the target is back by then, nothing happened.
+ *   On the third consecutive absent poll it degrades along the fallback chain.
+ * - `requested` (the scope in the URL the page opened with) is read only while there is no scope.
+ *   With no last good scope to hold, an unresolvable request falls back at once.
+ */
+export function trackScope(
+  track: ScopeTrack,
+  sessions: ViewerSession[],
+  requested: Scope | null,
+  preferred = "xx",
+  grace = SCOPE_GRACE,
+): ScopeTrack {
+  if (!hasAgents(sessions)) return track
+  const want = track.scope ?? requested
+  if (!want) return { scope: defaultScope(sessions, preferred), absent: 0 }
+  if (agentsInScope(sessions, want).length) {
+    const resolved = resolveScope(want, sessions, preferred)
+    return { scope: identicalScope(resolved, track.scope) ? track.scope : resolved, absent: 0 }
+  }
+  const absent = track.absent + 1
+  if (track.scope && absent < grace) return { scope: track.scope, absent }
+  return { scope: resolveScope(want, sessions, preferred), absent: 0 }
+}
+
+/**
+ * The scope for an address bar that changed under us (Back, Forward, a pasted URL): the URL's
+ * scope resolved against what exists now, else the current one. Empty discovery keeps the current scope.
+ */
+export function scopeFromUrl(search: string, current: Scope | null, sessions: ViewerSession[], preferred = "xx"): Scope | null {
+  if (!hasAgents(sessions)) return current
+  return resolveScope(parseScope(search) ?? current, sessions, preferred)
 }
 
 /** The agent a composer addresses by default: the pane itself, else the most recently active in scope. */

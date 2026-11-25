@@ -70,7 +70,14 @@ The scope is in the URL, so a reload, a bookmark and Back/Forward keep it:
 `p` needs a `%`-prefixed pane id and `w` a non-negative integer; a malformed value is ignored and the URL degrades to
 the nearest valid scope. A scope whose target has vanished falls back one level: a vanished pane to its window
 (`w` is why the pane scope carries it), a vanished window to its session, a vanished session to the default.
-A click on the sidebar adds a history entry; a fallback replaces the current one.
+A click on the sidebar adds a history entry; a fallback replaces the current one. Clicking the pane that is
+already selected adds none (a pane is identified by its id; `w` is only where it was last seen), and Back or
+Forward to a stale or invalid URL rewrites the address bar to the scope it resolved to.
+
+Polls do not move the scope on a hiccup. The page-open URL is read only until a scope has resolved, so it never
+replaces a later selection. A poll that finds no agent at all (an empty or failed discovery) changes nothing. A
+scope whose target is absent is kept for two polls and degrades along the chain on the third consecutive absent
+poll; if the target is back before that, nothing happened. Any poll counts: the 1.5 s thread poll and the 10 s discovery poll.
 
 ## Views
 

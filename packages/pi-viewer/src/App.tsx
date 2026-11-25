@@ -19,11 +19,17 @@ import {
   defaultTarget,
   describeScope,
   eventsInScope,
+  hasAgents,
+  identicalScope,
   parseScope,
-  resolveScope,
   sameScope,
+  SCOPE_GRACE,
+  scopeFromUrl,
+  scopeRowKey,
   serialiseScope,
+  trackScope,
   type Scope,
+  type ScopeTrack,
 } from "@/lib/scope"
 import { mergeLive } from "@/lib/tree"
 import type { ThreadMeta, ThreadPayload, ViewerAgent, ViewerEvent, ViewerSession } from "@/shared/types"
@@ -49,11 +55,17 @@ export default function App() {
   )
   const viewRef = useRef(view)
   const sessionName = scope?.session ?? null
-  const scopeKey = scope ? serialiseScope(scope) : "none"
+  // Remount keys use the scope's identity, not its URL: a pane scope with or without its window is one scope.
+  const scopeKey = scope ? scopeRowKey(scope) : "none"
   const scrollerKey = `${scopeKey}:${view}`
-  // The scope of a fresh page comes from the URL; until the first discovery it is only a request.
+  // The scope of a fresh page comes from the URL. It is a request, read only until a scope has
+  // resolved; after that the user's selection is never replaced by the page-open URL.
   const requestedScope = useRef<Scope | null>(parseScope(window.location.search))
+  // The scope as polls see it: the last good scope plus how long its target has been absent.
+  const track = useRef<ScopeTrack>({ scope: null, absent: 0 })
   const sessionsRef = useRef<ViewerSession[]>([])
+  // Consecutive discovery polls that found no agent at all.
+  const emptyPolls = useRef(0)
   // How the next URL write is made: a click on the sidebar adds a history entry (Back works);
   // a fallback or a first resolution replaces the current one.
   const urlMode = useRef<"push" | "replace">("replace")
@@ -81,19 +93,32 @@ export default function App() {
     urlMode.current = "replace"
   }, [scope])
 
-  // Back and Forward: read the URL again and resolve it against what exists now.
+  function applyTrack(next: ScopeTrack) {
+    track.current = next
+    if (next.scope) requestedScope.current = null
+    setScope((current) => (identicalScope(current, next.scope) ? current : next.scope))
+  }
+
+  // One observation of what exists now (a discovery or a thread poll) advances the scope.
+  function observe(view: ViewerSession[]) {
+    applyTrack(trackScope(track.current, view, requestedScope.current))
+  }
+
+  // Back and Forward: read the URL again, resolve it against what exists now, and write the
+  // resolved URL back, so a stale or invalid address never stays in the bar.
   useEffect(() => {
     function onPop() {
-      const next = parseScope(window.location.search)
+      const resolved = scopeFromUrl(window.location.search, track.current.scope, sessionsRef.current)
       urlMode.current = "replace"
       setTargetPaneId(null)
-      setScope((current) => {
-        const resolved = resolveScope(next ?? current, sessionsRef.current)
-        return sameScope(resolved, current) ? current : resolved
-      })
+      if (!resolved) return
+      applyTrack({ scope: resolved, absent: 0 })
+      const search = serialiseScope(resolved)
+      if (search !== window.location.search) window.history.replaceState(null, "", search)
     }
     window.addEventListener("popstate", onPop)
     return () => window.removeEventListener("popstate", onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyTrack only touches refs and a state setter
   }, [])
 
   useEffect(() => {
@@ -102,15 +127,17 @@ export default function App() {
       try {
         const payload = await fetchSessions()
         if (!live) return
-        setSessions(payload.sessions)
         setDiscoveryError(
           payload.error ?? (payload.sessions.length ? null : "No tmux session with a running pi or claude pane."),
         )
-        sessionsRef.current = payload.sessions
-        setScope((current) => {
-          const next = resolveScope(current ?? requestedScope.current, payload.sessions)
-          return sameScope(next, current) ? current : next
-        })
+        // One empty poll is a hiccup, not an empty tmux: the last good list stays for a few polls,
+        // so the sidebar does not blank, and the scope is kept (see trackScope).
+        emptyPolls.current = hasAgents(payload.sessions) ? 0 : emptyPolls.current + 1
+        if (hasAgents(payload.sessions) || emptyPolls.current >= SCOPE_GRACE) {
+          setSessions(payload.sessions)
+          sessionsRef.current = payload.sessions
+        }
+        observe(payload.sessions)
       } catch (error) {
         if (live) setDiscoveryError(errorText(error))
       }
@@ -144,6 +171,7 @@ export default function App() {
         const nextMeta = await fetchMeta(sessionName!)
         if (cancelled) return
         setMeta(nextMeta)
+        observe(mergeLive(sessionsRef.current, nextMeta.session, nextMeta))
         if (nextMeta.version === known) return
         known = nextMeta.version
         const payload = await fetchThread(sessionName!, "branch")
@@ -213,10 +241,19 @@ export default function App() {
 
   // The agents of the scope, in tree order, and the events they wrote. The payload carries the
   // whole tmux session; the scope filters it here, so no server change is needed.
+  // While a target is absent for a poll or two its last agents stay on screen, so one poll that
+  // drops a pane does not blank the thread.
+  const lastAgents = useRef<{ key: string; agents: ViewerAgent[] } | null>(null)
   const agents = useMemo<ViewerAgent[]>(() => {
     const fresh = freshAgents ? mergeLive(sessions, sessionName, freshAgents) : sessions
     const inScope = agentsInScope(fresh, scope)
-    return inScope.length ? inScope : agentsInScope(sessions, scope)
+    const found = inScope.length ? inScope : agentsInScope(sessions, scope)
+    const key = scope ? scopeRowKey(scope) : ""
+    if (found.length) {
+      lastAgents.current = { key, agents: found }
+      return found
+    }
+    return lastAgents.current?.key === key ? lastAgents.current.agents : found
   }, [freshAgents, sessions, sessionName, scope])
 
   const scopeEvents = useMemo<ViewerEvent[]>(() => eventsInScope(branch?.events ?? [], agents), [branch, agents])
@@ -235,11 +272,18 @@ export default function App() {
   const label = useMemo(() => describeScope(scope, agents), [scope, agents])
 
   function select(next: Scope) {
-    if (sameScope(next, scope)) return
+    if (sameScope(next, scope)) {
+      // The same target: no history entry. A pane opened without its window learns it quietly.
+      if (!identicalScope(next, scope)) {
+        urlMode.current = "replace"
+        applyTrack({ scope: next, absent: 0 })
+      }
+      return
+    }
     if (next.session !== sessionName) setView("channel")
     urlMode.current = "push"
     setTargetPaneId(null)
-    setScope(next)
+    applyTrack({ scope: next, absent: 0 })
   }
 
   async function handleSend(agent: ViewerAgent, text: string) {
