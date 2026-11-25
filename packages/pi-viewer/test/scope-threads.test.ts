@@ -17,6 +17,7 @@ import type { IntercomMeta, ViewerAgent, ViewerEvent, ViewerSession } from "../s
 function agent(paneId: string, windowIndex: number, paneIndex: number, name: string): ViewerAgent {
   return {
     id: paneId, paneId, panePid: 1, provider: "pi", piPid: 2, tmuxSession: "xx", windowIndex,
+    windowId: `@${windowIndex + 1}`,
     windowName: `win${windowIndex}`, paneIndex, name, role: null, title: "", cwd: "/w", sessionFile: null,
     sessionId: null, sessionName: null, model: null, thinkingLevel: null, modifiedAt: 0, eventCount: 0,
     status: "idle", statusNote: null,

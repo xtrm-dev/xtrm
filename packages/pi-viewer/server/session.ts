@@ -3,7 +3,7 @@ import { StringDecoder } from "node:string_decoder"
 import { basename } from "node:path"
 
 import type { AgentStatus, EventKind, ViewerEvent, ViewerPart } from "../src/shared/types.ts"
-import { intercomFromEntry, isIntercomTool } from "./intercom.ts"
+import { intercomsFromEntry, isIntercomTool } from "./intercom.ts"
 
 type Raw = Record<string, unknown>
 
@@ -366,8 +366,9 @@ export function normalizeEvent(
     })(),
   } satisfies Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "raw">
 
-  const intercom = intercomFromEntry(entry, agent)
-  if (intercom) {
+  const intercoms = intercomsFromEntry(entry, agent)
+  if (intercoms.length === 1) {
+    const intercom = intercoms[0]
     const body = cap(intercom.body, INTERCOM_CAP)
     return {
       ...base,
@@ -452,6 +453,15 @@ export function normalizeEvent(
       text: text || undefined,
       parts,
       stopReason,
+      ...(intercoms.length > 1
+        ? {
+            intercoms: intercoms.map((meta) => {
+              const capped = cap(meta.body, INTERCOM_CAP)
+              return { ...meta, body: capped.text }
+            }),
+            truncated: intercoms.some((meta) => cap(meta.body, INTERCOM_CAP).truncated) || undefined,
+          }
+        : {}),
       detail: stopReason ? `stopReason: ${stopReason}` : undefined,
     }
   }

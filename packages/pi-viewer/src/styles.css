@@ -449,14 +449,8 @@
     color: var(--color-ink-faint);
     background: var(--color-deep);
   }
-  .viewer-row {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 2.6rem;
-  }
-  .viewer-turn {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 9rem;
-  }
+  /* No content-visibility on transcript rows: an unrendered row changes height when it
+     enters the viewport, which moves the reader's anchor. The scroller owns anchoring. */
 }
 
 @keyframes viewer-pulse {

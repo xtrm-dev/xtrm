@@ -24,6 +24,7 @@ const SESSIONS_ROOT = join(HOME, ".pi", "agent", "sessions")
 export interface TmuxPane {
   session: string
   windowIndex: number
+  windowId: string
   windowName: string
   paneIndex: number
   paneId: string
@@ -58,6 +59,7 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
   const format = [
     "#{session_name}",
     "#{window_index}",
+    "#{window_id}",
     "#{window_name}",
     "#{pane_index}",
     "#{pane_id}",
@@ -72,12 +74,13 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
   const panes: TmuxPane[] = []
   for (const line of output.split("\n")) {
     if (!line.trim()) continue
-    const [session, windowIndex, windowName, paneIndex, paneId, panePid, command, cwd, title, role] =
+    const [session, windowIndex, windowId, windowName, paneIndex, paneId, panePid, command, cwd, title, role] =
       line.split("\t")
     if (!session || !paneId) continue
     panes.push({
       session,
       windowIndex: Number(windowIndex) || 0,
+      windowId: windowId || `@${Number(windowIndex) || 0}`,
       windowName: windowName ?? "",
       paneIndex: Number(paneIndex) || 0,
       paneId,
@@ -286,6 +289,7 @@ function resolveClaudePane(
     piPid: proc.pid,
     tmuxSession: pane.session,
     windowIndex: pane.windowIndex,
+    windowId: pane.windowId,
     windowName: pane.windowName,
     paneIndex: pane.paneIndex,
     name,
@@ -361,6 +365,7 @@ function resolvePaneAgent(
     piPid: chosen.proc.pid,
     tmuxSession: pane.session,
     windowIndex: pane.windowIndex,
+    windowId: pane.windowId,
     windowName: pane.windowName,
     paneIndex: pane.paneIndex,
     name,

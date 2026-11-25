@@ -2,7 +2,8 @@ import { strict as assert } from "node:assert"
 import { test } from "node:test"
 
 import { applyIntercomResults, intercomFromEntry } from "../server/intercom.ts"
-import { channelTimeline, dedupeIntercoms } from "../src/lib/thread.ts"
+import { normalizeEvent } from "../server/session.ts"
+import { channelTimeline, channelTurns, dedupeIntercoms } from "../src/lib/thread.ts"
 import type { IntercomDirection, ViewerEvent } from "../src/shared/types.ts"
 
 function event(
@@ -221,4 +222,69 @@ test("bodies longer than the 40,000-character cap still collapse to one card", (
   const out = dedupeIntercoms([sent, received])
   assert.equal(out.length, 1)
   assert.equal(out[0].intercom?.body.length, 45_000)
+})
+
+test("three intercom calls in one Pi assistant entry make three paired cards", () => {
+  const call = (id: string, to: string, body: string) => ({
+    type: "toolCall",
+    id,
+    name: "SendMessage",
+    arguments: { to, message: body, summary: `to ${to}` },
+  })
+  const entry = {
+    type: "message",
+    id: "entry-1",
+    timestamp: 1_000,
+    message: {
+      role: "assistant",
+      content: [
+        call("call-1", "b", "first body"),
+        call("call-2", "c", "second body"),
+        call("call-3", "d", "third body"),
+      ],
+      stopReason: "toolUse",
+    },
+  }
+  const result = (seq: number, toolCallId: string, output: string, isError = false) => ({
+    type: "message",
+    id: `result-${seq}`,
+    timestamp: 1_000 + seq * 100,
+    message: {
+      role: "toolResult",
+      toolCallId,
+      toolName: "SendMessage",
+      content: [{ type: "text", text: output }],
+      isError,
+    },
+  })
+
+  const events = [
+    normalizeEvent(entry, { id: "a", name: "a" }, 0, true),
+    normalizeEvent(result(1, "call-1", "Delivered to Pi session b"), { id: "a", name: "a" }, 1, true),
+    normalizeEvent(result(2, "call-2", "Message to c was not delivered", true), { id: "a", name: "a" }, 2, true),
+    normalizeEvent(result(3, "call-3", "Delivered to Pi session d"), { id: "a", name: "a" }, 3, true),
+  ]
+  assert.equal(events[0].intercoms?.length, 3)
+
+  const mapped = applyIntercomResults(events)
+  assert.match(mapped[0].summary, /· failed$/)
+  assert.equal(mapped[0].isError, true)
+  const cards = channelTimeline(mapped).filter((item) => item.kind === "intercom")
+  assert.equal(cards.length, 3)
+  assert.deepEqual(
+    cards.map((item) => item.kind === "intercom" && item.event.intercom?.to),
+    ["b", "c", "d"],
+  )
+  assert.deepEqual(
+    cards.map((item) => item.kind === "intercom" && item.event.intercom?.delivery),
+    ["delivered", "failed", "delivered"],
+  )
+  assert.deepEqual(
+    cards.map((item) => item.kind === "intercom" && item.event.intercom?.toolCallId),
+    ["call-1", "call-2", "call-3"],
+  )
+  const turns = channelTurns(mapped)
+  assert.equal(turns.length, 1)
+  assert.equal(turns[0].sent.length, 3)
+  assert.equal(turns[0].activity.length, 0)
 })

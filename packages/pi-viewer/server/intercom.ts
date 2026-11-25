@@ -219,8 +219,9 @@ function intercomCall(
   })
 }
 
-function fromAssistantContent(content: unknown, agent: { name: string }): IntercomMeta | null {
-  if (!Array.isArray(content)) return null
+function assistantIntercomCalls(content: unknown, agent: { name: string }): IntercomMeta[] {
+  if (!Array.isArray(content)) return []
+  const out: IntercomMeta[] = []
   for (const part of content) {
     if (!isRecord(part) || part.type !== "toolCall") continue
     const name = asString(part.name)
@@ -239,9 +240,13 @@ function fromAssistantContent(content: unknown, agent: { name: string }): Interc
     }
     if (!args) continue
     const meta = intercomCall(name, args, agent, asString(part.id))
-    if (meta) return meta
+    if (meta) out.push(meta)
   }
-  return null
+  return out
+}
+
+function fromAssistantContent(content: unknown, agent: { name: string }): IntercomMeta | null {
+  return assistantIntercomCalls(content, agent)[0] ?? null
 }
 
 function fromCustom(entry: Raw, agent: { name: string }): IntercomMeta | null {
@@ -306,10 +311,51 @@ export function isIntercomTool(name: string | undefined): boolean {
   return name === "SendMessage" || name === "intercom"
 }
 
+/** All peer messages carried by one entry, in call order. */
+export function intercomsFromEntry(entry: Raw, agent: { name: string }): IntercomMeta[] {
+  const type = asString(entry.type)
+  if (type === "message" && isRecord(entry.message)) {
+    const message = entry.message
+    if (asString(message.role) === "assistant") {
+      return assistantIntercomCalls(message.content, agent)
+    }
+  }
+  const one = intercomFromEntry(entry, agent)
+  return one ? [one] : []
+}
+
 /**
  * Attach the SendMessage/intercom tool result to the sent card it belongs to.
  * A failed send is still a real event: keep it in the thread and mark it red.
  */
+function applyResult(
+  event: ViewerEvent,
+  meta: IntercomMeta,
+  result: { isError: boolean; output: string } | undefined,
+): { event: ViewerEvent; meta: IntercomMeta } {
+  if (!result) return { event, meta }
+  if (result.isError) {
+    return {
+      event: {
+        ...event,
+        isError: true,
+        summary: `${event.summary.replace(/\s*· failed$/, "")} · failed`,
+      },
+      meta: {
+        ...meta,
+        failed: true,
+        delivery: "failed",
+        error: oneLine(result.output || "delivery failed", 240),
+      },
+    }
+  }
+  const confirmed = /(?:message|reply)\s+sent|delivered|injected|queued|accepted/i.test(result.output)
+  return {
+    event,
+    meta: { ...meta, failed: false, delivery: confirmed ? "delivered" : meta.delivery },
+  }
+}
+
 export function applyIntercomResults(events: ViewerEvent[]): ViewerEvent[] {
   const results = new Map<string, { isError: boolean; output: string }>()
   for (const event of events) {
@@ -322,29 +368,24 @@ export function applyIntercomResults(events: ViewerEvent[]): ViewerEvent[] {
   if (!results.size) return events
 
   return events.map((event) => {
+    if (event.intercoms?.length) {
+      let failed = false
+      let summary = event.summary
+      const intercoms = event.intercoms.map((meta) => {
+        if (meta.direction !== "sent" || !meta.toolCallId) return meta
+        const applied = applyResult(event, meta, results.get(meta.toolCallId))
+        if (applied.meta.failed) {
+          failed = true
+          summary = applied.event.summary
+        }
+        return applied.meta
+      })
+      return failed ? { ...event, summary, isError: true, intercoms } : { ...event, intercoms }
+    }
+
     const meta = event.intercom
     if (!meta || meta.direction !== "sent" || !meta.toolCallId) return event
-    const result = results.get(meta.toolCallId)
-    if (!result) return event
-    if (result.isError) {
-      return {
-        ...event,
-        isError: true,
-        summary: `${event.summary.replace(/\s*· failed$/, "")} · failed`,
-        intercom: {
-          ...meta,
-          failed: true,
-          delivery: "failed",
-          error: oneLine(result.output || "delivery failed", 240),
-        },
-      }
-    }
-    const confirmed = /(?:message|reply)\s+sent|delivered|injected|queued|accepted/i.test(
-      result.output,
-    )
-    return {
-      ...event,
-      intercom: { ...meta, failed: false, delivery: confirmed ? "delivered" : meta.delivery },
-    }
+    const applied = applyResult(event, meta, results.get(meta.toolCallId))
+    return { ...applied.event, intercom: applied.meta }
   })
 }

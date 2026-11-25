@@ -28,6 +28,7 @@ function agent(extra: Partial<ViewerAgent> & { paneId: string }): ViewerAgent {
     piPid: 200 + counter,
     tmuxSession: "xx",
     windowIndex: 0,
+    windowId: `@${(extra.windowIndex ?? 0) + 1}`,
     windowName: "w0",
     paneIndex: 0,
     name: `agent-${extra.paneId}`,
@@ -71,6 +72,17 @@ test("the tree groups by session and window, orders windows by index and panes b
   assert.equal(xx.count, 4)
 })
 
+test("windows group by stable tmux id, not the renumbered index", () => {
+  const tree = buildTree([session("xx", [
+    agent({ paneId: "%1", windowIndex: 0, windowId: "@1", windowName: "one" }),
+    agent({ paneId: "%2", windowIndex: 7, windowId: "@1", windowName: "one", paneIndex: 1 }),
+    agent({ paneId: "%9", windowIndex: 1, windowId: "@9", windowName: "nine" }),
+  ])])
+  assert.equal(tree[0].windows.length, 2)
+  assert.equal(tree[0].windows[0].key, "w:xx:@1")
+  assert.deepEqual(tree[0].windows[0].panes.map((pane) => pane.agent.paneId), ["%1", "%2"])
+})
+
 test("sessions, windows and panes without an agent are omitted", () => {
   const tree = buildTree(FIXTURE)
   assert.ok(!tree.some((node) => node.name === "empty"), "a session with no agent is not listed")
@@ -96,36 +108,36 @@ test("collapsing a session or window hides its rows and keeps the others", () =>
   assert.deepEqual(all.map((row) => row.level), [1, 2, 3, 3, 2, 2, 1, 2])
   const noXx = flatten(tree, new Set(["s:xx"]))
   assert.deepEqual(noXx.map((row) => row.key), ["s:xx", "s:yy", paneKey("%20")])
-  const noWindow = flatten(tree, new Set(["w:xx:0"]))
-  assert.ok(noWindow.some((row) => row.key === "w:xx:0"))
+  const noWindow = flatten(tree, new Set(["w:xx:@1"]))
+  assert.ok(noWindow.some((row) => row.key === "w:xx:@1"))
   assert.ok(!noWindow.some((row) => row.key === paneKey("%1")))
   assert.ok(noWindow.some((row) => row.key === paneKey("%5")))
   // A window with one pane has no row of its own; its pane sits directly under the session.
   const single = all.find((row) => row.key === paneKey("%5"))
   assert.equal(single?.level, 2)
   assert.equal(single?.parentKey, "s:xx")
-  assert.ok(!all.some((row) => row.key === "w:xx:1"), "no window row for a one-pane window")
+  assert.ok(!all.some((row) => row.key === "w:xx:@2"), "no window row for a one-pane window")
 })
 
 test("the keyboard model follows the WAI-ARIA tree pattern", () => {
   const rows: FlatRow[] = flatten(buildTree(FIXTURE), new Set())
   const at = (key: string) => navigate(rows, key, "ArrowDown")
-  assert.deepEqual(at("s:xx"), { type: "focus", key: "w:xx:0" })
+  assert.deepEqual(at("s:xx"), { type: "focus", key: "w:xx:@1" })
   assert.deepEqual(navigate(rows, "s:xx", "ArrowUp"), { type: "focus", key: "s:xx" }, "stays on the first row")
   assert.deepEqual(navigate(rows, "s:xx", "End"), { type: "focus", key: paneKey("%20") })
   assert.deepEqual(navigate(rows, paneKey("%20"), "Home"), { type: "focus", key: "s:xx" })
   // ArrowRight: open a closed group, else step into its first child.
-  assert.deepEqual(navigate(rows, "s:xx", "ArrowRight"), { type: "focus", key: "w:xx:0" })
+  assert.deepEqual(navigate(rows, "s:xx", "ArrowRight"), { type: "focus", key: "w:xx:@1" })
   const closed = flatten(buildTree(FIXTURE), new Set(["s:xx"]))
   assert.deepEqual(navigate(closed, "s:xx", "ArrowRight"), { type: "toggle", key: "s:xx", open: true })
   // ArrowLeft: close an open group, else go to the parent; a top-level row has nowhere to go.
   assert.deepEqual(navigate(rows, "s:xx", "ArrowLeft"), { type: "toggle", key: "s:xx", open: false })
-  assert.deepEqual(navigate(rows, paneKey("%1"), "ArrowLeft"), { type: "focus", key: "w:xx:0" })
+  assert.deepEqual(navigate(rows, paneKey("%1"), "ArrowLeft"), { type: "focus", key: "w:xx:@1" })
   assert.equal(navigate(closed, "s:xx", "ArrowLeft"), null)
   // Enter and Space select the scope of any level (session, window or pane); the arrows expand and
   // collapse. A pane has no ArrowRight.
   assert.deepEqual(navigate(rows, paneKey("%1"), "Enter"), { type: "activate", key: paneKey("%1") })
-  assert.deepEqual(navigate(rows, "w:xx:0", " "), { type: "activate", key: "w:xx:0" })
+  assert.deepEqual(navigate(rows, "w:xx:@1", " "), { type: "activate", key: "w:xx:@1" })
   assert.deepEqual(navigate(rows, "s:xx", "Enter"), { type: "activate", key: "s:xx" })
   assert.equal(navigate(rows, paneKey("%1"), "ArrowRight"), null)
   assert.equal(navigate(rows, paneKey("%1"), "x"), null)
@@ -172,8 +184,8 @@ test("focus on a vanished row goes to its nearest visible ancestor", () => {
   const open = flatten(tree, new Set())
   const parents = new Map(open.map((row) => [row.key, row.parentKey] as const))
   // The window collapses: its pane is gone, the window row remains.
-  const windowClosed = flatten(tree, new Set(["w:xx:0"]))
-  assert.equal(survivingFocus(parents, windowClosed, paneKey("%1")), "w:xx:0")
+  const windowClosed = flatten(tree, new Set(["w:xx:@1"]))
+  assert.equal(survivingFocus(parents, windowClosed, paneKey("%1")), "w:xx:@1")
   // The whole session collapses: the nearest visible ancestor is the session row.
   const sessionClosed = flatten(tree, new Set(["s:xx"]))
   assert.equal(survivingFocus(parents, sessionClosed, paneKey("%1")), "s:xx")

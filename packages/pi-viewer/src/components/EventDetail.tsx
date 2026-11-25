@@ -76,6 +76,35 @@ export function EventBody({ event, className }: { event: ViewerEvent; className?
         {event.output ? <CodeBlock text={event.output} tone={event.isError ? "error" : "default"} /> : null}
       </div>
     )
+  } else if (event.intercoms?.length) {
+    body = (
+      <div className="flex flex-col gap-4">
+        {event.intercoms.map((meta, index) => (
+          <div key={meta.toolCallId ?? index} className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-2 text-2xs text-ink-faint">
+              <span className="font-medium text-ink">{meta.from}</span>
+              <span>→</span>
+              <span className="text-ink-muted">{meta.to}</span>
+              <span>{meta.direction}</span>
+              {meta.expectsReply ? <span className="text-accent">reply requested</span> : null}
+            </div>
+            <Markdown text={meta.body} />
+            {meta.failed && meta.error ? (
+              <div className="text-2xs text-danger">{meta.error}</div>
+            ) : null}
+            <div className="flex flex-wrap gap-x-3 text-2xs text-ink-faint">
+              {meta.failed ? (
+                <span className="text-danger">failed</span>
+              ) : meta.delivery ? (
+                <span>{meta.delivery}</span>
+              ) : null}
+              {meta.messageId ? <span className="font-mono">{meta.messageId}</span> : null}
+              {meta.runtime ? <span>{meta.runtime}</span> : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
   } else if (event.kind === "intercom" && event.intercom) {
     const meta = event.intercom
     body = (

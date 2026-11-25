@@ -161,9 +161,9 @@ export function SessionTree({
     (row: FlatRow) => {
       const node = row.node
       if (node.kind === "pane") {
-        onSelect({ kind: "pane", session: node.session, window: node.agent.windowIndex, paneId: node.agent.paneId })
+        onSelect({ kind: "pane", session: node.session, window: node.agent.windowIndex, windowId: node.agent.windowId, paneId: node.agent.paneId })
       } else if (node.kind === "window") {
-        onSelect({ kind: "window", session: node.session, window: node.index })
+        onSelect({ kind: "window", session: node.session, window: node.index, windowId: node.windowId })
       } else {
         onSelect({ kind: "session", session: node.name })
       }
