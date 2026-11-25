@@ -180,7 +180,7 @@ test("a prompt starting with / but not a local command still leaves a stopped ro
   const base = [prompt("%1", 1, s(0)), reply("%1", 2, s(5))]
   const idle = agent("%1", { status: "idle", statusNote: "quiet for 15m" })
   const asked = { ...prompt("%1", 3, s(20)), text: "/summarize the diff", summary: "/summarize the diff" }
-  const local = { ...prompt("%1", 4, s(30)), text: "/model", summary: "/model" }
+  const local = { ...prompt("%1", 4, s(30)), text: "/model", summary: "/model", slash: true }
   assert.equal(splitPresence(channelTimeline([...base, asked]), [idle]).timeline.at(-1)?.kind, "stopped")
   assert.ok(!splitPresence(channelTimeline([...base, local]), [idle]).timeline.some((item) => item.kind === "stopped"))
 })
@@ -198,7 +198,7 @@ test("local commands after a reply open no presence entry: !ls is a local row, /
   assert.equal(row?.kind === "stopped" && row.turn.activity[0].label, "Ran")
 
   const slash = prompt("%1", 3, s(20))
-  const model = splitPresence(channelTimeline([...base, { ...slash, text: "/model", summary: "/model" }]), [waiting])
+  const model = splitPresence(channelTimeline([...base, { ...slash, text: "/model", summary: "/model", slash: true }]), [waiting])
   assert.equal(model.presence.length, 0, "a /model is not a running agent")
   assert.deepEqual(model.timeline.map(label), ["user:%1:0", "turn:%1:5", "user:%1:20"], "only the operator row is added")
 })
@@ -206,7 +206,7 @@ test("local commands after a reply open no presence entry: !ls is a local row, /
 test("an idle agent's lone /compact adds no stopped row; an interrupted prompt still does", () => {
   const base = [prompt("%1", 1, s(0)), reply("%1", 2, s(5))]
   const idle = agent("%1", { status: "idle", statusNote: "quiet for 15m" })
-  const compact = { ...prompt("%1", 3, s(20)), text: "/compact", summary: "/compact" }
+  const compact = { ...prompt("%1", 3, s(20)), text: "/compact", summary: "/compact", slash: true }
   const { timeline } = splitPresence(channelTimeline([...base, compact]), [idle])
   assert.ok(!timeline.some((item) => item.kind === "stopped"))
   const interrupted = splitPresence(channelTimeline([...base, prompt("%1", 3, s(20))]), [
@@ -244,7 +244,7 @@ test("scope filtering: presence holds only the agents of the session, window or 
     agent("%2", { windowIndex: 1, windowId: "@1", paneIndex: 1 }),
     agent("%3", { windowIndex: 2, windowId: "@2" }),
   ]
-  const sessions: ViewerSession[] = [{ name: "xx", agents, capturedAt: T0 }]
+  const sessions: ViewerSession[] = [{ name: "xx", serverId: "tmux:test", agents, capturedAt: T0 }]
   const events = agents.flatMap((entry, index) => [prompt(entry.id, 1, s(index)), tool(entry.id, 2, s(10 + index))])
   const run = (scope: Scope) => {
     const inScope = agentsInScope(sessions, scope)

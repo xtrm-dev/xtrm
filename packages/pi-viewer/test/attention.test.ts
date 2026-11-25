@@ -17,7 +17,7 @@ import {
   withPaneAttention,
 } from "../server/attention.ts"
 import { claudeStatusOf, parseClaudeFile } from "../server/claude.ts"
-import { COMPACTION_RETRY_MS, QUIET_MS, statusOf, type ParsedFile } from "../server/session.ts"
+import { QUIET_MS, statusOf, type ParsedFile } from "../server/session.ts"
 import type { ViewerAgent } from "../src/shared/types.ts"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -166,7 +166,7 @@ test("a compaction inside an open tool loop keeps the turn working, then closes 
   const compact = { type: "compaction", id: "c1", timestamp: new Date(NOW).toISOString(), summary: "…" }
   const mid: ParsedFile = { ...parsed([], NOW), events: [tool, compact] }
   assert.deepEqual(statusOf(mid, NOW), { status: "working", note: "compacting context" })
-  assert.equal(statusOf(mid, NOW + COMPACTION_RETRY_MS + 1).status, "waiting", "the retry window ended")
+  assert.deepEqual(statusOf(mid, NOW + 31_000), { status: "working", note: "compacting context" }, "no fixed retry timer flips the turn")
 
   // Claude auto-compact mid tool loop: the compact summary is followed by /compact and its output.
   const now = new Date(NOW).toISOString()

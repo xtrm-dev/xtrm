@@ -211,6 +211,7 @@ function includeTurn(set: Set<string>, turn: ReturnType<typeof channelTurns>[num
 
 function page(
   cache: SessionCache,
+  serverId: string,
   scope: "branch" | "all",
   limit: number,
   before: number | null,
@@ -250,6 +251,7 @@ function page(
   const earlierTurns = Math.max(0, start)
   return {
     session: cache.revision.split(":")[0],
+    serverId,
     version: "",
     agents: [],
     capturedAt: Date.now(),
@@ -276,7 +278,7 @@ export interface ThreadQuery {
 }
 
 export function cachedThread(
-  session: { name: string; agents: ViewerAgent[]; version: string; capturedAt: number },
+  session: { name: string; serverId: string; agents: ViewerAgent[]; version: string; capturedAt: number },
   query: ThreadQuery,
 ): ThreadPayload & { reset?: boolean; unchanged?: boolean } {
   const cache = sessionOf(session.name)
@@ -291,13 +293,14 @@ export function cachedThread(
 
   let result: ThreadPayload & { reset?: boolean; unchanged?: boolean }
   if (query.before != null || query.since == null || reset) {
-    result = page(cache, query.scope, limit, query.before ?? null)
+    result = page(cache, session.serverId, query.scope, limit, query.before ?? null)
     if (reset) result.reset = true
   } else {
     const since = query.since
     const fresh = filtered.filter((event) => cursorOf(cache, event) > since)
     result = {
       session: session.name,
+      serverId: session.serverId,
       version: session.version,
       agents: session.agents,
       capturedAt: Date.now(),
@@ -310,7 +313,7 @@ export function cachedThread(
       unchanged: fresh.length === 0,
     }
     if (since > cache.counter) {
-      result = page(cache, query.scope, limit, null)
+      result = page(cache, session.serverId, query.scope, limit, null)
       result.reset = true
     }
   }

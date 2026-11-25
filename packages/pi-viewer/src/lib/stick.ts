@@ -39,8 +39,9 @@ export function recall(threadKey: string): Remembered | undefined {
 }
 
 /** A remembered row that never appeared (pruned history) must not be searched forever. */
-export const MAX_RESTORE_SYNCS = 120
+export const RESTORE_MS = 2_000
 
-export function restoreExpired(syncs: number, now: number, deadline: number, max = MAX_RESTORE_SYNCS): boolean {
-  return syncs > max || now > deadline
+/** Bound a restore by wall time, not by how many renders happened. */
+export function restoreExpired(now: number, deadline: number): boolean {
+  return now > deadline
 }

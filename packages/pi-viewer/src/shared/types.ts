@@ -45,6 +45,8 @@ export interface ViewerAgent {
 
 export interface ViewerSession {
   name: string
+  /** Tmux server identity (pid + socket); reusing a window/pane id after a restart is not the same thread. */
+  serverId: string
   agents: ViewerAgent[]
   capturedAt: number
 }
@@ -129,6 +131,8 @@ export interface ViewerEvent {
    * its own card; `intercom` stays unset for these so a single event is never counted twice.
    */
   intercoms?: IntercomMeta[]
+  /** True for a Claude local slash command (`/model`), which opens no model turn. */
+  slash?: boolean
   /** False for events that belong to an abandoned branch of the session tree. */
   onBranch: boolean
   /** Compact, capped JSON of the original line for inspection. */
@@ -137,6 +141,8 @@ export interface ViewerEvent {
 
 export interface ThreadMeta {
   session: string
+  /** Tmux server identity, used to scope browser read-state keys. */
+  serverId: string
   version: string
   agents: ViewerAgent[]
   capturedAt: number

@@ -62,12 +62,12 @@ const LIVE: ReadonlySet<AgentStatus> = new Set<AgentStatus>(["working", "attenti
  */
 const REPLY_IN_FLIGHT_MS = 2_000
 
-/** Slash commands Claude Code runs locally, without a model turn. */
-const LOCAL_SLASH = /^\/(?:add-dir|bug|clear|compact|config|cost|doctor|help|login|logout|mcp|memory|model|permissions|release-notes|status|terminal-setup|vim)(?:\s|$)/i
-
-/** A turn opened only by local slash commands (`/model`, `/compact`), not a prompt starting with `/`. */
+/**
+ * A turn opened only by local slash commands (`/model`, `/compact`), not a prompt starting
+ * with `/help me`. The parser marks real commands; a prompt is never guessed from its text.
+ */
 function isSlashOnly(turn: Turn): boolean {
-  return turn.users.length > 0 && turn.users.every((user) => LOCAL_SLASH.test((user.text ?? user.summary).trimStart()))
+  return turn.users.length > 0 && turn.users.every((user) => user.slash === true)
 }
 
 function replyInFlight(agent: ViewerAgent, turn: Turn): boolean {

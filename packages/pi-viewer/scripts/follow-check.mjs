@@ -68,7 +68,7 @@ const agent = {
   statusNote: null,
 }
 
-const sessions = { sessions: [{ name: SESSION, agents: [agent] }], capturedAt: Date.now(), error: null }
+const sessions = { sessions: [{ name: SESSION, serverId: "test:tmux", agents: [agent] }], capturedAt: Date.now(), error: null }
 const baseEvents = makeFixture()
 let metaCalls = 0
 let fullCalls = 0
@@ -110,7 +110,7 @@ await page.route("**/api/**", async (route) => {
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ session: SESSION, version: `v${metaCalls}`, agents: [agent], capturedAt: Date.now() }),
+      body: JSON.stringify({ session: SESSION, serverId: "test:tmux", version: `v${metaCalls}`, agents: [agent], capturedAt: Date.now() }),
     })
   }
 
@@ -154,6 +154,7 @@ await page.route("**/api/**", async (route) => {
     contentType: "application/json",
     body: JSON.stringify({
       session: SESSION,
+      serverId: "test:tmux",
       version: `v${metaCalls}`,
       agents: [agent],
       capturedAt: Date.now(),

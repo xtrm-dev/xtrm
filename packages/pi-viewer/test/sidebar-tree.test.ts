@@ -49,7 +49,7 @@ function agent(extra: Partial<ViewerAgent> & { paneId: string }): ViewerAgent {
 }
 
 function session(name: string, agents: ViewerAgent[]): ViewerSession {
-  return { name, agents: agents.map((entry) => ({ ...entry, tmuxSession: name })), capturedAt: 0 }
+  return { name, serverId: "tmux:test", agents: agents.map((entry) => ({ ...entry, tmuxSession: name })), capturedAt: 0 }
 }
 
 const FIXTURE: ViewerSession[] = [

@@ -16,7 +16,7 @@ import { dayKey, dayLabel, fullDate, monogram, stamp } from "@/lib/format"
 import type { OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
 import { channelTimeline, type Turn } from "@/lib/thread"
-import { loadLastSeen, newCount, newSinceIndex, saveLastSeen, shouldSaveLastSeen, unseenEventCount } from "@/lib/readstate"
+import { migrateLastSeen, newCount, newSinceIndex, saveLastSeen, shouldSaveLastSeen, unseenTimelineItems } from "@/lib/readstate"
 import { cn } from "@/lib/utils"
 import type { ViewerAgent, ViewerEvent } from "@/shared/types"
 
@@ -230,6 +230,7 @@ export function ChannelView({
   agents,
   session,
   readKey,
+  legacyReadKeys = [],
   optimistic,
   onDismissOptimistic,
   hasEarlier = false,
@@ -240,8 +241,10 @@ export function ChannelView({
   events: ViewerEvent[]
   agents: ViewerAgent[]
   session: string
-  /** Stable identity of the scope: session, window id, or pane id. */
+  /** Stable identity of the scope, prefixed with the tmux server id. */
   readKey: string
+  /** Pre-migration keys (server-less scope key, old session:agentIds key). */
+  legacyReadKeys?: string[]
   optimistic: OptimisticMessage[]
   onDismissOptimistic: (id: string) => void
   hasEarlier?: boolean
@@ -254,6 +257,7 @@ export function ChannelView({
   // Delivery reads the unsplit timeline (`channel`); rows render from the split one (`items`).
   const channel = useMemo(() => channelTimeline(events, optimistic), [events, optimistic])
   const items = useMemo(() => splitPresence(channel, agents).timeline, [channel, agents])
+  const newest = useMemo(() => items.reduce((max, item) => Math.max(max, item.at), 0), [items])
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const latestUsers = useMemo(() => latestUserIds(channel), [channel])
 
@@ -262,17 +266,25 @@ export function ChannelView({
   const anyWorking = agents.some((agent) => agent.status === "working")
   useEffect(() => setWorking(anyWorking), [anyWorking, setWorking])
 
-  // Events that arrived while the reader was scrolled away from the end, for the scroll pill.
-  // One turn row can carry many events, so the count is the event count, not the row count.
-  const awayBase = useRef(events.length)
+  // Rows that arrived while the reader was scrolled away from the end, for the scroll pill.
+  // Only rows after the leave point count: a "Load earlier" prepend is older, not new.
+  const seenIds = useRef<Set<string>>(new Set(items.map((item) => item.id)))
+  const leftAt = useRef(newest)
+  const wasAtBottom = useRef(atBottom)
   useEffect(() => {
-    if (atBottom) awayBase.current = events.length
-    reportNew(unseenEventCount(events.length, awayBase.current, atBottom))
-  }, [atBottom, events.length, reportNew])
+    if (atBottom) {
+      seenIds.current = new Set(items.map((item) => item.id))
+      reportNew(0)
+    } else {
+      if (wasAtBottom.current) leftAt.current = newest
+      reportNew(unseenTimelineItems(items, seenIds.current, leftAt.current, atBottom))
+    }
+    wasAtBottom.current = atBottom
+  }, [atBottom, items, newest, reportNew])
 
   // "New since you looked": the baseline is the last-read time of this scope when it was opened.
   // It stays frozen for the visit, so the divider does not walk away while the reader reads.
-  const [baseline] = useState(() => loadLastSeen(readKey))
+  const [baseline] = useState(() => migrateLastSeen(readKey, legacyReadKeys))
   const dividerAt = newSinceIndex(items, baseline)
   const unread = newCount(items, baseline)
   const [visible, setVisible] = useState(() => !document.hidden)
@@ -281,7 +293,6 @@ export function ChannelView({
     document.addEventListener("visibilitychange", onChange)
     return () => document.removeEventListener("visibilitychange", onChange)
   }, [])
-  const newest = items.reduce((max, item) => Math.max(max, item.at), 0)
   useEffect(() => {
     // The scroll provider has applied (or given up on) the remembered position by now.
     if (shouldSaveLastSeen({ ready, atBottom, visible, newest })) saveLastSeen(readKey, newest)

@@ -54,6 +54,7 @@ function agent(paneId: string, windowIndex: number, paneIndex: number, extra: Pa
 const SESSIONS: ViewerSession[] = [
   {
     name: "xx",
+    serverId: "tmux:test",
     capturedAt: 0,
     agents: [
       agent("%12", 2, 0),
@@ -62,7 +63,7 @@ const SESSIONS: ViewerSession[] = [
       agent("%5", 1, 0, { modifiedAt: 30 }),
     ],
   },
-  { name: "yy", capturedAt: 0, agents: [agent("%20", 0, 0)] },
+  { name: "yy", serverId: "tmux:test", capturedAt: 0, agents: [agent("%20", 0, 0)] },
 ]
 
 const ROUND_TRIP: Scope[] = [
@@ -149,13 +150,13 @@ test("a vanished scope falls back: pane to window, window to session, session to
   // Nothing at all: no scope, and no crash.
   assert.equal(resolveScope(pane, []), null)
   assert.equal(resolveScope(null, []), null)
-  assert.equal(resolveScope(pane, [{ name: "xx", agents: [], capturedAt: 0 }]), null)
+  assert.equal(resolveScope(pane, [{ name: "xx", serverId: "tmux:test", agents: [], capturedAt: 0 }]), null)
 })
 
 test("with no scope the page opens on the preferred session, else the first that has agents", () => {
   assert.deepEqual(defaultScope(SESSIONS), { kind: "session", session: "xx" })
-  assert.deepEqual(defaultScope([SESSIONS[1], { name: "empty", agents: [], capturedAt: 0 }]), { kind: "session", session: "yy" })
-  assert.deepEqual(defaultScope([{ name: "empty", agents: [], capturedAt: 0 }, SESSIONS[1]]), { kind: "session", session: "yy" })
+  assert.deepEqual(defaultScope([SESSIONS[1], { name: "empty", serverId: "tmux:test", agents: [], capturedAt: 0 }]), { kind: "session", session: "yy" })
+  assert.deepEqual(defaultScope([{ name: "empty", serverId: "tmux:test", agents: [], capturedAt: 0 }, SESSIONS[1]]), { kind: "session", session: "yy" })
   assert.equal(defaultScope([]), null)
 })
 
@@ -219,7 +220,7 @@ test("an empty or failed discovery poll keeps the last good scope and does not c
     assert.equal(track.absent, 0)
   }
   // Sessions that exist but hold no agent are the same as no discovery.
-  track = trackScope(track, [{ name: "xx", agents: [], capturedAt: 0 }], null)
+  track = trackScope(track, [{ name: "xx", serverId: "tmux:test", agents: [], capturedAt: 0 }], null)
   assert.deepEqual(track.scope, { kind: "window", session: "xx", window: 2, windowId: "@3" })
   // Before any scope has resolved, an empty poll leaves the request waiting (no default invented).
   assert.deepEqual(trackScope({ scope: null, absent: 0 }, EMPTY, parseScope("?s=xx&w=2")), { scope: null, absent: 0 })
@@ -379,6 +380,7 @@ test("a reused window index with a different id is not the same state, and a mis
   const tree = buildTree([
     {
       name: "xx",
+      serverId: "tmux:test",
       agents: [
         agent("%90", 1, 0, { windowId: "" }),
         agent("%91", 1, 1, { windowId: "" }),

@@ -2,8 +2,8 @@ import { strict as assert } from "node:assert"
 import { test } from "node:test"
 
 import { scopeRowKey, type Scope } from "../src/lib/scope.ts"
-import { shouldSaveLastSeen, unseenEventCount } from "../src/lib/readstate.ts"
-import { MAX_RESTORE_SYNCS, restoreExpired } from "../src/lib/stick.ts"
+import { migrateLastSeen, shouldSaveLastSeen, threadReadKey, unseenTimelineItems } from "../src/lib/readstate.ts"
+import { restoreExpired } from "../src/lib/stick.ts"
 
 const windowScope: Scope = { kind: "window", session: "xx", window: 3, windowId: "@5" }
 
@@ -15,17 +15,22 @@ test("last-read is saved only after the first sync, at the end, on screen", () =
   assert.equal(shouldSaveLastSeen({ ready: true, atBottom: true, visible: true, newest: 10 }), true)
 })
 
-test("the new pill counts events, not rows: one turn row can carry many events", () => {
-  assert.equal(unseenEventCount(120, 100, false), 20)
-  assert.equal(unseenEventCount(120, 100, true), 0)
-  assert.equal(unseenEventCount(90, 100, false), 0)
+test("the new pill counts rows appended after leaving the bottom, not earlier pages", () => {
+  const seen = new Set(["turn:1"])
+  const items = [
+    { id: "turn:0", at: 50, kind: "turn" },
+    { id: "turn:1", at: 100, kind: "turn" },
+    { id: "turn:2", at: 200, kind: "turn" },
+  ]
+  assert.equal(unseenTimelineItems(items, seen, 100, false), 1)
+  assert.equal(unseenTimelineItems(items, seen, 100, true), 0)
+  assert.equal(unseenTimelineItems(items, new Set(items.map((item) => item.id)), 100, false), 0)
 })
 
-test("a restore that never finds its row gives up after the sync budget or deadline", () => {
-  assert.equal(restoreExpired(1, 500, 2_000), false)
-  assert.equal(restoreExpired(MAX_RESTORE_SYNCS, 500, 2_000), false)
-  assert.equal(restoreExpired(MAX_RESTORE_SYNCS + 1, 500, 2_000), true)
-  assert.equal(restoreExpired(2, 2_001, 2_000), true)
+test("a restore that never finds its row gives up at the deadline, not after a sync count", () => {
+  assert.equal(restoreExpired(500, 2_000), false)
+  assert.equal(restoreExpired(2_000, 2_000), false)
+  assert.equal(restoreExpired(2_001, 2_000), true)
 })
 
 test("the read key is the scope, not the agents that happen to be in it", () => {
@@ -34,4 +39,31 @@ test("the read key is the scope, not the agents that happen to be in it", () => 
   assert.equal(scopeRowKey(windowScope), "w:xx:@5")
   assert.ok(!scopeRowKey(joined).includes("%"))
   assert.ok(!scopeRowKey(windowScope).includes("%"))
+})
+
+
+test("read keys carry the tmux server identity", () => {
+  assert.equal(threadReadKey("1234:/tmp/tmux-1000/default", "p:%85"), "1234:/tmp/tmux-1000/default:p:%85")
+  assert.notEqual(
+    threadReadKey("1234:/tmp/tmux-1000/default", "w:xx:@5"),
+    threadReadKey("5678:/tmp/tmux-1000/default", "w:xx:@5"),
+  )
+})
+
+test("old read keys migrate once and are dropped", () => {
+  const store = new Map<string, string>()
+  ;(globalThis as { window?: unknown }).window = {
+    localStorage: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+      removeItem: (key: string) => store.delete(key),
+    },
+  }
+  store.set("xtrm-viewer:last-seen:xx:%1,%2", "1500")
+  const key = threadReadKey("tmux:test", "s:xx")
+  assert.equal(migrateLastSeen(key, ["xx:%1,%2", "s:xx"]), 1500)
+  assert.equal(store.get(`xtrm-viewer:last-seen:${key}`), "1500")
+  assert.equal(store.has("xtrm-viewer:last-seen:xx:%1,%2"), false)
+  assert.equal(store.has("xtrm-viewer:last-seen:s:xx"), false)
+  assert.equal(migrateLastSeen(key, ["xx:%1,%2"]), 1500)
 })

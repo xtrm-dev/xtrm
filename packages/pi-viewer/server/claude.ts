@@ -364,6 +364,10 @@ interface ClaudeState {
   customTitle: string | null
   agentName: string | null
   model: string | null
+  /** File write time of the last record that can move a turn. */
+  nonMetaWriteAt: number
+  /** A turn record arrived in this ingest pass; stamp the file time after the read. */
+  turnDirty: boolean
 }
 
 const states = new Map<string, ClaudeState>()
@@ -382,6 +386,8 @@ function freshState(rawRef: Raw[]): ClaudeState {
     customTitle: null,
     agentName: null,
     model: null,
+    nonMetaWriteAt: 0,
+    turnDirty: false,
   }
 }
 
@@ -414,6 +420,10 @@ function addEntry(state: ClaudeState, entry: Raw, record: Raw, sidechain: boolea
   state.entries.push(entry)
   state.versions.push(0)
   if (!sidechain) state.branchIds.add(id)
+  if (!sidechain && entry.type !== "claude-event" && entry._slash !== true && entry._localOutput !== true) {
+    const message = isRecord(entry.message) ? entry.message : {}
+    if (message.role !== "bashExecution") state.turnDirty = true
+  }
 }
 
 function eventEntry(label: string, summary: string, text?: string): Raw {
@@ -693,6 +703,10 @@ export function parseClaudeFile(file: string): ParsedFile {
     ingest(state, record)
   }
 
+  if (state.turnDirty) {
+    state.nonMetaWriteAt = cache.mtimeMs
+    state.turnDirty = false
+  }
   const cached = parsedCache.get(file)
   if (cached && cached.mtimeMs === cache.mtimeMs && cached.size === cache.size && cached.count === state.entries.length) {
     return cached.parsed
@@ -712,6 +726,7 @@ export function parseClaudeFile(file: string): ParsedFile {
     model: state.model,
     thinkingLevel: null,
     modifiedAt: cache.mtimeMs,
+    nonMetaWriteAt: state.nonMetaWriteAt,
     size: cache.size,
   }
   parsedCache.set(file, { mtimeMs: cache.mtimeMs, size: cache.size, count: state.entries.length, parsed })

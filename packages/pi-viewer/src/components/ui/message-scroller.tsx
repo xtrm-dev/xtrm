@@ -1,7 +1,7 @@
 import * as React from "react"
 import { ChevronDownIcon } from "lucide-react"
 
-import { followMode, recall, remember, restoreExpired, smoothStep } from "@/lib/stick"
+import { RESTORE_MS, followMode, recall, remember, restoreExpired, smoothStep } from "@/lib/stick"
 import { cn } from "@/lib/utils"
 
 interface ScrollOptions {
@@ -74,7 +74,6 @@ function MessageScrollerProvider({
   const glidingRef = React.useRef(false)
   const frameRef = React.useRef<number | null>(null)
   const restoreRef = React.useRef<{ id: string; top: number } | null>(null)
-  const restoreSyncsRef = React.useRef(0)
   const restoreDeadlineRef = React.useRef(0)
   const restoreFrameRef = React.useRef(0)
   const threadKeyRef = React.useRef(threadKey)
@@ -192,9 +191,9 @@ function MessageScrollerProvider({
       const saved = threadKeyRef.current ? recall(threadKeyRef.current) : undefined
       if (saved && !saved.atEnd && saved.anchorId) {
         restoreRef.current = { id: saved.anchorId, top: saved.anchorTop }
-        restoreSyncsRef.current = 0
+        viewport.dataset.restoring = "true"
         // The rows may never contain that id (a pruned history). Do not search forever.
-        restoreDeadlineRef.current = performance.now() + 2_000
+        restoreDeadlineRef.current = performance.now() + RESTORE_MS
         return
       }
       setReady(true)
@@ -204,9 +203,9 @@ function MessageScrollerProvider({
     if (restoreRef.current) {
       const wanted = restoreRef.current
       const content = contentRef.current
-      restoreSyncsRef.current += 1
-      if (restoreExpired(restoreSyncsRef.current, performance.now(), restoreDeadlineRef.current)) {
+      if (restoreExpired(performance.now(), restoreDeadlineRef.current)) {
         restoreRef.current = null
+        delete viewport.dataset.restoring
         setReady(true)
       } else {
         // The row may not be rendered yet (an earlier page is still arriving). Try again next
@@ -224,6 +223,7 @@ function MessageScrollerProvider({
           : undefined
         if (element) {
           restoreRef.current = null
+          delete viewport.dataset.restoring
           const delta = element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - wanted.top
           viewport.scrollTop += delta
           anchorRef.current = { id: wanted.id, top: wanted.top }
@@ -369,6 +369,7 @@ function MessageScrollerProvider({
     const cancel = () => {
       // A reader gesture ends a pending restore: their position wins over the remembered one.
       restoreRef.current = null
+      delete viewport.dataset.restoring
       if (restoreFrameRef.current) cancelAnimationFrame(restoreFrameRef.current)
       restoreFrameRef.current = 0
       setReady(true)

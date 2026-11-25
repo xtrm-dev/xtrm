@@ -14,6 +14,8 @@ export interface FileCache {
   raw: Raw[]
   mtimeMs: number
   size: number
+  /** File write time of the last non-meta entry; meta-only writes must not move it. */
+  nonMetaWriteAt: number
 }
 
 const fileCache = new Map<string, FileCache>()
@@ -34,6 +36,8 @@ export interface ParsedFile {
   thinkingLevel: string | null
   modifiedAt: number
   size: number
+  /** Write time of the newest record that can change a turn (not model/thinking/notice rows). */
+  nonMetaWriteAt?: number
   /** Per-entry revision for parsers that mutate an existing entry in place (Claude). */
   entryVersions?: number[]
 }
@@ -148,6 +152,16 @@ function atOf(entry: Raw): number {
   return 0
 }
 
+const META_TYPES = new Set(["session", "session_info", "model_change", "thinking_level_change", "custom", "custom_message"])
+
+/** A record that can move a turn: not session/model/thinking bookkeeping and not a local command. */
+export function isTurnWrite(entry: Raw): boolean {
+  if (META_TYPES.has(String(entry.type))) return false
+  if (entry._slash === true || entry._localOutput === true || entry._sidechain === true) return false
+  if (entry.type === "message" && isRecord(entry.message) && entry.message.role === "bashExecution") return false
+  return true
+}
+
 export function mergeFile(file: string): FileCache {
   const stat = statSync(file)
   let cache = fileCache.get(file)
@@ -159,10 +173,12 @@ export function mergeFile(file: string): FileCache {
       raw: [],
       mtimeMs: 0,
       size: 0,
+      nonMetaWriteAt: 0,
     }
     fileCache.set(file, cache)
   }
   if (stat.size > cache.offset) {
+    const firstNew = cache.raw.length
     const fd = openSync(file, "r")
     try {
       const length = stat.size - cache.offset
@@ -181,6 +197,7 @@ export function mergeFile(file: string): FileCache {
           // A partial or malformed line is not fatal; the next read may complete it.
         }
       }
+      if (cache.raw.slice(firstNew).some(isTurnWrite)) cache.nonMetaWriteAt = stat.mtimeMs
     } finally {
       closeSync(fd)
     }
@@ -257,6 +274,7 @@ export function parseSessionFile(file: string): ParsedFile {
     model,
     thinkingLevel,
     modifiedAt: cache.mtimeMs,
+    nonMetaWriteAt: cache.nonMetaWriteAt,
     size: cache.size,
   }
   parsedCache.set(file, { mtimeMs: cache.mtimeMs, size: cache.size, parsed })
@@ -356,7 +374,7 @@ export function normalizeEvent(
   options: NormalizeOptions = {},
 ): ViewerEvent {
   const at = atOf(entry)
-  const base: Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch"> & {
+  const base: Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "slash"> & {
     raw?: string
   } = {
     id: `${agent.id}:${seq}`,
@@ -366,6 +384,7 @@ export function normalizeEvent(
     at,
     onBranch,
   }
+  if (entry._slash === true) base.slash = true
   if (options.raw !== false) {
     let json = ""
     try {
@@ -613,49 +632,50 @@ export function compactedState(parsed: ParsedFile, now = Date.now()): AgentState
     : { status: "waiting", note: "awaiting input" }
 }
 
-/** A compaction can resume the same tool loop; wait this long before calling the turn closed. */
-export const COMPACTION_RETRY_MS = 30_000
-
-/** True when the record before `index` is an assistant tool loop that can still continue. */
+/**
+ * True when the record before `index` is an assistant loop that a compaction can resume.
+ * Real Claude auto-compact is tool_use -> tool_result -> compact_boundary; real Pi overflow is
+ * assistant error/length -> (optional context_edit) -> compaction.
+ */
 function toolLoopBefore(events: Raw[], index: number): boolean {
   for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
     const entry = events[cursor]
     if (entry._sidechain === true) continue
     if (entry._interrupt === true) return false
     if (entry._localOutput === true || entry._slash === true) continue
+    if (entry.type === "context_edit") continue
     if (entry.type === "compaction") return false
     if (entry.type !== "message" || !isRecord(entry.message)) continue
     if (isLocalCommand(entry.message)) continue
     const role = typeof entry.message.role === "string" ? entry.message.role : ""
+    if (role === "toolResult") continue
+    if (role !== "assistant") return false
     const stopReason = typeof entry.message.stopReason === "string" ? entry.message.stopReason : ""
-    return role === "assistant" && stopReason === "toolUse"
+    const error = typeof entry.message.errorMessage === "string" ? entry.message.errorMessage : ""
+    return stopReason === "toolUse" || stopReason === "length" || (stopReason === "error" && /context|too long|exceed/i.test(error))
   }
   return false
 }
 
 /**
- * A compaction while an assistant tool loop is still open (Claude auto-compact, Pi overflow
- * compaction then retry) is not the end of the turn. Only after the retry window, or when the
- * record before it is a finished turn, does the compaction close the turn.
+ * A compaction while the loop is still open is not the end of the turn. No fixed timer closes
+ * it: the next model write (or a real idle signal) decides. Only a long silence goes quiet.
  */
 export function compactionState(parsed: ParsedFile, index: number, now = Date.now()): AgentState {
-  const entry = parsed.events[index]
-  const at = entry ? atOf(entry) : 0
-  const age = now - parsed.modifiedAt
-  if (at > 0 && toolLoopBefore(parsed.events, index) && now - at <= COMPACTION_RETRY_MS) {
+  const age = now - (parsed.nonMetaWriteAt || parsed.modifiedAt)
+  if (toolLoopBefore(parsed.events, index)) {
     if (age > QUIET_MS) return { status: "quiet", note: `no output for ${Math.floor(age / 60_000)}m` }
     return { status: "working", note: "compacting context" }
   }
   return compactedState(parsed, now)
 }
 
-/** Last write that can change the turn state; meta rows (model, thinking, notices) do not. */
+/**
+ * Last file write that can move a turn. File mtime is the stream-completion time, unlike a
+ * Pi message timestamp (stream start); meta-only writes do not advance the cached value.
+ */
 export function lastWriteAt(parsed: ParsedFile): number {
-  for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
-    const entry = parsed.events[index]
-    if (entry.type === "message" || entry.type === "compaction") return atOf(entry)
-  }
-  return parsed.modifiedAt
+  return parsed.nonMetaWriteAt || parsed.modifiedAt
 }
 
 export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
@@ -663,6 +683,10 @@ export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   let last: Raw | null = null
   for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
     const entry = parsed.events[index]
+    // A local slash command with its own output (`/model`) opened no model turn; a
+    // prompt-type slash command (no output) still does.
+    if (entry._localOutput === true) continue
+    if (entry._slash === true && parsed.events[index + 1]?._localOutput === true) continue
     if (entry.type === "compaction") return compactionState(parsed, index, now)
     if (entry.type === "message" && isRecord(entry.message) && !isLocalCommand(entry.message)) {
       last = entry

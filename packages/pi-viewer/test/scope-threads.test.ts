@@ -27,7 +27,7 @@ function agent(paneId: string, windowIndex: number, paneIndex: number, name: str
 const ALPHA = agent("%1", 0, 0, "alpha")
 const BETA = agent("%2", 0, 1, "beta")
 const GAMMA = agent("%3", 1, 0, "gamma")
-const SESSIONS: ViewerSession[] = [{ name: "xx", agents: [GAMMA, BETA, ALPHA], capturedAt: 0 }]
+const SESSIONS: ViewerSession[] = [{ name: "xx", serverId: "tmux:test", agents: [GAMMA, BETA, ALPHA], capturedAt: 0 }]
 
 function ev(a: ViewerAgent, seq: number, at: number, kind: ViewerEvent["kind"], extra: Partial<ViewerEvent> = {}): ViewerEvent {
   return { id: `${a.id}:${seq}`, agentId: a.id, agentName: a.name, seq, at, kind, role: null, summary: `${a.name} ${kind} ${seq}`, onBranch: true, ...extra }

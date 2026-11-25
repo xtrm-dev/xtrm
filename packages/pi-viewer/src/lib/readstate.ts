@@ -2,6 +2,11 @@
 
 const PREFIX = "xtrm-viewer:last-seen:"
 
+/** A read-state key belongs to one tmux server: a reused window/pane id is not the same thread. */
+export function threadReadKey(serverId: string, base: string): string {
+  return `${serverId}:${base}`
+}
+
 export function loadLastSeen(key: string): number {
   try {
     const raw = window.localStorage.getItem(PREFIX + key)
@@ -10,6 +15,36 @@ export function loadLastSeen(key: string): number {
   } catch {
     return 0
   }
+}
+
+export function dropLastSeen(key: string): void {
+  try {
+    window.localStorage.removeItem(PREFIX + key)
+  } catch {
+    // Storage can be blocked; there is nothing to migrate then.
+  }
+}
+
+/**
+ * Read this scope's position, migrating one old key once. Old `session:agentIds` keys and
+ * server-less scope keys are dropped after their value moves to the key with a tmux server id.
+ */
+export function migrateLastSeen(key: string, legacyKeys: readonly string[] = []): number {
+  const current = loadLastSeen(key)
+  if (current > 0) {
+    for (const legacy of legacyKeys) dropLastSeen(legacy)
+    return current
+  }
+  for (const legacy of legacyKeys) {
+    const value = loadLastSeen(legacy)
+    if (value > 0) {
+      saveLastSeen(key, value)
+      for (const other of legacyKeys) dropLastSeen(other)
+      return value
+    }
+  }
+  for (const legacy of legacyKeys) dropLastSeen(legacy)
+  return 0
 }
 
 export function saveLastSeen(key: string, at: number): void {
@@ -49,9 +84,19 @@ export function shouldSaveLastSeen(input: {
   return input.ready && input.atBottom && input.visible && input.newest > 0
 }
 
-/** The scroll pill counts new events, not rendered rows: one turn row can carry many events. */
-export function unseenEventCount(current: number, base: number, atBottom: boolean): number {
-  return atBottom ? 0 : Math.max(0, current - base)
+/**
+ * The scroll pill counts timeline rows appended after the reader left the bottom. Rows loaded
+ * with "Load earlier" are older than the leave point and do not count; presence-only updates
+ * that do not add a row do not count either.
+ */
+export function unseenTimelineItems(
+  items: readonly Timed[],
+  seen: ReadonlySet<string>,
+  leftAt: number,
+  atBottom: boolean,
+): number {
+  if (atBottom) return 0
+  return items.filter((item) => item.at >= leftAt && !seen.has(item.id)).length
 }
 
 /** Rows after the divider, excluding the operator's own. */

@@ -64,7 +64,7 @@ test("incremental and earlier pages merge to the full timeline in order", () => 
   const future = new Date(Date.now() + 2_000)
   utimesSync(file, future, future)
 
-  const session = { name: "cache-test", agents: [agent(file, count)], version: "v1", capturedAt: 0 }
+  const session = { name: "cache-test", serverId: "tmux:test", agents: [agent(file, count)], version: "v1", capturedAt: 0 }
   const first = cachedThread(session, { scope: "branch", limit: 10 })
   assert.equal(first.events.length, 20)
   assert.equal(first.hasEarlier, true)
@@ -114,7 +114,7 @@ test("an unchanged poll returns no events", () => {
   )
   const future = new Date(Date.now() + 2_000)
   utimesSync(file, future, future)
-  const session = { name: "cache-unchanged", agents: [agent(file, 3)], version: "v1", capturedAt: 0 }
+  const session = { name: "cache-unchanged", serverId: "tmux:test", agents: [agent(file, 3)], version: "v1", capturedAt: 0 }
   const first = cachedThread(session, { scope: "branch", limit: 10 })
   const again = cachedThread(session, {
     scope: "branch",

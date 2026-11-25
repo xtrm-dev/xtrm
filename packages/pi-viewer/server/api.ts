@@ -92,6 +92,7 @@ function lite(event: ViewerEvent, scope: "branch" | "all"): ViewerEvent {
     summary: event.summary,
   }
   if (event.isError) base.isError = true
+  if (event.slash) base.slash = true
 
   // The inspection view renders summaries only; every body is fetched on expand.
   if (scope === "all") {
@@ -173,6 +174,7 @@ function threadOf(
   return cachedThread(
     {
       name: session.name,
+      serverId: session.serverId,
       agents: session.agents,
       version: versionOf(session),
       capturedAt: Date.now(),
@@ -307,6 +309,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
     if (url.searchParams.get("meta") === "1") {
       const meta: ThreadMeta = {
         session: session.name,
+        serverId: session.serverId,
         version: versionOf(session),
         agents: session.agents,
         capturedAt: Date.now(),

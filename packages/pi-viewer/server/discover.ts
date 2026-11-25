@@ -34,6 +34,8 @@ export interface TmuxPane {
   cwd: string
   title: string
   role: string | null
+  serverPid: string
+  socketPath: string
 }
 
 interface Proc {
@@ -69,13 +71,15 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
     "#{pane_current_path}",
     "#{pane_title}",
     "#{@agent_role}",
+    "#{pid}",
+    "#{socket_path}",
   ].join("\t")
   const output = run("tmux", ["list-panes", "-a", "-F", format])
   if (output === null) return { panes: [], error: "tmux is not running or not installed" }
   const panes: TmuxPane[] = []
   for (const line of output.split("\n")) {
     if (!line.trim()) continue
-    const [session, windowIndex, windowId, windowName, paneIndex, paneId, panePid, command, cwd, title, role] =
+    const [session, windowIndex, windowId, windowName, paneIndex, paneId, panePid, command, cwd, title, role, serverPid, socketPath] =
       line.split("\t")
     if (!session || !paneId) continue
     panes.push({
@@ -90,6 +94,8 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
       cwd: cwd ?? "",
       title: title ?? "",
       role: role?.trim() || null,
+      serverPid: serverPid ?? "",
+      socketPath: socketPath ?? "",
     })
   }
   return { panes }
@@ -395,6 +401,12 @@ export interface Discovery {
   error?: string
 }
 
+function serverIdentity(panes: TmuxPane[]): string {
+  const pane = panes[0]
+  if (!pane) return "tmux"
+  return `${pane.serverPid || "0"}:${pane.socketPath || "default"}`
+}
+
 export function discover(): Discovery {
   const { panes, error } = listTmuxPanes()
   if (error) return { sessions: [], error }
@@ -406,6 +418,7 @@ export function discover(): Discovery {
     bySession.set(pane.session, list)
   }
 
+  const serverId = serverIdentity(panes)
   const sessions: ViewerSession[] = []
   // Claude transcripts are paired for all panes together: one claim set across tmux
   // sessions, in a deterministic pane order (see resolveClaudeTranscripts).
@@ -424,7 +437,7 @@ export function discover(): Discovery {
     }
     if (!agents.length) continue
     agents.sort((a, b) => a.windowIndex - b.windowIndex || a.paneIndex - b.paneIndex)
-    sessions.push({ name, agents, capturedAt: Date.now() })
+    sessions.push({ name, serverId, agents, capturedAt: Date.now() })
   }
   sessions.sort((a, b) => a.name.localeCompare(b.name))
   prunePaneReads(new Set(sessions.flatMap((session) => session.agents.map((agent) => agent.paneId))))

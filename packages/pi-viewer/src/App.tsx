@@ -35,6 +35,7 @@ import {
   type Scope,
   type ScopeTrack,
 } from "@/lib/scope"
+import { threadReadKey } from "@/lib/readstate"
 import { mergeLive } from "@/lib/tree"
 import type { ThreadMeta, ThreadPayload, ViewerAgent, ViewerEvent, ViewerSession } from "@/shared/types"
 
@@ -213,6 +214,7 @@ export default function App() {
         revision = payload.revision
         const nextMeta: ThreadMeta = {
           session: payload.session,
+          serverId: payload.serverId,
           version: payload.version,
           agents: payload.agents,
           capturedAt: payload.capturedAt,
@@ -449,7 +451,14 @@ export default function App() {
                           events={scopeEvents}
                           agents={agents}
                           session={branch.session}
-                          readKey={scope ? scopeRowKey(scope) : branch.session}
+                          readKey={threadReadKey(branch.serverId, scope ? scopeRowKey(scope) : branch.session)}
+                          legacyReadKeys={[
+                            scope ? scopeRowKey(scope) : branch.session,
+                            `${branch.session}:${agents
+                              .map((agent) => agent.id)
+                              .sort()
+                              .join(",")}`,
+                          ]}
                           optimistic={scopeOptimistic}
                           onDismissOptimistic={(id) =>
                             setOptimistic((previous) => previous.filter((entry) => entry.id !== id))

@@ -68,7 +68,7 @@ const agent = {
   statusNote: null,
 }
 
-const sessions = { sessions: [{ name: SESSION, agents: [agent] }], capturedAt: Date.now(), error: null }
+const sessions = { sessions: [{ name: SESSION, serverId: "test:tmux", agents: [agent] }], capturedAt: Date.now(), error: null }
 const baseEvents = makeFixture()
 let metaCalls = 0
 let fullCalls = 0
@@ -111,7 +111,7 @@ await page.route("**/api/**", async (route) => {
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ session: SESSION, version: `v${metaCalls}`, agents: [agent], capturedAt: Date.now() }),
+      body: JSON.stringify({ session: SESSION, serverId: "test:tmux", version: `v${metaCalls}`, agents: [agent], capturedAt: Date.now() }),
     })
   }
 
@@ -154,6 +154,7 @@ await page.route("**/api/**", async (route) => {
     contentType: "application/json",
     body: JSON.stringify({
       session: SESSION,
+      serverId: "test:tmux",
       version: `v${metaCalls}`,
       agents: [agent],
       capturedAt: Date.now(),
@@ -317,6 +318,62 @@ try {
   )
   await page.setViewportSize({ width: 1440, height: 1000 })
   await settle(page)
+
+  // A remembered row that never appears must expire instead of searching forever.
+  const channelKey = "s:xx:channel"
+  await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.scrollTop = Math.max(0, viewport.scrollHeight * 0.5)
+  })
+  await settle(page)
+  await page.getByRole("tab", { name: "All events" }).click()
+  await settle(page)
+  await page.evaluate(async (key) => {
+    const stick = await import("/src/lib/stick.ts")
+    stick.remember(key, { atEnd: false, anchorId: "missing-row", anchorTop: 0 })
+  }, channelKey)
+  await page.getByRole("tab", { name: "Channel" }).click()
+  await page.waitForFunction(
+    () => document.querySelector('[data-slot="message-scroller-viewport"]')?.dataset.restoring === "true",
+    undefined,
+    { timeout: 4_000 },
+  )
+  await page.waitForFunction(
+    () => document.querySelector('[data-slot="message-scroller-viewport"]')?.dataset.restoring !== "true",
+    undefined,
+    { timeout: 5_000 },
+  )
+  const restoreExpired = await page.evaluate(
+    () => document.querySelector('[data-slot="message-scroller-viewport"]')?.dataset.restoring !== "true",
+  )
+  assert.equal(restoreExpired, true, "a missing remembered row kept searching past the deadline")
+
+  // A reader gesture cancels a pending restore immediately.
+  await page.getByRole("tab", { name: "All events" }).click()
+  await settle(page)
+  await page.evaluate(async (key) => {
+    const stick = await import("/src/lib/stick.ts")
+    stick.remember(key, { atEnd: false, anchorId: "missing-row", anchorTop: 0 })
+  }, channelKey)
+  await page.getByRole("tab", { name: "Channel" }).click()
+  await page.waitForFunction(
+    () => document.querySelector('[data-slot="message-scroller-viewport"]')?.dataset.restoring === "true",
+    undefined,
+    { timeout: 4_000 },
+  )
+  await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }))
+  })
+  await page.waitForFunction(
+    () => document.querySelector('[data-slot="message-scroller-viewport"]')?.dataset.restoring !== "true",
+    undefined,
+    { timeout: 1_000 },
+  )
+  const restoreCancelled = await page.evaluate(
+    () => document.querySelector('[data-slot="message-scroller-viewport"]')?.dataset.restoring !== "true",
+  )
+  assert.equal(restoreCancelled, true, "a wheel gesture did not cancel the pending restore")
 
   assert.equal(errors.length, 0, `console errors: ${errors.join(" | ")}`)
 
