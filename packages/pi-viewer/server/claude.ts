@@ -7,10 +7,10 @@ import {
   RAW_CAP,
   cap,
   contentText,
+  dropFileCache,
   firstLine,
   mergeFile,
   normalizeEvent,
-  compactionState,
   statusOf,
   type AgentState,
   type ParsedFile,
@@ -364,10 +364,6 @@ interface ClaudeState {
   customTitle: string | null
   agentName: string | null
   model: string | null
-  /** File write time of the last record that can move a turn. */
-  nonMetaWriteAt: number
-  /** A turn record arrived in this ingest pass; stamp the file time after the read. */
-  turnDirty: boolean
 }
 
 const states = new Map<string, ClaudeState>()
@@ -386,8 +382,6 @@ function freshState(rawRef: Raw[]): ClaudeState {
     customTitle: null,
     agentName: null,
     model: null,
-    nonMetaWriteAt: 0,
-    turnDirty: false,
   }
 }
 
@@ -420,9 +414,23 @@ function addEntry(state: ClaudeState, entry: Raw, record: Raw, sidechain: boolea
   state.entries.push(entry)
   state.versions.push(0)
   if (!sidechain) state.branchIds.add(id)
-  if (!sidechain && entry.type !== "claude-event" && entry._slash !== true && entry._localOutput !== true) {
-    const message = isRecord(entry.message) ? entry.message : {}
-    if (message.role !== "bashExecution") state.turnDirty = true
+}
+
+/**
+ * Local output proves that the slash command before it ran without the model (`/goal` writes
+ * output with no caveat before it): the command is marked local and its revision bumped, so
+ * caches re-read it. A command with neither (a skill or prompt command such as `/review`)
+ * stays a prompt.
+ */
+function markCommandLocal(state: ClaudeState): void {
+  for (let index = state.entries.length - 1; index >= 0; index -= 1) {
+    const entry = state.entries[index]
+    if (entry._sidechain === true || entry.type === "claude-event") continue
+    if (entry._command === true && entry._local !== true) {
+      entry._local = true
+      state.versions[index] += 1
+    }
+    return
   }
 }
 
@@ -509,6 +517,10 @@ function ingestAssistant(state: ClaudeState, record: Raw, sidechain: boolean): v
 const ENVELOPE = /^\s*(?:Another Claude session sent a message:\s*)?<cross-session-message\b/
 /** Output of a local slash command (`/model`): proof that the command ran without the model. */
 const LOCAL_OUTPUT = /^\s*<local-command-(?:stdout|stderr)\b/
+/** Claude writes this note just before a command it runs itself (`/compact`, `/model`, `/cd`). */
+const LOCAL_CAVEAT = /^\s*<local-command-caveat\b/
+/** Injected notifications that wake the agent: each starts a turn, like a Pi wake-up notice. */
+const WAKE = /^\s*<(?:task-notification|monitor-event)\b/
 const INJECTED = /^\s*<(?:system-reminder|local-command-caveat|local-command-stdout|local-command-stderr|user-prompt-submit-hook|task-notification|command-stdout)\b/
 /** Bash mode: the operator runs a command in the pane; it is not an agent turn. */
 const BASH_INPUT = /^\s*<bash-input>([\s\S]*?)<\/bash-input>/
@@ -568,12 +580,34 @@ function ingestUserText(state: ClaudeState, record: Raw, text: string, sidechain
     const label = origin && origin !== "human" ? origin : "injected"
     const body = text.replace(/<\/?system-reminder>/g, "")
     const entry = { ...eventEntry("injected", `${label} · ${firstLine(body) || "context"}`, body), ...base }
-    addEntry(state, LOCAL_OUTPUT.test(text) ? { ...entry, _localOutput: true } : entry, record, sidechain)
+    if (LOCAL_OUTPUT.test(text)) {
+      addEntry(state, { ...entry, _localOutput: true }, record, sidechain)
+      if (!sidechain) markCommandLocal(state)
+      return
+    }
+    const flagged = LOCAL_CAVEAT.test(text)
+      ? { ...entry, _caveat: true }
+      : WAKE.test(text) && record.isMeta !== true
+        ? { ...entry, _wake: true }
+        : entry
+    addEntry(state, flagged, record, sidechain)
     return
   }
   const slash = slashCommand(text)
   const message = { type: "message", ...base, message: { role: "user", content: slash ?? text } }
-  addEntry(state, slash ? { ...message, _slash: true } : message, record, sidechain)
+  // A command right after the local-command caveat runs in Claude Code, not in the model.
+  addEntry(state, slash ? { ...message, _command: true, _local: !sidechain && afterCaveat(state) } : message, record, sidechain)
+}
+
+/** True when the newest main-line injected record is the local-command caveat. */
+function afterCaveat(state: ClaudeState): boolean {
+  for (let index = state.entries.length - 1; index >= 0; index -= 1) {
+    const entry = state.entries[index]
+    if (entry._sidechain === true) continue
+    if (entry.type === "claude-event" && entry._label !== "injected") continue
+    return entry._caveat === true
+  }
+  return false
 }
 
 function ingestUser(state: ClaudeState, record: Raw, sidechain: boolean): void {
@@ -674,6 +708,13 @@ function ingest(state: ClaudeState, record: Raw): void {
   }
 }
 
+/** Forget every cached read of `file`; the next read parses it from the start (replay harness). */
+export function dropClaudeCache(file: string): void {
+  states.delete(file)
+  parsedCache.delete(file)
+  dropFileCache(file)
+}
+
 /** True while the newest assistant record has announced tool use but its tool_use block is not yet written. */
 function hasPendingTail(entry: Raw | undefined): boolean {
   if (!entry || entry.type !== "message" || !isRecord(entry.message)) return false
@@ -703,10 +744,6 @@ export function parseClaudeFile(file: string): ParsedFile {
     ingest(state, record)
   }
 
-  if (state.turnDirty) {
-    state.nonMetaWriteAt = cache.mtimeMs
-    state.turnDirty = false
-  }
   const cached = parsedCache.get(file)
   if (cached && cached.mtimeMs === cache.mtimeMs && cached.size === cache.size && cached.count === state.entries.length) {
     return cached.parsed
@@ -726,7 +763,6 @@ export function parseClaudeFile(file: string): ParsedFile {
     model: state.model,
     thinkingLevel: null,
     modifiedAt: cache.mtimeMs,
-    nonMetaWriteAt: state.nonMetaWriteAt,
     size: cache.size,
   }
   parsedCache.set(file, { mtimeMs: cache.mtimeMs, size: cache.size, count: state.entries.length, parsed })
@@ -734,33 +770,13 @@ export function parseClaudeFile(file: string): ParsedFile {
 }
 
 /**
- * Status from the main conversation only. Walking back from the newest record:
- * sidechain records and bookkeeping rows (system, attachment, queue-operation, ...) are skipped,
- * an interrupt marker means idle, and the first main-line message decides the rest.
+ * Status of a Claude agent: the same turn state model as Pi (src/lib/turn-state.ts). The
+ * converted entries carry the Claude facts the model needs: sidechain records have no effect,
+ * an interrupt marker aborts, a task notification opens, a slash command with local output
+ * is local.
  */
 export function claudeStatusOf(parsed: ParsedFile, now = Date.now()): AgentState {
-  const events = parsed.events
-  // A slash command followed by local-command output (`/model`, `/clear`) ran without the model:
-  // it opens no turn, so the status comes from the message before it.
-  let localOutput = false
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const entry = events[index]
-    if (entry._sidechain === true) continue
-    if (entry._interrupt === true) return { status: "idle", note: "turn interrupted" }
-    if (entry._localOutput === true) {
-      localOutput = true
-      continue
-    }
-    if (entry.type === "compaction") return compactionState(parsed, index, now)
-    if (entry.type !== "message") continue
-    if (localOutput && entry._slash === true) {
-      localOutput = false
-      continue
-    }
-    localOutput = false
-    return statusOf(index === events.length - 1 ? parsed : { ...parsed, events: events.slice(0, index + 1) }, now)
-  }
-  return statusOf({ ...parsed, events: [] }, now)
+  return statusOf(parsed, now)
 }
 
 export function normalizeClaudeEvent(

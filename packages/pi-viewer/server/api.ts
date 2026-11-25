@@ -92,7 +92,7 @@ function lite(event: ViewerEvent, scope: "branch" | "all"): ViewerEvent {
     summary: event.summary,
   }
   if (event.isError) base.isError = true
-  if (event.slash) base.slash = true
+  if (event.effect) base.effect = event.effect
 
   // The inspection view renders summaries only; every body is fetched on expand.
   if (scope === "all") {

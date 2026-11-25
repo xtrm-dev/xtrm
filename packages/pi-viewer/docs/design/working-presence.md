@@ -169,6 +169,9 @@ answered and waits for a new prompt, which is normal idle.
 A stopped turn that later receives activity (the agent resumes) moves back to presence. This can only
 happen after a server status flip, so it is rare and is acceptable.
 
+How a turn opens and closes, and which records count, is defined by the turn state model in §8
+(XTRM-1043). It replaces the per-case rules that were added here during XTRM-1037 to XTRM-1041.
+
 ### 3.7 Scope
 
 The presence set is the agents of the current scope, the same set `agentsInScope` already returns.
@@ -307,3 +310,161 @@ branch `xt/t3-audit`, §1, §3.5 and §10):
 2. A global shortcut to open the presence panel (proposal: none in v1).
 3. Should the presence line also count running agents outside the scope (`· 2 more elsewhere`)?
    Recommendation: no; the sidebar already shows them.
+
+## 8. Turn state model (XTRM-1043)
+
+Three review rounds (XTRM-1037, 1040, 1041) failed the working, idle and stopped classification. Each fix
+was a new heuristic, passed its fixture test and failed on a real transcript. The model below replaces those
+heuristics with one state machine. It is code in `src/lib/turn-state.ts`. Three consumers use it:
+
+- the Pi status (`statusOf`);
+- the Claude status (`claudeStatusOf`, which is now `statusOf`);
+- the browser's turn grouping (`groupAgent` in `src/lib/thread.ts`, then `splitPresence`).
+
+The status line and the thread therefore cannot disagree about a turn.
+
+### 8.1 One effect per record
+
+The server gives each transcript record exactly one effect (`entryEffect` in `server/session.ts`) and
+carries it on the event (`ViewerEvent.effect`). Claude records arrive converted to Pi's shape, with
+flags set by `server/claude.ts`.
+
+| effect | records |
+|---|---|
+| `open` | operator prompt; prompt-type slash command (`/review`, a skill); peer message received; a wake-up notice: Pi `custom_message` of type `intercom_message`, `task_notification`, `monitor_event`, `specialist_settled` or `specialist_ask`, or Claude `<task-notification>` or `<monitor-event>`; a Pi skill prompt |
+| `step` | assistant message with a tool call or stop reason tool use; tool result |
+| `reply` | assistant message with no tool call (`stop`, `end_turn`, `length`, `stop_sequence` without a call) |
+| `abort` | assistant `aborted`; Claude `[Request interrupted by user…]` |
+| `fail` | assistant `error` |
+| `compact` | compaction |
+| `none` | local commands the operator runs in the pane (Pi `!cmd`, Claude `!cmd`, a slash command run by Claude Code); bookkeeping (model, thinking level, titles, attachments, system rows, `context_edit`); injected context (`isMeta`, system reminders); a notice that wakes nobody (`skill_suggestion`, `substrate_suggestion`); sidechain (subagent) records |
+
+How the effect is decided where the record alone does not say:
+
+- **Claude slash commands.** A command is local when the record just before it is the
+  `<local-command-caveat>`. Measured: 20 of 20 caveated commands ran locally. It is also local when
+  `<local-command-stdout>` or `<local-command-stderr>` follows it (`/goal` writes output without a caveat);
+  the command entry is then marked local and its revision bumped, so the caches re-read it. Any other
+  command is a prompt. In 30 days of transcripts, 41 skill commands were followed by their `isMeta` body
+  and a model turn.
+- **Pi `custom_message`.** The five wake-up types above got an assistant reply within 60 s in 2,594 of
+  their 2,605 occurrences in 30 days (99.6%). `skill_suggestion` and `substrate_suggestion` did not. An
+  unknown type has no effect. If such a type does wake the agent, the agent's first step opens the turn,
+  so nothing flickers.
+- **Claude `stop_sequence`.** 1,438 real `tool_use` blocks carry `stop_sequence`. The tool call decides
+  the effect, not the stop reason. The old status read those blocks as `waiting`.
+
+### 8.2 States and transitions
+
+`phase` is one of `none`, `open`, `settled`, `aborted` or `failed`. An open turn also records whether it has
+run a step (`loop`). An effect of `none` never changes the state.
+
+| effect | result |
+|---|---|
+| `open` | `open`; joins the turn already open |
+| `step` | `open` with `loop`; with no open turn, the agent resumed by itself and a turn opens |
+| `reply` | `settled` |
+| `abort` | `aborted` |
+| `fail` | `failed`; the state remembers whether the error is a context overflow |
+| `compact` | inside a running loop (`open` with `loop`, or `failed` on a context overflow): stays `open`, note `compacting context`; anywhere else: `settled` (the conversation restarted) |
+
+A context overflow is matched by error text: `prompt is too long`, `input is too long`, `context length`
+or `context window`, `maximum context`, `too many tokens`. `Rate limit exceeded` and `quota exceeded` are
+not overflows, so a compaction after them settles the turn. Before this change, any `/exceed/` error was
+treated as resumable and held `working` for 15 minutes.
+
+The server reads the state from the end of the file (`resolveTurnState`). It walks back over the newest
+decisive records until one whose result does not depend on the state before it, then folds them forward.
+This equals a fold from the start, but costs only the trailing records.
+
+### 8.3 Status
+
+| phase | status |
+|---|---|
+| `none` | `idle · no messages` |
+| `open` | `attention · question` or `plan approval` when the newest decisive record is an assistant step with an open `AskUserQuestion` or `ExitPlanMode`; else `quiet · no output for Nm` after 15 min with no file write; else `working · compacting context`, `running tools` or `turn in progress` |
+| `settled` | `waiting · awaiting input`; `idle · quiet for 15m` after 15 min |
+| `aborted` | `idle · turn interrupted` (Claude marker); else `idle · turn aborted`, or `idle · quiet for 15m` after 15 min |
+| `failed` | `error · last turn failed` |
+
+The pane capture (`attention · permission: <tool>`, XTRM-1035) is applied after this, unchanged.
+
+**Time.** No timer enters the machine. The file write time decides only between a recent and a long
+silence (`quiet`, `idle`); a fresh parse and an incremental parse see the same file time.
+`ViewerAgent.lastWriteAt` is now the newest decisive record's own write time. For Pi this is the entry
+`timestamp`, written when the entry is appended at stream end; `message.timestamp` is the stream start.
+For Claude it is the record `timestamp`. It is never a batch read's file time. The old
+`nonMetaWriteAt` stamped the file time of a whole read. A fresh parse (a viewer restart, a first view)
+therefore differed from an incremental one, and a `!ls` turn stayed in presence as working.
+
+### 8.4 Turn grouping and presence
+
+`groupAgent` folds the same effects with the same `nextTurnState`. The open turn exists exactly while the
+phase is `open`:
+
+- `open` and `step` start a turn or join the open one. `reply` and `fail` close it with its final
+  message. A reply with no open turn answers nothing shown, as before.
+- `abort` closes the turn. A Claude interrupt marker, or an abort during a tool call, leaves
+  `Turn.stopped` (`turn interrupted`, `turn aborted`). The turn is closed, so the next prompt starts a
+  new turn: an interrupted turn no longer merges into the next prompt's turn.
+- `compact` inside a loop is a step of the open turn. Outside a loop it ends a turn that ran no step:
+  that turn is `local`, because its prompt was a command, as with the bare `/compact` record in
+  `2f0aa11a` line 6365.
+- Work with no open turn (`!ls`, `/model`, `/compact`, an idle compaction, a notice that wakes nobody)
+  collects in one closed `local` turn. It is never pending and never joins the next prompt's turn.
+  This fixes the idle compaction row and the Pi notice row that vanished on the next record.
+
+The browser receives meta events that carry an effect: an interrupt marker, a Claude wake-up, a Pi
+skill prompt, a Pi intercom delivery result. The Channel filter keeps them (`channelEvent`); rendering
+still skips meta events.
+
+`splitPresence` no longer uses a timer:
+
+- a `local` turn becomes a local stopped row (`Ran in the pane, no agent turn`); a local turn with no
+  step (`/model`) adds no row, because its operator row shows it;
+- a closed `stopped` turn becomes a stopped row;
+- a pending turn goes to presence when the agent is live (`working`, `attention`, `quiet`) or
+  `waiting`; a pending turn with a waiting agent means the status poll and the thread payload were read
+  at different moments;
+- otherwise (`idle`, `error`, `unknown`, gone), a pending turn becomes a stopped row at `Turn.end`.
+
+The time-based `replyInFlight` rule and the `slash` flag are removed.
+
+### 8.5 Replay harness
+
+`test/replay/harness.ts` writes a transcript to disk one record at a time, as an agent writes it. After
+each record it reads the file twice: incrementally (the same cached file, appended) and fresh (a new parse
+of the same bytes, as after a viewer restart). For every prefix it builds the status and the browser's
+split, and checks three conditions:
+
+1. **fresh == incremental:** the status, `lastWriteAt`, the presence entries and the stopped rows are
+   identical;
+2. **no flicker:** a stopped row never disappears unless the new record is an operator prompt;
+3. **sync:** an open turn exists only while the status is live.
+
+`test/replay.test.ts` replays eight redacted windows of real transcripts and asserts labelled states at
+named source lines. The windows are listed in `test/fixtures/replay/README.md`:
+
+- the Claude adapter `a09891e1` start (skill commands);
+- `a9a8fd4e` lines 599 and 2620 (auto compactions);
+- `2f0aa11a` line 6365 (the manual `/compact`);
+- `8a1d4345` lines 2117 to 2148 (an idle `/compact`, `/model`, a task notification, peer messages) and
+  line 2803 (`AskUserQuestion`);
+- Pi `01a20df7` lines 797 to 827 (task, specialist and intercom notices) and lines 1236 to 1339 (an
+  abort, a task notification, and the 502/503 retries).
+
+The same file holds the reviewer's `restart.ts` and `slash.ts` reproductions and the review nits as
+tests. `scripts/redact-transcript.mjs` makes a fixture from any window. `scripts/replay-transcript.ts`
+replays any transcript, redacted or real, and prints its status transitions and any violation.
+
+### 8.6 Known limits
+
+- **Pi retries.** Pi retries a failed request by writing `context_edit` (replacement null) over the error.
+  Each failed attempt reads as `error` until the next attempt writes; a successful retry opens a new
+  turn. The model does not guess a retry before it is written.
+- **Pi overflow compaction.** When a compaction resumes after a context overflow, the status is
+  `working · compacting context`. The failed turn is already closed in the thread, so presence shows the
+  agent with no open turn ("Working…") until the next step. No such case occurred in 30 days.
+- **Local row wording.** An automatic compaction with no turn open shows as a local row whose text is
+  "Ran in the pane, no agent turn". The row is stable. Better wording is a visual change and is out of
+  scope.

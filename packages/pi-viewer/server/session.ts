@@ -2,7 +2,8 @@ import { closeSync, openSync, readSync, statSync } from "node:fs"
 import { StringDecoder } from "node:string_decoder"
 import { basename } from "node:path"
 
-import type { AgentStatus, EventKind, ViewerEvent, ViewerPart } from "../src/shared/types.ts"
+import type { AgentStatus, EventKind, TurnEffect, ViewerEvent, ViewerPart } from "../src/shared/types.ts"
+import { isContextOverflow, resolveTurnState } from "../src/lib/turn-state.ts"
 import { intercomsFromEntry, isIntercomTool } from "./intercom.ts"
 
 type Raw = Record<string, unknown>
@@ -14,8 +15,6 @@ export interface FileCache {
   raw: Raw[]
   mtimeMs: number
   size: number
-  /** File write time of the last non-meta entry; meta-only writes must not move it. */
-  nonMetaWriteAt: number
 }
 
 const fileCache = new Map<string, FileCache>()
@@ -36,8 +35,6 @@ export interface ParsedFile {
   thinkingLevel: string | null
   modifiedAt: number
   size: number
-  /** Write time of the newest record that can change a turn (not model/thinking/notice rows). */
-  nonMetaWriteAt?: number
   /** Per-entry revision for parsers that mutate an existing entry in place (Claude). */
   entryVersions?: number[]
 }
@@ -152,16 +149,6 @@ function atOf(entry: Raw): number {
   return 0
 }
 
-const META_TYPES = new Set(["session", "session_info", "model_change", "thinking_level_change", "custom", "custom_message"])
-
-/** A record that can move a turn: not session/model/thinking bookkeeping and not a local command. */
-export function isTurnWrite(entry: Raw): boolean {
-  if (META_TYPES.has(String(entry.type))) return false
-  if (entry._slash === true || entry._localOutput === true || entry._sidechain === true) return false
-  if (entry.type === "message" && isRecord(entry.message) && entry.message.role === "bashExecution") return false
-  return true
-}
-
 export function mergeFile(file: string): FileCache {
   const stat = statSync(file)
   let cache = fileCache.get(file)
@@ -173,12 +160,10 @@ export function mergeFile(file: string): FileCache {
       raw: [],
       mtimeMs: 0,
       size: 0,
-      nonMetaWriteAt: 0,
     }
     fileCache.set(file, cache)
   }
   if (stat.size > cache.offset) {
-    const firstNew = cache.raw.length
     const fd = openSync(file, "r")
     try {
       const length = stat.size - cache.offset
@@ -197,7 +182,6 @@ export function mergeFile(file: string): FileCache {
           // A partial or malformed line is not fatal; the next read may complete it.
         }
       }
-      if (cache.raw.slice(firstNew).some(isTurnWrite)) cache.nonMetaWriteAt = stat.mtimeMs
     } finally {
       closeSync(fd)
     }
@@ -205,6 +189,12 @@ export function mergeFile(file: string): FileCache {
   cache.mtimeMs = stat.mtimeMs
   cache.size = stat.size
   return cache
+}
+
+/** Forget every cached read of `file`; the next read parses it from the start (replay harness). */
+export function dropFileCache(file: string): void {
+  fileCache.delete(file)
+  parsedCache.delete(file)
 }
 
 function branchIds(raw: Raw[]): Set<string> {
@@ -274,7 +264,6 @@ export function parseSessionFile(file: string): ParsedFile {
     model,
     thinkingLevel,
     modifiedAt: cache.mtimeMs,
-    nonMetaWriteAt: cache.nonMetaWriteAt,
     size: cache.size,
   }
   parsedCache.set(file, { mtimeMs: cache.mtimeMs, size: cache.size, parsed })
@@ -374,7 +363,7 @@ export function normalizeEvent(
   options: NormalizeOptions = {},
 ): ViewerEvent {
   const at = atOf(entry)
-  const base: Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "slash"> & {
+  const base: Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "effect"> & {
     raw?: string
   } = {
     id: `${agent.id}:${seq}`,
@@ -383,8 +372,8 @@ export function normalizeEvent(
     seq,
     at,
     onBranch,
+    effect: entryEffect(entry),
   }
-  if (entry._slash === true) base.slash = true
   if (options.raw !== false) {
     let json = ""
     try {
@@ -614,108 +603,105 @@ function pendingAsk(message: Raw): AgentState | null {
 }
 
 /**
- * Records the operator runs in the pane without the agent: a Pi `!cmd` (bashExecution). They
- * never open an agent turn, so the status is read from the message before them.
+ * Pi custom messages that wake the agent, so each starts a turn. Measured over 30 days of
+ * real sessions: these types got an assistant reply within 60 s in 2,594 of 2,605 cases;
+ * `skill_suggestion` and `substrate_suggestion` did not and stay without effect.
  */
-function isLocalCommand(message: Raw): boolean {
-  return message.role === "bashExecution"
+const WAKE_CUSTOM_TYPES = new Set(["intercom_message", "task_notification", "monitor_event", "specialist_settled", "specialist_ask"])
+
+function hasToolCall(message: Raw): boolean {
+  return Array.isArray(message.content) && message.content.some((part) => isRecord(part) && part.type === "toolCall")
 }
 
 /**
- * The state of an agent whose newest record is a compaction: the conversation was summarised
- * and restarted, so no earlier turn is still open. A turn that continues after an automatic
- * compaction writes new messages, which then decide the status.
+ * The one classification of a record for the turn state model (src/lib/turn-state.ts). Pi
+ * entries are read as written; Claude records arrive converted to the same shape with flags
+ * (`_sidechain`, `_interrupt`, `_wake`, `_local`) set by server/claude.ts.
  */
-export function compactedState(parsed: ParsedFile, now = Date.now()): AgentState {
-  return now - parsed.modifiedAt > QUIET_MS
-    ? { status: "idle", note: "quiet for 15m" }
-    : { status: "waiting", note: "awaiting input" }
-}
-
-/**
- * True when the record before `index` is an assistant loop that a compaction can resume.
- * Real Claude auto-compact is tool_use -> tool_result -> compact_boundary; real Pi overflow is
- * assistant error/length -> (optional context_edit) -> compaction.
- */
-function toolLoopBefore(events: Raw[], index: number): boolean {
-  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-    const entry = events[cursor]
-    if (entry._sidechain === true) continue
-    if (entry._interrupt === true) return false
-    if (entry._localOutput === true || entry._slash === true) continue
-    if (entry.type === "context_edit") continue
-    if (entry.type === "compaction") return false
-    if (entry.type !== "message" || !isRecord(entry.message)) continue
-    if (isLocalCommand(entry.message)) continue
-    const role = typeof entry.message.role === "string" ? entry.message.role : ""
-    if (role === "toolResult") continue
-    if (role !== "assistant") return false
-    const stopReason = typeof entry.message.stopReason === "string" ? entry.message.stopReason : ""
-    const error = typeof entry.message.errorMessage === "string" ? entry.message.errorMessage : ""
-    return stopReason === "toolUse" || stopReason === "length" || (stopReason === "error" && /context|too long|exceed/i.test(error))
+export function entryEffect(entry: Raw): TurnEffect {
+  if (entry._sidechain === true) return "none"
+  if (entry._interrupt === true) return "abort"
+  if (entry._wake === true) return "open"
+  if (entry.type === "compaction") return "compact"
+  if (entry.type === "custom_message") return WAKE_CUSTOM_TYPES.has(String(entry.customType)) ? "open" : "none"
+  if (entry.type !== "message" || !isRecord(entry.message)) return "none"
+  const message = entry.message
+  switch (message.role) {
+    case "user":
+      // A local command (`/model` with its output) never reaches the model.
+      return entry._local === true ? "none" : "open"
+    case "toolResult":
+      return "step"
+    case "assistant":
+      if (message.stopReason === "error") return "fail"
+      if (message.stopReason === "aborted") return "abort"
+      // Claude writes `stop_sequence` on many tool_use blocks: the call decides, not the reason.
+      return message.stopReason === "toolUse" || hasToolCall(message) ? "step" : "reply"
+    default:
+      // bashExecution (`!ls`), system and other roles: run in the pane, never by the model.
+      return "none"
   }
-  return false
 }
 
-/**
- * A compaction while the loop is still open is not the end of the turn. No fixed timer closes
- * it: the next model write (or a real idle signal) decides. Only a long silence goes quiet.
- */
-export function compactionState(parsed: ParsedFile, index: number, now = Date.now()): AgentState {
-  const age = now - (parsed.nonMetaWriteAt || parsed.modifiedAt)
-  if (toolLoopBefore(parsed.events, index)) {
-    if (age > QUIET_MS) return { status: "quiet", note: `no output for ${Math.floor(age / 60_000)}m` }
-    return { status: "working", note: "compacting context" }
+/** A failed assistant record whose error is a context overflow, which a compaction resumes. */
+export function entryOverflow(entry: Raw): boolean {
+  const message = isRecord(entry.message) ? entry.message : null
+  if (!message || message.role !== "assistant" || message.stopReason !== "error") return false
+  const error = typeof message.errorMessage === "string" ? message.errorMessage : ""
+  return isContextOverflow(`${error} ${contentText(message.content)}`)
+}
+
+/** Write time of a record: Pi and Claude stamp each record when it is appended. */
+function writeAtOf(entry: Raw): number {
+  const raw = entry.timestamp
+  if (typeof raw === "number") return raw
+  if (typeof raw === "string") {
+    const parsed = Date.parse(raw)
+    if (!Number.isNaN(parsed)) return parsed
   }
-  return compactedState(parsed, now)
+  return atOf(entry)
 }
 
 /**
- * Last file write that can move a turn. File mtime is the stream-completion time, unlike a
- * Pi message timestamp (stream start); meta-only writes do not advance the cached value.
+ * Write time of the newest record that moves a turn, read from the record itself, so a
+ * fresh parse and an incremental parse agree. Zero when no record moves a turn.
  */
 export function lastWriteAt(parsed: ParsedFile): number {
-  return parsed.nonMetaWriteAt || parsed.modifiedAt
-}
-
-export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
-  const age = now - parsed.modifiedAt
-  let last: Raw | null = null
   for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
     const entry = parsed.events[index]
-    // A local slash command with its own output (`/model`) opened no model turn; a
-    // prompt-type slash command (no output) still does.
-    if (entry._localOutput === true) continue
-    if (entry._slash === true && parsed.events[index + 1]?._localOutput === true) continue
-    if (entry.type === "compaction") return compactionState(parsed, index, now)
-    if (entry.type === "message" && isRecord(entry.message) && !isLocalCommand(entry.message)) {
-      last = entry
-      break
+    if (entryEffect(entry) !== "none") return writeAtOf(entry)
+  }
+  return 0
+}
+
+/**
+ * Agent status from the turn state model. The state comes from the records alone; the file
+ * write time only separates a long silence (quiet, idle) from a recent one.
+ */
+export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
+  const { state, last } = resolveTurnState(parsed.events, entryEffect, entryOverflow)
+  const age = now - parsed.modifiedAt
+  switch (state.phase) {
+    case "none":
+      return { status: "idle", note: "no messages" }
+    case "failed":
+      return { status: "error", note: "last turn failed" }
+    case "aborted":
+      if (last?._interrupt === true) return { status: "idle", note: "turn interrupted" }
+      return age > QUIET_MS ? { status: "idle", note: "quiet for 15m" } : { status: "idle", note: "turn aborted" }
+    case "settled":
+      return age > QUIET_MS ? { status: "idle", note: "quiet for 15m" } : { status: "waiting", note: "awaiting input" }
+    case "open": {
+      const message = last && isRecord(last.message) && last.message.role === "assistant" ? last.message : null
+      // A question or a plan waits for the operator however long it has been open.
+      const ask = message ? pendingAsk(message) : null
+      if (ask) return ask
+      // An open turn with no write for 15 minutes is a long tool or a stuck agent.
+      if (age > QUIET_MS) return { status: "quiet", note: `no output for ${Math.floor(age / 60_000)}m` }
+      if (state.compacting) return { status: "working", note: "compacting context" }
+      return { status: "working", note: message ? "running tools" : "turn in progress" }
     }
   }
-  if (!last) return { status: "idle", note: "no messages" }
-  const message = isRecord(last.message) ? last.message : {}
-  const role = typeof message.role === "string" ? message.role : ""
-  const stopReason = typeof message.stopReason === "string" ? message.stopReason : ""
-  if (stopReason === "error") return { status: "error", note: "last turn failed" }
-  // A question or a plan waits for the operator however long it has been open.
-  if (role === "assistant" && stopReason === "toolUse") {
-    const ask = pendingAsk(message)
-    if (ask) return ask
-  }
-  const turnOpen = role !== "assistant" || stopReason === "toolUse"
-  if (age > QUIET_MS) {
-    // An open turn with no write for 15 minutes is a long tool or a stuck agent: quiet, still
-    // in the turn. A finished or aborted turn that old is plain idle.
-    if (turnOpen) return { status: "quiet", note: `no output for ${Math.floor(age / 60_000)}m` }
-    return { status: "idle", note: "quiet for 15m" }
-  }
-  if (role === "assistant") {
-    if (stopReason === "toolUse") return { status: "working", note: "running tools" }
-    if (stopReason === "aborted") return { status: "idle", note: "turn aborted" }
-    return { status: "waiting", note: "awaiting input" }
-  }
-  return { status: "working", note: "turn in progress" }
 }
 
 export function sessionIdFromFile(file: string): string | null {

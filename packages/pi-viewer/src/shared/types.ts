@@ -34,7 +34,7 @@ export interface ViewerAgent {
   model: string | null
   thinkingLevel: string | null
   modifiedAt: number
-  /** Last transcript write that can open or close a turn (meta writes do not count). */
+  /** Write time of the newest record that moves a turn, from the record itself (0 when none). */
   lastWriteAt: number
   eventCount: number
   status: AgentStatus
@@ -60,6 +60,9 @@ export type EventKind =
   | "compaction"
   | "intercom"
   | "meta"
+
+/** What one transcript record does to its agent's turn; see src/lib/turn-state.ts. */
+export type TurnEffect = "open" | "step" | "reply" | "abort" | "fail" | "compact" | "none"
 
 export type IntercomDirection = "sent" | "received"
 
@@ -131,8 +134,8 @@ export interface ViewerEvent {
    * its own card; `intercom` stays unset for these so a single event is never counted twice.
    */
   intercoms?: IntercomMeta[]
-  /** True for a Claude local slash command (`/model`), which opens no model turn. */
-  slash?: boolean
+  /** What this record does to its agent's turn (src/lib/turn-state.ts). The server sets it on every event. */
+  effect?: TurnEffect
   /** False for events that belong to an abandoned branch of the session tree. */
   onBranch: boolean
   /** Compact, capped JSON of the original line for inspection. */

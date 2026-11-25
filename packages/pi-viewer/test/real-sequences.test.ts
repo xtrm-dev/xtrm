@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert"
-import { appendFileSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
+import { appendFileSync, copyFileSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { after, test } from "node:test"
@@ -99,24 +99,29 @@ test("probe C: real Pi overflow (error -> context_edit -> compaction) stays work
   assert.equal(statusOf(parsed, now + QUIET_MS + 1_000).status, "quiet", "only a long silence quiets it")
 })
 
-test("lastWriteAt uses the file write time, and a meta-only append does not move it", () => {
+test("lastWriteAt is the record's own write time: a meta-only append and a fresh parse do not move it", () => {
   const now = Math.floor(Date.now() / 1000) * 1000
   const file = join(SCRATCH, "pi-long-reply.jsonl")
   writeFileSync(
     file,
     [
       pi({ type: "message", id: "u1", message: { role: "user", timestamp: now - 60_000, content: [{ type: "text", text: "write the long answer" }] } }, now - 60_000),
-      pi({ type: "message", id: "a1", parentId: "u1", message: { role: "assistant", timestamp: now - 60_000, stopReason: "stop", content: [{ type: "text", text: "a very long final answer" }] } }, now - 60_000),
+      // Pi stamps the entry when it is appended (stream end); message.timestamp is the stream start.
+      pi({ type: "message", id: "a1", parentId: "u1", message: { role: "assistant", timestamp: now - 60_000, stopReason: "stop", content: [{ type: "text", text: "a very long final answer" }] } }, now),
     ].join(""),
   )
   const writeAt = now / 1000
   utimesSync(file, writeAt, writeAt)
   const first = parseSessionFile(file)
-  assert.equal(lastWriteAt(first), now, "the message timestamp is the stream start; the file time is the end")
-  assert.ok(lastWriteAt(first) - (now - 60_000) > 2_000)
+  assert.equal(lastWriteAt(first), now, "the entry write time, not the message stream start")
 
-  appendFileSync(file, pi({ type: "model_change", id: "m1", parentId: "a1", provider: "p", modelId: "m" }, now))
+  appendFileSync(file, pi({ type: "model_change", id: "m1", parentId: "a1", provider: "p", modelId: "m" }, now + 10_000))
   utimesSync(file, writeAt + 10, writeAt + 10)
   const second = parseSessionFile(file)
-  assert.equal(lastWriteAt(second), now, "a model-only write must not make the reply look in flight")
+  assert.equal(lastWriteAt(second), now, "a model-only write does not move it")
+
+  const fresh = join(SCRATCH, "pi-long-reply-fresh.jsonl")
+  copyFileSync(file, fresh)
+  utimesSync(fresh, writeAt + 10, writeAt + 10)
+  assert.equal(lastWriteAt(parseSessionFile(fresh)), now, "a fresh parse gives the same value")
 })

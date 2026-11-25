@@ -1,5 +1,5 @@
 import type { ThreadPayload, ViewerAgent, ViewerEvent } from "../src/shared/types.ts"
-import { channelTurns } from "../src/lib/thread.ts"
+import { channelEvent, channelTurns } from "../src/lib/thread.ts"
 import { applyIntercomResults } from "./intercom.ts"
 import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
 import { normalizeEvent, parseSessionFile, type NormalizeOptions } from "./session.ts"
@@ -218,7 +218,7 @@ function page(
 ): ThreadPayload {
   const all = sortedEvents(cache)
   const filtered =
-    scope === "all" ? all : all.filter((event) => event.kind !== "meta" && event.onBranch)
+    scope === "all" ? all : all.filter((event) => channelEvent(event))
   const boundary = before == null ? filtered.length : indexOfCursor(cache, filtered, before)
   const universe = before == null ? filtered : filtered.slice(0, boundary)
   const turns = channelTurns(universe)
@@ -289,7 +289,7 @@ export function cachedThread(
   const filtered =
     query.scope === "all"
       ? sorted
-      : sorted.filter((event) => event.kind !== "meta" && event.onBranch)
+      : sorted.filter((event) => channelEvent(event))
 
   let result: ThreadPayload & { reset?: boolean; unchanged?: boolean }
   if (query.before != null || query.since == null || reset) {

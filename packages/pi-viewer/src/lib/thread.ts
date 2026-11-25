@@ -1,5 +1,8 @@
 import type { OptimisticMessage } from "@/lib/optimistic"
-import type { ViewerEvent, ViewerPart } from "@/shared/types"
+import type { TurnEffect, ViewerEvent, ViewerPart } from "@/shared/types"
+
+// Relative with the extension: the server and the node tests load this module without the @ alias.
+import { INITIAL_TURN_STATE, nextTurnState } from "./turn-state.ts"
 
 export type ActivityKind = "thinking" | "tool" | "bash" | "notice" | "compaction" | "meta" | "event"
 
@@ -36,7 +39,12 @@ export interface Turn {
   /** A row that only carries outgoing peer messages, with no agent turn. */
   sentOnly?: boolean
   activity: ActivityItem[]
+  /** The agent's turn is open (turn state model, src/lib/turn-state.ts). */
   pending: boolean
+  /** Pane-only work between agent turns (`!ls`, `/compact`, a notice that wakes nobody). Never pending. */
+  local?: boolean
+  /** Closed without a reply (an interrupt, an abort during a tool call): why. */
+  stopped?: string
 }
 
 const VERBS: Record<string, string> = {
@@ -144,119 +152,207 @@ function attachResult(turn: Turn, event: ViewerEvent): void {
   })
 }
 
-function groupAgent(events: ViewerEvent[]): Turn[] {
-  const turns: Turn[] = []
-  let current: Turn | null = null
+/**
+ * The effect of an event on its agent's turn. The server sets it on every event; an event
+ * built without one (tests, older payloads) falls back to its kind.
+ */
+export function eventEffect(event: ViewerEvent): TurnEffect {
+  if (event.effect) return event.effect
+  switch (event.kind) {
+    case "user":
+      return "open"
+    case "intercom":
+      return event.intercom?.direction === "received" ? "open" : "none"
+    case "assistant":
+      if (event.stopReason === "error") return "fail"
+      if (event.stopReason === "aborted") return "abort"
+      return event.parts?.some((part) => part.type === "tool-call") ? "step" : "reply"
+    case "tool-result":
+      return "step"
+    case "compaction":
+      return "compact"
+    default:
+      return "none"
+  }
+}
 
-  for (const event of events) {
-    if (event.kind === "meta") continue
+/** Events the Channel groups: on the branch, and visible or carrying a turn effect. */
+export function channelEvent(event: ViewerEvent): boolean {
+  return event.onBranch && (event.kind !== "meta" || eventEffect(event) !== "none")
+}
 
-    if (event.kind === "intercom" && event.intercom) {
-      const sent = event.intercom.direction === "sent"
-      if (sent) {
-        if (!current || current.final) {
-          if (current) turns.push(current)
-          current = newTurn(event)
-          current.sentOnly = true
-        }
-        current.sent.push(event)
-        current.pending = false
-      } else {
-        if (!current || current.final || current.sentOnly) {
-          if (current) turns.push(current)
-          current = newTurn(event)
-        }
-        current.inbound.push(event)
-      }
-      current.end = Math.max(current.end, event.at)
-      continue
-    }
-
-    if (event.kind === "user") {
-      if (!current || current.final || current.sentOnly) {
-        if (current) turns.push(current)
-        current = newTurn(event)
-      }
-      current.users.push(event)
-      current.sentOnly = false
-      current.end = Math.max(current.end, event.at)
-      continue
-    }
-
-    if (!current) {
-      if (event.kind === "assistant" && !event.parts?.some((part) => part.type === "tool-call")) {
-        continue
-      }
-      current = newTurn(event)
-    }
-
-    current.sentOnly = false
-
-    if (event.kind === "assistant") {
-      const parts = event.parts ?? []
-      const hasCall = parts.some((part) => part.type === "tool-call")
-      if (!hasCall) {
-        current.final = event
-        current.end = Math.max(current.end, event.at)
-        current.pending = false
-        turns.push(current)
-        current = null
-        continue
-      }
-      parts.forEach((part, index) => addPart(current!, event, part, index))
-      current.end = Math.max(current.end, event.at)
-      continue
-    }
-
-    if (event.kind === "tool-result") {
-      attachResult(current, event)
-      current.end = Math.max(current.end, event.at)
-      continue
-    }
-
-    if (event.kind === "bash") {
-      current.activity.push({
-        key: `${event.id}:bash`,
-        kind: "bash",
-        label: "Ran",
-        summary: firstLine(stripPrefix(event.summary, "! "), 140),
-        at: event.at,
-        isError: event.isError === true,
-        event,
-      })
-      current.end = Math.max(current.end, event.at)
-      continue
-    }
-
-    if (event.kind === "notice") {
-      current.activity.push({
-        key: `${event.id}:notice`,
-        kind: "notice",
-        label: "Notice",
-        summary: firstLine(stripPrefix(event.summary, "notice · "), 140),
-        at: event.at,
-        isError: false,
-        event,
-      })
-      current.end = Math.max(current.end, event.at)
-      continue
-    }
-
-    if (event.kind === "compaction") {
-      current.activity.push({
-        key: `${event.id}:compaction`,
-        kind: "compaction",
-        label: "Compacted",
-        summary: firstLine(stripPrefix(event.summary, "context compacted · "), 140),
-        at: event.at,
-        isError: false,
-        event,
-      })
-      current.end = Math.max(current.end, event.at)
+function activityOf(event: ViewerEvent): ActivityItem | null {
+  if (event.kind === "bash") {
+    return {
+      key: `${event.id}:bash`,
+      kind: "bash",
+      label: "Ran",
+      summary: firstLine(stripPrefix(event.summary, "! "), 140),
+      at: event.at,
+      isError: event.isError === true,
+      event,
     }
   }
+  if (event.kind === "notice") {
+    return {
+      key: `${event.id}:notice`,
+      kind: "notice",
+      label: "Notice",
+      summary: firstLine(stripPrefix(event.summary, "notice · "), 140),
+      at: event.at,
+      isError: false,
+      event,
+    }
+  }
+  if (event.kind === "compaction") {
+    return {
+      key: `${event.id}:compaction`,
+      kind: "compaction",
+      label: "Compacted",
+      summary: firstLine(stripPrefix(event.summary, "context compacted · "), 140),
+      at: event.at,
+      isError: false,
+      event,
+    }
+  }
+  return null
+}
 
-  if (current) turns.push(current)
+/**
+ * One agent's events as turns, by the turn state model: `current` is the open turn exactly
+ * while the model's phase is open. Work the operator runs in the pane with no turn open
+ * (`!ls`, `/model`, `/compact`, a notice that wakes nobody) collects in one closed `local`
+ * row, so it never becomes a pending turn and never joins the next prompt's turn.
+ */
+function groupAgent(events: ViewerEvent[]): Turn[] {
+  const turns: Turn[] = []
+  let state = INITIAL_TURN_STATE
+  // Held in an object: the helpers below reassign both.
+  const at: { current: Turn | null; local: Turn | null } = { current: null, local: null }
+
+  const open = (event: ViewerEvent): Turn => {
+    const turn = newTurn(event)
+    turns.push(turn)
+    at.local = null
+    at.current = turn
+    return turn
+  }
+  const localRow = (event: ViewerEvent): Turn => {
+    if (!at.local) {
+      at.local = newTurn(event)
+      at.local.pending = false
+      at.local.local = true
+      turns.push(at.local)
+    }
+    return at.local
+  }
+  const close = (turn: Turn): void => {
+    turn.pending = false
+    at.current = null
+  }
+
+  for (const event of events) {
+    const effect = eventEffect(event)
+    const before = state
+    state = nextTurnState(state, effect)
+    const hasCall = event.kind === "assistant" && (event.parts ?? []).some((part) => part.type === "tool-call")
+    let turn: Turn | null = at.current
+
+    if (event.kind === "intercom" && event.intercom) {
+      if (event.intercom.direction === "sent") {
+        // A sent card is a step of the turn that issued it.
+        if (!turn) {
+          turn = effect === "step" ? open(event) : newTurn(event)
+          if (effect !== "step") {
+            turn.pending = false
+            turns.push(turn)
+          }
+          turn.sentOnly = true
+        }
+        turn.sent.push(event)
+      } else {
+        turn ??= open(event)
+        turn.inbound.push(event)
+      }
+      turn.end = Math.max(turn.end, event.at)
+      // A card cut from a message that ended the turn (aborted during a SendMessage) closes it too.
+      if (turn === at.current && (effect === "abort" || effect === "fail" || effect === "reply")) {
+        if (effect !== "reply") turn.stopped = effect === "abort" ? "turn aborted" : "last turn failed"
+        close(turn)
+      }
+      continue
+    }
+
+    switch (effect) {
+      case "open":
+        turn ??= open(event)
+        turn.sentOnly = false
+        if (event.kind === "user") turn.users.push(event)
+        else {
+          const item = activityOf(event)
+          if (item) turn.activity.push(item)
+        }
+        break
+      case "step":
+        turn ??= open(event)
+        turn.sentOnly = false
+        if (event.kind === "assistant") (event.parts ?? []).forEach((part, index) => addPart(turn!, event, part, index))
+        else if (event.kind === "tool-result") attachResult(turn, event)
+        break
+      case "reply":
+      case "fail":
+        // A reply with no open turn answers nothing shown in the thread.
+        if (!turn || event.kind !== "assistant") continue
+        turn.sentOnly = false
+        turn.final = event
+        close(turn)
+        break
+      case "abort":
+        if (!turn && !hasCall) continue
+        turn ??= open(event)
+        turn.sentOnly = false
+        if (event.kind === "assistant" && !hasCall) turn.final = event
+        else {
+          if (hasCall) (event.parts ?? []).forEach((part, index) => addPart(turn!, event, part, index))
+          turn.stopped = event.kind === "assistant" ? "turn aborted" : "turn interrupted"
+        }
+        close(turn)
+        break
+      case "compact": {
+        const item = activityOf(event)
+        if (turn && before.phase === "open" && before.loop) {
+          // Compaction inside a running loop: the turn goes on.
+          if (item) turn.activity.push(item)
+          break
+        }
+        if (turn) {
+          // A turn that ran no step ends here: the prompt was a command, not agent work.
+          if (item) turn.activity.push(item)
+          turn.local = true
+          close(turn)
+          break
+        }
+        turn = localRow(event)
+        if (item) turn.activity.push(item)
+        break
+      }
+      case "none": {
+        if (event.kind === "user") {
+          // A local slash command (`/model`): an operator row, no agent turn.
+          turn ??= localRow(event)
+          turn.users.push(event)
+          break
+        }
+        const item = activityOf(event)
+        if (!item) continue
+        turn ??= localRow(event)
+        turn.activity.push(item)
+        break
+      }
+    }
+    turn.end = Math.max(turn.end, event.at)
+  }
+
   return turns
 }
 

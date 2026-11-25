@@ -53,28 +53,12 @@ const PRESENT: ReadonlySet<AgentStatus> = new Set<AgentStatus>(["working", "atte
 const LIVE: ReadonlySet<AgentStatus> = new Set<AgentStatus>(["working", "attention", "quiet"])
 
 /**
- * A `waiting` agent with a pending turn is one of two things:
- * - its reply is written but the thread payload does not carry it yet (the status poll ran
- *   first): the agent wrote after the turn's last event, so the turn stays in presence for that
- *   poll instead of flashing a stopped row;
- * - the operator ran a local command (`!ls`, `/model`) after the last reply: the agent's last
- *   write is the turn's own last event, and no agent turn runs.
+ * A pending turn is an open turn by the turn state model (src/lib/turn-state.ts), which the
+ * server status uses too. A `waiting` agent with a pending turn means the status and the
+ * thread payload were read at different moments (the reply or the prompt is not in both yet):
+ * the turn stays in presence until both agree. No timer decides it.
  */
-const REPLY_IN_FLIGHT_MS = 2_000
-
-/**
- * A turn opened only by local slash commands (`/model`, `/compact`), not a prompt starting
- * with `/help me`. The parser marks real commands; a prompt is never guessed from its text.
- */
-function isSlashOnly(turn: Turn): boolean {
-  return turn.users.length > 0 && turn.users.every((user) => user.slash === true)
-}
-
-function replyInFlight(agent: ViewerAgent, turn: Turn): boolean {
-  // Meta writes (model, thinking level) move the file but do not write the turn. The status
-  // poll compares the last turn write, so a `!cmd` followed by a model change stays local.
-  return agent.status === "waiting" && agent.lastWriteAt - turn.end > REPLY_IN_FLIGHT_MS
-}
+const IN_FLIGHT: ReadonlySet<AgentStatus> = new Set<AgentStatus>(["waiting"])
 
 const LAUNCHER_PREFIX = /^[a-z0-9.]+-xt-(?:pi|claude|codex)-/
 
@@ -108,15 +92,32 @@ function treeOrder(a: PresenceEntry, b: PresenceEntry): number {
   )
 }
 
+function stoppedItem(item: Extract<ChannelItem, { kind: "turn" }>, note: string, local: boolean): StoppedItem {
+  const { turn } = item
+  return {
+    kind: "stopped",
+    id: `stopped:${turn.id}`,
+    at: turn.end > 0 ? turn.end : turn.start,
+    agentId: item.agentId,
+    agentName: item.agentName,
+    seq: item.seq,
+    turn,
+    note,
+    local,
+  }
+}
+
 /**
  * Splits a Channel timeline into the settled thread and the presence set.
  *
- * - A pending turn of a live agent (working, attention, quiet, or waiting while its reply is in
- *   flight) leaves the timeline and becomes that agent's presence entry.
- * - A pending turn of a waiting agent that holds only a local command (`!ls`, `/model`) is not
- *   an agent turn: a `!ls` stays as a `local` stopped row with its step, a `/model` adds no row.
- * - A pending turn of an agent that is idle, failed, unknown or gone stays in the timeline as a
- *   `stopped` row anchored at `Turn.end`, re-sorted with the timeline comparator.
+ * - A pending (open) turn of a live agent (working, attention, quiet), or of a waiting agent
+ *   whose status and thread were read at different moments, leaves the timeline and becomes
+ *   that agent's presence entry.
+ * - A pending turn of an agent that is idle, failed, unknown or gone is a `stopped` row
+ *   anchored at `Turn.end`, re-sorted with the timeline comparator.
+ * - A closed `local` turn (pane-only work: `!ls`, `/compact`) is a `local` stopped row; one
+ *   with no step (`/model`) adds no row, its operator row shows it. A turn closed without a
+ *   reply (`stopped`: interrupted) is a stopped row. Both are closed, so they never vanish.
  * - A present agent (working, attention, quiet) with no pending turn in the loaded events gets
  *   an entry with no turn ("Working…").
  * - Entries: attention first, then tree order (window, pane).
@@ -133,31 +134,30 @@ export function splitPresence(
   let resort = false
 
   for (const item of items) {
-    if (item.kind !== "turn" || !item.turn.pending) {
+    if (item.kind !== "turn") {
+      timeline.push(item)
+      continue
+    }
+    const turn = item.turn
+    if (turn.local) {
+      if (turn.activity.length) timeline.push(stoppedItem(item, "ran in the pane", true))
+      continue
+    }
+    if (turn.stopped) {
+      timeline.push(stoppedItem(item, turn.stopped, false))
+      continue
+    }
+    if (!turn.pending) {
       timeline.push(item)
       continue
     }
     const agent = byId.get(item.agentId)
-    if (agent && (LIVE.has(agent.status) || replyInFlight(agent, item.turn))) {
+    if (agent && (LIVE.has(agent.status) || IN_FLIGHT.has(agent.status))) {
       const known = open.get(agent.id)
-      if (!known || known.start <= item.turn.start) open.set(agent.id, item.turn)
+      if (!known || known.start <= turn.start) open.set(agent.id, turn)
       continue
     }
-    const turn = item.turn
-    const local = agent?.status === "waiting"
-    // A local command with no step (`/model`, `/compact`) is already shown by its operator row.
-    if (!turn.activity.length && (local || isSlashOnly(turn))) continue
-    timeline.push({
-      kind: "stopped",
-      id: `stopped:${turn.id}`,
-      at: turn.end > 0 ? turn.end : turn.start,
-      agentId: item.agentId,
-      agentName: item.agentName,
-      seq: item.seq,
-      turn,
-      note: local ? "ran in the pane" : agent ? (agent.statusNote ?? agent.status) : "agent gone",
-      local,
-    })
+    timeline.push(stoppedItem(item, agent ? (agent.statusNote ?? agent.status) : "agent gone", false))
     resort = true
   }
   if (resort) timeline.sort(compareTimelineItems)
