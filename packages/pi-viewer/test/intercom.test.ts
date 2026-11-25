@@ -314,6 +314,7 @@ test("a truncated card does not mark its siblings truncated", () => {
   }
   const event = normalizeEvent(entry, { id: "a", name: "a" }, 0, true)
   assert.equal(event.intercoms?.length, 2)
+  assert.equal(event.truncated, undefined, "the entry is not truncated; its cards are")
   assert.equal(event.intercoms?.[0].truncated, undefined)
   assert.equal(event.intercoms?.[1].truncated, true)
   const cards = channelTimeline([event]).filter((item) => item.kind === "intercom")
