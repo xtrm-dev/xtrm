@@ -36,10 +36,11 @@ rail of status dots (one Tab stop, arrow keys). On a narrow screen it starts as 
 that closes on Escape, on a click outside, or when a pane is chosen; only the desktop rail/open choice is
 persisted.
 
-It is built from the console's primitives, not ReUI or shadcn Sidebar. The values (28px row; the plane is 240px and the indent step 0.75rem, narrower than the console's 264px and 1.25rem on purpose;
-`INDENT_REM` 1.25, type ladder, `--x-hover` selected fill with the 2px accent marker, hairline rails) are
+It is built from the console's primitives, not ReUI or shadcn Sidebar. The values (28px row, type ladder,
+`--x-hover` selected fill with the 2px accent marker, hairline rails) are
 copied from `packages/xtrm-app` (`docs/design/console-ui-system.md` §3, §4.2, §4.3, §6, §11 and
-`src/agent/AgentSidebar.tsx`, `src/ui/sidebar.tsx`, `src/ui/nav-rail.tsx`); `src/components/sidebar/geometry.ts`
+`src/agent/AgentSidebar.tsx`, `src/ui/sidebar.tsx`, `src/ui/nav-rail.tsx`), except two deliberate narrowings: the plane is 240px (the console's is 264px) and the
+indent step is 0.75rem (the console's `INDENT_REM` is 1.25). `src/components/sidebar/geometry.ts`
 names the source of each. The tree is keyboard operable (`role="tree"`, `aria-expanded`, roving focus; arrows,
 Home, End, Enter, Space).
 
