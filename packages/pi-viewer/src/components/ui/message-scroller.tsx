@@ -74,6 +74,8 @@ function MessageScrollerProvider({
   const threadKeyRef = React.useRef(threadKey)
   threadKeyRef.current = threadKey
 
+  const handleScrollRef = React.useRef<() => void>(() => {})
+
   const stopGlide = React.useCallback(() => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
     frameRef.current = null
@@ -84,15 +86,24 @@ function MessageScrollerProvider({
   const glide = React.useCallback(() => {
     if (frameRef.current !== null) return
     glidingRef.current = true
+    let wrote: number | null = null
     const tick = () => {
       const viewport = viewportRef.current
       if (!viewport || !atBottomRef.current) {
         stopGlide()
         return
       }
+      // Someone else moved the viewport (scrollbar, script, restore): the reader wins.
+      // The scroll events were ignored while gliding, so re-read the position now.
+      if (wrote !== null && Math.abs(viewport.scrollTop - wrote) > 2) {
+        stopGlide()
+        handleScrollRef.current()
+        return
+      }
       const target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
       const next = smoothStep(viewport.scrollTop, target)
       viewport.scrollTop = next
+      wrote = viewport.scrollTop
       if (next === target) {
         frameRef.current = null
         glidingRef.current = false
@@ -287,6 +298,8 @@ function MessageScrollerProvider({
     if (bottom) anchorRef.current = null
     else captureAnchor()
   }, [captureAnchor, setBottom])
+
+  handleScrollRef.current = handleScroll
 
   const registerViewport = React.useCallback((element: HTMLDivElement | null) => {
     viewportRef.current = element
