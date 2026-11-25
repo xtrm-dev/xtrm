@@ -1,24 +1,34 @@
+import { StatusDot } from "@/components/StatusDot"
+import { SIDEBAR_DOT, sidebarDotLabel } from "@/lib/status-dot"
+import type { AgentStatus } from "@/shared/types"
 import { cn } from "@/lib/utils"
-import { STATE_LABEL, type SidebarState } from "@/lib/tree"
 
 /**
- * The status carrier of a row: one small static dot, no animation. The state is also written
- * on the row's second line, so the dot only has to be calm and consistent.
- *   idle     faint ink, 40%
- *   running  muted ink, solid
- *   error    danger, solid
- * There is no "needs attention" dot: the server proves no such state (see `stateOf`).
+ * The status carrier of a sidebar row: the shared status dot (src/components/StatusDot.tsx), wearing
+ * the sidebar's classes from `SIDEBAR_DOT` for the 3:1 contrast floor of the sidebar plane. The dot
+ * carries the state alone — the row's second line no longer repeats it — so the label and the tooltip
+ * hold the word (`Working`, `Needs you`, `Quiet 16m`) and the row's aria-label includes it.
  */
-const DOT: Record<SidebarState, string> = {
-  idle: "bg-ink-faint/40",
-  running: "bg-ink-muted",
-  error: "bg-danger",
-}
-
-export function SidebarDot({ state, className }: { state: SidebarState; className?: string }) {
+export function SidebarDot({
+  status,
+  note,
+  className,
+}: {
+  status: AgentStatus
+  /** The server's status note; the quiet state reads its age from it. */
+  note?: string | null
+  className?: string
+}) {
+  const label = sidebarDotLabel(status, note)
   return (
-    <span aria-hidden title={STATE_LABEL[state]} className={cn("inline-flex size-3.5 shrink-0 items-center justify-center", className)}>
-      <span className={cn("size-1.5 rounded-full", DOT[state])} />
+    <span
+      data-testid="sidebar-dot"
+      role="img"
+      aria-label={label}
+      title={label}
+      className={cn("inline-flex size-3.5 shrink-0 items-center justify-center", className)}
+    >
+      <StatusDot status={status} className={SIDEBAR_DOT[status]} decorative />
     </span>
   )
 }

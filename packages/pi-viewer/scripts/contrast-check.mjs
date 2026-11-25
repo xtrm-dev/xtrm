@@ -1,9 +1,13 @@
 // Contrast gate for the transcript text roles (XTRM-1034, audit 1.6), in both palettes (XTRM-1046).
 // Reads the --x-* tokens from src/styles.css, so a token edit re-runs the proof. The Console palette
 // is the Threads set with the :root[data-palette="console"] blocks laid over it, as the cascade does.
-// Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1)
+// Since XTRM-1048 it also holds the sidebar's status dot to 3:1 against the sidebar: the dot carries
+// the state alone, so its colour is a non-text mark that must stay visible in every palette.
+// Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1 or a dot below 3:1)
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
+
+import { SIDEBAR_DOT } from "../src/lib/status-dot.ts"
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8")
 
@@ -119,8 +123,34 @@ for (const [palette, theme, set] of sets) {
   const bg = plane(set, "canvas")
   console.log(`INFO ${palette.padEnd(7)} ${theme.padEnd(5)} ink-faint (glyphs only, not text) on canvas ${ratio(parse(value(set, "ink-faint"), bg), bg).toFixed(2)}`)
 }
+
+/** The token and alpha a dot class paints with; `bg-transparent` means the border draws the ring. */
+function paint(classes) {
+  const fill = /(?:^|\s)bg-([a-z-]+)(?:\/(\d+))?(?=\s|$)/.exec(classes)
+  const ring = /(?:^|\s)border-([a-z-]+)(?:\/(\d+))?(?=\s|$)/.exec(classes)
+  const [token, alpha] = fill[1] === "transparent" && ring ? [ring[1], ring[2]] : [fill[1], fill[2]]
+  return { token, alpha: alpha === undefined ? 1 : Number(alpha) / 100 }
+}
+
+// XTRM-1048: the sidebar's status dot is the only mark of the state (the state word left line 2), so
+// each dot colour is checked against the sidebar plane it sits on, at the 3:1 non-text minimum.
+let dotFailures = 0
+for (const [palette, theme, set] of sets) {
+  const bg = plane(set, "sidebar")
+  for (const [status, classes] of Object.entries(SIDEBAR_DOT)) {
+    const { token, alpha } = paint(classes)
+    const fg = mix(parse(value(set, token), bg), bg, alpha)
+    const result = ratio(fg, bg)
+    if (result < 3) dotFailures += 1
+    console.log(`${result >= 3 ? "PASS" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} ${("dot " + status).padEnd(40)} on ${"sidebar".padEnd(14)} ${result.toFixed(2)}`)
+  }
+}
+
 if (failures) {
   console.error(`${failures} pair(s) below 4.5:1`)
-  process.exit(1)
 }
-console.log("all transcript text roles >= 4.5:1 in both palettes")
+if (dotFailures) {
+  console.error(`${dotFailures} sidebar dot(s) below 3:1`)
+}
+if (failures || dotFailures) process.exit(1)
+console.log("all transcript text roles >= 4.5:1 and all sidebar status dots >= 3:1, in both palettes")

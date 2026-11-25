@@ -41,10 +41,48 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       return { groupHs: uniq(groups), paneHs: uniq(leaves), railLines: document.querySelectorAll('[data-testid=sidebar] [role=tree] .border-l').length, nGroups: groups.length, n: rows.length, hs: [...new Set(r.map((x) => Math.round(x.height * 10) / 10))], contiguous: r.every((x, i) => i === 0 || Math.abs(x.top - r[i - 1].bottom) < 0.6), levels: [...new Set(rows.map((e) => e.getAttribute("aria-level")))].sort(), windowsRows: rows.filter((e) => e.getAttribute("aria-level") === "2" && e.hasAttribute("aria-expanded")).length, panes: rows.filter((e) => !e.hasAttribute("aria-expanded")).length, groupCounts: rows.filter((e) => e.hasAttribute("aria-expanded")).every((e) => /\d+ agents/.test(e.getAttribute("aria-label"))), total: r.length ? Math.round(r.at(-1).bottom - r[0].top) : 0, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth }
     })
     check(tag + " session and window rows are one 28px line", g.groupHs.length === 1 && g.groupHs[0] === 28, JSON.stringify(g.groupHs))
-    check(tag + " pane rows are two lines, 46px (name, then role, runtime and state)", g.paneHs.length === 1 && g.paneHs[0] === 46, JSON.stringify(g.paneHs))
+    check(tag + " pane rows are two lines, 46px (name, then role, runtime, repo)", g.paneHs.length === 1 && g.paneHs[0] === 46, JSON.stringify(g.paneHs))
     check(tag + " rows are contiguous and draw no rail lines", g.contiguous && g.railLines === 0, "rails " + g.railLines)
     check(tag + " tree height " + g.total + "px for " + g.panes + " agents", g.total <= g.nGroups * 28 + g.panes * 46 + 1)
     check(tag + " group rows carry counts", g.groupCounts)
+    // XTRM-1048: the dot carries the state. Line 2 names role, repo and runtime only; every pane row's
+    // dot is labelled and titled with the state word, the row's aria-label carries the same word, and
+    // every dot holds 3:1 against the sidebar it sits on (the non-text minimum).
+    const dots = await p.evaluate(() => {
+      // Colours are read through a canvas: the used value of a Tailwind v4 token can be oklch(), and the
+      // canvas resolves any CSS colour to sRGB bytes, which is what a screenshot would show.
+      const px = (() => { const c = document.createElement('canvas'); c.width = c.height = 1; const g = c.getContext('2d', { willReadFrequently: true }); return (css) => { g.clearRect(0, 0, 1, 1); g.fillStyle = css; g.fillRect(0, 0, 1, 1); const d = g.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255] } })()
+      const lum = (c) => { const [r, gg, b] = c.slice(0, 3).map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }); return 0.2126 * r + 0.7152 * gg + 0.0722 * b }
+      const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+      const plane = px(getComputedStyle(document.querySelector('[data-testid=sidebar]')).backgroundColor)
+      const wordAtEnd = /(^|\s)(idle|running|working|quiet|waiting|error|failed|unknown|needs you)$/i
+      const words = ['Working', 'Needs you', 'Quiet', 'Waiting', 'Failed', 'Idle', 'Unknown']
+      return [...document.querySelectorAll('[role=treeitem][aria-level="3"]')].map((row) => {
+        const line2 = (row.querySelector('[data-testid=pane-row-line2]')?.textContent || '').replace(/\s+/g, ' ').trim()
+        const dot = row.querySelector('[data-testid=sidebar-dot]')
+        const mark = dot?.firstElementChild
+        const cs = mark ? getComputedStyle(mark) : null
+        const fill = cs?.backgroundColor || 'rgb(0, 0, 0)'
+        const hollow = px(fill)[3] === 0
+        const [r, gg, b, a] = px(hollow ? cs.borderTopColor : fill)
+        const colour = [r, gg, b].map((v, i) => Math.round(v * a + plane[i] * (1 - a)))
+        return {
+          line2,
+          wordAtEnd: wordAtEnd.test(line2),
+          hasSeparator: line2.includes('·'),
+          label: dot?.getAttribute('aria-label') || '',
+          title: dot?.getAttribute('title') || '',
+          rowLabel: row.getAttribute('aria-label') || '',
+          contrast: cs ? ratio(colour, plane) : 0,
+          anim: cs?.animationName || 'none',
+          known: words.some((w) => (dot?.getAttribute('aria-label') || '') === w || (dot?.getAttribute('aria-label') || '').startsWith(w + ' ')),
+        }
+      })
+    })
+    check(tag + " pane row line 2 names the role, the runtime and the repo, with no separator and no state", dots.length > 0 && dots.every((d) => d.line2.length > 0 && !d.wordAtEnd && !d.hasSeparator), JSON.stringify(dots.slice(0, 2).map((d) => d.line2)))
+    check(tag + " every pane row's dot is labelled and titled with its state", dots.length > 0 && dots.every((d) => d.label && d.known && d.title === d.label), JSON.stringify(dots.slice(0, 2)))
+    check(tag + " the row's aria-label carries the dot's state", dots.length > 0 && dots.every((d) => d.rowLabel.endsWith(', ' + d.label)), JSON.stringify(dots.slice(0, 2).map((d) => d.rowLabel)))
+    check(tag + " every dot holds 3:1 against the sidebar", dots.length > 0 && dots.every((d) => d.contrast >= 3), Math.min(...dots.map((d) => d.contrast)).toFixed(2))
     check(tag + " one-pane windows add no row (window rows have 2+ agents)", await p.evaluate(() => [...document.querySelectorAll('[role=treeitem][aria-level="2"][aria-expanded]')].every((e) => Number(/(\d+) agents/.exec(e.getAttribute("aria-label"))[1]) >= 2)))
     check(tag + " no overflow", !g.overflow)
     await p.screenshot({ path: SHOTS + "/g4-" + tag + ".png" })
@@ -114,6 +152,20 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
   } catch (e) { check(tag + " script threw", false, String(e).slice(0, 250)) }
   check(tag + " 0 console errors or warnings", errs.length === 0, errs.slice(0, 3).join(" || "))
   await ctx.close()
+}
+for (const theme of ["dark", "light"]) {
+  // XTRM-1048 (4): prefers-reduced-motion drops the motion; the colour still carries the state.
+  try {
+    const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" })
+    try {
+      await ctx.addInitScript((t) => { localStorage.setItem("pi-viewer-theme", t); localStorage.removeItem("pi-viewer-sidebar"); localStorage.removeItem("xtrm.console.layout.v1") }, theme)
+      const rp = await ctx.newPage()
+      await rp.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 })
+      await rp.waitForSelector('[data-testid=sidebar-dot]', { state: "attached", timeout: 90000 })
+      const anims = await rp.evaluate(() => [...document.querySelectorAll('[data-testid=sidebar-dot] > span')].map((e) => getComputedStyle(e).animationName))
+      check("reduced-motion " + theme + ": sidebar dots do not animate", anims.length > 0 && anims.every((n) => n === "none"), JSON.stringify([...new Set(anims)]))
+    } finally { await ctx.close().catch(() => {}) }
+  } catch (e) { check("reduced-motion " + theme + " script threw", false, String(e).slice(0, 250)) }
 }
 await b.close()
 let f = 0; for (const r of res) { if (!r.ok) f++; console.log(r.ok ? "PASS" : "FAIL", r.n, r.d ? "· " + r.d : "") }
