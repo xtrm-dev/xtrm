@@ -885,10 +885,10 @@ Source: `packages/pi-viewer/docs/design/t3code-chat-audit.md` §1.5 and §4.4. B
 document named one motion only (the toolbar filter, §5.3: 150ms, instant under reduced motion). The
 rules below are the ones the chat thread ships; any surface may use them, none must.
 
-1. **Opacity plus a 4px translate, nothing else.** An element may fade, and may move by at most 4px
-   while it fades (the scroll pill: `translate` and `scale` 0.95 to 1 with opacity). No animation of
-   `width`, `height`, `top`, `margin`, `padding` or any property that changes layout. The one existing
-   exception is the filter widen in §5.3.
+1. **Opacity plus a short translate, nothing else.** Content may fade and may move by at most 4px
+   while it fades. A floating control that enters and leaves (the scroll pill) may translate by its own
+   height and scale 0.95 to 1 with its opacity. No animation of `width`, `height`, `top`, `margin`,
+   `padding` or any property that changes layout. The one existing exception is the filter widen in §5.3.
 2. **Hover reveal: 200ms opacity.** Secondary metadata (timestamps, copy) appears on hover and on
    `:focus-within`, so it stays reachable by keyboard. A coarse pointer shows it always. The last row
    of a thread keeps it visible.
