@@ -60,16 +60,31 @@ export type TreeNode = SessionNode | WindowNode | PaneNode
 
 export const paneKey = (paneId: string) => `p:${paneId}`
 
+const warnedDuplicates = new Set<string>()
+
+/** A repeated pane id is a discovery fault, not a normal state: say so once per pair, never silently. */
+function warnDuplicatePane(session: string, paneId: string, keptId: string, droppedId: string) {
+  const id = `${session}|${paneId}|${keptId}|${droppedId}`
+  if (warnedDuplicates.has(id)) return
+  warnedDuplicates.add(id)
+  console.warn(`pi-viewer: pane ${paneId} in session ${session} has two agents; kept ${keptId}, dropped ${droppedId}`)
+}
+
 export function buildTree(sessions: ViewerSession[]): SessionNode[] {
   const tree: SessionNode[] = []
   for (const session of sessions) {
     const byWindow = new Map<string, ViewerAgent[]>()
     // A pane id keys its row (`p:%N`) and the URL. Two agents on one pane id would repeat the key, so
     // the first agent wins (XTRM-1044: React "two children with the same key" seen once in a live run).
-    const seenPanes = new Set<string>()
+    const seenPanes = new Map<string, ViewerAgent>()
     for (const agent of session.agents) {
-      if (!agent.paneId || seenPanes.has(agent.paneId)) continue
-      seenPanes.add(agent.paneId)
+      if (!agent.paneId) continue
+      const kept = seenPanes.get(agent.paneId)
+      if (kept) {
+        warnDuplicatePane(session.name, agent.paneId, kept.id, agent.id)
+        continue
+      }
+      seenPanes.set(agent.paneId, agent)
       const key = agent.windowId || String(agent.windowIndex)
       const list = byWindow.get(key) ?? []
       list.push(agent)
