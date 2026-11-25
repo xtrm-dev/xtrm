@@ -61,6 +61,10 @@ export function serialiseScope(scope: Scope): string {
   return `?${params.toString()}`
 }
 
+function windowKey(scope: Extract<Scope, { kind: "window" }>): string {
+  return scope.windowId ? `id:${scope.windowId}` : `index:${scope.window}`
+}
+
 /**
  * Same target. A pane is identified by its id alone: `window` is only where it was last seen
  * (the fallback), so opening ?s=xx&p=%12 and then clicking pane %12 is not a new selection.
@@ -68,7 +72,7 @@ export function serialiseScope(scope: Scope): string {
 export function sameScope(a: Scope | null, b: Scope | null): boolean {
   if (a === b) return true
   if (!a || !b || a.kind !== b.kind || a.session !== b.session) return false
-  if (a.kind === "window" && b.kind === "window") return (a.windowId || a.window) === (b.windowId || b.window)
+  if (a.kind === "window" && b.kind === "window") return windowKey(a) === windowKey(b)
   if (a.kind === "pane" && b.kind === "pane") return a.paneId === b.paneId
   return true
 }

@@ -314,6 +314,7 @@ test("a truncated card does not mark its siblings truncated", () => {
   }
   const event = normalizeEvent(entry, { id: "a", name: "a" }, 0, true)
   assert.equal(event.intercoms?.length, 2)
+  assert.equal(event.truncated, undefined, "the entry is not truncated; its cards are")
   assert.equal(event.intercoms?.[0].truncated, undefined)
   assert.equal(event.intercoms?.[1].truncated, true)
   const cards = channelTimeline([event]).filter((item) => item.kind === "intercom")
@@ -358,4 +359,29 @@ test("a single intercom call keeps the entry's other tool work", () => {
   assert.equal(turns.length, 1)
   assert.equal(turns[0].activity.length, 1)
   assert.match(turns[0].activity[0].summary, /echo after send/)
+})
+
+test("a delivery-failed card does not rely on the entry-level error flag", () => {
+  const entry = event("a", 0, 1_000, "assistant", {
+    isError: false,
+    parts: [
+      { type: "tool-call", toolCallId: "ok", toolName: "SendMessage", summary: "to b" },
+      { type: "tool-call", toolCallId: "bad", toolName: "SendMessage", summary: "to c" },
+    ],
+    intercoms: [
+      {
+        direction: "sent", from: "a", to: "b", body: "fine", toolCallId: "ok",
+        delivery: "delivered", runtime: "pi",
+      },
+      {
+        direction: "sent", from: "a", to: "c", body: "lost", toolCallId: "bad",
+        delivery: "failed", error: "not delivered", runtime: "pi",
+      },
+    ],
+  })
+  const cards = channelTimeline([entry]).filter((item) => item.kind === "intercom")
+  assert.deepEqual(
+    cards.map((item) => item.kind === "intercom" && item.event.isError === true),
+    [false, true],
+  )
 })
