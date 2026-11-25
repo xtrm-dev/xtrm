@@ -597,11 +597,23 @@ function isLocalCommand(message: Raw): boolean {
   return message.role === "bashExecution"
 }
 
+/**
+ * The state of an agent whose newest record is a compaction: the conversation was summarised
+ * and restarted, so no earlier turn is still open. A turn that continues after an automatic
+ * compaction writes new messages, which then decide the status.
+ */
+export function compactedState(parsed: ParsedFile, now = Date.now()): AgentState {
+  return now - parsed.modifiedAt > QUIET_MS
+    ? { status: "idle", note: "quiet for 15m" }
+    : { status: "waiting", note: "awaiting input" }
+}
+
 export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   const age = now - parsed.modifiedAt
   let last: Raw | null = null
   for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
     const entry = parsed.events[index]
+    if (entry.type === "compaction") return compactedState(parsed, now)
     if (entry.type === "message" && isRecord(entry.message) && !isLocalCommand(entry.message)) {
       last = entry
       break

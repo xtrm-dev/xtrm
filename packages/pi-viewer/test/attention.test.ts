@@ -136,6 +136,30 @@ test("a Claude local slash command (/model) opens no turn; a prompt-type slash c
   assert.equal(claudeStatusOf(parseClaudeFile(prompted)).status, "working", "a slash command with no local output runs the model")
 })
 
+test("a compaction newer than every message closes the turn: waiting, then idle", () => {
+  const open = { role: "user", content: "a prompt the agent never answered" }
+  const compacted = (modifiedAt: number): ParsedFile => ({
+    ...parsed([open], modifiedAt),
+    events: [{ type: "message", id: "e0", message: open }, { type: "compaction", id: "c1", summary: "…" }],
+  })
+  assert.equal(statusOf(compacted(NOW), NOW).status, "waiting")
+  assert.equal(statusOf(compacted(NOW - QUIET_MS - 60_000), NOW).status, "idle")
+
+  // Claude: /compact writes the summary, then the slash command and its local output.
+  const now = new Date().toISOString()
+  const rec = (value: Record<string, unknown>) => `${JSON.stringify({ timestamp: now, ...value })}\n`
+  const file = join(SCRATCH, "compact.jsonl")
+  writeFileSync(
+    file,
+    rec({ type: "user", uuid: "u1", message: { role: "user", content: "never answered" } }) +
+      rec({ type: "system", subtype: "compact_boundary", uuid: "b1", parentUuid: null }) +
+      rec({ type: "user", uuid: "s1", parentUuid: "b1", isCompactSummary: true, message: { role: "user", content: "This session is being continued…" } }) +
+      rec({ type: "user", uuid: "c1", parentUuid: "s1", message: { role: "user", content: "<command-name>/compact</command-name>" } }) +
+      rec({ type: "user", uuid: "c2", parentUuid: "c1", message: { role: "user", content: "<local-command-stdout>Compacted</local-command-stdout>" } }),
+  )
+  assert.equal(claudeStatusOf(parseClaudeFile(file)).status, "waiting")
+})
+
 // ── quiet ──
 
 test("an open turn with no write for 15 minutes is quiet, not idle", () => {

@@ -182,6 +182,18 @@ test("local commands after a reply open no presence entry: !ls is a local row, /
   assert.deepEqual(model.timeline.map(label), ["user:%1:0", "turn:%1:5", "user:%1:20"], "only the operator row is added")
 })
 
+test("an idle agent's lone /compact adds no stopped row; an interrupted prompt still does", () => {
+  const base = [prompt("%1", 1, s(0)), reply("%1", 2, s(5))]
+  const idle = agent("%1", { status: "idle", statusNote: "quiet for 15m" })
+  const compact = { ...prompt("%1", 3, s(20)), text: "/compact", summary: "/compact" }
+  const { timeline } = splitPresence(channelTimeline([...base, compact]), [idle])
+  assert.ok(!timeline.some((item) => item.kind === "stopped"))
+  const interrupted = splitPresence(channelTimeline([...base, prompt("%1", 3, s(20))]), [
+    agent("%1", { status: "idle", statusNote: "turn interrupted" }),
+  ])
+  assert.equal(interrupted.timeline.at(-1)?.kind, "stopped")
+})
+
 test("attention sorts first, then tree order; quiet stays in presence", () => {
   const ids = ["%1", "%2", "%3"]
   const { events } = scenario(ids)

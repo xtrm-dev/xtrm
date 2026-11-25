@@ -62,6 +62,11 @@ const LIVE: ReadonlySet<AgentStatus> = new Set<AgentStatus>(["working", "attenti
  */
 const REPLY_IN_FLIGHT_MS = 2_000
 
+/** A turn opened only by slash commands (`/compact`), which Claude Code runs without the model. */
+function isSlashOnly(turn: Turn): boolean {
+  return turn.users.length > 0 && turn.users.every((user) => (user.text ?? user.summary).trimStart().startsWith("/"))
+}
+
 function replyInFlight(agent: ViewerAgent, turn: Turn): boolean {
   return agent.status === "waiting" && agent.modifiedAt - turn.end > REPLY_IN_FLIGHT_MS
 }
@@ -135,8 +140,8 @@ export function splitPresence(
     }
     const turn = item.turn
     const local = agent?.status === "waiting"
-    // A local slash command leaves no activity: its operator row already shows it.
-    if (local && !turn.activity.length) continue
+    // A local command with no step (`/model`, `/compact`) is already shown by its operator row.
+    if (!turn.activity.length && (local || isSlashOnly(turn))) continue
     timeline.push({
       kind: "stopped",
       id: `stopped:${turn.id}`,

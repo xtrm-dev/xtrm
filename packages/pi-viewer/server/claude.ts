@@ -10,6 +10,7 @@ import {
   firstLine,
   mergeFile,
   normalizeEvent,
+  compactedState,
   statusOf,
   type AgentState,
   type ParsedFile,
@@ -705,6 +706,7 @@ export function claudeStatusOf(parsed: ParsedFile, now = Date.now()): AgentState
       localOutput = true
       continue
     }
+    if (entry.type === "compaction") return compactedState(parsed, now)
     if (entry.type !== "message") continue
     if (localOutput && entry._slash === true) {
       localOutput = false
