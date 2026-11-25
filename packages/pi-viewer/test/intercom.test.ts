@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 
-import { applyIntercomResults, intercomFromEntry } from "../server/intercom.ts"
+import { applyIntercomResults, intercomFromEntry, intercomPairKey as bodyPairKey } from "../server/intercom.ts"
 import { normalizeEvent } from "../server/session.ts"
-import { channelTimeline, channelTurns, dedupeIntercoms } from "../src/lib/thread.ts"
+import { channelTimeline, channelTurns, dedupeIntercoms, intercomPairKey } from "../src/lib/thread.ts"
 import type { IntercomDirection, ViewerEvent } from "../src/shared/types.ts"
 
 function event(
@@ -48,6 +48,21 @@ function intercom(
     },
   })
 }
+
+test("pair identity hashes the full body, not the 160-char display cut", () => {
+  const shared = "word ".repeat(40).slice(0, 160)
+  const first = `${shared}alpha`
+  const second = `${shared}beta`
+  assert.equal(first.slice(0, 160), second.slice(0, 160))
+  assert.notEqual(bodyPairKey(first), bodyPairKey(second))
+
+  const base = { from: "a", to: "b", body: shared }
+  assert.notEqual(
+    intercomPairKey({ ...base, pairKey: bodyPairKey(first) }),
+    intercomPairKey({ ...base, pairKey: bodyPairKey(second) }),
+  )
+  assert.equal(intercomPairKey(base), intercomPairKey({ ...base }))
+})
 
 test("sent and received copies collapse to the send position with the receiver id", () => {
   const sent = intercom("a", 1, 1_000, "sent", "the same body")

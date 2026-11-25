@@ -13,7 +13,7 @@ import type {
 } from "../src/shared/types.ts"
 import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
 import { discover } from "./discover.ts"
-import { applyIntercomResults } from "./intercom.ts"
+import { applyIntercomResults, intercomPairKey } from "./intercom.ts"
 import { normalizeEvent, parseSessionFile } from "./session.ts"
 
 const MAX_TEXT = 20_000
@@ -95,8 +95,14 @@ function lite(event: ViewerEvent, scope: "branch" | "all"): ViewerEvent {
   // The inspection view renders summaries only; every body is fetched on expand.
   if (scope === "all") {
     if (event.kind === "intercom" && event.intercom) {
-      // Keep the pair identity for the paired marker, without the body.
-      base.intercom = { ...event.intercom, body: event.intercom.body.slice(0, 160) }
+      // Normalize before the display cut, and keep a hash so a shared 160-char prefix
+      // cannot pair two different messages.
+      const body = event.intercom.body.replace(/\s+/g, " ").trim()
+      base.intercom = {
+        ...event.intercom,
+        body: body.slice(0, 160),
+        pairKey: intercomPairKey(event.intercom.body),
+      }
     }
     return base
   }
@@ -210,21 +216,49 @@ function resolveSession(name: string | null): { session: ViewerSession; all: Vie
  */
 interface DetailEntry {
   events: ViewerEvent[]
+  /** Parser revision per entry; Claude can mutate an entry after it was first read. */
+  versions: number[]
   applied: number
+}
+
+function detailKey(agent: ViewerAgent): string {
+  return `${agent.id}|${agent.name}|${agent.sessionFile ?? ""}`
 }
 
 const detailCache = new Map<string, DetailEntry>()
 const DETAIL_CACHE_MAX = 6
 
-function detailOf(agent: ViewerAgent, seq: number): ViewerEvent {
+export function detailOf(agent: ViewerAgent, seq: number): ViewerEvent {
   if (!agent.sessionFile) throw new ApiError(404, "agent has no session file")
   const reader = readerFor(agent)
   const parsed = reader.parse(agent.sessionFile)
   if (!parsed.events[seq]) throw new ApiError(404, `event ${seq} not found`)
 
-  let entry = detailCache.get(agent.sessionFile)
+  const key = detailKey(agent)
+  let entry = detailCache.get(key)
   if (entry && entry.events.length > parsed.events.length) entry = undefined
-  if (!entry) entry = { events: [], applied: 0 }
+  if (!entry) entry = { events: [], versions: [], applied: 0 }
+
+  let changed = false
+  const shared = Math.min(entry.events.length, parsed.events.length)
+  for (let index = 0; index < shared; index += 1) {
+    const raw = parsed.events[index]
+    const id = typeof raw.id === "string" ? raw.id : null
+    const onBranch = id === null || parsed.branchIds.has(id)
+    const version = parsed.entryVersions?.[index]
+    if (version !== undefined) {
+      if (entry.versions[index] !== version) {
+        entry.events[index] = reader.normalize(raw, { id: agent.id, name: agent.name }, index, onBranch)
+        entry.versions[index] = version
+        changed = true
+      }
+      continue
+    }
+    // Pi has no entry revisions; its tree can still extend and make a cached line on-branch.
+    if (entry.events[index].onBranch !== onBranch) {
+      entry.events[index] = { ...entry.events[index], onBranch }
+    }
+  }
 
   if (parsed.events.length > entry.events.length) {
     const fresh = parsed.events.slice(entry.events.length).map((raw, offset) => {
@@ -234,13 +268,17 @@ function detailOf(agent: ViewerAgent, seq: number): ViewerEvent {
       return reader.normalize(raw, { id: agent.id, name: agent.name }, index, onBranch)
     })
     entry.events = entry.events.concat(fresh)
+    if (parsed.entryVersions) {
+      entry.versions = entry.versions.concat(parsed.entryVersions.slice(entry.events.length - fresh.length))
+    }
+    changed = true
   }
-  if (entry.applied !== entry.events.length) {
+  if (changed || entry.applied !== entry.events.length) {
     entry.events = applyIntercomResults(entry.events)
     entry.applied = entry.events.length
   }
-  detailCache.delete(agent.sessionFile)
-  detailCache.set(agent.sessionFile, entry)
+  detailCache.delete(key)
+  detailCache.set(key, entry)
   if (detailCache.size > DETAIL_CACHE_MAX) {
     const oldest = detailCache.keys().next().value
     if (oldest !== undefined) detailCache.delete(oldest)
