@@ -64,8 +64,12 @@ export function buildTree(sessions: ViewerSession[]): SessionNode[] {
   const tree: SessionNode[] = []
   for (const session of sessions) {
     const byWindow = new Map<string, ViewerAgent[]>()
+    // A pane id keys its row (`p:%N`) and the URL. Two agents on one pane id would repeat the key, so
+    // the first agent wins (XTRM-1044: React "two children with the same key" seen once in a live run).
+    const seenPanes = new Set<string>()
     for (const agent of session.agents) {
-      if (!agent.paneId) continue
+      if (!agent.paneId || seenPanes.has(agent.paneId)) continue
+      seenPanes.add(agent.paneId)
       const key = agent.windowId || String(agent.windowIndex)
       const list = byWindow.get(key) ?? []
       list.push(agent)
