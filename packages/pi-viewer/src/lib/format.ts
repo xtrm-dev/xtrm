@@ -54,3 +54,30 @@ export function monogram(name: string): string {
   const last = parts.length > 1 ? parts[parts.length - 1] : name
   return last.replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toLowerCase() || "pi"
 }
+
+/** Full local date and time for a tooltip: `Tue 25 Nov 2026, 14:02:09`. */
+export function fullDate(at: number): string {
+  if (!at) return ""
+  return new Date(at).toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+}
+
+/** Day-aware stamp: time for today, `Yesterday 14:02` for yesterday, `Mon 24 Nov 14:02` before that. */
+export function stamp(at: number): string {
+  if (!at) return "—"
+  const date = new Date(at)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+  if (sameDay(date, today)) return timeFormat.format(date)
+  if (sameDay(date, yesterday)) return `Yesterday ${timeFormat.format(date)}`
+  return `${dayFormat.format(date)} ${timeFormat.format(date)}`
+}

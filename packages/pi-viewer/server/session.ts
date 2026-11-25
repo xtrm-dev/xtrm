@@ -550,8 +550,47 @@ export function normalizeEvent(
   }
 }
 
-export function statusOf(parsed: ParsedFile): { status: AgentStatus; note: string | null } {
-  const age = Date.now() - parsed.modifiedAt
+/** Tools whose open call means the agent waits for the operator, with the note shown for each. */
+const ASK_TOOLS: Record<string, string> = { AskUserQuestion: "question", ExitPlanMode: "plan approval" }
+
+/** No transcript write for this long while a turn is open reads as quiet, not idle. */
+export const QUIET_MS = 15 * 60 * 1000
+
+export interface AgentState {
+  status: AgentStatus
+  note: string | null
+  /** The pending request the operator is asked to answer, shown read-only (attention only). */
+  detail?: string
+}
+
+function askText(name: string, args: unknown): string {
+  if (!isRecord(args)) return ""
+  if (name === "ExitPlanMode") return typeof args.plan === "string" ? cap(args.plan, 1_500).text : ""
+  const questions = Array.isArray(args.questions) ? args.questions : []
+  return cap(
+    questions
+      .map((entry) => (isRecord(entry) && typeof entry.question === "string" ? entry.question : ""))
+      .filter(Boolean)
+      .join("\n"),
+    1_500,
+  ).text
+}
+
+/** The first open AskUserQuestion or ExitPlanMode call of an assistant tool-use message. */
+function pendingAsk(message: Raw): AgentState | null {
+  const content = Array.isArray(message.content) ? message.content : []
+  for (const part of content) {
+    if (!isRecord(part) || part.type !== "toolCall" || typeof part.name !== "string") continue
+    const note = ASK_TOOLS[part.name]
+    if (!note) continue
+    const detail = askText(part.name, part.arguments)
+    return detail ? { status: "attention", note, detail } : { status: "attention", note }
+  }
+  return null
+}
+
+export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
+  const age = now - parsed.modifiedAt
   let last: Raw | null = null
   for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
     const entry = parsed.events[index]
@@ -565,7 +604,18 @@ export function statusOf(parsed: ParsedFile): { status: AgentStatus; note: strin
   const role = typeof message.role === "string" ? message.role : ""
   const stopReason = typeof message.stopReason === "string" ? message.stopReason : ""
   if (stopReason === "error") return { status: "error", note: "last turn failed" }
-  if (age > 15 * 60 * 1000) return { status: "idle", note: "quiet for 15m" }
+  // A question or a plan waits for the operator however long it has been open.
+  if (role === "assistant" && stopReason === "toolUse") {
+    const ask = pendingAsk(message)
+    if (ask) return ask
+  }
+  const turnOpen = role !== "assistant" || stopReason === "toolUse"
+  if (age > QUIET_MS) {
+    // An open turn with no write for 15 minutes is a long tool or a stuck agent: quiet, still
+    // in the turn. A finished or aborted turn that old is plain idle.
+    if (turnOpen) return { status: "quiet", note: `no output for ${Math.floor(age / 60_000)}m` }
+    return { status: "idle", note: "quiet for 15m" }
+  }
   if (role === "assistant") {
     if (stopReason === "toolUse") return { status: "working", note: "running tools" }
     if (stopReason === "aborted") return { status: "idle", note: "turn aborted" }

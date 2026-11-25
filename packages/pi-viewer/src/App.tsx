@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { AllEventsView } from "@/components/AllEventsView"
 import { ChannelView } from "@/components/ChannelView"
 import { Composer } from "@/components/Composer"
+import { PresenceLine } from "@/components/presence/PresenceLine"
 import { Sidebar } from "@/components/sidebar/Sidebar"
 import { ViewerHeader } from "@/components/ViewerHeader"
 import {
@@ -14,6 +15,8 @@ import {
 } from "@/components/ui/message-scroller"
 import { fetchMeta, fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
 import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
+import { splitPresence } from "@/lib/presence"
+import { channelTimeline } from "@/lib/thread"
 import {
   agentsInScope,
   defaultTarget,
@@ -272,6 +275,19 @@ export default function App() {
   )
   const label = useMemo(() => describeScope(scope, agents), [scope, agents])
 
+  // The running agents of the scope, shown by the presence line above the composer (XTRM-1035).
+  const presence = useMemo(
+    () => splitPresence(channelTimeline(scopeEvents, scopeOptimistic), agents).presence,
+    [scopeEvents, scopeOptimistic, agents],
+  )
+
+  function messageAgent(agent: ViewerAgent) {
+    setTargetPaneId(agent.id)
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>("[data-composer-input]")?.focus()
+    })
+  }
+
   function select(next: Scope) {
     if (sameScope(next, scope)) {
       // The same target: no history entry. A pane opened without its window learns it quietly.
@@ -335,7 +351,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setKick((value) => value + 1)}
-            className="ml-auto shrink-0 text-ink-faint underline-offset-2 hover:text-ink-muted hover:underline"
+            className="ml-auto shrink-0 text-ink-muted underline-offset-2 hover:text-ink hover:underline"
           >
             Retry
           </button>
@@ -345,7 +361,7 @@ export default function App() {
       {!sessionName ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <div className="text-sm text-ink-muted">{discoveryError ?? "Looking for tmux sessions…"}</div>
-          <div className="max-w-md text-xs text-ink-faint">
+          <div className="max-w-md text-xs text-ink-muted">
             The viewer reads pi session files from ~/.pi/agent/sessions and injects prompts with
             tmux send-keys. It never attaches to a pane.
           </div>
@@ -366,7 +382,7 @@ export default function App() {
                   <MessageScrollerContent
                     className={
                       view === "channel"
-                        ? "mx-auto w-full max-w-3xl gap-6 px-4 pt-5 pb-8 sm:px-5"
+                        ? "mx-auto w-full max-w-[46rem] gap-6 px-3 pt-5 pb-8 sm:px-12"
                         : "mx-auto w-full max-w-5xl gap-3 px-4 pt-0 pb-8 sm:px-5"
                     }
                   >
@@ -382,7 +398,7 @@ export default function App() {
                           }
                         />
                       ) : (
-                        <div className="py-20 text-center text-xs text-ink-faint">Loading thread…</div>
+                        <div className="py-20 text-center text-xs text-ink-muted">Loading thread…</div>
                       )
                     ) : all ? (
                       <AllEventsView
@@ -392,13 +408,30 @@ export default function App() {
                         session={all.session}
                       />
                     ) : (
-                      <div className="py-20 text-center text-xs text-ink-faint">Loading events…</div>
+                      <div className="py-20 text-center text-xs text-ink-muted">Loading events…</div>
                     )}
                   </MessageScrollerContent>
                 </MessageScrollerViewport>
                 <MessageScrollerButton direction="end" />
               </MessageScroller>
             </MessageScrollerProvider>
+          </div>
+
+          <div className="shrink-0 bg-deep px-4 pt-1 sm:px-5">
+            <PresenceLine
+              entries={presence}
+              session={branch?.session ?? sessionName ?? ""}
+              onMessage={messageAgent}
+              onOpenPane={(agent) =>
+                select({
+                  kind: "pane",
+                  session: agent.tmuxSession,
+                  window: agent.windowIndex,
+                  windowId: agent.windowId,
+                  paneId: agent.paneId,
+                })
+              }
+            />
           </div>
 
           <Composer

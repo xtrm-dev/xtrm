@@ -488,7 +488,7 @@ function kindRank(item: ChannelItem): number {
   return RANK_TURN
 }
 
-function compareChannelItems(a: ChannelItem, b: ChannelItem): number {
+export function compareChannelItems(a: ChannelItem, b: ChannelItem): number {
   return (
     pendingRank(a) - pendingRank(b) ||
     a.at - b.at ||

@@ -1,6 +1,10 @@
 /** Wire types shared by the Vite middleware and the browser app. */
 
-export type AgentStatus = "working" | "waiting" | "idle" | "error" | "unknown"
+/**
+ * `attention`: the agent waits for the operator (a question, a plan, a permission prompt).
+ * `quiet`: a turn is open but nothing was written for 15 minutes.
+ */
+export type AgentStatus = "working" | "attention" | "quiet" | "waiting" | "idle" | "error" | "unknown"
 
 export type AgentProvider = "pi" | "claude"
 
@@ -33,6 +37,8 @@ export interface ViewerAgent {
   eventCount: number
   status: AgentStatus
   statusNote: string | null
+  /** The pending request behind `attention` (question, plan or permission prompt), read-only text. */
+  statusDetail?: string | null
 }
 
 export interface ViewerSession {

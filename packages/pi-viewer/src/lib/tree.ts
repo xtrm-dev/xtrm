@@ -15,7 +15,9 @@ export type SidebarState = "idle" | "running" | "error"
  * and error, and `unknown` reads as idle.
  */
 export function stateOf(status: AgentStatus): SidebarState {
-  if (status === "working") return "running"
+  // `attention` is a running turn that waits for the operator; `quiet` reads as idle, as the
+  // same agent did before the quiet status existed. The sidebar gains no new dot here.
+  if (status === "working" || status === "attention") return "running"
   if (status === "error") return "error"
   return "idle"
 }
