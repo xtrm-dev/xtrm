@@ -34,8 +34,8 @@ export const ROW_ONE_LINE = "h-7"
 
 /**
  * A two-line pane row is the ruled exception to the 32px list density (§4.2): the second line
- * is text-2xs. The row grows to its content: 1.25rem + 0.875rem of line height + py-1.5 = 2.875rem (46px,
- * the console AgentSidebar's ROW_H). Pane rows are rounded-lg for a softer selection; groups stay one line.
+ * is text-2xs. The row grows to its content: 1.25rem + 0.875rem of line height + py-1.5 = 2.875rem (46px, the console
+ * AgentSidebar's ROW_H); the 1rem role pill on line 2 makes it 3rem (48px). Pane rows are rounded-lg for a softer selection; groups stay one line.
  */
 export const ROW_TWO_LINE = "items-start rounded-lg py-1.5"
 
