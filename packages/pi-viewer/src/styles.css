@@ -18,6 +18,8 @@
   --x-surface: #ffffff;
   --x-raised: #ffffff;
   --x-control: #efeff1;
+  /* The selected segment of a segmented control (Work/Threads, Channel/All events). Light: the white surface. */
+  --x-segment: #ffffff;
   --x-hover: rgb(15 15 20 / 0.045);
   --x-pressed: rgb(15 15 20 / 0.08);
   --x-ink: #18181b;
@@ -96,6 +98,8 @@
   --x-surface: #151515;
   --x-raised: #1e1e1e;
   --x-control: #262626;
+  /* Dark: lighter than the pressed track (#262626 or #303030 in the console palette) by at least 1.5:1; text-ink on it is 7:1. */
+  --x-segment: #4d4d4d;
   --x-hover: rgb(255 255 255 / 0.03);
   --x-pressed: rgb(255 255 255 / 0.06);
   --x-ink: #ececef;
@@ -160,6 +164,7 @@
   --color-surface: var(--x-surface);
   --color-raised: var(--x-raised);
   --color-control: var(--x-control);
+  --color-segment: var(--x-segment);
   --color-hover: var(--x-hover);
   --color-pressed: var(--x-pressed);
   --color-ink: var(--x-ink);

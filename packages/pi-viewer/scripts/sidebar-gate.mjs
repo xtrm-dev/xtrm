@@ -84,6 +84,24 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       // Operator: no right-edge border or hairline; the sidebar and the thread differ by background only.
       const edge = await p.evaluate(() => { const a = document.querySelector('[data-testid=sidebar]'), cs = getComputedStyle(a), line = document.querySelector('[role=separator] span'), ls = line ? getComputedStyle(line) : null; const m = document.querySelector('[data-testid=top-bar]').parentElement; return { border: cs.borderRightWidth, side: cs.backgroundColor, main: getComputedStyle(m).backgroundColor, line: ls ? ls.backgroundColor : "none" } })
       check(tag + " no sidebar border or hairline, background-only edge", edge.border === "0px" && (edge.line === "none" || edge.line === "rgba(0, 0, 0, 0)"), JSON.stringify(edge))
+      // Segmented controls (Work/Threads, Channel/All events): WCAG ratios, the translucent track composited over what is behind it.
+      const seg = await p.evaluate(() => {
+        const rgba = (c) => { const x = document.createElement("canvas").getContext("2d"); x.fillStyle = "#000"; x.fillStyle = c; x.fillRect(0, 0, 1, 1); const d = x.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255] }
+        const over = (t, b) => [0, 1, 2].map((i) => t[i] * t[3] + b[i] * (1 - t[3]))
+        const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]) }
+        const cr = (a, b) => { const x = lum(a), y = lum(b); return Math.round(((Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)) * 100) / 100 }
+        const one = (track, sel, off, behind) => {
+          let n = behind; while (n && rgba(getComputedStyle(n).backgroundColor)[3] === 0) n = n.parentElement; const bg = rgba(getComputedStyle(n ?? document.body).backgroundColor), t = over(rgba(getComputedStyle(track).backgroundColor), bg), s = rgba(getComputedStyle(sel).backgroundColor).slice(0, 3)
+          return { pillVsTrack: cr(s, t), textVsPill: cr(rgba(getComputedStyle(sel).color), s), offVsTrack: cr(rgba(getComputedStyle(off).color), t), trackVsBehind: cr(t, bg.slice(0, 3)) }
+        }
+        const hs = document.querySelector("[data-testid=half-switch]"), vs = document.querySelector('[role=tablist][aria-label=View]')
+        return { switcher: one(hs, hs.querySelector("[aria-checked=true]"), hs.querySelector("[aria-checked=false]"), document.querySelector("[data-testid=sidebar]")), view: one(vs, vs.querySelector("[aria-selected=true]"), vs.querySelector("[aria-selected=false]"), vs.parentElement) }
+      }).catch(() => null)
+      if (seg) for (const [name, r] of Object.entries(seg)) {
+        check(tag + " " + name + " selected text on the pill is 4.5:1 or better", r.textVsPill >= 4.5, JSON.stringify(r))
+        check(tag + " " + name + " unselected label on the track is 4.5:1 or better", r.offVsTrack >= 4.5, JSON.stringify(r))
+        check(tag + " " + name + " selected pill against the track is " + (theme === "dark" ? "1.5:1" : "1.25:1 (white pill)") + " or better", r.pillVsTrack >= (theme === "dark" ? 1.5 : 1.25), JSON.stringify(r))
+      }
       const sep = p.getByRole("separator", { name: "Resize sidebar" })
       const drag = async (dx) => { const bb = await sep.boundingBox(); const x = bb.x + bb.width / 2, y = bb.y + 300; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x + dx, y, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(400) }
       await drag(60); check(tag + " drag +60 widens to 324", (await panelW()) === 324, String(await panelW()))
