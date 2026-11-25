@@ -49,12 +49,29 @@ const agents = [agent(1), agent(2)]
 const workingAgents = [...agents, { ...agent(3), name: "agent-gamma", status: "working", statusNote: "running tools" }]
 
 
-// What docs/design/palette-console.md says each region wears.
+// What docs/design/palette-console.md says each region wears. prose and muted are the computed text colours
+// of the thread prose and of the quiet meta row; Desktop in the light theme is the Threads light set.
+const THREADS_LIGHT = { canvas: "rgb(244, 244, 245)", sidebar: "rgb(244, 244, 245)", composer: "rgb(255, 255, 255)", edge: false, prose: "rgb(24, 24, 27)", muted: "rgb(95, 95, 104)" }
 const EXPECT = {
-  "threads dark": { canvas: "rgb(13, 13, 13)", sidebar: "rgb(24, 24, 24)", composer: "rgb(21, 21, 21)", edge: false },
-  "console dark": { canvas: "rgb(21, 21, 21)", sidebar: "rgb(35, 35, 35)", composer: "rgb(21, 21, 21)", edge: true },
-  "threads light": { canvas: "rgb(244, 244, 245)", sidebar: "rgb(244, 244, 245)", composer: "rgb(255, 255, 255)", edge: false },
-  "console light": { canvas: "rgb(255, 255, 255)", sidebar: "rgb(244, 244, 245)", composer: "rgb(255, 255, 255)", edge: true },
+  "threads dark": { canvas: "rgb(13, 13, 13)", sidebar: "rgb(24, 24, 24)", composer: "rgb(21, 21, 21)", edge: false, prose: "rgb(236, 236, 239)", muted: "rgb(160, 160, 168)" },
+  "console dark": { canvas: "rgb(21, 21, 21)", sidebar: "rgb(35, 35, 35)", composer: "rgb(21, 21, 21)", edge: true, prose: "rgb(236, 236, 239)", muted: "rgb(160, 160, 168)" },
+  "desktop dark": { canvas: "rgb(31, 31, 31)", sidebar: "rgb(36, 36, 36)", composer: "rgb(51, 51, 51)", edge: false, prose: "rgb(200, 200, 200)", muted: "rgb(142, 142, 142)", selected: "rgb(69, 69, 69)" },
+  "threads light": THREADS_LIGHT,
+  "console light": { canvas: "rgb(255, 255, 255)", sidebar: "rgb(244, 244, 245)", composer: "rgb(255, 255, 255)", edge: true, prose: "rgb(24, 24, 27)", muted: "rgb(95, 95, 104)" },
+  "desktop light": THREADS_LIGHT,
+}
+const paletteName = (palette) => ({ threads: "Threads", console: "Console", desktop: "Desktop" })[palette]
+
+function expectPalette(seen, palette, theme, width, label) {
+  const want = EXPECT[`${palette} ${theme}`]
+  const tag = `${label} ${theme} ${palette}`
+  assert.equal(seen.canvas, want.canvas, `${tag} canvas`)
+  assert.equal(seen.composer, want.composer, `${tag} composer`)
+  if (width >= 1024) assert.equal(seen.sidebar, want.sidebar, `${tag} sidebar`)
+  assert.equal(/inset/.test(seen.shadow) && !/rgba\(0, 0, 0, 0\) 0px 0px 0px 1px inset/.test(seen.shadow), want.edge, `${tag} composer edge`)
+  assert.equal(seen.prose, want.prose, `${tag} thread prose colour`)
+  assert.equal(seen.muted, want.muted, `${tag} muted text colour`)
+  if (want.selected && seen.selected) assert.equal(seen.selected, want.selected, `${tag} selected sidebar row`)
 }
 
 const server = await createServer({ root: process.cwd(), logLevel: "error", server: { host: "127.0.0.1", port: PORT, strictPort: true } })
@@ -106,6 +123,18 @@ const paint = (page) =>
       composer: bg(box),
       shadow: getComputedStyle(box).boxShadow,
       overflow: document.documentElement.scrollWidth - window.innerWidth,
+      prose: (() => {
+        const node = document.querySelector(".xtrm-prose")
+        return node ? getComputedStyle(node).color : null
+      })(),
+      muted: (() => {
+        const node = document.querySelector(".xtrm-meta")
+        return node ? getComputedStyle(node).color : null
+      })(),
+      selected: (() => {
+        const node = document.querySelector('[data-testid="sidebar"] [aria-selected="true"]')
+        return node && sidebar.getBoundingClientRect().width > 0 ? bg(node) : null
+      })(),
       // The presence pill's edge is the surrounding background (the console's cut-out trick).
       pillShadow: (() => {
         const mark = document.querySelector("[data-presence-line] span[aria-hidden]")
@@ -121,6 +150,7 @@ async function choose(page, name) {
 }
 
 const shots = {}
+const OTHERS = ["console", "desktop"]
 try {
   for (const [width, height, label] of [[1440, 900, "1440"], [390, 844, "390"]]) {
     for (const theme of ["dark", "light"]) {
@@ -129,43 +159,41 @@ try {
 
       const before = await paint(page)
       assert.equal(before.palette, "threads", `${label} ${theme}: Threads is the default`)
-      const t = EXPECT[`threads ${theme}`]
-      assert.equal(before.canvas, t.canvas, `${label} ${theme} threads canvas`)
-      assert.equal(before.composer, t.composer, `${label} ${theme} threads composer`)
-      if (width >= 1024) assert.equal(before.sidebar, t.sidebar, `${label} ${theme} threads sidebar`)
-      assert.match(before.shadow, /rgba\(0, 0, 0, 0\)/, `${label} ${theme} threads composer has no edge`)
+      expectPalette(before, "threads", theme, width, label)
       await page.screenshot({ path: join(SHOTS, `mock-${label}-${theme}-threads.png`) })
       shots[`${label}-${theme}-threads`] = await page.screenshot()
 
-      // Scroll the thread mid-way, then switch.
-      await viewport.evaluate((node) => (node.scrollTop = Math.round((node.scrollHeight - node.clientHeight) / 2)))
-      await page.waitForTimeout(250)
-      const top = await viewport.evaluate((node) => node.scrollTop)
-      const loadsBefore = loads()
-      await choose(page, "Console")
-      await page.waitForTimeout(200)
-      const after = await paint(page)
-      const c = EXPECT[`console ${theme}`]
-      assert.equal(after.palette, "console")
-      assert.equal(after.canvas, c.canvas, `${label} ${theme} console canvas`)
-      assert.equal(after.shell, c.canvas, `${label} ${theme} console shell`)
-      assert.equal(after.body, c.canvas, `${label} ${theme} console body`)
-      assert.equal(after.composer, c.composer, `${label} ${theme} console composer`)
-      if (width >= 1024) assert.equal(after.sidebar, c.sidebar, `${label} ${theme} console sidebar`)
-      assert.ok(!/rgba\(0, 0, 0, 0\) 0px 0px 0px 1px inset/.test(after.shadow) && /inset/.test(after.shadow), `${label} ${theme} console composer has an edge`)
-      assert.equal(await viewport.evaluate((node) => node.scrollTop), top, `${label} ${theme}: the switch leaves the scroll position alone`)
-      assert.equal(loads(), loadsBefore, "no reload")
-      assert.equal(await page.evaluate(() => localStorage.getItem("pi-viewer-palette")), "console")
-      await page.screenshot({ path: join(SHOTS, `mock-${label}-${theme}-console.png`) })
-      shots[`${label}-${theme}-console`] = await page.screenshot()
+      for (const palette of OTHERS) {
+        // Scroll the thread mid-way, then switch.
+        await viewport.evaluate((node) => (node.scrollTop = Math.round((node.scrollHeight - node.clientHeight) / 2)))
+        await page.waitForTimeout(250)
+        const top = await viewport.evaluate((node) => node.scrollTop)
+        const loadsBefore = loads()
+        await choose(page, paletteName(palette))
+        await page.waitForTimeout(200)
+        const after = await paint(page)
+        assert.equal(after.palette, palette)
+        expectPalette(after, palette, theme, width, label)
+        assert.equal(after.shell, EXPECT[`${palette} ${theme}`].canvas, `${label} ${theme} ${palette} shell`)
+        assert.equal(after.body, EXPECT[`${palette} ${theme}`].canvas, `${label} ${theme} ${palette} body`)
+        assert.equal(await viewport.evaluate((node) => node.scrollTop), top, `${label} ${theme} ${palette}: the switch leaves the scroll position alone`)
+        assert.equal(loads(), loadsBefore, "no reload")
+        assert.equal(await page.evaluate(() => localStorage.getItem("pi-viewer-palette")), palette)
+        await page.screenshot({ path: join(SHOTS, `mock-${label}-${theme}-${palette}.png`) })
+        shots[`${label}-${theme}-${palette}`] = await page.screenshot()
 
-      // Persisted: a reload keeps Console without a flash of Threads.
-      await page.reload({ waitUntil: "domcontentloaded" })
-      await page.locator('[data-slot="message-scroller-item"]').first().waitFor({ state: "visible" })
-      assert.equal((await paint(page)).palette, "console", "Console persists across a reload")
-      assert.equal((await paint(page)).overflow, 0, `${label} ${theme}: no horizontal overflow`)
+        // Persisted: a reload keeps the palette without a flash of Threads.
+        await page.reload({ waitUntil: "domcontentloaded" })
+        await page.locator('[data-slot="message-scroller-item"]').first().waitFor({ state: "visible" })
+        assert.equal((await paint(page)).palette, palette, `${palette} persists across a reload`)
+        assert.equal((await paint(page)).overflow, 0, `${label} ${theme} ${palette}: no horizontal overflow`)
+      }
 
-      // And back.
+      // And back; the choice list offers all three.
+      await page.getByRole("button", { name: /^Colours:/ }).click()
+      const names = await page.getByRole("radiogroup", { name: "Colours" }).getByRole("radio").allTextContents()
+      assert.deepEqual(names.map((name) => name.replace(/dark only$/, "").trim()), ["Threads", "Console", "Desktop"])
+      await page.keyboard.press("Escape")
       await choose(page, "Threads")
       assert.equal((await paint(page)).palette, "threads")
       assert.deepEqual(errors, [], `${label} ${theme}: no console errors`)
@@ -179,8 +207,8 @@ try {
     for (const theme of ["dark", "light"]) {
       const { context, page, errors } = await open(width, height, theme, workingAgents)
       await page.locator("[data-presence-line] span[aria-hidden]").first().waitFor({ state: "visible" })
-      for (const palette of ["threads", "console"]) {
-        if (palette === "console") await choose(page, "Console")
+      for (const palette of ["threads", ...OTHERS]) {
+        if (palette !== "threads") await choose(page, paletteName(palette))
         const seen = await paint(page)
         const want = EXPECT[`${palette} ${theme}`].canvas
         assert.ok(seen.pillShadow?.includes(`${want} 0px 0px 0px 2px`), `${label} ${theme} ${palette}: presence pill edge equals the canvas ${want}: ${seen.pillShadow}`)
@@ -191,15 +219,12 @@ try {
     }
   }
 
-  // Side by side, one image per viewport and theme.
-  const page = await browser.newPage({ viewport: { width: 2000, height: 1000 } })
+  // Side by side, one image per viewport and theme: Threads, Console, Desktop.
+  const page = await browser.newPage({ viewport: { width: 3000, height: 1000 } })
   for (const label of ["1440", "390"]) {
     for (const theme of ["dark", "light"]) {
-      const a = shots[`${label}-${theme}-threads`].toString("base64")
-      const b = shots[`${label}-${theme}-console`].toString("base64")
-      await page.setContent(`<body style="margin:0;display:flex;gap:16px;background:#888;padding:16px;align-items:flex-start;font:14px sans-serif">
-        <figure style="margin:0"><figcaption>Threads</figcaption><img style="max-width:${label === "1440" ? 960 : 390}px" src="data:image/png;base64,${a}"></figure>
-        <figure style="margin:0"><figcaption>Console</figcaption><img style="max-width:${label === "1440" ? 960 : 390}px" src="data:image/png;base64,${b}"></figure></body>`)
+      const figure = (name) => `<figure style="margin:0"><figcaption>${paletteName(name)}</figcaption><img style="max-width:${label === "1440" ? 960 : 390}px" src="data:image/png;base64,${shots[`${label}-${theme}-${name}`].toString("base64")}"></figure>`
+      await page.setContent(`<body style="margin:0;display:flex;gap:16px;background:#888;padding:16px;align-items:flex-start;font:14px sans-serif">${["threads", ...OTHERS].map(figure).join("")}</body>`)
       await page.screenshot({ path: join(SHOTS, `mock-side-by-side-${label}-${theme}.png`), fullPage: true })
     }
   }

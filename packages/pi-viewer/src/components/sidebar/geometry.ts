@@ -38,6 +38,6 @@ export const ROW_ONE_LINE = "h-7"
  */
 export const ROW_TWO_LINE = "items-start rounded-lg py-1.5"
 
-/** Selected row: the --x-hover fill alone (§3.1). No accent marker: the operator asked for it removed. */
-export const ROW_SELECTED = "bg-hover text-ink"
+/** Selected row: the --x-selected fill alone (§3.1): the hover wash in Threads and Console, #454545 in Desktop. No accent marker: the operator asked for it removed. */
+export const ROW_SELECTED = "bg-selected text-ink"
 

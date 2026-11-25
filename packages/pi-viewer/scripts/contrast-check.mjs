@@ -1,6 +1,9 @@
-// Contrast gate for the transcript text roles (XTRM-1034, audit 1.6), in both palettes (XTRM-1046).
+// Contrast gate for the transcript text roles (XTRM-1034, audit 1.6), in all three palettes (XTRM-1046,
+// XTRM-1051).
 // Reads the --x-* tokens from src/styles.css, so a token edit re-runs the proof. The Console palette
 // is the Threads set with the :root[data-palette="console"] blocks laid over it, as the cascade does.
+// Desktop (dark only) is the Threads dark set with its own block over it; Desktop in the light theme is
+// the Threads light set, because no Desktop rule matches there.
 // Since XTRM-1048 it also holds the sidebar's status dot to 3:1 against the sidebar: the dot carries
 // the state alone, so its colour is a non-text mark that must stay visible in every palette.
 // Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1 or a dot below 3:1)
@@ -35,11 +38,14 @@ const threadsLight = tokens(block(":root {"))
 const dark = tokens(block(':root[data-theme="dark"]'))
 const consoleAll = tokens(block(':root[data-palette="console"] {'))
 const consoleDark = tokens(block(':root[data-palette="console"][data-theme="dark"]'))
+const desktopDark = tokens(block(':root[data-palette="desktop"][data-theme="dark"]'))
 const sets = [
   ["threads", "light", threadsLight],
   ["threads", "dark", { ...threadsLight, ...dark }],
   ["console", "light", { ...threadsLight, ...consoleAll }],
   ["console", "dark", { ...threadsLight, ...dark, ...consoleAll, ...consoleDark }],
+  ["desktop", "light", threadsLight],
+  ["desktop", "dark", { ...threadsLight, ...dark, ...desktopDark }],
 ]
 
 /** The final value of a token, following var(--x-name) the way the cascade does. */
@@ -85,10 +91,13 @@ function mix(fg, bg, alpha) {
 // Transcript text roles and the planes they sit on. The first four planes are the Threads set;
 // canvas, sidebar, composer-focus and code are the region roles the palette swaps; inset is the
 // quiet panel in the thread, drawn at 40% over the canvas as ActivityDisclosure draws it.
-const planes = ["deep", "surface", "raised", "control", "canvas", "sidebar", "composer-focus", "code", "inset"]
+// selected is the sidebar's selected row (the --x-selected wash over the sidebar); track is the segmented
+// controls' pressed track (the --x-pressed wash over the canvas).
+const planes = ["deep", "surface", "raised", "control", "canvas", "sidebar", "composer-focus", "code", "inset", "selected", "track"]
 const roles = [
   { name: "ink (prose 90%)", token: "ink", alpha: 0.9 },
   { name: "ink", token: "ink" },
+  { name: "read (thread prose)", token: "read" },
   { name: "ink-muted (tool rows, meta, fold line)", token: "ink-muted" },
   { name: "accent-ink (links)", token: "accent-ink" },
   { name: "danger (failed, errors)", token: "danger" },
@@ -99,24 +108,45 @@ function plane(set, name) {
     const canvas = parse(value(set, "canvas"), [255, 255, 255])
     return mix(parse(value(set, "inset"), canvas), canvas, 0.4)
   }
+  if (name === "selected") return parse(value(set, "selected"), parse(value(set, "sidebar"), [255, 255, 255]))
+  if (name === "track") return parse(value(set, "pressed"), parse(value(set, "canvas"), [255, 255, 255]))
   return parse(value(set, name), [255, 255, 255])
 }
 
 // ink-muted on control is the user bubble and the code toolbar; the others are the canvas and frames.
+// Desktop dark carries the operator's own values, which are fixed (XTRM-1051). Its muted text (#8e8e8e) is
+// 5.0:1 on the canvas but falls below 4.5:1 on the lighter planes (#333333, #383838, #454545), so on those
+// planes it is reported as WARN, not failed. Each WARN is a place a builder must not put muted text without
+// a decision; the numbers are in docs/design/palette-console.md. Nothing else is waived, and a waived pair
+// that reaches 4.5:1 prints PASS.
+const WAIVED = new Set(
+  ["surface", "raised", "control", "composer-focus", "selected", "track", "inset"].map((name) => `desktop|dark|ink-muted|${name}`),
+)
+// Prose is held to 7:1 on the canvas in every palette; muted text to 4.5:1 there (the generic loop).
+const PROSE_MIN = 7
+
 let failures = 0
+let waived = 0
 for (const [palette, theme, set] of sets) {
   for (const role of roles) {
     for (const name of planes) {
-      if (role.token === "danger" && name === "control") continue
+      // Error text never sits on a control, a selected sidebar row or a segmented track.
+      if (role.token === "danger" && ["control", "selected", "track"].includes(name)) continue
       const bg = plane(set, name)
       let fg = parse(value(set, role.token), bg)
       if (role.alpha) fg = mix(fg, bg, role.alpha)
       const result = ratio(fg, bg)
       const ok = result >= 4.5
-      if (!ok) failures += 1
-      console.log(`${ok ? "PASS" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} ${role.name.padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
+      const waive = !ok && WAIVED.has(`${palette}|${theme}|${role.token}|${name}`)
+      if (!ok && !waive) failures += 1
+      if (waive) waived += 1
+      console.log(`${ok ? "PASS" : waive ? "WARN" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} ${role.name.padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
     }
   }
+  const bg = plane(set, "canvas")
+  const prose = ratio(parse(value(set, "read"), bg), bg)
+  if (prose < PROSE_MIN) failures += 1
+  console.log(`${prose >= PROSE_MIN ? "PASS" : "FAIL"} ${palette.padEnd(7)} ${theme.padEnd(5)} thread prose (read) on canvas, minimum 7:1 ${prose.toFixed(2)}`)
 }
 // ink-faint is a glyph and heading role only; it must not carry transcript text.
 for (const [palette, theme, set] of sets) {
@@ -153,4 +183,4 @@ if (dotFailures) {
   console.error(`${dotFailures} sidebar dot(s) below 3:1`)
 }
 if (failures || dotFailures) process.exit(1)
-console.log("all transcript text roles >= 4.5:1 and all sidebar status dots >= 3:1, in both palettes")
+console.log(`all transcript text roles >= 4.5:1 (${waived} Desktop dark muted-on-light-plane pairs waived, see WARN lines), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, in all three palettes`)
