@@ -43,12 +43,10 @@ function RoleLabel({ role }: { role: string | null }) {
 function GroupRow({
   row,
   node,
-  selected,
   onToggle,
 }: {
   row: FlatRow
   node: SessionNode | WindowNode
-  selected: boolean
   onToggle: (key: string, open: boolean) => void
 }) {
   const isSession = node.kind === "session"
@@ -231,7 +229,7 @@ export function SessionTree({
             {row.node.kind === "pane" ? (
               <PaneRowBody pane={row.node} selected={selected} />
             ) : (
-              <GroupRow row={row} node={row.node} selected={selected} onToggle={onToggle} />
+              <GroupRow row={row} node={row.node} onToggle={onToggle} />
             )}
           </div>
         )
