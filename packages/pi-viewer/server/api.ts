@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
+import { gzipSync } from "node:zlib"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
 import type {
@@ -18,11 +19,19 @@ import { normalizeEvent, parseSessionFile } from "./session.ts"
 const MAX_TEXT = 20_000
 const MAX_BODY = 64 * 1024
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
+function sendJson(req: IncomingMessage, res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body)
   res.statusCode = status
   res.setHeader("content-type", "application/json; charset=utf-8")
   res.setHeader("cache-control", "no-store")
+  res.setHeader("vary", "accept-encoding")
+  // The thread payload is repetitive JSON; gzip cuts it by roughly 5x on the wire.
+  if (payload.length > 1024 && /\bgzip\b/.test(req.headers["accept-encoding"] ?? "")) {
+    const compressed = gzipSync(payload)
+    res.setHeader("content-encoding", "gzip")
+    res.end(compressed)
+    return
+  }
   res.end(payload)
 }
 
@@ -69,35 +78,70 @@ function isFinal(event: ViewerEvent): boolean {
  * Bulk payloads carry summaries only. Full text, tool input/output, thinking, and raw
  * JSON are fetched per event when a row is expanded.
  */
-function lite(event: ViewerEvent): ViewerEvent {
-  const { raw: _raw, ...rest } = event
-  if (rest.kind === "user") return { ...rest, parts: undefined }
-  if (rest.kind === "intercom") return { ...rest, text: undefined, parts: undefined, input: undefined, output: undefined }
-  if (isFinal(rest)) return { ...rest, parts: rest.parts?.filter((part) => part.type === "text") }
-  if (rest.kind === "notice" || rest.kind === "compaction") {
-    return { ...rest, parts: undefined, output: undefined, input: undefined }
+function lite(event: ViewerEvent, scope: "branch" | "all"): ViewerEvent {
+  const base: ViewerEvent = {
+    id: event.id,
+    agentId: event.agentId,
+    agentName: event.agentName,
+    seq: event.seq,
+    at: event.at,
+    kind: event.kind,
+    role: event.role,
+    onBranch: event.onBranch,
+    summary: event.summary,
   }
-  if (rest.kind === "assistant") {
-    return {
-      ...rest,
-      text: undefined,
-      output: undefined,
-      input: undefined,
-      parts: rest.parts?.map((part) =>
-        part.type === "thinking"
-          ? { type: "thinking", text: part.text?.slice(0, 160), truncated: true }
-          : part.type === "tool-call"
-            ? {
-                type: "tool-call",
-                toolName: part.toolName,
-                toolCallId: part.toolCallId,
-                summary: part.summary,
-              }
-            : part,
-      ),
+  if (event.isError) base.isError = true
+
+  // The inspection view renders summaries only; every body is fetched on expand.
+  if (scope === "all") {
+    if (event.kind === "intercom" && event.intercom) {
+      // Keep the pair identity for the paired marker, without the body.
+      base.intercom = { ...event.intercom, body: event.intercom.body.slice(0, 160) }
     }
+    return base
   }
-  return { ...rest, text: undefined, parts: undefined, output: undefined, input: undefined }
+
+  switch (event.kind) {
+    case "user":
+      return { ...base, text: event.text }
+    case "intercom":
+      return { ...base, intercom: event.intercom }
+    case "assistant":
+      if (isFinal(event)) {
+        // The turn renders text; parts would duplicate it and are only needed on expand.
+        return { ...base, stopReason: event.stopReason, text: event.text }
+      }
+      return {
+        ...base,
+        stopReason: event.stopReason,
+        parts: event.parts?.map((part) =>
+          part.type === "thinking"
+            ? { type: "thinking", text: part.text?.slice(0, 160), truncated: true }
+            : part.type === "tool-call"
+              ? {
+                  type: "tool-call",
+                  toolName: part.toolName,
+                  toolCallId: part.toolCallId,
+                  summary: part.summary,
+                }
+              : part,
+        ),
+      }
+    case "tool-result":
+      return {
+        ...base,
+        toolName: event.toolName,
+        toolCallId: event.toolCallId,
+        isError: event.isError,
+      }
+    case "bash":
+      return { ...base, toolName: event.toolName, isError: event.isError }
+    case "notice":
+    case "compaction":
+      return { ...base, text: event.text }
+    default:
+      return base
+  }
 }
 
 /** Pick the transcript parser and event normalizer for the agent's runtime. */
@@ -130,7 +174,10 @@ function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayloa
       )
     })
   }
-  const events = applyIntercomResults(normalized).map(lite)
+  const events = applyIntercomResults(normalized)
+    // Channel turns never render meta events; the inspection view fetches them with scope=all.
+    .filter((event) => scope === "all" || event.kind !== "meta")
+    .map((event) => lite(event, scope))
   events.sort((a, b) => a.at - b.at || a.agentId.localeCompare(b.agentId) || a.seq - b.seq)
   return {
     session: session.name,
@@ -153,17 +200,48 @@ function resolveSession(name: string | null): { session: ViewerSession; all: Vie
   return { session, all: found.sessions }
 }
 
+/**
+ * A normalized transcript is append-only until it shrinks. Expanding a row therefore
+ * normalizes only the entries appended since the last expand, then resolves by seq.
+ */
+interface DetailEntry {
+  events: ViewerEvent[]
+  applied: number
+}
+
+const detailCache = new Map<string, DetailEntry>()
+const DETAIL_CACHE_MAX = 6
+
 function detailOf(agent: ViewerAgent, seq: number): ViewerEvent {
   if (!agent.sessionFile) throw new ApiError(404, "agent has no session file")
   const reader = readerFor(agent)
   const parsed = reader.parse(agent.sessionFile)
   if (!parsed.events[seq]) throw new ApiError(404, `event ${seq} not found`)
-  const events = parsed.events.map((entry, index) => {
-    const id = typeof entry.id === "string" ? entry.id : null
-    const onBranch = id === null || parsed.branchIds.has(id)
-    return reader.normalize(entry, { id: agent.id, name: agent.name }, index, onBranch)
-  })
-  const event = applyIntercomResults(events)[seq]
+
+  let entry = detailCache.get(agent.sessionFile)
+  if (entry && entry.events.length > parsed.events.length) entry = undefined
+  if (!entry) entry = { events: [], applied: 0 }
+
+  if (parsed.events.length > entry.events.length) {
+    const fresh = parsed.events.slice(entry.events.length).map((raw, offset) => {
+      const index = entry!.events.length + offset
+      const id = typeof raw.id === "string" ? raw.id : null
+      const onBranch = id === null || parsed.branchIds.has(id)
+      return reader.normalize(raw, { id: agent.id, name: agent.name }, index, onBranch)
+    })
+    entry.events = entry.events.concat(fresh)
+  }
+  if (entry.applied !== entry.events.length) {
+    entry.events = applyIntercomResults(entry.events)
+    entry.applied = entry.events.length
+  }
+  detailCache.delete(agent.sessionFile)
+  detailCache.set(agent.sessionFile, entry)
+  if (detailCache.size > DETAIL_CACHE_MAX) {
+    const oldest = detailCache.keys().next().value
+    if (oldest !== undefined) detailCache.delete(oldest)
+  }
+  const event = entry.events[seq]
   if (!event) throw new ApiError(404, `event ${seq} not found`)
   return event
 }
@@ -175,7 +253,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
   const method = req.method ?? "GET"
 
   if (url.pathname === "/api/health" && method === "GET") {
-    sendJson(res, 200, { ok: true, pid: process.pid })
+    sendJson(req, res, 200, { ok: true, pid: process.pid })
     return true
   }
 
@@ -186,7 +264,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
       capturedAt: Date.now(),
       error: found.error,
     }
-    sendJson(res, found.error ? 503 : 200, payload)
+    sendJson(req, res, found.error ? 503 : 200, payload)
     return true
   }
 
@@ -199,11 +277,11 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
         agents: session.agents,
         capturedAt: Date.now(),
       }
-      sendJson(res, 200, meta)
+      sendJson(req, res, 200, meta)
       return true
     }
     const scope = url.searchParams.get("scope") === "all" ? "all" : "branch"
-    sendJson(res, 200, threadOf(session, scope))
+    sendJson(req, res, 200, threadOf(session, scope))
     return true
   }
 
@@ -214,7 +292,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
     if (!Number.isInteger(seq) || seq < 0) throw new ApiError(400, "invalid seq")
     const agent = session.agents.find((entry) => entry.paneId === paneId)
     if (!agent) throw new ApiError(404, "unknown pane in this session")
-    sendJson(res, 200, detailOf(agent, seq))
+    sendJson(req, res, 200, detailOf(agent, seq))
     return true
   }
 
@@ -247,7 +325,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
       const message = error instanceof Error ? error.message : String(error)
       throw new ApiError(502, `tmux send-keys failed: ${message}`)
     }
-    sendJson(res, 200, { ok: true, paneId, at: Date.now() })
+    sendJson(req, res, 200, { ok: true, paneId, at: Date.now() })
     return true
   }
 
@@ -261,11 +339,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     return await route(req, res)
   } catch (error) {
     if (error instanceof ApiError) {
-      sendJson(res, error.status, { error: error.message })
+      sendJson(req, res, error.status, { error: error.message })
       return true
     }
     const message = error instanceof Error ? error.message : String(error)
-    sendJson(res, 500, { error: message })
+    sendJson(req, res, 500, { error: message })
     return true
   }
 }
