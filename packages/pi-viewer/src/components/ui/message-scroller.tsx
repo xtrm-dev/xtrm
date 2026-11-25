@@ -206,7 +206,7 @@ function MessageScrollerViewport({ className, onScroll, ...props }: React.Compon
       }}
       data-slot="message-scroller-viewport"
       className={cn(
-        "size-full min-h-0 min-w-0 scroll-fade-b scrollbar-thin scrollbar-gutter-stable overflow-y-auto overscroll-contain",
+        "size-full min-h-0 min-w-0 scroll-fade-b scrollbar-thin scrollbar-gutter-stable overflow-y-auto overscroll-contain [overflow-anchor:none]",
         className,
       )}
       {...props}
