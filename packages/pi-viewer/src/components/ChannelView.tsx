@@ -125,7 +125,7 @@ function UserMessage({
         <Bubble variant="muted" align="end" className="max-w-[80%]">
           <BubbleContent
             className={cn(
-              "rounded-lg border-0 bg-control px-3 py-3 text-[0.875rem] leading-[1.625] whitespace-pre-wrap text-ink",
+              "rounded-lg border-0 bg-control px-3 py-3 text-[0.875rem] leading-[1.625] whitespace-pre-wrap text-read",
               joinsAbove && "rounded-tr-sm",
               joinsBelow && "rounded-br-sm",
             )}

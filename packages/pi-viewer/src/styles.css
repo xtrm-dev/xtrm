@@ -87,6 +87,11 @@
   --x-inset: var(--x-surface); /* quiet panels inside the thread: activity detail, intercom card */
   --x-code: var(--x-surface); /* rendered code frame */
   --x-code-edge: var(--x-border-muted);
+  /* Reading colour (XTRM-1051): thread prose and the operator's bubbles. Threads and Console read in
+     full ink; the Desktop palette reads one step dimmer (its secondary text). */
+  --x-read: var(--x-ink);
+  /* The selected row in a list (sidebar). Threads and Console keep the hover wash. */
+  --x-selected: var(--x-hover);
 }
 
 :root[data-theme="dark"] {
@@ -153,6 +158,32 @@
   --x-sidebar: #232323; /* console src/styles.css:79 */
 }
 
+/* Desktop palette (XTRM-1051), dark only. The values are the operator's, extracted from Claude Desktop
+   (2026-11-25): base #1f1f1f, sidebar #242424, surface #333333, selected #454545, input #383838;
+   text primary #e4e4e4, secondary #c8c8c8, muted #8e8e8e; border #383838; icons #c8c8c8 and #8e8e8e.
+   The point is a dimmer reading colour: prose reads in secondary, names and titles in primary, meta in
+   muted. There are no light values, so Desktop in the light theme is the Threads light set (no rule below
+   matches it). Region assignments stay the Threads ones; only the planes and the text roles change.
+   Not supplied, so unchanged and marked inferred in docs/design/palette-console.md: border-muted,
+   border-subtle, border-strong, ink-faint, hover, pressed, accent, danger. */
+:root[data-palette="desktop"][data-theme="dark"] {
+  --x-deep: #1f1f1f; /* base: canvas, header, thread */
+  --x-sidebar: #242424;
+  --x-surface: #333333; /* cards, composer, quiet panels, code frame */
+  --x-raised: #333333; /* popovers, presence panel */
+  --x-control: #383838; /* input */
+  --x-segment: #454545; /* selected segment */
+  --x-selected: #454545; /* selected row */
+  --x-ink: #e4e4e4; /* text primary: names, titles, selected rows */
+  --x-read: #c8c8c8; /* text secondary: thread prose */
+  --x-ink-muted: #8e8e8e; /* text muted: meta, time, unselected labels, resting icons */
+  --x-border: #383838;
+  --x-danger: #f58f8f; /* inferred: #f07171 is 4.1:1 on the focused composer fill (#383838); this is 5.1:1 */
+  --x-composer-focus: var(--x-control); /* the focused composer takes the input fill */
+  --x-code: var(--x-deep); /* a well cut into the canvas: muted text on #333333 is only 3.9:1 */
+  --x-code-edge: var(--x-border);
+}
+
 @theme inline {
   --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
@@ -168,6 +199,8 @@
   --color-hover: var(--x-hover);
   --color-pressed: var(--x-pressed);
   --color-ink: var(--x-ink);
+  --color-read: var(--x-read);
+  --color-selected: var(--x-selected);
   --color-ink-muted: var(--x-ink-muted);
   --color-ink-faint: var(--x-ink-faint);
   --color-border-muted: var(--x-border-muted);

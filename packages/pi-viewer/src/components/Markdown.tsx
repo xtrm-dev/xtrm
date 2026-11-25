@@ -13,7 +13,7 @@ function textOf(node: ReactNode): string {
 
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
-    <div className="xtrm-prose min-w-0 text-ink">
+    <div className="xtrm-prose min-w-0 text-read">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

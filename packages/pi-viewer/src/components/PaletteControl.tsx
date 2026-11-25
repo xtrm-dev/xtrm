@@ -2,11 +2,11 @@ import { CheckIcon, PaletteIcon } from "lucide-react"
 import { Popover } from "radix-ui"
 import { useLayoutEffect, useState } from "react"
 
-import { PALETTES, applyPalette, loadPalette, paletteLabel, savePalette, type Palette } from "@/lib/palette"
+import { PALETTES, applyPalette, loadPalette, paletteHint, paletteLabel, savePalette, type Palette } from "@/lib/palette"
 import { cn } from "@/lib/utils"
 
 /**
- * Header control for the Colours setting (XTRM-1046): "Colours: Threads | Console". It owns its
+ * Header control for the Colours setting (XTRM-1046): "Colours: Threads | Console | Desktop". It owns its
  * state and writes the root `data-palette` attribute, so switching is instant and leaves the
  * scroll position alone. The glyph is 16px, the console's `sm` step.
  */
@@ -51,6 +51,7 @@ export function PaletteControl() {
                   type="button"
                   role="radio"
                   aria-checked={selected}
+                  title={paletteHint(value) ?? undefined}
                   onClick={() => choose(value)}
                   className={cn(
                     "flex h-8 items-center gap-2 rounded-md px-2 text-left text-sm text-ink hover:bg-hover",
@@ -61,6 +62,11 @@ export function PaletteControl() {
                     {selected ? <CheckIcon className="size-3.5" /> : null}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{paletteLabel(value)}</span>
+                  {paletteHint(value) ? (
+                    <span className="shrink-0 text-2xs text-ink-muted" aria-hidden>
+                      dark only
+                    </span>
+                  ) : null}
                 </button>
               )
             })}

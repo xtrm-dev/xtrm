@@ -13,7 +13,9 @@
       }
       try {
         document.documentElement.dataset.palette =
-          localStorage.getItem("pi-viewer-palette") === "console" ? "console" : "threads"
+          (function (saved) {
+            return saved === "console" || saved === "desktop" ? saved : "threads"
+          })(localStorage.getItem("pi-viewer-palette"))
       } catch (error) {
         document.documentElement.dataset.palette = "threads"
       }

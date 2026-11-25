@@ -1,9 +1,10 @@
-# Palette switch: Threads and Console (XTRM-1046)
+# Palettes: Threads, Console and Desktop (XTRM-1046, XTRM-1051)
 
-The header has a Colours control (palette glyph, 16px): **Colours: Threads | Console**. Default Threads,
+The header has a Colours control (palette glyph, 16px): **Colours: Threads | Console | Desktop**. Default Threads,
 persisted in `localStorage` under `pi-viewer-palette`, applied as `data-palette` on `<html>` (set before
 first paint by `index.html`). Switching rewrites CSS variables only; no component forks, no reload, no scroll change.
-The operator decides which palette stays; this document records what each one is.
+The operator decides which palette stays; this document records what each one is. Console and Threads are
+described first, Desktop (XTRM-1051) in its own section below, with a token table across all three.
 
 ## Source of the console values
 
@@ -74,9 +75,88 @@ sticky header; `bg-inset` on the four quiet panels; `xtrm-composer-box` on the c
 
 ## Contrast
 
-`npm run test:contrast` resolves the tokens for all four sets (Threads and Console, dark and light) and checks
-ink, ink at 90%, ink-muted, accent-ink and danger against deep, surface, raised, control, canvas, sidebar,
-composer-focus, code and inset: every pair is at least 4.5:1. `ink-faint` stays a glyph role (INFO lines).
+`npm run test:contrast` resolves the tokens for all six sets (Threads, Console and Desktop, dark and light)
+and checks ink, ink at 90%, read (thread prose), ink-muted, accent-ink and danger against deep, surface,
+raised, control, canvas, sidebar, composer-focus, code, inset, the sidebar's selected row and the segmented
+track: every pair is at least 4.5:1, except the six Desktop dark muted-text pairs listed under Desktop
+(printed WARN, not waived silently). Thread prose is also held to 7:1 on the canvas in every palette.
+`ink-faint` stays a glyph role (INFO lines).
+
+## Desktop palette (XTRM-1051)
+
+Source: the operator's values, extracted from Claude Desktop (2026-11-25, as supplied; the viewer shows only
+the label "Desktop"). Dark only. In the light theme `data-palette="desktop"` matches no rule, so the light
+theme is the **Threads light set**; the control says so ("dark only", tooltip "Dark theme. In the light theme
+it uses the Threads colours."). The point is a dimmer reading colour: prose reads in secondary, names, titles
+and selected rows in primary, meta in muted. Two new tokens carry it: `--x-read` (class `text-read`: the
+Markdown body and the operator's bubble text) and `--x-selected` (class `bg-selected`: the selected sidebar
+row). Both equal `ink` and `hover` in Threads and Console, so nothing changes there.
+
+### Operator value to viewer token (dark)
+
+| Operator value | Hex | Viewer token |
+|---|---|---|
+| base | `#1f1f1f` | `--x-deep` (so `--x-canvas`: page, header, thread, presence line) |
+| sidebar | `#242424` | `--x-sidebar` |
+| surface | `#333333` | `--x-surface` and `--x-raised` (cards, composer, quiet panels, popovers) |
+| selected | `#454545` | `--x-selected` (sidebar row) and `--x-segment` (selected segment of the two switches) |
+| input | `#383838` | `--x-control`, and the focused composer fill (`--x-composer-focus`) |
+| text primary | `#e4e4e4` | `--x-ink` (names, titles, selected rows) |
+| text secondary | `#c8c8c8` | `--x-read` (thread prose, operator bubble text); also the "icon primary" value |
+| text muted | `#8e8e8e` | `--x-ink-muted` (meta, time, unselected labels, resting icons) |
+| border | `#383838` | `--x-border` (and the code frame edge) |
+| icon primary / muted | `#c8c8c8` / `#8e8e8e` | icons use `ink-muted` at rest and `ink` on hover; no separate token |
+
+### Tokens, dark: Threads, Console, Desktop
+
+| Token | Threads | Console | Desktop |
+|---|---|---|---|
+| `--x-deep` | `#0d0d0d` | `#0d0d0d` | `#1f1f1f` |
+| `--x-canvas` | deep `#0d0d0d` | surface `#151515` | deep `#1f1f1f` |
+| `--x-sidebar` | `#181818` | `#232323` | `#242424` |
+| `--x-surface` | `#151515` | `#151515` | `#333333` |
+| `--x-raised` | `#1e1e1e` | `#1e1e1e` | `#333333` |
+| `--x-control` | `#262626` | `#262626` | `#383838` |
+| `--x-segment` | `#4d4d4d` | `#4d4d4d` | `#454545` |
+| `--x-selected` | hover wash | hover wash | `#454545` |
+| `--x-ink` | `#ececef` | `#ececef` | `#e4e4e4` |
+| `--x-read` | ink `#ececef` | ink `#ececef` | `#c8c8c8` |
+| `--x-ink-muted` | `#a0a0a8` | `#a0a0a8` | `#8e8e8e` |
+| `--x-border` | `rgb(255 255 255 / .12)` | same | `#383838` |
+| `--x-composer-focus` | raised `#1e1e1e` | surface `#151515` | control `#383838` |
+| `--x-composer-edge` | none | border | none (as Threads) |
+| `--x-inset` | surface | control `#262626` | surface `#333333` (at 40 / 70%) |
+| `--x-code` / `--x-code-edge` | surface / none | deep / border-muted | deep `#1f1f1f` / border `#383838` |
+| `--x-danger` | `#f07171` | `#f07171` | `#f58f8f` (inferred, see below) |
+
+Light: Desktop equals the Threads light column of the light table above.
+
+Not supplied, so left as in Threads and **inferred**: `border-muted`, `border-subtle`, `border-strong`,
+`ink-faint`, `hover`, `pressed`, `accent`, the role chips, the success and diff colours. `danger` is the one
+inferred change: `#f07171` is 4.1:1 on the focused composer fill, so Desktop uses `#f58f8f` (5.1:1). The code
+frame is a well cut into the canvas (deep plus the border) because muted text on `#333333` is below 4.5:1.
+
+The adapter's two segmented controls and the sidebar need no Desktop rule: their `in-data-[palette=console]`
+classes do not match, so they take the Threads behaviour with the Desktop planes (pill `#454545` on the
+pressed track).
+
+### Contrast, Desktop dark (`npm run test:contrast`)
+
+| Pair | Ratio |
+|---|---|
+| prose `#c8c8c8` on canvas `#1f1f1f` | 9.85 (7:1 required) |
+| prose on surface / control (user bubble) / selected row | 7.55 / 7.01 / 5.73 |
+| ink `#e4e4e4` at 90% on canvas / surface / control / selected | 10.69 / 8.36 / 7.83 / 6.47 |
+| muted `#8e8e8e` on canvas / sidebar / code / inset | all at least 4.5 (PASS) |
+| muted on surface and raised | 3.86 (WARN) |
+| muted on control and the focused composer | 3.58 (WARN) |
+| muted on the selected sidebar row | 2.93 (WARN) |
+| muted on the segmented pressed track | 4.26 (WARN) |
+
+The six WARN pairs come from the operator's own values and are not tuned away. Rule for builders: in Desktop,
+do not put muted text on surface, control or a selected row without a decision; the second line of a
+selected sidebar row is the live case (2.93:1). Candidates, for the operator: read text (`#c8c8c8`) on those
+planes, or a lighter muted (`#a0a0a0` is 4.8:1 on `#333333` and 4.5:1 on `#383838`).
 
 ## Presence pill edge (XTRM-1047)
 
@@ -91,6 +171,8 @@ the canvas token, so each combination uses its own surround (asserted by `npm ru
 | Threads light | `#f4f4f5` |
 | Console dark | `#151515` |
 | Console light | `#ffffff` (it was `#f4f4f5`, the deep token, which outlined the pill) |
+| Desktop dark | `#1f1f1f` |
+| Desktop light | `#f4f4f5` (the Threads light set) |
 
 The edge does not follow the line's hover fill (`bg-hover`, a translucent wash), so on hover the ring is
 a hair lighter than the wash. The cut-out effect holds at rest, which is the state the operator compared.
