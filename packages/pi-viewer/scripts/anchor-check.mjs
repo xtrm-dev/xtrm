@@ -374,6 +374,57 @@ try {
     () => document.querySelector('[data-slot="message-scroller-viewport"]')?.dataset.restoring !== "true",
   )
   assert.equal(restoreCancelled, true, "a wheel gesture did not cancel the pending restore")
+  // XTRM-1042: a lane width change while the reader is scrolled up keeps the anchored row in place,
+  // and the thread lane, the composer and the lane variable agree.
+  const widthBefore = await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.scrollTop = Math.round(viewport.scrollHeight * 0.4)
+    return new Promise((resolve) =>
+      setTimeout(() => {
+        const viewportTop = viewport.getBoundingClientRect().top
+        const items = Array.from(document.querySelectorAll('[data-slot="message-scroller-item"]'))
+        const anchor = items.find((item) => item.getBoundingClientRect().top >= viewportTop)
+        window.__widthAnchorId = anchor.dataset.messageId
+        const content = document.querySelector('[data-slot="message-scroller-content"]')
+        const composer = document.querySelector("textarea").closest(".xtrm-lane")
+        resolve({
+          top: anchor.getBoundingClientRect().top - viewportTop,
+          lane: getComputedStyle(document.documentElement).getPropertyValue("--chat-lane").trim(),
+          contentInner: content.getBoundingClientRect().width - 96,
+          composer: composer.getBoundingClientRect().width,
+        })
+      }, 400),
+    )
+  })
+  assert.equal(widthBefore.lane, "46rem", "default lane is Comfortable 46rem")
+  assert.ok(Math.abs(widthBefore.contentInner - 736) < 1 && Math.abs(widthBefore.composer - 736) < 1, `Comfortable lane ${widthBefore.contentInner}px and composer ${widthBefore.composer}px are not both 46rem`)
+  await page.getByRole("button", { name: /Chat width/ }).click()
+  await page.getByRole("radio", { name: /Wide/ }).click()
+  await page.waitForTimeout(700)
+  const widthAfter = await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    const viewportTop = viewport.getBoundingClientRect().top
+    const anchor = Array.from(document.querySelectorAll('[data-slot="message-scroller-item"]')).find(
+      (item) => item.dataset.messageId === window.__widthAnchorId,
+    )
+    const content = document.querySelector('[data-slot="message-scroller-content"]')
+    const composer = document.querySelector("textarea").closest(".xtrm-lane")
+    return {
+      top: anchor ? anchor.getBoundingClientRect().top - viewportTop : null,
+      lane: getComputedStyle(document.documentElement).getPropertyValue("--chat-lane").trim(),
+      contentInner: content.getBoundingClientRect().width - 96,
+      composer: composer.getBoundingClientRect().width,
+      stored: localStorage.getItem("pi-viewer-chat-width"),
+    }
+  })
+  const widthDrift = widthAfter.top === null ? Infinity : widthAfter.top - widthBefore.top
+  assert.ok(Math.abs(widthDrift) < 2, `anchor drifted ${widthDrift}px after a width change (expected < 2px)`)
+  assert.equal(widthAfter.lane, "72rem")
+  assert.equal(widthAfter.stored, "wide")
+  // Wide (72rem) clamps to the column at 1440px; the 10px difference is the thread's scrollbar gutter.
+  assert.ok(widthAfter.contentInner > widthBefore.contentInner + 200, "Wide did not widen the lane")
+  assert.ok(Math.abs(widthAfter.contentInner - widthAfter.composer) <= 16, `lane ${widthAfter.contentInner}px and composer ${widthAfter.composer}px differ`)
+  await page.keyboard.press("Escape")
 
   assert.equal(errors.length, 0, `console errors: ${errors.join(" | ")}`)
 
@@ -392,6 +443,8 @@ try {
         bottomAfter,
         smoothAfter,
         resizedAfter,
+        widthBefore,
+        widthAfter,
       },
       null,
       2,

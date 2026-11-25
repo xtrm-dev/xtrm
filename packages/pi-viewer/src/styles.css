@@ -41,6 +41,9 @@
   --x-role-manager: #2563eb;
   --x-role-lead: #15803d;
   --x-role-worker: #52525b;
+  /* The same two hues as text (the sidebar's Lead and Manager labels); dark lifts them for 10px type. */
+  --x-role-manager-ink: #2563eb;
+  --x-role-lead-ink: #15803d;
   /* The badge ink: --x-success on its own 12% tint is 4.30:1 on white and 3.93:1 on the
      canvas, below the 4.5:1 text minimum. Same hue, darker: 5.85:1 and 5.34:1 (§3.2). */
   --x-success-ink: #146839;
@@ -105,6 +108,8 @@
   --x-success-ink: #5ccb8a;
   --x-diff-add: #5ccb8a;
   --x-diff-del: #f07171;
+  --x-role-manager-ink: #6b9bff;
+  --x-role-lead-ink: #5ccb8a;
   --x-shadow-float: 0 18px 44px -12px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.08);
   --x-shadow-panel: 0 18px 44px -12px rgb(0 0 0 / 0.72);
   --x-strip: #1c1c1c;
@@ -146,6 +151,8 @@
   --color-role-manager: var(--x-role-manager);
   --color-role-lead: var(--x-role-lead);
   --color-role-worker: var(--x-role-worker);
+  --color-role-manager-ink: var(--x-role-manager-ink);
+  --color-role-lead-ink: var(--x-role-lead-ink);
   --color-success-ink: var(--x-success-ink);
   --color-diff-add: var(--x-diff-add);
   --color-diff-del: var(--x-diff-del);
@@ -600,5 +607,28 @@
   }
   .xtrm-meta {
     transition: none;
+  }
+}
+
+/* ── Chat lane (XTRM-1042) ─────────────────────────────────────────────────────
+   One variable drives the thread lane, the composer and the presence line, so they always
+   align. Set on the root from src/lib/chat-width.ts; 46rem is Comfortable, the default.
+   Below 640px the lane is the full column and the setting has no effect. */
+:root {
+  --chat-lane: 46rem;
+}
+/* .xtrm-lane: the composer and the presence line. Their parents hold the side padding, so the
+   box is the lane. .xtrm-lane-padded: the thread content, which carries its own 3rem side
+   padding (sm:px-12), so its box is the lane plus 6rem and the text column equals the lane. */
+.xtrm-lane,
+.xtrm-lane-padded {
+  max-width: none;
+}
+@media (min-width: 640px) {
+  .xtrm-lane {
+    max-width: var(--chat-lane);
+  }
+  .xtrm-lane-padded {
+    max-width: min(100%, calc(var(--chat-lane) + 6rem));
   }
 }

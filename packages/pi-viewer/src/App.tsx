@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { AllEventsView } from "@/components/AllEventsView"
 import { ChannelView } from "@/components/ChannelView"
@@ -6,6 +6,7 @@ import { Composer } from "@/components/Composer"
 import { PresenceLine } from "@/components/presence/PresenceLine"
 import { Sidebar } from "@/components/sidebar/Sidebar"
 import { ViewerHeader } from "@/components/ViewerHeader"
+import { laneValue, loadWidth, saveWidth } from "@/lib/chat-width"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -80,6 +81,12 @@ export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     document.documentElement.dataset.theme === "light" ? "light" : "dark",
   )
+  const [chatWidth, setChatWidth] = useState(loadWidth)
+  // One root variable carries the lane width to the thread, the composer and the presence line.
+  useLayoutEffect(() => {
+    document.documentElement.style.setProperty("--chat-lane", laneValue(chatWidth))
+    saveWidth(chatWidth)
+  }, [chatWidth])
   const sessionName = scope?.session ?? null
   // Remount keys use the scope's identity, not its URL: a pane scope with or without its window is one scope.
   const scopeKey = scope ? scopeRowKey(scope) : "none"
@@ -402,6 +409,8 @@ export default function App() {
         onViewChange={setView}
         theme={theme}
         onToggleTheme={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
+        chatWidth={chatWidth}
+        onChatWidthChange={setChatWidth}
       />
 
       {threadError ? (
@@ -441,7 +450,7 @@ export default function App() {
                   <MessageScrollerContent
                     className={
                       view === "channel"
-                        ? "mx-auto w-full max-w-[46rem] gap-6 px-3 pt-5 pb-8 sm:px-12"
+                        ? "xtrm-lane-padded mx-auto w-full gap-6 px-3 pt-5 pb-8 sm:px-12"
                         : "mx-auto w-full max-w-5xl gap-3 px-4 pt-0 pb-8 sm:px-5"
                     }
                   >
@@ -492,7 +501,7 @@ export default function App() {
             </MessageScrollerProvider>
           </div>
 
-          <div className="shrink-0 bg-deep px-4 pt-1 sm:px-5">
+          <div className="shrink-0 bg-deep px-3 pt-1 sm:px-12">
             <PresenceLine
               entries={presence}
               session={branch?.session ?? sessionName ?? ""}

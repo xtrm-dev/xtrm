@@ -12,14 +12,12 @@ import {
   type SessionNode,
   type WindowNode,
 } from "@/lib/tree"
-import { RoleChip } from "@/components/RoleChip"
 import { scopeRowKey, type Scope } from "@/lib/scope"
 import { cn } from "@/lib/utils"
 
 import {
   DISCLOSURE,
   INDENT_REM,
-  MARKER,
   ROW_BASE,
   ROW_ONE_LINE,
   ROW_SELECTED,
@@ -29,22 +27,32 @@ import { SidebarDot } from "./SidebarDot"
 
 const PROVIDER_LABEL = { pi: "Pi", claude: "Claude" } as const
 
+/**
+ * The role on line 2: plain text at the line's own size. Only Lead and Manager are called out,
+ * bold in their role colour (the thread view's pill colours); any other role is plain faint text.
+ */
+function RoleLabel({ role }: { role: string | null }) {
+  const key = role?.trim().toLowerCase()
+  if (!key) return null
+  const label = key.charAt(0).toUpperCase() + key.slice(1)
+  if (key === "lead") return <span className="shrink-0 font-semibold text-role-lead-ink">{label}</span>
+  if (key === "manager" || key === "coordinator") return <span className="shrink-0 font-semibold text-role-manager-ink">{label}</span>
+  return <span className="shrink-0">{label}</span>
+}
+
 function GroupRow({
   row,
   node,
-  selected,
   onToggle,
 }: {
   row: FlatRow
   node: SessionNode | WindowNode
-  selected: boolean
   onToggle: (key: string, open: boolean) => void
 }) {
   const isSession = node.kind === "session"
   const count = node.kind === "session" ? node.count : node.panes.length
   return (
     <>
-      {selected && <span aria-hidden className={MARKER} />}
       <span
         className={cn("min-w-0 truncate text-sm", isSession ? "font-semibold text-ink" : "font-medium text-ink-muted")}
         style={{ marginLeft: "var(--row-indent)" }}
@@ -74,12 +82,11 @@ function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) 
   const state = stateOf(agent.status)
   return (
     <>
-      {selected && <span aria-hidden className={MARKER} />}
       <span className="flex min-w-0 flex-1 flex-col" style={{ marginLeft: "var(--row-indent)" }}>
         <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
-        {/* Line 2: the role pill as in the thread view, then which runtime the agent is and its state. */}
-        <span className="flex min-h-4 min-w-0 items-center gap-1.5 text-2xs text-ink-faint">
-          <RoleChip role={agent.role} />
+        {/* Line 2: the role, then which runtime the agent is and its state. */}
+        <span className="flex min-w-0 items-center gap-1 text-2xs text-ink-faint">
+          <RoleLabel role={agent.role} />
           <span className="truncate">
             {PROVIDER_LABEL[agent.provider]} · {STATE_LABEL[state]}
           </span>
@@ -222,7 +229,7 @@ export function SessionTree({
             {row.node.kind === "pane" ? (
               <PaneRowBody pane={row.node} selected={selected} />
             ) : (
-              <GroupRow row={row} node={row.node} selected={selected} onToggle={onToggle} />
+              <GroupRow row={row} node={row.node} onToggle={onToggle} />
             )}
           </div>
         )
