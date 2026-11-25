@@ -579,12 +579,20 @@ function pendingAsk(message: Raw): AgentState | null {
   return null
 }
 
+/**
+ * Records the operator runs in the pane without the agent: a Pi `!cmd` (bashExecution). They
+ * never open an agent turn, so the status is read from the message before them.
+ */
+function isLocalCommand(message: Raw): boolean {
+  return message.role === "bashExecution"
+}
+
 export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   const age = now - parsed.modifiedAt
   let last: Raw | null = null
   for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
     const entry = parsed.events[index]
-    if (entry.type === "message" && isRecord(entry.message)) {
+    if (entry.type === "message" && isRecord(entry.message) && !isLocalCommand(entry.message)) {
       last = entry
       break
     }

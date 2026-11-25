@@ -491,6 +491,8 @@ function ingestAssistant(state: ClaudeState, record: Raw, sidechain: boolean): v
 }
 
 const ENVELOPE = /^\s*(?:Another Claude session sent a message:\s*)?<cross-session-message\b/
+/** Output of a local slash command (`/model`): proof that the command ran without the model. */
+const LOCAL_OUTPUT = /^\s*<local-command-(?:stdout|stderr)\b/
 const INJECTED = /^\s*<(?:system-reminder|local-command-caveat|local-command-stdout|local-command-stderr|user-prompt-submit-hook|task-notification|command-stdout)\b/
 
 function slashCommand(text: string): string | null {
@@ -525,11 +527,13 @@ function ingestUserText(state: ClaudeState, record: Raw, text: string, sidechain
   if (injected) {
     const label = origin && origin !== "human" ? origin : "injected"
     const body = text.replace(/<\/?system-reminder>/g, "")
-    addEntry(state, { ...eventEntry("injected", `${label} · ${firstLine(body) || "context"}`, body), ...base }, record, sidechain)
+    const entry = { ...eventEntry("injected", `${label} · ${firstLine(body) || "context"}`, body), ...base }
+    addEntry(state, LOCAL_OUTPUT.test(text) ? { ...entry, _localOutput: true } : entry, record, sidechain)
     return
   }
   const slash = slashCommand(text)
-  addEntry(state, { type: "message", ...base, message: { role: "user", content: slash ?? text } }, record, sidechain)
+  const message = { type: "message", ...base, message: { role: "user", content: slash ?? text } }
+  addEntry(state, slash ? { ...message, _slash: true } : message, record, sidechain)
 }
 
 function ingestUser(state: ClaudeState, record: Raw, sidechain: boolean): void {
@@ -690,11 +694,23 @@ export function parseClaudeFile(file: string): ParsedFile {
  */
 export function claudeStatusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   const events = parsed.events
+  // A slash command followed by local-command output (`/model`, `/clear`) ran without the model:
+  // it opens no turn, so the status comes from the message before it.
+  let localOutput = false
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const entry = events[index]
     if (entry._sidechain === true) continue
     if (entry._interrupt === true) return { status: "idle", note: "turn interrupted" }
+    if (entry._localOutput === true) {
+      localOutput = true
+      continue
+    }
     if (entry.type !== "message") continue
+    if (localOutput && entry._slash === true) {
+      localOutput = false
+      continue
+    }
+    localOutput = false
     return statusOf(index === events.length - 1 ? parsed : { ...parsed, events: events.slice(0, index + 1) }, now)
   }
   return statusOf({ ...parsed, events: [] }, now)

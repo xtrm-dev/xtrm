@@ -16,7 +16,7 @@ import {
   type ClaudePaneQuery,
   type ClaudeTranscript,
 } from "./claude.ts"
-import { withPaneAttention } from "./attention.ts"
+import { prunePaneReads, withPaneAttention } from "./attention.ts"
 import { parseSessionFile, readSessionName, sessionIdFromFile, statusOf, type AgentState } from "./session.ts"
 
 const HOME = homedir()
@@ -425,6 +425,7 @@ export function discover(): Discovery {
     sessions.push({ name, agents, capturedAt: Date.now() })
   }
   sessions.sort((a, b) => a.name.localeCompare(b.name))
+  prunePaneReads(new Set(sessions.flatMap((session) => session.agents.map((agent) => agent.paneId))))
   return { sessions }
 }
 
