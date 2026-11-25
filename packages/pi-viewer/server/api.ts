@@ -106,14 +106,16 @@ function lite(event: ViewerEvent, scope: "branch" | "all"): ViewerEvent {
       return { ...base, text: event.text }
     case "intercom":
       return { ...base, intercom: event.intercom }
-    case "assistant":
+    case "assistant": {
+      const intercoms = scope === "branch" && event.intercoms ? { intercoms: event.intercoms } : {}
       if (isFinal(event)) {
         // The turn renders text; parts would duplicate it and are only needed on expand.
-        return { ...base, stopReason: event.stopReason, text: event.text }
+        return { ...base, stopReason: event.stopReason, text: event.text, ...intercoms }
       }
       return {
         ...base,
         stopReason: event.stopReason,
+        ...intercoms,
         parts: event.parts?.map((part) =>
           part.type === "thinking"
             ? { type: "thinking", text: part.text?.slice(0, 160), truncated: true }
@@ -127,6 +129,8 @@ function lite(event: ViewerEvent, scope: "branch" | "all"): ViewerEvent {
               : part,
         ),
       }
+    }
+
     case "tool-result":
       return {
         ...base,

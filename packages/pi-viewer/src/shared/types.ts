@@ -70,6 +70,8 @@ export interface IntercomMeta {
   summary?: string
   /** The complete message body. */
   body: string
+  /** True when this card's body was shortened by the parser. */
+  truncated?: boolean
   runtime?: "pi" | "claude"
   delivery?: string
   /** True when the send tool reported an error. */
