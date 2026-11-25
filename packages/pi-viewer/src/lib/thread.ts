@@ -299,17 +299,42 @@ export function dedupeIntercoms(events: ViewerEvent[]): ViewerEvent[] {
       continue
     }
     const existing = out[index]
+    if (existing.intercom?.direction === "sent" && event.intercom.direction === "sent") {
+      // A retry of the same body: a later success proves the message can be delivered, while
+      // a later failure must never erase an earlier success.
+      if (existing.intercom.failed && !event.intercom.failed) {
+        out[index] = {
+          ...existing,
+          isError: false,
+          summary: existing.summary.replace(/\s*· failed$/, ""),
+          intercom: {
+            ...existing.intercom,
+            messageId: existing.intercom.messageId ?? event.intercom.messageId,
+            toolCallId: event.intercom.toolCallId ?? existing.intercom.toolCallId,
+            failed: undefined,
+            error: undefined,
+            delivery: event.intercom.delivery === "failed" ? "sent" : (event.intercom.delivery ?? "sent"),
+          },
+        }
+        byBody.set(bodyKey, index)
+        if (idKey) byId.set(idKey, index)
+      }
+      continue
+    }
     if (existing.intercom?.direction === "sent" && event.intercom.direction === "received") {
-      const failed = Boolean(existing.intercom.failed || event.intercom.failed)
+      // The receiver's copy is proof of delivery. It overrides a stale failure from an
+      // earlier attempt, including its error text and the event-level error flag.
       out[index] = {
         ...existing,
+        isError: false,
+        summary: existing.summary.replace(/\s*· failed$/, ""),
         intercom: {
           ...existing.intercom,
           messageId: existing.intercom.messageId ?? event.intercom.messageId,
           expectsReply: existing.intercom.expectsReply || event.intercom.expectsReply,
-          failed: failed || undefined,
-          error: existing.intercom.error ?? event.intercom.error,
-          delivery: failed ? "failed" : "delivered",
+          failed: undefined,
+          error: undefined,
+          delivery: "delivered",
         },
       }
       byBody.set(bodyKey, index)

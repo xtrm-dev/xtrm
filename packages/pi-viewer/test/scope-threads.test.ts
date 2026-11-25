@@ -156,3 +156,35 @@ test("a result pairs with its own call when one event issues several tool calls"
     for (const item of tools) assert.equal(item.result?.toolCallId, item.toolCallId)
   }
 })
+
+test("a failed intercom card survives window and pane scope", () => {
+  const failed = ev(ALPHA, 6, 180, "intercom", {
+    isError: true,
+    summary: "→ beta · failed",
+    intercom: {
+      direction: "sent",
+      from: "alpha",
+      to: "beta",
+      body: "stale failure",
+      messageId: "m-failed",
+      toolCallId: "call-failed",
+      failed: true,
+      delivery: "failed",
+      error: "Session not found",
+    },
+  })
+  const events = [...EVENTS, failed].sort((a, b) => a.at - b.at)
+  const rowsIn = (scope: Scope) =>
+    channelTimeline(eventsInScope(events, agentsInScope(SESSIONS, scope))).map((item) => item.id)
+  for (const scope of [
+    { kind: "window", session: "xx", window: 0 },
+    { kind: "pane", session: "xx", window: 0, paneId: "%1" },
+  ] as Scope[]) {
+    assert.ok(rowsIn(scope).includes("intercom:%1:6"), "the failed card is still in scope")
+    const card = channelTimeline(eventsInScope(events, agentsInScope(SESSIONS, scope))).find(
+      (item) => item.kind === "intercom" && item.id === "intercom:%1:6",
+    )
+    assert.equal(card?.kind === "intercom" && card.event.intercom?.failed, true)
+    assert.equal(card?.kind === "intercom" && card.event.intercom?.delivery, "failed")
+  }
+})

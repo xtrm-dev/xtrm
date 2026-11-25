@@ -158,7 +158,7 @@ test("a successful SendMessage result leaves the card sent", () => {
   assert.equal(out.intercom?.delivery, "delivered")
 })
 
-test("dedupe keeps a failure when the received copy arrives", () => {
+test("a received copy clears a stale failure", () => {
   const sent = intercom("a", 1, 1_000, "sent", "hello", {
     toolCallId: "call-3",
     failed: true,
@@ -167,7 +167,58 @@ test("dedupe keeps a failure when the received copy arrives", () => {
   })
   const received = intercom("b", 1, 2_000, "received", "hello", { messageId: "m-3" })
   const [out] = dedupeIntercoms([sent, received])
-  assert.equal(out.intercom?.failed, true)
-  assert.equal(out.intercom?.delivery, "failed")
-  assert.equal(out.intercom?.error, "Session not found")
+  assert.equal(out.intercom?.failed, undefined)
+  assert.equal(out.intercom?.delivery, "delivered")
+  assert.equal(out.intercom?.error, undefined)
+  assert.equal(out.isError, false)
+})
+
+test("a successful retry upgrades a failed send before the received copy arrives", () => {
+  const failed = intercom("a", 1, 1_000, "sent", "hello", {
+    toolCallId: "call-fail",
+    failed: true,
+    delivery: "failed",
+    error: "Session not found",
+  })
+  const success = intercom("a", 2, 2_000, "sent", "hello", {
+    toolCallId: "call-ok",
+    failed: false,
+    delivery: "delivered",
+  })
+  const [out] = dedupeIntercoms([failed, success])
+  assert.equal(out.intercom?.failed, undefined)
+  assert.equal(out.intercom?.delivery, "delivered")
+  assert.equal(out.intercom?.error, undefined)
+  assert.equal(out.intercom?.toolCallId, "call-ok")
+  assert.equal(out.isError, false)
+})
+
+test("a failed-then-retried message and its received copy collapse to one delivered card", () => {
+  const failed = intercom("a", 1, 1_000, "sent", "hello", {
+    toolCallId: "call-fail",
+    failed: true,
+    delivery: "failed",
+    error: "Session not found",
+  })
+  const success = intercom("a", 2, 2_000, "sent", "hello", {
+    toolCallId: "call-ok",
+    failed: false,
+    delivery: "delivered",
+  })
+  const received = intercom("b", 1, 3_000, "received", "hello", { messageId: "m-4" })
+  const out = dedupeIntercoms([failed, success, received])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].intercom?.failed, undefined)
+  assert.equal(out[0].intercom?.delivery, "delivered")
+  assert.equal(out[0].intercom?.error, undefined)
+  assert.equal(out[0].intercom?.messageId, "m-4")
+})
+
+test("bodies longer than the 40,000-character cap still collapse to one card", () => {
+  const body = "x".repeat(45_000)
+  const sent = intercom("a", 1, 1_000, "sent", body, { toolCallId: "call-long" })
+  const received = intercom("b", 1, 2_000, "received", body, { messageId: "m-long" })
+  const out = dedupeIntercoms([sent, received])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].intercom?.body.length, 45_000)
 })

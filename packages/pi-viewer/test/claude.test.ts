@@ -14,6 +14,7 @@ import {
   resolveClaudeTranscript,
   resolveClaudeTranscripts,
 } from "../server/claude.ts"
+import { applyIntercomResults } from "../server/intercom.ts"
 import { channelTurns } from "../src/lib/thread.ts"
 import type { ViewerEvent } from "../src/shared/types.ts"
 
@@ -479,4 +480,97 @@ test("an interrupt stays idle behind trailing system, attachment and queue recor
   // A prompt sent after the interrupt ends the idle state.
   appendFileSync(file, line({ type: "user", uuid: "u3", message: { role: "user", content: "again" } }))
   assert.equal(claudeStatusOf(parseClaudeFile(file)).status, "working")
+})
+
+test("Claude SendMessage results mark a failed card and confirm a delivered one", () => {
+  const file = join(SCRATCH, "send-results.jsonl")
+  const base = {
+    isSidechain: false,
+    sessionId: "11111111-2222-4333-8444-555555555555",
+    cwd: "/work/my_proj.v2",
+  }
+  const records = [
+    {
+      ...base,
+      type: "assistant",
+      uuid: "c1",
+      parentUuid: null,
+      timestamp: "2026-11-25T10:01:00.000Z",
+      message: {
+        id: "msg_1",
+        role: "assistant",
+        model: "claude-opus-5-5",
+        stop_reason: "tool_use",
+        content: [
+          { type: "tool_use", id: "toolu_fail", name: "SendMessage", input: { to: "gone", message: "first body" } },
+        ],
+      },
+    },
+    {
+      ...base,
+      type: "user",
+      uuid: "c2",
+      parentUuid: "c1",
+      timestamp: "2026-11-25T10:01:01.000Z",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "toolu_fail",
+            is_error: true,
+            content: 'Message to "gone" was not delivered: Session not found',
+          },
+        ],
+      },
+    },
+    {
+      ...base,
+      type: "assistant",
+      uuid: "c3",
+      parentUuid: "c2",
+      timestamp: "2026-11-25T10:01:02.000Z",
+      message: {
+        id: "msg_2",
+        role: "assistant",
+        model: "claude-opus-5-5",
+        stop_reason: "tool_use",
+        content: [
+          { type: "tool_use", id: "toolu_ok", name: "SendMessage", input: { to: "sibling", message: "second body" } },
+        ],
+      },
+    },
+    {
+      ...base,
+      type: "user",
+      uuid: "c4",
+      parentUuid: "c3",
+      timestamp: "2026-11-25T10:01:03.000Z",
+      message: {
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: "toolu_ok", content: "Delivered to Pi session sibling" },
+        ],
+      },
+    },
+  ]
+  writeFileSync(file, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`)
+
+  const parsed = parseClaudeFile(file)
+  const events = parsed.events.map((entry, index) =>
+    normalizeClaudeEvent(entry, AGENT, index, parsed.branchIds.has(String(entry.id))),
+  )
+  const cards = applyIntercomResults(events).filter(
+    (event) => event.kind === "intercom" && event.intercom?.direction === "sent",
+  )
+  assert.equal(cards.length, 2)
+
+  const failed = cards.find((event) => event.intercom?.toolCallId === "toolu_fail")
+  assert.equal(failed?.intercom?.failed, true)
+  assert.equal(failed?.intercom?.delivery, "failed")
+  assert.match(failed?.intercom?.error ?? "", /not delivered/)
+
+  const delivered = cards.find((event) => event.intercom?.toolCallId === "toolu_ok")
+  assert.equal(delivered?.intercom?.failed, false)
+  assert.equal(delivered?.intercom?.delivery, "delivered")
 })
