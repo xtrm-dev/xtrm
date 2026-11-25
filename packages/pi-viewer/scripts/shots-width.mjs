@@ -40,7 +40,7 @@ for (const viewport of viewports) {
         const content = document.querySelector('[data-slot="message-scroller-content"]')
         const padding = parseFloat(getComputedStyle(content).paddingLeft) * 2
         const composer = document.querySelector("textarea").closest(".xtrm-lane")
-        const presence = document.querySelector('[role="listbox"], [data-presence]')?.closest(".xtrm-lane")
+        const presence = Array.from(document.querySelectorAll(".xtrm-lane")).find((node) => node !== composer)
         const control = document.querySelector('button[aria-label^="Chat width"]')
         return {
           lane: getComputedStyle(document.documentElement).getPropertyValue("--chat-lane").trim(),
@@ -59,9 +59,8 @@ for (const viewport of viewports) {
         if (step === "custom") {
           const slider = page.getByRole("slider", { name: /Custom chat width/ })
           await slider.focus()
-          await slider.press("ArrowRight")
-          await slider.press("ArrowRight")
-          await slider.press("ArrowRight")
+          // The previous step was Full, so the thumb is at the right end: move it left.
+          for (let i = 0; i < 12; i += 1) await slider.press("ArrowLeft")
         } else {
           await page.getByRole("radio", { name: new RegExp(step) }).click()
         }
