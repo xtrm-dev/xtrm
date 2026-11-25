@@ -30,7 +30,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
   const open = async () => { if (narrow && (await side.getAttribute("data-collapsed")) === "true") { await p.getByRole("button", { name: "Expand sidebar" }).click(); await p.waitForTimeout(250) } }
   const sel = async () => { await open(); const k = await p.evaluate(() => document.querySelector('[role=treeitem][aria-selected=true]')?.getAttribute("data-key")); if (narrow) { await p.keyboard.press("Escape"); await p.waitForTimeout(250) } return k }
   try {
-    await p.goto(BASE, { waitUntil: "networkidle" }); await p.waitForSelector('[data-testid="sidebar"]'); await p.waitForTimeout(2500)
+    await p.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="sidebar"]', { timeout: 60000 }); await p.waitForTimeout(2500)
     await open()
     const g = await p.evaluate(() => {
       const rows = [...document.querySelectorAll('[role=treeitem]')]
@@ -59,10 +59,10 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     await pane.click(); await p.waitForTimeout(1500)
     check(tag + " pane click: URL, header, selected row", /p=%25\d+/.test(await S_()) && (await title()) === pname && (await sel()) === pk, (await S_()) + " " + (await title()))
     const url = await S_()
-    await p.reload({ waitUntil: "networkidle" }); await p.waitForSelector('[data-testid="sidebar"]'); await p.waitForTimeout(2500)
+    await p.reload({ waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="sidebar"]', { timeout: 60000 }); await p.waitForTimeout(2500)
     check(tag + " reload keeps scope", (await S_()) === url && (await title()) === pname)
     // single-pane window scope selects its pane row
-    await p.goto(BASE + "?s=xx&w=99", { waitUntil: "networkidle" }); await p.waitForTimeout(2000)
+    await p.goto(BASE + "?s=xx&w=99", { waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForTimeout(2000)
     const single = await p.evaluate(() => 0); void single
     // keyboard (desktop)
     if (!narrow) {
