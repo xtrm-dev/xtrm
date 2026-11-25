@@ -78,7 +78,7 @@ function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) 
       <span className="flex min-w-0 flex-1 flex-col" style={{ marginLeft: "var(--row-indent)" }}>
         <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
         {/* Line 2: the role pill as in the thread view, then which runtime the agent is and its state. */}
-        <span className="flex min-w-0 items-center gap-1.5 text-2xs text-ink-faint">
+        <span className="flex min-h-4 min-w-0 items-center gap-1.5 text-2xs text-ink-faint">
           <RoleChip role={agent.role} />
           <span className="truncate">
             {PROVIDER_LABEL[agent.provider]} · {STATE_LABEL[state]}
