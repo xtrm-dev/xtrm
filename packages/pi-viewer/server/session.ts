@@ -613,12 +613,57 @@ export function compactedState(parsed: ParsedFile, now = Date.now()): AgentState
     : { status: "waiting", note: "awaiting input" }
 }
 
+/** A compaction can resume the same tool loop; wait this long before calling the turn closed. */
+export const COMPACTION_RETRY_MS = 30_000
+
+/** True when the record before `index` is an assistant tool loop that can still continue. */
+function toolLoopBefore(events: Raw[], index: number): boolean {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const entry = events[cursor]
+    if (entry._sidechain === true) continue
+    if (entry._interrupt === true) return false
+    if (entry._localOutput === true || entry._slash === true) continue
+    if (entry.type === "compaction") return false
+    if (entry.type !== "message" || !isRecord(entry.message)) continue
+    if (isLocalCommand(entry.message)) continue
+    const role = typeof entry.message.role === "string" ? entry.message.role : ""
+    const stopReason = typeof entry.message.stopReason === "string" ? entry.message.stopReason : ""
+    return role === "assistant" && stopReason === "toolUse"
+  }
+  return false
+}
+
+/**
+ * A compaction while an assistant tool loop is still open (Claude auto-compact, Pi overflow
+ * compaction then retry) is not the end of the turn. Only after the retry window, or when the
+ * record before it is a finished turn, does the compaction close the turn.
+ */
+export function compactionState(parsed: ParsedFile, index: number, now = Date.now()): AgentState {
+  const entry = parsed.events[index]
+  const at = entry ? atOf(entry) : 0
+  const age = now - parsed.modifiedAt
+  if (at > 0 && toolLoopBefore(parsed.events, index) && now - at <= COMPACTION_RETRY_MS) {
+    if (age > QUIET_MS) return { status: "quiet", note: `no output for ${Math.floor(age / 60_000)}m` }
+    return { status: "working", note: "compacting context" }
+  }
+  return compactedState(parsed, now)
+}
+
+/** Last write that can change the turn state; meta rows (model, thinking, notices) do not. */
+export function lastWriteAt(parsed: ParsedFile): number {
+  for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
+    const entry = parsed.events[index]
+    if (entry.type === "message" || entry.type === "compaction") return atOf(entry)
+  }
+  return parsed.modifiedAt
+}
+
 export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   const age = now - parsed.modifiedAt
   let last: Raw | null = null
   for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
     const entry = parsed.events[index]
-    if (entry.type === "compaction") return compactedState(parsed, now)
+    if (entry.type === "compaction") return compactionState(parsed, index, now)
     if (entry.type === "message" && isRecord(entry.message) && !isLocalCommand(entry.message)) {
       last = entry
       break

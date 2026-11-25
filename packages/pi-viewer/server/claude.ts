@@ -10,7 +10,7 @@ import {
   firstLine,
   mergeFile,
   normalizeEvent,
-  compactedState,
+  compactionState,
   statusOf,
   type AgentState,
   type ParsedFile,
@@ -500,6 +500,9 @@ const ENVELOPE = /^\s*(?:Another Claude session sent a message:\s*)?<cross-sessi
 /** Output of a local slash command (`/model`): proof that the command ran without the model. */
 const LOCAL_OUTPUT = /^\s*<local-command-(?:stdout|stderr)\b/
 const INJECTED = /^\s*<(?:system-reminder|local-command-caveat|local-command-stdout|local-command-stderr|user-prompt-submit-hook|task-notification|command-stdout)\b/
+/** Bash mode: the operator runs a command in the pane; it is not an agent turn. */
+const BASH_INPUT = /^\s*<bash-input>([\s\S]*?)<\/bash-input>/
+const BASH_OUTPUT = /^\s*<bash-(stdout|stderr)\b/
 
 function slashCommand(text: string): string | null {
   const name = /<command-name>\s*([^<]+?)\s*<\/command-name>/.exec(text)?.[1]
@@ -514,6 +517,27 @@ function ingestUserText(state: ClaudeState, record: Raw, text: string, sidechain
   const origin = isRecord(record.origin) ? asString(record.origin.kind) : undefined
   const base = { id, parentId: asString(record.parentUuid), timestamp: record.timestamp }
 
+  if (BASH_INPUT.test(text)) {
+    // Claude's bash mode (!cmd): a local command like Pi's bashExecution, not a user prompt.
+    const command = BASH_INPUT.exec(text)?.[1].trim() ?? ""
+    addEntry(
+      state,
+      {
+        type: "message",
+        ...base,
+        message: { role: "bashExecution", command, output: "", exitCode: 0, timestamp: base.timestamp },
+      },
+      record,
+      sidechain,
+    )
+    return
+  }
+  if (BASH_OUTPUT.test(text)) {
+    const body = text.replace(/<\/?bash-(?:stdout|stderr)>/g, "").trim()
+    const entry = { ...eventEntry("bash-output", `bash output · ${firstLine(body) || "output"}`, body), ...base, _localOutput: true }
+    addEntry(state, entry, record, sidechain)
+    return
+  }
   if (ENVELOPE.test(text)) {
     // Peer message: server/intercom.ts reads the envelope.
     addEntry(state, { type: "message", ...base, message: { role: "user", content: text } }, record, sidechain)
@@ -712,7 +736,7 @@ export function claudeStatusOf(parsed: ParsedFile, now = Date.now()): AgentState
       localOutput = true
       continue
     }
-    if (entry.type === "compaction") return compactedState(parsed, now)
+    if (entry.type === "compaction") return compactionState(parsed, index, now)
     if (entry.type !== "message") continue
     if (localOutput && entry._slash === true) {
       localOutput = false

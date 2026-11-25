@@ -41,7 +41,7 @@ function agent(index, status = "waiting", note = "awaiting input") {
     model: "claude-opus-5-5",
     thinkingLevel: null,
     role: "worker",
-    modifiedAt: Date.now(),
+    modifiedAt: Date.now(), lastWriteAt: Date.now(),
     eventCount: 0,
     status,
     statusNote: note,
@@ -114,7 +114,15 @@ async function open(width, height, theme) {
     if (url.pathname !== "/api/thread") return route.fulfill({ status: 404, contentType: "application/json", body: "{}" })
     const meta = { session: SESSION, version: `v${state.version}`, agents: state.agents, capturedAt: Date.now() }
     if (url.searchParams.get("meta") === "1") return json(meta)
-    return json({ ...meta, events: state.events })
+    return json({
+      ...meta,
+      events: state.events,
+      cursor: state.events.length,
+      revision: `r${state.version}`,
+      hasEarlier: false,
+      earlier: null,
+      earlierTurns: 0,
+    })
   })
   await page.goto(`${base}/?s=${SESSION}`, { waitUntil: "domcontentloaded" })
   await page.locator('[data-slot="message-scroller-item"]').first().waitFor({ state: "visible" })

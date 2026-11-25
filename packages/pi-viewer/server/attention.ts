@@ -151,9 +151,22 @@ interface PaneRead {
 
 const lastRead = new Map<string, PaneRead>()
 const inFlight = new Map<string, Promise<void>>()
+/**
+ * Reads are asynchronous, and the pane can change while one runs. `epoch` invalidates every
+ * read started before a reset; `generations` invalidates the reads of one pane that became
+ * waiting, fresh, or gone. A result from an older read must never repopulate the cache.
+ */
+let epoch = 0
+const generations = new Map<string, number>()
+
+function bump(paneId: string): void {
+  generations.set(paneId, (generations.get(paneId) ?? 0) + 1)
+}
 
 /** Forget the cache and wait for nothing (tests). */
 export function resetPaneReads(): void {
+  epoch += 1
+  generations.clear()
   lastRead.clear()
   inFlight.clear()
 }
@@ -165,7 +178,11 @@ export async function settlePaneReads(): Promise<void> {
 
 /** Drops cached reads of panes that no longer hold an agent; called once per discovery. */
 export function prunePaneReads(live: ReadonlySet<string>): void {
-  for (const paneId of lastRead.keys()) if (!live.has(paneId)) lastRead.delete(paneId)
+  for (const paneId of new Set([...lastRead.keys(), ...inFlight.keys()])) {
+    if (live.has(paneId)) continue
+    bump(paneId)
+    lastRead.delete(paneId)
+  }
 }
 
 /** Statuses during which a permission prompt can be open: a turn that runs or went quiet. */
@@ -183,21 +200,28 @@ export function panePrompt(
   capture: CapturePane = capturePane,
 ): PanePrompt | null {
   if (!READ_WHILE.has(agent.status) || now - agent.modifiedAt < CAPTURE_AFTER_MS) {
+    bump(agent.paneId)
     lastRead.delete(agent.paneId)
     return null
   }
   const cached = lastRead.get(agent.paneId)
   const stale = !cached || now - cached.at >= CAPTURE_EVERY_MS
   if (stale && !inFlight.has(agent.paneId) && inFlight.size < MAX_READS_IN_FLIGHT) {
+    const readEpoch = epoch
+    const readGeneration = generations.get(agent.paneId) ?? 0
     const read = capture(agent.paneId)
       .catch(() => null)
       .then((screen) => {
+        if (readEpoch !== epoch) return
+        if ((generations.get(agent.paneId) ?? 0) !== readGeneration) return
         lastRead.set(agent.paneId, {
           at: now,
           prompt: screen === null ? null : detectPermissionPrompt(screen, agent.provider),
         })
       })
-      .finally(() => inFlight.delete(agent.paneId))
+      .finally(() => {
+        if (inFlight.get(agent.paneId) === read) inFlight.delete(agent.paneId)
+      })
     inFlight.set(agent.paneId, read)
   }
   return cached?.prompt ?? null

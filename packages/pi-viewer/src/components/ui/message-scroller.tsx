@@ -1,7 +1,7 @@
 import * as React from "react"
 import { ChevronDownIcon } from "lucide-react"
 
-import { followMode, recall, remember, smoothStep } from "@/lib/stick"
+import { followMode, recall, remember, restoreExpired, smoothStep } from "@/lib/stick"
 import { cn } from "@/lib/utils"
 
 interface ScrollOptions {
@@ -10,6 +10,8 @@ interface ScrollOptions {
 
 interface ScrollerContextValue {
   atBottom: boolean
+  /** False until the first sync has applied, or given up on, the remembered position. */
+  ready: boolean
   /** Rows that arrived while the reader was scrolled away from the end. */
   newCount: number
   setWorking: (working: boolean) => void
@@ -66,11 +68,15 @@ function MessageScrollerProvider({
   const pinRef = React.useRef(false)
   const pinTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const [atBottom, setAtBottom] = React.useState(true)
+  const [ready, setReady] = React.useState(false)
   const [newCount, setNewCount] = React.useState(0)
   const workingRef = React.useRef(false)
   const glidingRef = React.useRef(false)
   const frameRef = React.useRef<number | null>(null)
   const restoreRef = React.useRef<{ id: string; top: number } | null>(null)
+  const restoreSyncsRef = React.useRef(0)
+  const restoreDeadlineRef = React.useRef(0)
+  const restoreFrameRef = React.useRef(0)
   const threadKeyRef = React.useRef(threadKey)
   threadKeyRef.current = threadKey
 
@@ -186,26 +192,46 @@ function MessageScrollerProvider({
       const saved = threadKeyRef.current ? recall(threadKeyRef.current) : undefined
       if (saved && !saved.atEnd && saved.anchorId) {
         restoreRef.current = { id: saved.anchorId, top: saved.anchorTop }
+        restoreSyncsRef.current = 0
+        // The rows may never contain that id (a pruned history). Do not search forever.
+        restoreDeadlineRef.current = performance.now() + 2_000
+        return
       }
+      setReady(true)
       return
     }
 
     if (restoreRef.current) {
       const wanted = restoreRef.current
       const content = contentRef.current
-      const element = content
-        ? Array.from(content.children).find(
-            (child): child is HTMLElement => child instanceof HTMLElement && child.dataset.messageId === wanted.id,
-          )
-        : undefined
-      if (element) {
+      restoreSyncsRef.current += 1
+      if (restoreExpired(restoreSyncsRef.current, performance.now(), restoreDeadlineRef.current)) {
         restoreRef.current = null
-        const delta = element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - wanted.top
-        viewport.scrollTop += delta
-        anchorRef.current = { id: wanted.id, top: wanted.top }
-        atBottomRef.current = false
-        setAtBottom(false)
-        return
+        setReady(true)
+      } else {
+        // The row may not be rendered yet (an earlier page is still arriving). Try again next
+        // frame: this effect does not re-run by itself while the restore is pending.
+        if (restoreFrameRef.current === 0) {
+          restoreFrameRef.current = requestAnimationFrame(() => {
+            restoreFrameRef.current = 0
+            if (restoreRef.current) sync()
+          })
+        }
+        const element = content
+          ? Array.from(content.children).find(
+              (child): child is HTMLElement => child instanceof HTMLElement && child.dataset.messageId === wanted.id,
+            )
+          : undefined
+        if (element) {
+          restoreRef.current = null
+          const delta = element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - wanted.top
+          viewport.scrollTop += delta
+          anchorRef.current = { id: wanted.id, top: wanted.top }
+          atBottomRef.current = false
+          setAtBottom(false)
+          setReady(true)
+          return
+        }
       }
     }
 
@@ -341,6 +367,11 @@ function MessageScrollerProvider({
     const viewport = viewportRef.current
     if (!viewport) return
     const cancel = () => {
+      // A reader gesture ends a pending restore: their position wins over the remembered one.
+      restoreRef.current = null
+      if (restoreFrameRef.current) cancelAnimationFrame(restoreFrameRef.current)
+      restoreFrameRef.current = 0
+      setReady(true)
       stopGlide()
       pinRef.current = false
       if (pinTimerRef.current) {
@@ -363,6 +394,7 @@ function MessageScrollerProvider({
   const value = React.useMemo(
     () => ({
       atBottom,
+      ready,
       newCount,
       setWorking,
       reportNew,
@@ -372,7 +404,7 @@ function MessageScrollerProvider({
       handleScroll,
       scrollToEnd,
     }),
-    [atBottom, newCount, setWorking, reportNew, registerViewport, registerContent, sync, handleScroll, scrollToEnd],
+    [atBottom, ready, newCount, setWorking, reportNew, registerViewport, registerContent, sync, handleScroll, scrollToEnd],
   )
 
   return <ScrollerContext.Provider value={value}>{children}</ScrollerContext.Provider>
@@ -479,12 +511,13 @@ function MessageScrollerButton({
 }
 
 function useMessageScroller() {
-  const { scrollToEnd, setWorking, reportNew, atBottom } = useScrollerContext()
+  const { scrollToEnd, setWorking, reportNew, atBottom, ready } = useScrollerContext()
   return {
     scrollToEnd,
     setWorking,
     reportNew,
     atBottom,
+    ready,
     scrollToStart: () => {},
     scrollToMessage: () => {},
   }

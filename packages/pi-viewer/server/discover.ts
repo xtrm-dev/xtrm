@@ -17,7 +17,7 @@ import {
   type ClaudeTranscript,
 } from "./claude.ts"
 import { prunePaneReads, withPaneAttention } from "./attention.ts"
-import { parseSessionFile, readSessionName, sessionIdFromFile, statusOf, type AgentState } from "./session.ts"
+import { lastWriteAt, parseSessionFile, readSessionName, sessionIdFromFile, statusOf, type AgentState } from "./session.ts"
 
 const HOME = homedir()
 const SESSIONS_ROOT = join(HOME, ".pi", "agent", "sessions")
@@ -303,6 +303,7 @@ function resolveClaudePane(
     model: parsed?.model ?? null,
     thinkingLevel: null,
     modifiedAt: parsed?.modifiedAt ?? 0,
+    lastWriteAt: parsed ? lastWriteAt(parsed) : 0,
     eventCount: parsed?.events.length ?? 0,
     status: state.status,
     statusNote: state.note,
@@ -380,6 +381,7 @@ function resolvePaneAgent(
     model: parsed?.model ?? null,
     thinkingLevel: parsed?.thinkingLevel ?? null,
     modifiedAt: parsed?.modifiedAt ?? 0,
+    lastWriteAt: parsed ? lastWriteAt(parsed) : 0,
     eventCount: parsed?.events.length ?? 0,
     status: state.status,
     statusNote: state.note,

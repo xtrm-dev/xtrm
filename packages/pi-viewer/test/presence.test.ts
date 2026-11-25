@@ -41,6 +41,7 @@ const reply = (agentId: string, seq: number, at: number) =>
 
 function agent(id: string, over: Partial<ViewerAgent> = {}): ViewerAgent {
   const index = Number(id.replace(/\D/g, "")) || 0
+  const modifiedAt = over.modifiedAt ?? T0
   return {
     id,
     paneId: id,
@@ -61,7 +62,8 @@ function agent(id: string, over: Partial<ViewerAgent> = {}): ViewerAgent {
     sessionName: null,
     model: null,
     thinkingLevel: null,
-    modifiedAt: T0,
+    modifiedAt,
+    lastWriteAt: over.lastWriteAt ?? modifiedAt,
     eventCount: 0,
     status: "working",
     statusNote: "running tools",
@@ -159,15 +161,34 @@ test("an error, an unknown status and a vanished pane also stop a pending turn",
 test("waiting while the reply is in flight keeps a pending turn in presence (no stopped flash)", () => {
   const events = [prompt("%1", 1, s(0)), tool("%1", 2, s(1))]
   // The status poll saw the reply written at s(9); the thread payload does not carry it yet.
-  const { presence, timeline } = splitPresence(channelTimeline(events), [agent("%1", { status: "waiting", modifiedAt: s(9) })])
+  const { presence, timeline } = splitPresence(channelTimeline(events), [agent("%1", { status: "waiting", modifiedAt: s(9), lastWriteAt: s(9) })])
   assert.equal(presence.length, 1)
   assert.ok(!timeline.some((item) => item.kind === "stopped"))
+})
+
+test("a !cmd followed by a meta write is not kept as a reply in flight", () => {
+  const base = [prompt("%1", 1, s(0)), reply("%1", 2, s(5))]
+  const bash = event("%1", 3, s(20), "bash", { summary: "! ls", toolName: "bash", input: "ls" })
+  // The file was touched at s(60) by a model/thinking meta write; the turn's last write is s(20).
+  const waiting = agent("%1", { status: "waiting", statusNote: "awaiting input", modifiedAt: s(60), lastWriteAt: s(20) })
+  const { presence, timeline } = splitPresence(channelTimeline([...base, bash]), [waiting])
+  assert.equal(presence.length, 0)
+  assert.equal(timeline.at(-1)?.kind, "stopped")
+})
+
+test("a prompt starting with / but not a local command still leaves a stopped row", () => {
+  const base = [prompt("%1", 1, s(0)), reply("%1", 2, s(5))]
+  const idle = agent("%1", { status: "idle", statusNote: "quiet for 15m" })
+  const asked = { ...prompt("%1", 3, s(20)), text: "/summarize the diff", summary: "/summarize the diff" }
+  const local = { ...prompt("%1", 4, s(30)), text: "/model", summary: "/model" }
+  assert.equal(splitPresence(channelTimeline([...base, asked]), [idle]).timeline.at(-1)?.kind, "stopped")
+  assert.ok(!splitPresence(channelTimeline([...base, local]), [idle]).timeline.some((item) => item.kind === "stopped"))
 })
 
 test("local commands after a reply open no presence entry: !ls is a local row, /model adds none", () => {
   const bash = event("%1", 3, s(20), "bash", { summary: "! ls", toolName: "bash", input: "ls" })
   const base = [prompt("%1", 1, s(0)), reply("%1", 2, s(5))]
-  const waiting = agent("%1", { status: "waiting", statusNote: "awaiting input", modifiedAt: s(20) })
+  const waiting = agent("%1", { status: "waiting", statusNote: "awaiting input", modifiedAt: s(20), lastWriteAt: s(5) })
 
   const ran = splitPresence(channelTimeline([...base, bash]), [waiting])
   assert.equal(ran.presence.length, 0, "a !ls is not a running agent")

@@ -34,6 +34,8 @@ export interface ViewerAgent {
   model: string | null
   thinkingLevel: string | null
   modifiedAt: number
+  /** Last transcript write that can open or close a turn (meta writes do not count). */
+  lastWriteAt: number
   eventCount: number
   status: AgentStatus
   statusNote: string | null

@@ -62,13 +62,18 @@ const LIVE: ReadonlySet<AgentStatus> = new Set<AgentStatus>(["working", "attenti
  */
 const REPLY_IN_FLIGHT_MS = 2_000
 
-/** A turn opened only by slash commands (`/compact`), which Claude Code runs without the model. */
+/** Slash commands Claude Code runs locally, without a model turn. */
+const LOCAL_SLASH = /^\/(?:add-dir|bug|clear|compact|config|cost|doctor|help|login|logout|mcp|memory|model|permissions|release-notes|status|terminal-setup|vim)(?:\s|$)/i
+
+/** A turn opened only by local slash commands (`/model`, `/compact`), not a prompt starting with `/`. */
 function isSlashOnly(turn: Turn): boolean {
-  return turn.users.length > 0 && turn.users.every((user) => (user.text ?? user.summary).trimStart().startsWith("/"))
+  return turn.users.length > 0 && turn.users.every((user) => LOCAL_SLASH.test((user.text ?? user.summary).trimStart()))
 }
 
 function replyInFlight(agent: ViewerAgent, turn: Turn): boolean {
-  return agent.status === "waiting" && agent.modifiedAt - turn.end > REPLY_IN_FLIGHT_MS
+  // Meta writes (model, thinking level) move the file but do not write the turn. The status
+  // poll compares the last turn write, so a `!cmd` followed by a model change stays local.
+  return agent.status === "waiting" && agent.lastWriteAt - turn.end > REPLY_IN_FLIGHT_MS
 }
 
 const LAUNCHER_PREFIX = /^[a-z0-9.]+-xt-(?:pi|claude|codex)-/
