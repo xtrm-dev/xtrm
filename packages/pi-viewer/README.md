@@ -29,9 +29,9 @@ The server binds to `127.0.0.1` only and has no authentication.
 The left sidebar is a tree of tmux session > window > pane. Only panes that hold a pi or claude agent are
 listed; windows and sessions without an agent are omitted. Session and window rows are one 28px line: the name, a small chevron right after it, and the agent count.
 A window that holds a single pane has no row of its own: its pane sits directly under the session, and the
-window name is in the pane's tooltip. A pane row is two lines (46px): the agent name, then `role · state`, with one
+window name is in the pane's tooltip. A pane row is two lines (48px): the agent name, then the role pill (same colours as the thread view), the runtime (`Claude` or `Pi`) and the state, with one
 small static status dot on the right (idle, running, error; the server's `waiting` is a finished turn, so it
-reads as idle, and no state is proven to "need attention"). The dark sidebar plane is `#202020`. Every level is a selectable scope (see Scope and URL below). The sidebar collapses to an icon
+reads as idle, and no state is proven to "need attention"). The dark sidebar plane is `#181818`, a quiet step from the `#0d0d0d` viewport. Every level is a selectable scope (see Scope and URL below). The sidebar collapses to an icon
 rail of status dots (one Tab stop, arrow keys). On a narrow screen it starts as the rail and opens as an overlay
 that closes on Escape, on a click outside, or when a pane is chosen; only the desktop rail/open choice is
 persisted.
@@ -154,13 +154,14 @@ custom entries become `intercom` events.
 Incoming messages are recognised in both formats: the current
 `<cross-session-message>` envelope used by Pi and Claude sessions, and the
 older `**From <name>**` header. The full body is kept (up to 40,000
-characters) and rendered as Markdown. The Channel card shows five rendered
+characters) and rendered as Markdown. The Channel card shows three rendered
 lines with a `Show more` control; the full body remains available in the
 expanded card and in All events.
 
 A send's tool result is attached back to its card by tool call id. A failed
-send stays in the thread: the card gets a red delivery mark and the tool
-error, instead of disappearing into the meta stream. Successful delivery
+send stays in the thread: the card gets a red delivery mark and an inline
+failure reason, instead of disappearing into the meta stream. Each card keeps
+its own delivery state, including when one entry issued several messages. Successful delivery
 gets a green check; a send without a result yet gets a muted check.
 
 A sent message appears under the sender's reply. A received message appears
