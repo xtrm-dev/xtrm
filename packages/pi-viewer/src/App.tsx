@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { AllEventsView } from "@/components/AllEventsView"
 import { ChannelView } from "@/components/ChannelView"
 import { Composer } from "@/components/Composer"
+import { Sidebar } from "@/components/sidebar/Sidebar"
 import { ViewerHeader } from "@/components/ViewerHeader"
 import {
   MessageScroller,
@@ -13,7 +14,25 @@ import {
 } from "@/components/ui/message-scroller"
 import { fetchMeta, fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
 import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
-import type { ThreadMeta, ThreadPayload, ViewerAgent, ViewerSession } from "@/shared/types"
+import {
+  agentsInScope,
+  defaultTarget,
+  describeScope,
+  eventsInScope,
+  hasAgents,
+  identicalScope,
+  parseScope,
+  sameScope,
+  SCOPE_GRACE,
+  scopeFromUrl,
+  scopeRowKey,
+  serialiseScope,
+  trackScope,
+  type Scope,
+  type ScopeTrack,
+} from "@/lib/scope"
+import { mergeLive } from "@/lib/tree"
+import type { ThreadMeta, ThreadPayload, ViewerAgent, ViewerEvent, ViewerSession } from "@/shared/types"
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -22,20 +41,34 @@ function errorText(error: unknown): string {
 export default function App() {
   const [sessions, setSessions] = useState<ViewerSession[]>([])
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
-  const [sessionName, setSessionName] = useState<string | null>(null)
+  const [scope, setScope] = useState<Scope | null>(null)
+  const [targetPaneId, setTargetPaneId] = useState<string | null>(null)
   const [meta, setMeta] = useState<ThreadMeta | null>(null)
   const [branch, setBranch] = useState<ThreadPayload | null>(null)
   const [all, setAll] = useState<ThreadPayload | null>(null)
   const [view, setView] = useState<"channel" | "all">("channel")
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([])
-  const [targetPaneId, setTargetPaneId] = useState<string | null>(null)
   const [threadError, setThreadError] = useState<string | null>(null)
   const [kick, setKick] = useState(0)
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     document.documentElement.dataset.theme === "light" ? "light" : "dark",
   )
   const viewRef = useRef(view)
-  const scrollerKey = `${sessionName ?? "none"}:${view}`
+  const sessionName = scope?.session ?? null
+  // Remount keys use the scope's identity, not its URL: a pane scope with or without its window is one scope.
+  const scopeKey = scope ? scopeRowKey(scope) : "none"
+  const scrollerKey = `${scopeKey}:${view}`
+  // The scope of a fresh page comes from the URL. It is a request, read only until a scope has
+  // resolved; after that the user's selection is never replaced by the page-open URL.
+  const requestedScope = useRef<Scope | null>(parseScope(window.location.search))
+  // The scope as polls see it: the last good scope plus how long its target has been absent.
+  const track = useRef<ScopeTrack>({ scope: null, absent: 0 })
+  const sessionsRef = useRef<ViewerSession[]>([])
+  // Consecutive discovery polls that found no agent at all.
+  const emptyPolls = useRef(0)
+  // How the next URL write is made: a click on the sidebar adds a history entry (Back works);
+  // a fallback or a first resolution replaces the current one.
+  const urlMode = useRef<"push" | "replace">("replace")
 
   useEffect(() => {
     viewRef.current = view
@@ -50,21 +83,61 @@ export default function App() {
     }
   }, [theme])
 
+  // The URL follows the scope: ?s=<session>[&w=<window>[&p=<pane>]].
+  useEffect(() => {
+    if (!scope) return
+    const search = serialiseScope(scope)
+    if (search !== window.location.search) {
+      window.history[urlMode.current === "push" ? "pushState" : "replaceState"](null, "", search)
+    }
+    urlMode.current = "replace"
+  }, [scope])
+
+  function applyTrack(next: ScopeTrack) {
+    track.current = next
+    if (next.scope) requestedScope.current = null
+    setScope((current) => (identicalScope(current, next.scope) ? current : next.scope))
+  }
+
+  // One observation of what exists now (a discovery or a thread poll) advances the scope.
+  function observe(view: ViewerSession[]) {
+    applyTrack(trackScope(track.current, view, requestedScope.current))
+  }
+
+  // Back and Forward: read the URL again, resolve it against what exists now, and write the
+  // resolved URL back, so a stale or invalid address never stays in the bar.
+  useEffect(() => {
+    function onPop() {
+      const resolved = scopeFromUrl(window.location.search, track.current.scope, sessionsRef.current)
+      urlMode.current = "replace"
+      setTargetPaneId(null)
+      if (!resolved) return
+      applyTrack({ scope: resolved, absent: 0 })
+      const search = serialiseScope(resolved)
+      if (search !== window.location.search) window.history.replaceState(null, "", search)
+    }
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyTrack only touches refs and a state setter
+  }, [])
+
   useEffect(() => {
     let live = true
     async function load() {
       try {
         const payload = await fetchSessions()
         if (!live) return
-        setSessions(payload.sessions)
         setDiscoveryError(
-          payload.error ?? (payload.sessions.length ? null : "No tmux session with a running pi pane."),
+          payload.error ?? (payload.sessions.length ? null : "No tmux session with a running pi or claude pane."),
         )
-        setSessionName((current) => {
-          if (current && payload.sessions.some((entry) => entry.name === current)) return current
-          const preferred = payload.sessions.find((entry) => entry.name === "xx") ?? payload.sessions[0]
-          return preferred?.name ?? null
-        })
+        // One empty poll is a hiccup, not an empty tmux: the last good list stays for a few polls,
+        // so the sidebar does not blank, and the scope is kept (see trackScope).
+        emptyPolls.current = hasAgents(payload.sessions) ? 0 : emptyPolls.current + 1
+        if (hasAgents(payload.sessions) || emptyPolls.current >= SCOPE_GRACE) {
+          setSessions(payload.sessions)
+          sessionsRef.current = payload.sessions
+        }
+        observe(payload.sessions)
       } catch (error) {
         if (live) setDiscoveryError(errorText(error))
       }
@@ -98,6 +171,7 @@ export default function App() {
         const nextMeta = await fetchMeta(sessionName!)
         if (cancelled) return
         setMeta(nextMeta)
+        observe(mergeLive(sessionsRef.current, nextMeta.session, nextMeta))
         if (nextMeta.version === known) return
         known = nextMeta.version
         const payload = await fetchThread(sessionName!, "branch")
@@ -150,22 +224,67 @@ export default function App() {
     })
   }, [branch])
 
-  const agents = useMemo<ViewerAgent[]>(
-    () => branch?.agents ?? meta?.agents ?? sessions.find((entry) => entry.name === sessionName)?.agents ?? [],
-    [branch, meta, sessions, sessionName],
+  // A thread payload belongs to one session. Right after a cross-session select the previous
+  // payload is still in state; it is used only while it names the session being read.
+  const freshAgents = useMemo(() => {
+    if (meta && meta.session === sessionName) return { session: meta.session, agents: meta.agents }
+    if (branch && branch.session === sessionName) return { session: branch.session, agents: branch.agents }
+    return null
+  }, [meta, branch, sessionName])
+
+  // The sidebar lists every session; the one being read refreshes with the thread poll, the
+  // rest with the 10 s discovery poll.
+  const liveSessions = useMemo<ViewerSession[]>(
+    () => mergeLive(sessions, sessionName, freshAgents),
+    [sessions, sessionName, freshAgents],
   )
 
-  useEffect(() => {
-    if (!agents.length) {
-      setTargetPaneId(null)
+  // The agents of the scope, in tree order, and the events they wrote. The payload carries the
+  // whole tmux session; the scope filters it here, so no server change is needed.
+  // While a target is absent for a poll or two its last agents stay on screen, so one poll that
+  // drops a pane does not blank the thread.
+  const lastAgents = useRef<{ key: string; agents: ViewerAgent[] } | null>(null)
+  const agents = useMemo<ViewerAgent[]>(() => {
+    const fresh = freshAgents ? mergeLive(sessions, sessionName, freshAgents) : sessions
+    const inScope = agentsInScope(fresh, scope)
+    const found = inScope.length ? inScope : agentsInScope(sessions, scope)
+    const key = scope ? scopeRowKey(scope) : ""
+    if (found.length) {
+      lastAgents.current = { key, agents: found }
+      return found
+    }
+    return lastAgents.current?.key === key ? lastAgents.current.agents : found
+  }, [freshAgents, sessions, sessionName, scope])
+
+  const scopeEvents = useMemo<ViewerEvent[]>(() => eventsInScope(branch?.events ?? [], agents), [branch, agents])
+  const scopeAllEvents = useMemo<ViewerEvent[]>(() => eventsInScope(all?.events ?? [], agents), [all, agents])
+  const scopeOptimistic = useMemo(() => {
+    const ids = new Set(agents.map((agent) => agent.id))
+    return optimistic.filter((message) => ids.has(message.paneId))
+  }, [optimistic, agents])
+
+  // The composer addresses one agent of the scope: the one picked, else the pane itself or the
+  // most recently active agent of the window or session.
+  const target = useMemo(
+    () => agents.find((agent) => agent.id === targetPaneId) ?? defaultTarget(agents, scope),
+    [agents, targetPaneId, scope],
+  )
+  const label = useMemo(() => describeScope(scope, agents), [scope, agents])
+
+  function select(next: Scope) {
+    if (sameScope(next, scope)) {
+      // The same target: no history entry. A pane opened without its window learns it quietly.
+      if (!identicalScope(next, scope)) {
+        urlMode.current = "replace"
+        applyTrack({ scope: next, absent: 0 })
+      }
       return
     }
-    if (targetPaneId && agents.some((agent) => agent.id === targetPaneId)) return
-    const recent = [...agents].sort((a, b) => b.modifiedAt - a.modifiedAt)[0]
-    setTargetPaneId(recent?.id ?? agents[0].id)
-  }, [agents, targetPaneId])
-
-  const target = agents.find((agent) => agent.id === targetPaneId) ?? null
+    if (next.session !== sessionName) setView("channel")
+    urlMode.current = "push"
+    setTargetPaneId(null)
+    applyTrack({ scope: next, absent: 0 })
+  }
 
   async function handleSend(agent: ViewerAgent, text: string) {
     const message: OptimisticMessage = {
@@ -194,17 +313,17 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-deep text-ink">
+    <div className="flex h-dvh bg-deep text-ink">
+      <Sidebar
+        sessions={liveSessions}
+        scope={scope}
+        onSelect={select}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
       <ViewerHeader
-        sessions={sessions}
-        session={sessionName}
-        onSessionChange={(next) => {
-          setSessionName(next)
-          setView("channel")
-        }}
+        label={label}
         view={view}
         onViewChange={setView}
-        agentCount={agents.length}
         theme={theme}
         onToggleTheme={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
       />
@@ -253,10 +372,10 @@ export default function App() {
                     {view === "channel" ? (
                       branch ? (
                         <ChannelView
-                          events={branch.events}
-                          agents={branch.agents}
+                          events={scopeEvents}
+                          agents={agents}
                           session={branch.session}
-                          optimistic={optimistic}
+                          optimistic={scopeOptimistic}
                           onDismissOptimistic={(id) =>
                             setOptimistic((previous) => previous.filter((entry) => entry.id !== id))
                           }
@@ -266,9 +385,9 @@ export default function App() {
                       )
                     ) : all ? (
                       <AllEventsView
-                        key={sessionName}
-                        events={all.events}
-                        agents={all.agents}
+                        key={scopeKey}
+                        events={scopeAllEvents}
+                        agents={agents}
                         session={all.session}
                       />
                     ) : (
@@ -290,6 +409,7 @@ export default function App() {
           />
         </>
       )}
+      </div>
     </div>
   )
 }

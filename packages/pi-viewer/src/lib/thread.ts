@@ -120,7 +120,9 @@ function attachResult(turn: Turn, event: ViewerEvent): void {
   for (let index = turn.activity.length - 1; index >= 0; index -= 1) {
     const item = turn.activity[index]
     if (item.kind !== "tool" || item.result) continue
-    const callId = item.call?.parts?.find((part) => part.type === "tool-call")?.toolCallId
+    // The item's own call id: an event can carry several parallel tool calls, and matching
+    // against the event's first tool-call part paired a result with the wrong call.
+    const callId = item.toolCallId
     if (callId && event.toolCallId && callId === event.toolCallId) {
       item.result = event
       item.isError = event.isError === true

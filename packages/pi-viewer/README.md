@@ -1,7 +1,7 @@
 # pi viewer
 
 A small, read-only web viewer for pi agent sessions that run inside tmux.
-One tmux session is one channel. Agents are the pi panes in that tmux session.
+One tmux session is one channel. Agents are the pi and Claude Code panes in that tmux session.
 
 The viewer reads session JSONL files and injects prompts with `tmux send-keys`.
 It never attaches to a pane, never proxies the agent, and never takes process
@@ -23,6 +23,61 @@ npm run preview    # http://127.0.0.1:5199
 
 Requirements: Linux (`/proc`), tmux, and pi sessions under `~/.pi/agent/sessions`.
 The server binds to `127.0.0.1` only and has no authentication.
+
+## Sidebar
+
+The left sidebar is a tree of tmux session > window > pane. Only panes that hold a pi or claude agent are
+listed; windows and sessions without an agent are omitted. Session and window rows are one line with an
+agent count and expand/collapse. A pane row has two lines: the agent name, then `role · state`, with one
+status dot (idle, running, error; the server's `waiting` is a finished turn, so it reads as idle, and no state
+is proven to "need attention"). Every level is a selectable scope (see Scope and URL below). The sidebar collapses to an icon
+rail of status dots (one Tab stop, arrow keys). On a narrow screen it starts as the rail and opens as an overlay
+that closes on Escape, on a click outside, or when a pane is chosen; only the desktop rail/open choice is
+persisted.
+
+It is built from the console's primitives, not ReUI or shadcn Sidebar. The values (28px row, 264px plane,
+`INDENT_REM` 1.25, type ladder, `--x-hover` selected fill with the 2px accent marker, hairline rails) are
+copied from `packages/xtrm-app` (`docs/design/console-ui-system.md` §3, §4.2, §4.3, §6, §11 and
+`src/agent/AgentSidebar.tsx`, `src/ui/sidebar.tsx`, `src/ui/nav-rail.tsx`); `src/components/sidebar/geometry.ts`
+names the source of each. The tree is keyboard operable (`role="tree"`, `aria-expanded`, roving focus; arrows,
+Home, End, Enter, Space).
+
+## Scope and URL
+
+Each sidebar level is a scope, and the thread, All events, composer and @-mention list all follow it:
+
+| click | scope | thread |
+|---|---|---|
+| a session row | session | the combined Channel of every agent in that tmux session (the default on a fresh page: `xx`, else the first session with agents) |
+| a window row | window | only that window's agents, on the same settle-time timeline |
+| a pane row | pane | one agent; the composer is addressed to it |
+
+A row selects its scope; the chevron (or ArrowRight / ArrowLeft) expands and collapses. Enter and Space select the focused row.
+The composer's **To** picker and the @-mention list show the agents of the scope (a window lists that window's
+agents; a pane lists itself), and the composer addresses the pane itself, else the most recently active agent
+of the scope. All events and its agent tabs show only the scope's agents. In a pane scope the pane's own
+intercom cards stay, sent and received. The viewer filters the already-fetched session payload; the server
+is not asked for a scope.
+
+The scope is in the URL, so a reload, a bookmark and Back/Forward keep it:
+
+```
+?s=xx                 session scope
+?s=xx&w=3             window scope (window index 3)
+?s=xx&w=3&p=%2527     pane scope: pane id %27 (percent-encoded), last seen in window 3
+```
+
+`p` needs a `%`-prefixed pane id and `w` a non-negative integer; a malformed value is ignored and the URL degrades to
+the nearest valid scope. A scope whose target has vanished falls back one level: a vanished pane to its window
+(`w` is why the pane scope carries it), a vanished window to its session, a vanished session to the default.
+A click on the sidebar adds a history entry; a fallback replaces the current one. Clicking the pane that is
+already selected adds none (a pane is identified by its id; `w` is only where it was last seen), and Back or
+Forward to a stale or invalid URL rewrites the address bar to the scope it resolved to.
+
+Polls do not move the scope on a hiccup. The page-open URL is read only until a scope has resolved, so it never
+replaces a later selection. A poll that finds no agent at all (an empty or failed discovery) changes nothing. A
+scope whose target is absent is kept for two polls and degrades along the chain on the third consecutive absent
+poll; if the target is back before that, nothing happened. Any poll counts: the 1.5 s thread poll and the 10 s discovery poll.
 
 ## Views
 
@@ -50,6 +105,26 @@ tmux send-keys -t <pane-id> Enter
 Newlines are flattened to spaces for this version. `@` opens an agent list.
 The user message is appended optimistically and disappears when the matching
 user event appears in the session file.
+
+## Claude Code agents
+
+A tmux pane that runs `claude` appears beside the pi panes with `provider: "claude"`.
+The viewer reads the transcript under `<config>/projects/<cwd, non-alphanumerics as "-">/<session-id>.jsonl`
+(`CLAUDE_CONFIG_DIR` of the claude process, else `~/.claude`). It never attaches.
+
+Pane to transcript matching, in order:
+
+1. **registry**: `<config>/sessions/<pid>.json` names the session id of that claude pid. The entry counts
+   only when its `procStart` equals the process start time in `/proc/<pid>/stat`.
+2. **newest-since-start**: otherwise the newest transcript in the cwd's project directory that was written
+   after the process started and that no other pane or live claude process owns.
+
+Transcript records are converted to the Pi event model in `server/claude.ts`: one assistant message spread
+over several records becomes one event; each `tool_use` gets its own event and its `tool_result` pairs by
+`tool_use_id`; `isSidechain` records are off-branch (All events only); hook and `<system-reminder>` user
+records are meta; the `<cross-session-message>` envelope goes through `server/intercom.ts`; wire telemetry
+(`api-request*`, `data-flow-*`, `mode`, …) is dropped. The pane name is the transcript's `custom-title`,
+else `agent-name`, else the cwd basename plus the short session id.
 
 ## Roles
 

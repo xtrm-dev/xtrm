@@ -2,11 +2,16 @@
 
 export type AgentStatus = "working" | "waiting" | "idle" | "error" | "unknown"
 
+export type AgentProvider = "pi" | "claude"
+
 export interface ViewerAgent {
   /** Stable identity: the tmux pane id. */
   id: string
   paneId: string
   panePid: number
+  /** Which agent runtime owns the pane; selects the transcript parser. */
+  provider: AgentProvider
+  /** Pid of the agent process (pi or claude, per `provider`). */
   piPid: number | null
   tmuxSession: string
   windowIndex: number

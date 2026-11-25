@@ -177,7 +177,7 @@ export function AllEventsView({
         </div>
       ) : (
         <div className="py-2 text-2xs text-ink-faint">
-          Chronological raw events from every agent in this tmux session. Select a row for full
+          Chronological raw events from {agents.length === 1 ? "this agent" : `the ${agents.length} agents in this scope`}. Select a row for full
           input, output, and JSON.
         </div>
       )}

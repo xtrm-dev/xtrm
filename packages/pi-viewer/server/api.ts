@@ -10,6 +10,7 @@ import type {
   ViewerEvent,
   ViewerSession,
 } from "../src/shared/types.ts"
+import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
 import { discover } from "./discover.ts"
 import { applyIntercomResults } from "./intercom.ts"
 import { normalizeEvent, parseSessionFile } from "./session.ts"
@@ -99,13 +100,24 @@ function lite(event: ViewerEvent): ViewerEvent {
   return { ...rest, text: undefined, parts: undefined, output: undefined, input: undefined }
 }
 
+/** Pick the transcript parser and event normalizer for the agent's runtime. */
+function readerFor(agent: ViewerAgent): {
+  parse: typeof parseSessionFile
+  normalize: typeof normalizeEvent
+} {
+  return agent.provider === "claude"
+    ? { parse: parseClaudeFile, normalize: normalizeClaudeEvent }
+    : { parse: parseSessionFile, normalize: normalizeEvent }
+}
+
 function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayload {
   const normalized: ViewerEvent[] = []
   for (const agent of session.agents) {
     if (!agent.sessionFile) continue
+    const reader = readerFor(agent)
     let parsed: ReturnType<typeof parseSessionFile>
     try {
-      parsed = parseSessionFile(agent.sessionFile)
+      parsed = reader.parse(agent.sessionFile)
     } catch {
       continue
     }
@@ -113,7 +125,9 @@ function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayloa
       const id = typeof entry.id === "string" ? entry.id : null
       const onBranch = id === null || parsed.branchIds.has(id)
       if (scope === "branch" && !onBranch) return
-      normalized.push(normalizeEvent(entry, { id: agent.id, name: agent.name }, index, onBranch))
+      normalized.push(
+        reader.normalize(entry, { id: agent.id, name: agent.name }, index, onBranch),
+      )
     })
   }
   const events = applyIntercomResults(normalized).map(lite)
@@ -130,23 +144,25 @@ function threadOf(session: ViewerSession, scope: "branch" | "all"): ThreadPayloa
 function resolveSession(name: string | null): { session: ViewerSession; all: ViewerSession[] } {
   const found = discover()
   if (!found.sessions.length) {
-    throw new ApiError(404, found.error || "no tmux session with a running pi pane found")
+    throw new ApiError(404, found.error || "no tmux session with a running pi or claude pane found")
   }
   const session = name
     ? found.sessions.find((entry) => entry.name === name)
     : (found.sessions.find((entry) => entry.name === "xx") ?? found.sessions[0])
-  if (!session) throw new ApiError(404, `tmux session ${name} has no running pi pane`)
+  if (!session) throw new ApiError(404, `tmux session ${name} has no running pi or claude pane`)
   return { session, all: found.sessions }
 }
 
 function detailOf(agent: ViewerAgent, seq: number): ViewerEvent {
   if (!agent.sessionFile) throw new ApiError(404, "agent has no session file")
-  const parsed = parseSessionFile(agent.sessionFile)
-  const id = typeof parsed.events[seq]?.id === "string" ? parsed.events[seq].id : null
-  const onBranch = id === null || parsed.branchIds.has(id)
-  const events = parsed.events.map((entry, index) =>
-    normalizeEvent(entry, { id: agent.id, name: agent.name }, index, onBranch),
-  )
+  const reader = readerFor(agent)
+  const parsed = reader.parse(agent.sessionFile)
+  if (!parsed.events[seq]) throw new ApiError(404, `event ${seq} not found`)
+  const events = parsed.events.map((entry, index) => {
+    const id = typeof entry.id === "string" ? entry.id : null
+    const onBranch = id === null || parsed.branchIds.has(id)
+    return reader.normalize(entry, { id: agent.id, name: agent.name }, index, onBranch)
+  })
   const event = applyIntercomResults(events)[seq]
   if (!event) throw new ApiError(404, `event ${seq} not found`)
   return event
@@ -219,7 +235,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
     const target = discover().sessions.some((session) =>
       session.agents.some((agent) => agent.paneId === paneId),
     )
-    if (!target) throw new ApiError(404, "pane is not a pi agent in an open tmux session")
+    if (!target) throw new ApiError(404, "pane is not a pi or claude agent in an open tmux session")
     if (text.length > MAX_TEXT) throw new ApiError(400, "message too long")
 
     // One line per send: a literal newline would submit the prompt early.
