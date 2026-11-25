@@ -152,6 +152,33 @@ export function PresenceLine({
     return () => window.removeEventListener("popstate", onPop)
   }, [open])
 
+  // Escape closes from anywhere in the panel or sheet; Tab stays inside the sheet (aria-modal).
+  function onLayerKey(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.defaultPrevented) return
+    if (event.key === "Escape") {
+      event.preventDefault()
+      closePanel()
+      return
+    }
+    if (event.key !== "Tab" || !narrow) return
+    const focusable = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'),
+    ).filter((node) => node.offsetParent !== null)
+    if (!focusable.length) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    } else if (!event.currentTarget.contains(document.activeElement)) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   // A click outside the panel closes it (desktop; the sheet has its scrim).
   useEffect(() => {
     if (!open || narrow) return
@@ -309,6 +336,7 @@ export function PresenceLine({
       {open && !narrow ? (
         <div
           id={panelId}
+          onKeyDown={onLayerKey}
           className="absolute right-0 bottom-full left-0 z-30 mb-1 flex max-h-[60vh] flex-col rounded-lg bg-raised p-1 shadow-float"
         >
           {body}
@@ -322,6 +350,7 @@ export function PresenceLine({
             role="dialog"
             aria-modal="true"
             aria-label="Running agents"
+            onKeyDown={onLayerKey}
             className="absolute inset-x-0 bottom-0 flex max-h-[75dvh] flex-col rounded-t-lg bg-raised p-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-float"
           >
             {body}

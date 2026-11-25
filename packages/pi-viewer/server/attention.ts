@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process"
+import { execFile } from "node:child_process"
 
 import type { AgentProvider, ViewerAgent } from "../src/shared/types.ts"
 
@@ -8,9 +8,10 @@ import type { AgentProvider, ViewerAgent } from "../src/shared/types.ts"
  * (operator ruling on XTRM-1026, 2026-11-25: read-only, no attach, no keys) and recognises
  * the prompts of Claude Code and of the Pi permission gate.
  *
- * Bounds: only an agent that is `working` and has written nothing for 5 s is read; one pane
- * is read at most once per 2 s; only the last 60 lines of the visible screen are matched; the
- * prompt text sent to the browser is capped.
+ * Bounds: only an agent that is `working` or `quiet` and has written nothing for 5 s is read;
+ * reads run in the background (never on the request path), one pane at most once per 2 s, at
+ * most four at once; only the last 60 lines of the visible screen are matched; the prompt text
+ * sent to the browser is capped; reads of panes that are gone are dropped.
  */
 
 export interface PanePrompt {
@@ -124,47 +125,82 @@ export function detectPermissionPrompt(screen: string, provider: AgentProvider):
   return provider === "claude" ? claudePrompt(lines) : piPrompt(lines)
 }
 
-export type CapturePane = (paneId: string) => string | null
-
-/** `tmux capture-pane -p` of the visible screen: a read, never an attach, never a key. */
-export const capturePane: CapturePane = (paneId) => {
-  try {
-    return execFileSync("tmux", ["capture-pane", "-p", "-J", "-t", paneId], {
-      encoding: "utf8",
-      timeout: 1_000,
-      maxBuffer: 1024 * 1024,
-    })
-  } catch {
-    return null
-  }
-}
-
-const lastRead = new Map<string, { at: number; prompt: PanePrompt | null }>()
-
-/** Forget the rate-limit cache (tests). */
-export function resetPaneReads(): void {
-  lastRead.clear()
-}
+export type CapturePane = (paneId: string) => Promise<string | null>
 
 /**
- * The permission prompt open on an agent's pane, or null. Reads the pane only for a working
- * agent that has been silent for 5 s, and at most once per 2 s per pane.
+ * `tmux capture-pane -p` of the visible screen: a read, never an attach, never a key. Async, so
+ * a slow tmux never blocks the request that discovers agents.
+ */
+export const capturePane: CapturePane = (paneId) =>
+  new Promise((resolve) => {
+    execFile(
+      "tmux",
+      ["capture-pane", "-p", "-J", "-t", paneId],
+      { encoding: "utf8", timeout: 1_000, maxBuffer: 1024 * 1024 },
+      (error, stdout) => resolve(error ? null : stdout),
+    )
+  })
+
+/** At most this many pane reads run at once, across all requests. */
+export const MAX_READS_IN_FLIGHT = 4
+
+interface PaneRead {
+  at: number
+  prompt: PanePrompt | null
+}
+
+const lastRead = new Map<string, PaneRead>()
+const inFlight = new Map<string, Promise<void>>()
+
+/** Forget the cache and wait for nothing (tests). */
+export function resetPaneReads(): void {
+  lastRead.clear()
+  inFlight.clear()
+}
+
+/** Resolves when every pane read started so far has finished (tests). */
+export async function settlePaneReads(): Promise<void> {
+  await Promise.all(Array.from(inFlight.values()))
+}
+
+/** Drops cached reads of panes that no longer hold an agent; called once per discovery. */
+export function prunePaneReads(live: ReadonlySet<string>): void {
+  for (const paneId of lastRead.keys()) if (!live.has(paneId)) lastRead.delete(paneId)
+}
+
+/** Statuses during which a permission prompt can be open: a turn that runs or went quiet. */
+const READ_WHILE = new Set<ViewerAgent["status"]>(["working", "quiet"])
+
+/**
+ * The permission prompt open on an agent's pane, from the last read, or null. The pane is read
+ * in the background, never on the caller's path: only for a working or quiet agent that has been
+ * silent for 5 s, at most once per 2 s per pane, and with at most four reads in flight. A
+ * prompt found by one read is reported by the next discovery (about one poll later).
  */
 export function panePrompt(
   agent: Pick<ViewerAgent, "paneId" | "provider" | "status" | "modifiedAt">,
   now = Date.now(),
   capture: CapturePane = capturePane,
 ): PanePrompt | null {
-  if (agent.status !== "working" || now - agent.modifiedAt < CAPTURE_AFTER_MS) {
+  if (!READ_WHILE.has(agent.status) || now - agent.modifiedAt < CAPTURE_AFTER_MS) {
     lastRead.delete(agent.paneId)
     return null
   }
   const cached = lastRead.get(agent.paneId)
-  if (cached && now - cached.at < CAPTURE_EVERY_MS) return cached.prompt
-  const screen = capture(agent.paneId)
-  const prompt = screen === null ? null : detectPermissionPrompt(screen, agent.provider)
-  lastRead.set(agent.paneId, { at: now, prompt })
-  return prompt
+  const stale = !cached || now - cached.at >= CAPTURE_EVERY_MS
+  if (stale && !inFlight.has(agent.paneId) && inFlight.size < MAX_READS_IN_FLIGHT) {
+    const read = capture(agent.paneId)
+      .catch(() => null)
+      .then((screen) => {
+        lastRead.set(agent.paneId, {
+          at: now,
+          prompt: screen === null ? null : detectPermissionPrompt(screen, agent.provider),
+        })
+      })
+      .finally(() => inFlight.delete(agent.paneId))
+    inFlight.set(agent.paneId, read)
+  }
+  return cached?.prompt ?? null
 }
 
 /** Applies an open permission prompt to a discovered agent: `attention · permission: <tool>`. */

@@ -8,9 +8,12 @@ import { fileURLToPath } from "node:url"
 import {
   CAPTURE_AFTER_MS,
   CAPTURE_EVERY_MS,
+  MAX_READS_IN_FLIGHT,
   detectPermissionPrompt,
   panePrompt,
+  prunePaneReads,
   resetPaneReads,
+  settlePaneReads,
   withPaneAttention,
 } from "../server/attention.ts"
 import { claudeStatusOf, parseClaudeFile } from "../server/claude.ts"
@@ -95,6 +98,66 @@ test("Claude transcript: AskUserQuestion and ExitPlanMode tool_use blocks become
     note: "plan approval",
     detail: "Build option B",
   })
+})
+
+// ── local commands open no turn ──
+
+test("a Pi !cmd (bashExecution) after a reply keeps the agent waiting, then idle; never quiet", () => {
+  const reply = { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "done" }] }
+  const bash = { role: "bashExecution", command: "ls", output: "a\nb", exitCode: 0 }
+  assert.equal(statusOf(parsed([{ role: "user", content: "go" }, reply, bash]), NOW).status, "waiting")
+  assert.deepEqual(statusOf(parsed([reply, bash], NOW - QUIET_MS - 60_000), NOW), { status: "idle", note: "quiet for 15m" })
+  // A !cmd during a running turn does not end it.
+  assert.equal(statusOf(parsed([toolUse("Bash", {}), bash]), NOW).status, "working")
+})
+
+test("a Claude local slash command (/model) opens no turn; a prompt-type slash command does", () => {
+  const now = new Date().toISOString()
+  const rec = (value: Record<string, unknown>) => `${JSON.stringify({ timestamp: now, ...value })}\n`
+  const settled =
+    rec({ type: "user", uuid: "u1", message: { role: "user", content: "go" } }) +
+    rec({ type: "assistant", uuid: "a1", parentUuid: "u1", message: { id: "m1", role: "assistant", stop_reason: "end_turn", content: [{ type: "text", text: "done" }] } })
+  const local = join(SCRATCH, "local.jsonl")
+  writeFileSync(
+    local,
+    settled +
+      rec({ type: "user", uuid: "c0", parentUuid: "a1", isMeta: true, message: { role: "user", content: "<local-command-caveat>Caveat: local commands</local-command-caveat>" } }) +
+      rec({ type: "user", uuid: "c1", parentUuid: "c0", message: { role: "user", content: "<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args></command-args>" } }) +
+      rec({ type: "user", uuid: "c2", parentUuid: "c1", message: { role: "user", content: "<local-command-stdout>Set model to opus</local-command-stdout>" } }),
+  )
+  assert.equal(claudeStatusOf(parseClaudeFile(local)).status, "waiting")
+
+  const prompted = join(SCRATCH, "prompted.jsonl")
+  writeFileSync(
+    prompted,
+    settled +
+      rec({ type: "user", uuid: "c1", parentUuid: "a1", message: { role: "user", content: "<command-name>/review</command-name>\n<command-args>42</command-args>" } }),
+  )
+  assert.equal(claudeStatusOf(parseClaudeFile(prompted)).status, "working", "a slash command with no local output runs the model")
+})
+
+test("a compaction newer than every message closes the turn: waiting, then idle", () => {
+  const open = { role: "user", content: "a prompt the agent never answered" }
+  const compacted = (modifiedAt: number): ParsedFile => ({
+    ...parsed([open], modifiedAt),
+    events: [{ type: "message", id: "e0", message: open }, { type: "compaction", id: "c1", summary: "…" }],
+  })
+  assert.equal(statusOf(compacted(NOW), NOW).status, "waiting")
+  assert.equal(statusOf(compacted(NOW - QUIET_MS - 60_000), NOW).status, "idle")
+
+  // Claude: /compact writes the summary, then the slash command and its local output.
+  const now = new Date().toISOString()
+  const rec = (value: Record<string, unknown>) => `${JSON.stringify({ timestamp: now, ...value })}\n`
+  const file = join(SCRATCH, "compact.jsonl")
+  writeFileSync(
+    file,
+    rec({ type: "user", uuid: "u1", message: { role: "user", content: "never answered" } }) +
+      rec({ type: "system", subtype: "compact_boundary", uuid: "b1", parentUuid: null }) +
+      rec({ type: "user", uuid: "s1", parentUuid: "b1", isCompactSummary: true, message: { role: "user", content: "This session is being continued…" } }) +
+      rec({ type: "user", uuid: "c1", parentUuid: "s1", message: { role: "user", content: "<command-name>/compact</command-name>" } }) +
+      rec({ type: "user", uuid: "c2", parentUuid: "c1", message: { role: "user", content: "<local-command-stdout>Compacted</local-command-stdout>" } }),
+  )
+  assert.equal(claudeStatusOf(parseClaudeFile(file)).status, "waiting")
 })
 
 // ── quiet ──
@@ -198,29 +261,73 @@ function agent(over: Partial<ViewerAgent> = {}): ViewerAgent {
   }
 }
 
-test("the pane is read only for a working agent silent for 5 s, at most once per 2 s", () => {
+test("the pane is read in the background for a working or quiet agent silent for 5 s, at most once per 2 s", async () => {
   const reads: string[] = []
-  const capture = (id: string) => {
+  const capture = async (id: string) => {
     reads.push(id)
     return pane("claude-bash.txt")
   }
   assert.equal(panePrompt(agent({ status: "waiting" }), NOW, capture), null)
+  assert.equal(panePrompt(agent({ status: "idle" }), NOW, capture), null)
   assert.equal(panePrompt(agent({ modifiedAt: NOW - 1_000 }), NOW, capture), null)
-  assert.equal(reads.length, 0, "no read for a waiting agent or a fresh write")
+  assert.equal(reads.length, 0, "no read for a waiting or idle agent or a fresh write")
 
-  assert.equal(panePrompt(agent(), NOW, capture)?.tool, "Bash")
+  // The first call starts a read and answers from the (empty) cache: nothing waits on tmux.
+  assert.equal(panePrompt(agent(), NOW, capture), null)
+  assert.equal(panePrompt(agent(), NOW, capture), null)
+  assert.equal(reads.length, 1, "a read in flight is not started twice")
+  await settlePaneReads()
   assert.equal(panePrompt(agent(), NOW + CAPTURE_EVERY_MS - 1, capture)?.tool, "Bash")
-  assert.equal(reads.length, 1, "the second call inside 2 s uses the cached read")
+  assert.equal(reads.length, 1, "a call inside 2 s uses the cached read")
   panePrompt(agent(), NOW + CAPTURE_EVERY_MS, capture)
+  await settlePaneReads()
   assert.equal(reads.length, 2)
 })
 
-test("withPaneAttention turns a working agent into attention · permission with the prompt as detail", () => {
-  const out = withPaneAttention(agent({ provider: "pi" }), NOW, () => pane("pi-gate.txt"))
+test("a permission prompt open past 15 minutes stays attention: quiet agents are read too", async () => {
+  const quiet = agent({ provider: "pi", status: "quiet", statusNote: "no output for 16m", modifiedAt: NOW - QUIET_MS - 60_000 })
+  const capture = async () => pane("pi-gate.txt")
+  assert.equal(withPaneAttention(quiet, NOW, capture).status, "quiet", "the first poll only starts the read")
+  await settlePaneReads()
+  const out = withPaneAttention(quiet, NOW + 1_500, capture)
+  assert.equal(out.status, "attention")
+  assert.equal(out.statusNote, "permission: Bash")
+})
+
+test("withPaneAttention turns a working agent into attention · permission with the prompt as detail", async () => {
+  const capture = async () => pane("pi-gate.txt")
+  withPaneAttention(agent({ provider: "pi" }), NOW, capture)
+  await settlePaneReads()
+  const out = withPaneAttention(agent({ provider: "pi" }), NOW + 1_500, capture)
   assert.equal(out.status, "attention")
   assert.equal(out.statusNote, "permission: Bash")
   assert.match(out.statusDetail ?? "", /Allow execution\?$/)
   resetPaneReads()
   const plain = agent()
-  assert.equal(withPaneAttention(plain, NOW, () => null), plain, "a failed capture changes nothing")
+  withPaneAttention(plain, NOW, async () => null)
+  await settlePaneReads()
+  assert.equal(withPaneAttention(plain, NOW + 1_500, async () => null), plain, "a failed capture changes nothing")
+})
+
+test("at most four reads run at once; reads of panes that are gone are dropped", async () => {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const reads: string[] = []
+  const capture = async (id: string) => {
+    reads.push(id)
+    await gate
+    return pane("claude-bash.txt")
+  }
+  for (let index = 1; index <= 6; index += 1) panePrompt(agent({ paneId: `%${index}` }), NOW, capture)
+  assert.equal(reads.length, MAX_READS_IN_FLIGHT)
+  release()
+  await settlePaneReads()
+  assert.equal(panePrompt(agent({ paneId: "%1" }), NOW + 1, capture)?.tool, "Bash")
+  prunePaneReads(new Set(["%2"]))
+  // %1 was pruned: its next call starts a fresh read and has no cached prompt.
+  assert.equal(panePrompt(agent({ paneId: "%1" }), NOW + 2, capture), null)
+  assert.equal(panePrompt(agent({ paneId: "%2" }), NOW + 2, capture)?.tool, "Bash")
+  await settlePaneReads()
 })

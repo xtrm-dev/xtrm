@@ -6,6 +6,7 @@ import { RoleChip } from "@/components/RoleChip"
 import { useDetail } from "@/lib/details"
 import { clockWithSeconds, dayKey, dayLabel } from "@/lib/format"
 import type { ViewerAgent, ViewerEvent } from "@/shared/types"
+import { intercomPairKey } from "@/lib/thread"
 import { cn } from "@/lib/utils"
 
 const KIND_LABEL: Record<ViewerEvent["kind"], string> = {
@@ -105,8 +106,7 @@ export function AllEventsView({
     for (const event of events) {
       const meta = event.intercom
       if (!meta) continue
-      const pair = [meta.from, meta.to].sort().join("|")
-      const key = `${pair}|${(meta.body ?? "").replace(/\s+/g, " ").trim()}`
+      const key = intercomPairKey(meta)
       const group = groups.get(key) ?? { sent: [], received: [] }
       if (meta.direction === "sent") group.sent.push(event.id)
       else group.received.push(event.id)

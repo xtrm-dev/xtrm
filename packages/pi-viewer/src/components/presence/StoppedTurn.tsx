@@ -31,7 +31,9 @@ export function StoppedTurn({
             <StatusDot status={agent?.status ?? "unknown"} />
             <span className="shrink-0 text-2xs text-ink-faint">{clock(item.at)}</span>
           </div>
-          <div className="text-xs text-ink-faint">Stopped without a reply · {item.note}</div>
+          <div className="text-xs text-ink-faint">
+            {item.local ? "Ran in the pane, no agent turn" : `Stopped without a reply · ${item.note}`}
+          </div>
           <ActivityDisclosure turn={item.turn} session={session} pending={false} />
         </MessageContent>
       </Message>

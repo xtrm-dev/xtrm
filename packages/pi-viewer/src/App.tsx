@@ -114,7 +114,9 @@ export default function App() {
     function onPop() {
       const resolved = scopeFromUrl(window.location.search, track.current.scope, sessionsRef.current)
       urlMode.current = "replace"
-      setTargetPaneId(null)
+      // A history step within the same scope (the presence sheet's own entry) keeps the
+      // composer target; only a scope change resets it.
+      if (!resolved || !sameScope(resolved, track.current.scope)) setTargetPaneId(null)
       if (!resolved) return
       applyTrack({ scope: resolved, absent: 0 })
       const search = serialiseScope(resolved)

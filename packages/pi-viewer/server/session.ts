@@ -34,6 +34,8 @@ export interface ParsedFile {
   thinkingLevel: string | null
   modifiedAt: number
   size: number
+  /** Per-entry revision for parsers that mutate an existing entry in place (Claude). */
+  entryVersions?: number[]
 }
 
 function isRecord(value: unknown): value is Raw {
@@ -584,12 +586,32 @@ function pendingAsk(message: Raw): AgentState | null {
   return null
 }
 
+/**
+ * Records the operator runs in the pane without the agent: a Pi `!cmd` (bashExecution). They
+ * never open an agent turn, so the status is read from the message before them.
+ */
+function isLocalCommand(message: Raw): boolean {
+  return message.role === "bashExecution"
+}
+
+/**
+ * The state of an agent whose newest record is a compaction: the conversation was summarised
+ * and restarted, so no earlier turn is still open. A turn that continues after an automatic
+ * compaction writes new messages, which then decide the status.
+ */
+export function compactedState(parsed: ParsedFile, now = Date.now()): AgentState {
+  return now - parsed.modifiedAt > QUIET_MS
+    ? { status: "idle", note: "quiet for 15m" }
+    : { status: "waiting", note: "awaiting input" }
+}
+
 export function statusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   const age = now - parsed.modifiedAt
   let last: Raw | null = null
   for (let index = parsed.events.length - 1; index >= 0; index -= 1) {
     const entry = parsed.events[index]
-    if (entry.type === "message" && isRecord(entry.message)) {
+    if (entry.type === "compaction") return compactedState(parsed, now)
+    if (entry.type === "message" && isRecord(entry.message) && !isLocalCommand(entry.message)) {
       last = entry
       break
     }

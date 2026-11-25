@@ -241,6 +241,44 @@ try {
         `${label}: Escape returns focus to the line`,
       )
 
+      // Escape works from an action button too, and closing keeps the composer target.
+      await page.locator("[data-presence-line]").focus()
+      await page.keyboard.press("Enter")
+      await page.locator('[role="option"]').first().waitFor()
+      await page.keyboard.press("Enter")
+      await page.getByRole("button", { name: "Message", exact: true }).click()
+      await page.waitForFunction(() =>
+        document.querySelector("[data-composer-input]")?.getAttribute("placeholder")?.includes("agent3"),
+      )
+      await page.locator("[data-presence-line]").click()
+      await page.locator('[role="option"]').first().waitFor()
+      await page.keyboard.press("Enter")
+      await page.getByRole("button", { name: "Open pane", exact: true }).focus()
+      if (width < 640) {
+        // The sheet traps Tab: from its last control focus wraps to its first.
+        const wrapped = await page.evaluate(() => {
+          const sheet = document.querySelector('[role="dialog"]')
+          const buttons = Array.from(sheet.querySelectorAll("button")).filter((node) => node.offsetParent !== null)
+          buttons.at(-1).focus()
+          return buttons.length
+        })
+        assert.ok(wrapped > 1)
+        await page.keyboard.press("Tab")
+        assert.equal(
+          await page.evaluate(() => document.querySelector('[role="dialog"]').contains(document.activeElement)),
+          true,
+          `${label}: Tab left the sheet`,
+        )
+      }
+      await page.keyboard.press("Escape")
+      await page.waitForTimeout(300)
+      assert.equal(await page.locator('[role="option"], [role="dialog"]').count(), 0, `${label}: Escape from a button closes`)
+      assert.match(
+        (await page.locator("[data-composer-input]").getAttribute("placeholder")) ?? "",
+        /agent3/,
+        `${label}: closing the panel kept the composer target`,
+      )
+
       const final = await measure(page)
       assert.ok(final.overflow <= 0, `${label}: horizontal overflow ${final.overflow}px`)
       assert.deepEqual(errors, [], `${label}: console errors`)

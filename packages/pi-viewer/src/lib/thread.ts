@@ -260,6 +260,14 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
   return turns
 }
 
+/** All-events pair identity. The server supplies a hash because its body is cut to 160 chars. */
+export function intercomPairKey(
+  meta: Pick<NonNullable<ViewerEvent["intercom"]>, "from" | "to" | "body" | "pairKey">,
+): string {
+  const pair = [meta.from, meta.to].sort().join("|")
+  return `${pair}|${meta.pairKey ?? meta.body.replace(/\s+/g, " ").trim()}`
+}
+
 function intercomBodyKey(event: ViewerEvent): string {
   const meta = event.intercom
   if (!meta) return ""

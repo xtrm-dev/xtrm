@@ -10,6 +10,7 @@ import {
   firstLine,
   mergeFile,
   normalizeEvent,
+  compactedState,
   statusOf,
   type AgentState,
   type ParsedFile,
@@ -354,6 +355,7 @@ interface ClaudeState {
   rawRef: Raw[]
   processed: number
   entries: Raw[]
+  versions: number[]
   branchIds: Set<string>
   /** Assistant message id to the entry still accepting thinking/text/the first tool_use. */
   openEntry: Map<string, number>
@@ -372,6 +374,7 @@ function freshState(rawRef: Raw[]): ClaudeState {
     rawRef,
     processed: 0,
     entries: [],
+    versions: [],
     branchIds: new Set(),
     openEntry: new Map(),
     toolNames: new Map(),
@@ -409,6 +412,7 @@ function addEntry(state: ClaudeState, entry: Raw, record: Raw, sidechain: boolea
   entry._sidechain = sidechain
   hideRecords(entry, [record])
   state.entries.push(entry)
+  state.versions.push(0)
   if (!sidechain) state.branchIds.add(id)
 }
 
@@ -459,6 +463,8 @@ function ingestAssistant(state: ClaudeState, record: Raw, sidechain: boolean): v
     const records = (entry as { _records?: Raw[] })._records
     if (records && records[records.length - 1] !== record) records.push(record)
     if (stopReason) (entry.message as Raw).stopReason = stopReason
+    const index = state.entries.indexOf(entry)
+    if (index >= 0) state.versions[index] += 1
   }
 
   const blocks = message.content.map((block) => assistantBlock(state, block)).filter((block): block is Raw => block !== null)
@@ -491,6 +497,8 @@ function ingestAssistant(state: ClaudeState, record: Raw, sidechain: boolean): v
 }
 
 const ENVELOPE = /^\s*(?:Another Claude session sent a message:\s*)?<cross-session-message\b/
+/** Output of a local slash command (`/model`): proof that the command ran without the model. */
+const LOCAL_OUTPUT = /^\s*<local-command-(?:stdout|stderr)\b/
 const INJECTED = /^\s*<(?:system-reminder|local-command-caveat|local-command-stdout|local-command-stderr|user-prompt-submit-hook|task-notification|command-stdout)\b/
 
 function slashCommand(text: string): string | null {
@@ -525,11 +533,13 @@ function ingestUserText(state: ClaudeState, record: Raw, text: string, sidechain
   if (injected) {
     const label = origin && origin !== "human" ? origin : "injected"
     const body = text.replace(/<\/?system-reminder>/g, "")
-    addEntry(state, { ...eventEntry("injected", `${label} · ${firstLine(body) || "context"}`, body), ...base }, record, sidechain)
+    const entry = { ...eventEntry("injected", `${label} · ${firstLine(body) || "context"}`, body), ...base }
+    addEntry(state, LOCAL_OUTPUT.test(text) ? { ...entry, _localOutput: true } : entry, record, sidechain)
     return
   }
   const slash = slashCommand(text)
-  addEntry(state, { type: "message", ...base, message: { role: "user", content: slash ?? text } }, record, sidechain)
+  const message = { type: "message", ...base, message: { role: "user", content: slash ?? text } }
+  addEntry(state, slash ? { ...message, _slash: true } : message, record, sidechain)
 }
 
 function ingestUser(state: ClaudeState, record: Raw, sidechain: boolean): void {
@@ -673,6 +683,7 @@ export function parseClaudeFile(file: string): ParsedFile {
     events,
     seqById,
     branchIds: state.branchIds,
+    entryVersions: state.versions.slice(0, events.length),
     sessionName: state.customTitle ?? state.agentName,
     model: state.model,
     thinkingLevel: null,
@@ -690,11 +701,24 @@ export function parseClaudeFile(file: string): ParsedFile {
  */
 export function claudeStatusOf(parsed: ParsedFile, now = Date.now()): AgentState {
   const events = parsed.events
+  // A slash command followed by local-command output (`/model`, `/clear`) ran without the model:
+  // it opens no turn, so the status comes from the message before it.
+  let localOutput = false
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const entry = events[index]
     if (entry._sidechain === true) continue
     if (entry._interrupt === true) return { status: "idle", note: "turn interrupted" }
+    if (entry._localOutput === true) {
+      localOutput = true
+      continue
+    }
+    if (entry.type === "compaction") return compactedState(parsed, now)
     if (entry.type !== "message") continue
+    if (localOutput && entry._slash === true) {
+      localOutput = false
+      continue
+    }
+    localOutput = false
     return statusOf(index === events.length - 1 ? parsed : { ...parsed, events: events.slice(0, index + 1) }, now)
   }
   return statusOf({ ...parsed, events: [] }, now)
