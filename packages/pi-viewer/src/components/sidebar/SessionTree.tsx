@@ -1,4 +1,3 @@
-import { ChevronDownIcon } from "lucide-react"
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react"
 
 import {
@@ -14,6 +13,7 @@ import {
 } from "@/lib/tree"
 import { scopeRowKey, type Scope } from "@/lib/scope"
 import { cn } from "@/lib/utils"
+import { Icon } from "@/shell/icon"
 
 import {
   DISCLOSURE,
@@ -70,7 +70,7 @@ function GroupRow({
           onToggle(row.key, !row.expanded)
         }}
       >
-        <ChevronDownIcon className={cn("size-[0.75rem] transition-transform", !row.expanded && "-rotate-90")} />
+        <Icon name="chevronDown" size="xs" className={cn("transition-transform", !row.expanded && "-rotate-90")} />
       </span>
       <span className="ml-auto shrink-0 text-xs text-ink-faint tabular">{count}</span>
     </>

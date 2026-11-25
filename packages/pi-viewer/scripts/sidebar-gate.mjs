@@ -20,17 +20,18 @@ const b = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: pr
 for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "light"]) {
   const tag = w + "-" + theme, narrow = w < 768
   const ctx = await b.newContext({ viewport: { width: w, height: h } })
-  await ctx.addInitScript((t) => { if (!sessionStorage.getItem("s")) { localStorage.setItem("pi-viewer-theme", t); localStorage.removeItem("pi-viewer-sidebar"); sessionStorage.setItem("s", "1") } }, theme)
+  await ctx.addInitScript((t) => { if (!sessionStorage.getItem("s")) { localStorage.setItem("pi-viewer-theme", t); localStorage.removeItem("pi-viewer-sidebar"); localStorage.removeItem("xtrm.console.layout.v1"); sessionStorage.setItem("s", "1") } }, theme)
   const p = await ctx.newPage(); p.setDefaultTimeout(60000); const errs = []
   p.on("console", (m) => { if (["error", "warning"].includes(m.type())) errs.push(m.text().slice(0, 200)) })
   p.on("pageerror", (e) => errs.push("pageerror " + e.message))
   const S_ = () => p.evaluate(() => location.search)
   const title = () => p.locator('[data-testid="scope-title"]').textContent()
   const side = p.locator('[data-testid="sidebar"]')
-  const open = async () => { if (narrow && (await side.getAttribute("data-collapsed")) === "true") { await p.getByRole("button", { name: "Expand sidebar" }).click(); await p.waitForTimeout(250) } }
+  // XTRM-1044: the sidebar is the console's container. Narrow: an overlay that is not mounted while closed, opened from the top bar.
+  const open = async () => { if (narrow && (await side.count()) === 0) { await p.getByRole("button", { name: "Open sidebar" }).click(); await p.waitForTimeout(250) } }
   const sel = async () => { await open(); const k = await p.evaluate(() => document.querySelector('[role=treeitem][aria-selected=true]')?.getAttribute("data-key")); if (narrow) { await p.keyboard.press("Escape"); await p.waitForTimeout(250) } return k }
   try {
-    await p.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="sidebar"]', { timeout: 60000 }); await p.waitForSelector('[role=treeitem], [role=toolbar] button', { state: "attached", timeout: 90000 }); await p.waitForTimeout(2500)
+    await p.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="top-bar"]', { timeout: 60000 }); if (narrow) await open(); await p.waitForSelector('[role=treeitem]', { state: "attached", timeout: 90000 }); await p.waitForTimeout(2500)
     await open()
     const g = await p.evaluate(() => {
       const rows = [...document.querySelectorAll('[role=treeitem]')]
@@ -59,7 +60,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     await pane.click(); await p.waitForTimeout(1500)
     check(tag + " pane click: URL, header, selected row", /p=%25\d+/.test(await S_()) && (await title()) === pname && (await sel()) === pk, (await S_()) + " " + (await title()))
     const url = await S_()
-    await p.reload({ waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="sidebar"]', { timeout: 60000 }); await p.waitForSelector('[role=treeitem], [role=toolbar] button', { state: "attached", timeout: 90000 }); await p.waitForTimeout(2500)
+    await p.reload({ waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="top-bar"]', { timeout: 60000 }); if (narrow) await open(); await p.waitForSelector('[role=treeitem]', { state: "attached", timeout: 90000 }); await p.waitForTimeout(2500)
     check(tag + " reload keeps scope", (await S_()) === url && (await title()) === pname)
     // single-pane window scope selects its pane row
     await p.goto(BASE + "?s=xx&w=99", { waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForTimeout(2000)
@@ -71,17 +72,37 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       await p.locator('[role=treeitem][aria-expanded=true][aria-level="2"]').first().focus(); await p.keyboard.press("ArrowLeft"); await p.waitForTimeout(150)
       check(tag + " ArrowLeft collapses an open window", (await p.evaluate(() => document.activeElement?.getAttribute("aria-expanded"))) === "false")
       await p.keyboard.press("ArrowRight")
-      await p.getByRole("button", { name: "Collapse sidebar" }).focus(); await p.keyboard.press("Enter"); await p.waitForTimeout(250)
-      check(tag + " collapse to 44px rail, focus on Expand", Math.round((await side.boundingBox()).width) === 44 && (await p.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Expand sidebar")
-      await p.screenshot({ path: SHOTS + "/g4-" + tag + "-rail.png" })
-      await p.keyboard.press("Enter"); await p.waitForTimeout(250)
-      check(tag + " expands back to 240px", Math.round((await side.boundingBox()).width) === 240)
+      // Console shell (XTRM-1044): width 264 (min 220, max 360), persisted; collapse to 0 with the reopen button in the top bar.
+      const panelW = async () => Math.round((await p.locator('[data-testid="sidebar-panel"]').boundingBox()).width)
+      const mainX = async () => Math.round((await p.locator('[data-testid="top-bar"]').boundingBox()).x)
+      const stored = () => p.evaluate(() => JSON.parse(localStorage.getItem("xtrm.console.layout.v1") ?? "null"))
+      check(tag + " expanded width is the console's 264", (await panelW()) === 264, String(await panelW()))
+      check(tag + " console top switcher: Work, Agent selected", await p.evaluate(() => { const r = [...document.querySelectorAll('[data-testid=half-switch] [role=radio]')]; return r.length === 2 && r[0].getAttribute("aria-label") === "Work" && r[1].getAttribute("aria-checked") === "true" }))
+      const sep = p.getByRole("separator", { name: "Resize sidebar" })
+      const drag = async (dx) => { const bb = await sep.boundingBox(); const x = bb.x + bb.width / 2, y = bb.y + 300; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x + dx, y, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(400) }
+      await drag(60); check(tag + " drag +60 widens to 324", (await panelW()) === 324, String(await panelW()))
+      await drag(-600); check(tag + " drag stops at the console minimum 220", (await panelW()) === 220, String(await panelW()))
+      await drag(700); check(tag + " drag stops at the console maximum 360", (await panelW()) === 360, String(await panelW()))
+      await drag(-90); const w2 = await panelW(); check(tag + " width persisted under the console's key", (await stored())?.sidebarWidth === w2, w2 + " " + JSON.stringify(await stored()))
+      await sep.focus(); await p.keyboard.press("ArrowRight"); await p.waitForTimeout(300)
+      check(tag + " resize handle is a labelled, keyboard-reachable separator (ArrowRight widens)", (await panelW()) > w2, w2 + " -> " + (await panelW()))
+      const w3 = await panelW()
+      await p.getByRole("button", { name: "Collapse sidebar" }).focus(); await p.keyboard.press("Enter"); await p.waitForTimeout(500)
+      check(tag + " collapse: panel gone (content starts at x=0), focus on Open sidebar", (await mainX()) === 0 && (await p.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Open sidebar", (await mainX()) + " " + (await p.evaluate(() => document.activeElement?.getAttribute("aria-label"))))
+      check(tag + " collapsed state persisted", (await stored())?.sidebarOpen === false)
+      await p.screenshot({ path: SHOTS + "/g4-" + tag + "-collapsed.png" })
+      await p.keyboard.press("Enter"); await p.waitForTimeout(500)
+      check(tag + " reopen restores the dragged width, focus on Collapse sidebar", (await mainX()) === w3 && (await p.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Collapse sidebar", (await mainX()) + " vs " + w3)
+      await p.keyboard.press("Control+b"); await p.waitForTimeout(500); const closedByKey = (await mainX()) === 0
+      await p.keyboard.press("Control+b"); await p.waitForTimeout(500)
+      check(tag + " Ctrl+B toggles the sidebar", closedByKey && (await mainX()) === w3)
+      await p.reload({ waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[role=treeitem]', { state: "attached", timeout: 90000 }); await p.waitForTimeout(1500)
+      check(tag + " reload keeps the width", (await panelW()) === w3, String(await panelW()))
     } else {
-      await p.getByRole("button", { name: "Expand sidebar" }).click(); await p.waitForTimeout(250)
-      await p.screenshot({ path: SHOTS + "/g4-" + tag + "-open.png" })
+      await open(); await p.screenshot({ path: SHOTS + "/g4-" + tag + "-open.png" })
       await p.keyboard.press("Escape"); await p.waitForTimeout(250)
-      check(tag + " Escape closes the overlay", (await side.getAttribute("data-collapsed")) === "true")
-      check(tag + " overlay never persisted as collapsed", (await p.evaluate(() => JSON.parse(localStorage.getItem("pi-viewer-sidebar")).collapsed)) === false)
+      check(tag + " Escape closes the overlay", (await side.count()) === 0)
+      check(tag + " overlay never persisted as closed", (await p.evaluate(() => JSON.parse(localStorage.getItem("xtrm.console.layout.v1") ?? '{"sidebarOpen":true}').sidebarOpen)) !== false)
     }
     check(tag + " no overflow at end", !(await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)))
   } catch (e) { check(tag + " script threw", false, String(e).slice(0, 250)) }
