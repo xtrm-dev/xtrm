@@ -3,6 +3,7 @@ import { StringDecoder } from "node:string_decoder"
 import { basename } from "node:path"
 
 import type { AgentStatus, EventKind, ViewerEvent, ViewerPart } from "../src/shared/types.ts"
+import { intercomFromEntry, isIntercomTool } from "./intercom.ts"
 
 type Raw = Record<string, unknown>
 
@@ -21,6 +22,7 @@ const TEXT_CAP = 20_000
 const THINKING_CAP = 6_000
 const TOOL_OUTPUT_CAP = 6_000
 const TOOL_INPUT_CAP = 2_000
+const INTERCOM_CAP = 40_000
 const RAW_CAP = 6_000
 
 export interface ParsedFile {
@@ -364,6 +366,26 @@ export function normalizeEvent(
     })(),
   } satisfies Pick<ViewerEvent, "id" | "agentId" | "agentName" | "seq" | "at" | "onBranch" | "raw">
 
+  const intercom = intercomFromEntry(entry, agent)
+  if (intercom) {
+    const body = cap(intercom.body, INTERCOM_CAP)
+    return {
+      ...base,
+      kind: "intercom",
+      role: typeof entry.type === "string" ? entry.type : "intercom",
+      summary:
+        intercom.direction === "sent"
+          ? `→ ${intercom.to} · ${intercom.summary ?? firstLine(intercom.body)}`
+          : `← ${intercom.from} · ${intercom.summary ?? firstLine(intercom.body)}`,
+      intercom: { ...intercom, body: body.text },
+      truncated: body.truncated || undefined,
+      detail:
+        intercom.direction === "sent"
+          ? `intercom sent to ${intercom.to}`
+          : `intercom received from ${intercom.from}`,
+    }
+  }
+
   if (entry.type !== "message" || !isRecord(entry.message)) {
     const detail = metaDetail(entry)
     return {
@@ -438,6 +460,20 @@ export function normalizeEvent(
     const output = contentText(message.content)
     const capped = cap(output, TOOL_OUTPUT_CAP)
     const toolName = typeof message.toolName === "string" ? message.toolName : "tool"
+    if (isIntercomTool(toolName)) {
+      return {
+        ...base,
+        kind: "meta",
+        role,
+        toolName,
+        toolCallId: typeof message.toolCallId === "string" ? message.toolCallId : undefined,
+        isError: message.isError === true,
+        summary: `intercom · ${firstLine(output, 140) || (message.isError === true ? "failed" : "delivered")}`,
+        output: capped.text,
+        truncated: capped.truncated || undefined,
+        detail: "intercom delivery",
+      }
+    }
     return {
       ...base,
       kind: "tool-result",

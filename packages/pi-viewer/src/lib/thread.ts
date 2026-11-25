@@ -1,3 +1,4 @@
+import type { OptimisticMessage } from "@/lib/optimistic"
 import type { ViewerEvent, ViewerPart } from "@/shared/types"
 
 export type ActivityKind = "thinking" | "tool" | "bash" | "notice" | "compaction" | "meta" | "event"
@@ -21,10 +22,19 @@ export interface Turn {
   id: string
   agentId: string
   agentName: string
+  /** Sequence of the event that opened the turn; a stable tie-breaker. */
+  seq: number
   start: number
   end: number
   final?: ViewerEvent
+  /** Operator prompts that opened or joined the turn; rendered as timeline rows. */
   users: ViewerEvent[]
+  /** Peer messages that opened or were consumed during the turn. */
+  inbound: ViewerEvent[]
+  /** Peer messages sent after the turn's final reply (or while it ran). */
+  sent: ViewerEvent[]
+  /** A row that only carries outgoing peer messages, with no agent turn. */
+  sentOnly?: boolean
   activity: ActivityItem[]
   pending: boolean
 }
@@ -65,9 +75,12 @@ function newTurn(event: ViewerEvent): Turn {
     id: `${event.agentId}:${event.seq}`,
     agentId: event.agentId,
     agentName: event.agentName,
+    seq: event.seq,
     start: event.at,
     end: event.at,
     users: [],
+    inbound: [],
+    sent: [],
     activity: [],
     pending: true,
   }
@@ -136,12 +149,34 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
   for (const event of events) {
     if (event.kind === "meta") continue
 
+    if (event.kind === "intercom" && event.intercom) {
+      const sent = event.intercom.direction === "sent"
+      if (sent) {
+        if (!current || current.final) {
+          if (current) turns.push(current)
+          current = newTurn(event)
+          current.sentOnly = true
+        }
+        current.sent.push(event)
+        current.pending = false
+      } else {
+        if (!current || current.final || current.sentOnly) {
+          if (current) turns.push(current)
+          current = newTurn(event)
+        }
+        current.inbound.push(event)
+      }
+      current.end = Math.max(current.end, event.at)
+      continue
+    }
+
     if (event.kind === "user") {
-      if (!current || current.final) {
+      if (!current || current.final || current.sentOnly) {
         if (current) turns.push(current)
         current = newTurn(event)
       }
       current.users.push(event)
+      current.sentOnly = false
       current.end = Math.max(current.end, event.at)
       continue
     }
@@ -152,6 +187,8 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
       }
       current = newTurn(event)
     }
+
+    current.sentOnly = false
 
     if (event.kind === "assistant") {
       const parts = event.parts ?? []
@@ -221,9 +258,177 @@ function groupAgent(events: ViewerEvent[]): Turn[] {
   return turns
 }
 
-export function channelTurns(events: ViewerEvent[]): Turn[] {
-  const byAgent = new Map<string, ViewerEvent[]>()
+function intercomBodyKey(event: ViewerEvent): string {
+  const meta = event.intercom
+  if (!meta) return ""
+  const pair = [meta.from, meta.to].sort().join("|")
+  return `${pair}|${meta.body.replace(/\s+/g, " ").trim()}`
+}
+
+/**
+ * A message between two viewers is written twice, once on each side. Keep the send
+ * position and time, but borrow the receiver's message id and delivery proof.
+ */
+export function dedupeIntercoms(events: ViewerEvent[]): ViewerEvent[] {
+  const out: ViewerEvent[] = []
+  const byBody = new Map<string, number>()
+  const byId = new Map<string, number>()
+
   for (const event of events) {
+    if (event.kind !== "intercom" || !event.intercom) {
+      out.push(event)
+      continue
+    }
+    const idKey = event.intercom.messageId ? `id:${event.intercom.messageId}` : null
+    const bodyKey = intercomBodyKey(event)
+    let index = idKey ? byId.get(idKey) : undefined
+    if (index === undefined) {
+      const candidate = byBody.get(bodyKey)
+      // The receiver can hold a message for minutes while it finishes a turn.
+      if (candidate !== undefined && Math.abs(out[candidate].at - event.at) <= 30 * 60_000) {
+        index = candidate
+      }
+    }
+    if (index === undefined) {
+      out.push(event)
+      const next = out.length - 1
+      byBody.set(bodyKey, next)
+      if (idKey) byId.set(idKey, next)
+      continue
+    }
+    const existing = out[index]
+    if (existing.intercom?.direction === "sent" && event.intercom.direction === "received") {
+      out[index] = {
+        ...existing,
+        intercom: {
+          ...existing.intercom,
+          messageId: existing.intercom.messageId ?? event.intercom.messageId,
+          expectsReply: existing.intercom.expectsReply || event.intercom.expectsReply,
+          delivery: "delivered",
+        },
+      }
+      byBody.set(bodyKey, index)
+      if (idKey) byId.set(idKey, index)
+    }
+  }
+  return out
+}
+
+/**
+ * A Channel row. The Channel renders one row per timeline item, never one block per turn,
+ * so an operator message keeps its own place in the conversation regardless of which turn
+ * happens to be running around it.
+ */
+export type ChannelItem =
+  | {
+      kind: "user"
+      id: string
+      at: number
+      agentId: string
+      agentName: string
+      seq: number
+      event: ViewerEvent
+    }
+  | {
+      kind: "intercom"
+      id: string
+      at: number
+      agentId: string
+      agentName: string
+      seq: number
+      event: ViewerEvent
+    }
+  | {
+      kind: "optimistic"
+      id: string
+      at: number
+      agentId: string
+      agentName: string
+      seq: number
+      message: OptimisticMessage
+    }
+  | {
+      kind: "turn"
+      id: string
+      at: number
+      agentId: string
+      agentName: string
+      seq: number
+      turn: Turn
+    }
+
+/**
+ * Ordering invariant for the Channel timeline.
+ *
+ * Every row is anchored at the moment it becomes true for the reader:
+ * - an operator message is anchored at its send time;
+ * - a settled turn is anchored at its settling event (the final assistant reply), not at
+ *   its start, so a turn that overlaps a newer prompt cannot jump above it;
+ * - a pending turn is always last, whatever its timestamps; it anchors at its start, so a
+ *   live turn never reorders among its peers as activity streams in;
+ * - an optimistic composer message is anchored at its send time, like a user message.
+ *
+ * Rows with the same anchor keep a deterministic order: pending rank, anchor, row kind
+ * (operator message, optimistic message, turn), agent id, event sequence, row id. The
+ * comparison uses code-unit string order, never `localeCompare`, so the order does not
+ * depend on the browser locale. The result is a total order, so repeated polls over the
+ * same events produce the same rows: nothing reorders until an event actually arrives.
+ */
+export function turnAnchor(turn: Turn): number {
+  if (!turn.pending) {
+    const settling = turn.final?.at ?? turn.end
+    if (settling > 0) return settling
+  }
+  // A pending turn has no settling event yet, and a turn with no timestamp at all has
+  // nothing better than its start. Zero means "unknown": such rows sort first,
+  // deterministically, instead of jumping between polls.
+  return turn.start > 0 ? turn.start : 0
+}
+
+const RANK_USER = 0
+const RANK_INBOUND = 1
+const RANK_OPTIMISTIC = 2
+const RANK_TURN = 3
+const RANK_SENT = 4
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+function pendingRank(item: ChannelItem): number {
+  return item.kind === "turn" && item.turn.pending ? 1 : 0
+}
+
+function kindRank(item: ChannelItem): number {
+  if (item.kind === "user") return RANK_USER
+  if (item.kind === "intercom") {
+    return item.event.intercom?.direction === "sent" ? RANK_SENT : RANK_INBOUND
+  }
+  if (item.kind === "optimistic") return RANK_OPTIMISTIC
+  return RANK_TURN
+}
+
+function compareChannelItems(a: ChannelItem, b: ChannelItem): number {
+  return (
+    pendingRank(a) - pendingRank(b) ||
+    a.at - b.at ||
+    kindRank(a) - kindRank(b) ||
+    compareText(a.agentId, b.agentId) ||
+    a.seq - b.seq ||
+    compareText(a.id, b.id)
+  )
+}
+
+function compareTurns(a: Turn, b: Turn): number {
+  if (a.pending !== b.pending) return a.pending ? 1 : -1
+  return (
+    turnAnchor(a) - turnAnchor(b) || compareText(a.agentId, b.agentId) || a.seq - b.seq
+  )
+}
+
+function groupTurns(events: ViewerEvent[]): Turn[] {
+  const byAgent = new Map<string, ViewerEvent[]>()
+  for (const event of dedupeIntercoms(events)) {
     const list = byAgent.get(event.agentId) ?? []
     list.push(event)
     byAgent.set(event.agentId, list)
@@ -233,13 +438,83 @@ export function channelTurns(events: ViewerEvent[]): Turn[] {
     agentEvents.sort((a, b) => a.seq - b.seq)
     turns.push(...groupAgent(agentEvents))
   }
-  turns.sort((a, b) => {
-    if (a.pending !== b.pending) return a.pending ? 1 : -1
-    const at = a.pending ? a.end : a.start
-    const bt = b.pending ? b.end : b.start
-    return at - bt || a.agentId.localeCompare(b.agentId)
-  })
   return turns
+}
+
+/** Turns in Channel order: settled turns by settling event, pending turns last. */
+export function channelTurns(events: ViewerEvent[]): Turn[] {
+  return groupTurns(events).sort(compareTurns)
+}
+
+/**
+ * The Channel timeline: operator messages as their own rows plus one row per turn and per
+ * optimistic composer message, ordered by the invariant documented on `turnAnchor`.
+ */
+export function channelTimeline(
+  events: ViewerEvent[],
+  optimistic: OptimisticMessage[] = [],
+): ChannelItem[] {
+  const items: ChannelItem[] = []
+  for (const turn of groupTurns(events)) {
+    const anchor = turnAnchor(turn)
+    for (const user of turn.users) {
+      items.push({
+        kind: "user",
+        id: `user:${user.id}`,
+        // A prompt without a timestamp keeps its position inside its own turn.
+        at: user.at > 0 ? user.at : anchor,
+        agentId: user.agentId,
+        agentName: user.agentName,
+        seq: user.seq,
+        event: user,
+      })
+    }
+    for (const event of turn.inbound) {
+      items.push({
+        kind: "intercom",
+        id: `intercom:${event.id}`,
+        at: event.at > 0 ? event.at : anchor,
+        agentId: event.agentId,
+        agentName: event.agentName,
+        seq: event.seq,
+        event,
+      })
+    }
+    if (!turn.sentOnly) {
+      items.push({
+        kind: "turn",
+        id: `turn:${turn.id}`,
+        at: anchor,
+        agentId: turn.agentId,
+        agentName: turn.agentName,
+        seq: turn.seq,
+        turn,
+      })
+    }
+    for (const event of turn.sent) {
+      items.push({
+        kind: "intercom",
+        id: `intercom:${event.id}`,
+        at: event.at > 0 ? event.at : anchor,
+        agentId: event.agentId,
+        agentName: event.agentName,
+        seq: event.seq,
+        event,
+      })
+    }
+  }
+  for (const message of optimistic) {
+    items.push({
+      kind: "optimistic",
+      id: `optimistic:${message.id}`,
+      at: message.at,
+      agentId: message.paneId,
+      agentName: message.agentName,
+      seq: 0,
+      message,
+    })
+  }
+  return items.sort(compareChannelItems)
 }
 
 export function toolCount(turn: Turn): number {

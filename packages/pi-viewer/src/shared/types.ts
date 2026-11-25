@@ -13,6 +13,8 @@ export interface ViewerAgent {
   windowName: string
   paneIndex: number
   name: string
+  /** Role assigned by the launcher (@agent_role), e.g. lead, worker, debugger. */
+  role: string | null
   title: string
   cwd: string
   sessionFile: string | null
@@ -39,7 +41,30 @@ export type EventKind =
   | "bash"
   | "notice"
   | "compaction"
+  | "intercom"
   | "meta"
+
+export type IntercomDirection = "sent" | "received"
+
+export interface IntercomMeta {
+  direction: IntercomDirection
+  /** Display name of the sender. */
+  from: string
+  /** Display name of the recipient. */
+  to: string
+  /** Raw sender address when it differs from the display name (socket, id). */
+  fromId?: string
+  /** Raw recipient address when it differs from the display name (socket, id). */
+  toId?: string
+  messageId?: string
+  expectsReply?: boolean
+  summary?: string
+  /** The complete message body. */
+  body: string
+  runtime?: "pi" | "claude"
+  delivery?: string
+  legacy?: boolean
+}
 
 export interface ViewerPart {
   type: "text" | "thinking" | "tool-call" | "image"
@@ -72,6 +97,8 @@ export interface ViewerEvent {
   detail?: string
   truncated?: boolean
   stopReason?: string
+  /** Present when this event is a peer message, not a chat turn or tool step. */
+  intercom?: IntercomMeta
   /** False for events that belong to an abandoned branch of the session tree. */
   onBranch: boolean
   /** Compact, capped JSON of the original line for inspection. */

@@ -2,6 +2,7 @@ import { ChevronRightIcon } from "lucide-react"
 import { Fragment, useEffect, useMemo, useState } from "react"
 
 import { EventBody } from "@/components/EventDetail"
+import { RoleChip } from "@/components/RoleChip"
 import { useMessageScroller } from "@/components/ui/message-scroller"
 import { useDetail } from "@/lib/details"
 import { clockWithSeconds, dayKey, dayLabel } from "@/lib/format"
@@ -15,15 +16,24 @@ const KIND_LABEL: Record<ViewerEvent["kind"], string> = {
   bash: "bash",
   notice: "notice",
   compaction: "compact",
+  intercom: "intercom",
   meta: "meta",
 }
 
-function EventRow({ event, session }: { event: ViewerEvent; session: string }) {
+function EventRow({
+  event,
+  session,
+  paired,
+}: {
+  event: ViewerEvent
+  session: string
+  paired: boolean
+}) {
   const [open, setOpen] = useState(false)
   const detail = useDetail(session, event.agentId, event.seq, open)
 
   return (
-    <div className="viewer-row border-b border-border-subtle">
+    <div className="viewer-row">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -56,10 +66,11 @@ function EventRow({ event, session }: { event: ViewerEvent; session: string }) {
           {!event.onBranch ? (
             <span className="shrink-0 text-2xs text-ink-faint">off-branch</span>
           ) : null}
+          {paired ? <span className="shrink-0 text-2xs text-ink-faint">paired</span> : null}
         </span>
       </button>
       {open ? (
-        <div className="border-t border-border-subtle bg-surface/40 px-3 py-3 sm:pl-[calc(3.5rem+8rem+1.25rem)]">
+        <div className="bg-surface/40 px-3 py-3 sm:pl-[calc(3.5rem+8rem+1.25rem)]">
           {detail.loading ? (
             <div className="text-2xs text-ink-faint">Loading event…</div>
           ) : detail.error ? (
@@ -96,22 +107,42 @@ export function AllEventsView({
     return map
   }, [events])
 
+  const paired = useMemo(() => {
+    const groups = new Map<string, { sent: string[]; received: string[] }>()
+    for (const event of events) {
+      const meta = event.intercom
+      if (!meta) continue
+      const pair = [meta.from, meta.to].sort().join("|")
+      const key = `${pair}|${meta.body.replace(/\s+/g, " ").trim()}`
+      const group = groups.get(key) ?? { sent: [], received: [] }
+      if (meta.direction === "sent") group.sent.push(event.id)
+      else group.received.push(event.id)
+      groups.set(key, group)
+    }
+    const ids = new Set<string>()
+    for (const group of groups.values()) {
+      if (!group.sent.length || !group.received.length) continue
+      for (const id of [...group.sent, ...group.received]) ids.add(id)
+    }
+    return ids
+  }, [events])
+
   const shown = filter === "all" ? events : events.filter((event) => event.agentId === filter)
   const activeAgent = agents.find((agent) => agent.id === filter)
 
   return (
     <div className="flex flex-col">
-      <div className="sticky top-0 z-10 -mx-5 border-b border-border-muted bg-deep">
+      <div className="sticky top-0 z-10 -mx-5 bg-deep">
         <div className="relative">
-          <div className="flex items-center gap-5 overflow-x-auto px-5">
+          <div className="flex items-center gap-1 overflow-x-auto px-5">
         <button
           type="button"
           onClick={() => setFilter("all")}
           className={cn(
-            "flex shrink-0 items-baseline gap-1.5 border-b-2 px-0.5 py-2 text-xs transition-colors",
+            "flex shrink-0 items-baseline gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
             filter === "all"
-              ? "border-ink text-ink"
-              : "border-transparent text-ink-faint hover:text-ink-muted",
+              ? "bg-pressed text-ink"
+              : "text-ink-faint hover:bg-hover hover:text-ink-muted",
           )}
         >
           All
@@ -123,13 +154,14 @@ export function AllEventsView({
             type="button"
             onClick={() => setFilter(agent.id)}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 border-b-2 px-0.5 py-2 text-xs transition-colors",
+              "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
               filter === agent.id
-                ? "border-ink text-ink"
-                : "border-transparent text-ink-faint hover:text-ink-muted",
+                ? "bg-pressed text-ink"
+                : "text-ink-faint hover:bg-hover hover:text-ink-muted",
             )}
           >
             <span className="max-w-44 truncate">{agent.name}</span>
+            <RoleChip role={agent.role} />
             <span className="text-2xs text-ink-faint">{counts.get(agent.id) ?? 0}</span>
           </button>
         ))}
@@ -140,6 +172,7 @@ export function AllEventsView({
 
       {activeAgent ? (
         <div className="flex items-center gap-2 py-2 text-2xs text-ink-faint">
+          <RoleChip role={activeAgent.role} />
           <span className="truncate font-mono">{activeAgent.sessionFile ?? "no session file"}</span>
         </div>
       ) : (
@@ -150,21 +183,20 @@ export function AllEventsView({
       )}
 
       {shown.length ? (
-        <div className="border-t border-border-muted">
+        <div>
           {shown.map((event, index) => {
             const key = dayKey(event.at)
             const previous = index === 0 ? "" : dayKey(shown[index - 1].at)
             return (
               <Fragment key={event.id}>
                 {key !== previous ? (
-                  <div className="flex items-center gap-3 pt-3 pb-1.5">
+                  <div className="flex items-center pt-3 pb-1.5">
                     <span className="text-2xs tracking-wide text-ink-faint uppercase">
                       {dayLabel(event.at)}
                     </span>
-                    <span className="h-px flex-1 bg-border-subtle" />
                   </div>
                 ) : null}
-                <EventRow event={event} session={session} />
+                <EventRow event={event} session={session} paired={paired.has(event.id)} />
               </Fragment>
             )
           })}

@@ -210,7 +210,7 @@ export default function App() {
       />
 
       {threadError ? (
-        <div className="flex shrink-0 items-center gap-2 border-b border-border-muted px-4 py-1.5 text-2xs text-danger sm:px-5">
+        <div className="flex shrink-0 items-center gap-2 bg-danger/5 px-4 py-1.5 text-2xs text-danger sm:px-5">
           <span className="truncate">{threadError}</span>
           <button
             type="button"
@@ -232,7 +232,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setKick((value) => value + 1)}
-            className="rounded-md border border-border-muted px-2.5 py-1 text-xs text-ink-muted hover:bg-hover"
+            className="rounded-md bg-control px-2.5 py-1 text-xs text-ink-muted hover:bg-hover"
           >
             Rescan
           </button>

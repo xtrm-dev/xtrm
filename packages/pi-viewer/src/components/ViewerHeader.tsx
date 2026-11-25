@@ -58,7 +58,7 @@ export function ViewerHeader({
   onToggleTheme: () => void
 }) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border-muted px-4 sm:px-5">
+    <header className="flex h-14 shrink-0 items-center gap-3 px-4 sm:px-5">
       <div className="flex min-w-0 items-baseline gap-2.5">
         <span className="relative inline-flex shrink-0 self-center">
           <select

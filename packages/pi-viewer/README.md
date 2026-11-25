@@ -26,11 +26,14 @@ The server binds to `127.0.0.1` only and has no authentication.
 
 ## Views
 
-**Channel** is the default. It shows user messages and the final reply of each
-agent turn. Tool calls, tool results, thinking, and notices are collapsed under
-the final reply behind a chevron. A turn with no final reply is shown as
-working. The channel follows the active branch of each session file, so
-rewound or compacted-away events stay out of the conversation.
+**Channel** is the default. It is a timeline: operator messages appear at their
+send time, and each agent turn appears at the event that settles it (the final
+assistant reply). A turn that is still running is always last. This keeps
+overlapping agents in causal order when one prompt is sent while another agent
+is still working. Tool calls, tool results, thinking, and notices are collapsed
+under the final reply behind a chevron. The channel follows the active branch of
+each session file, so rewound or compacted-away events stay out of the
+conversation.
 
 **All events** is a flat chronological inspection list. Each row is one raw
 JSONL event with time, agent, kind, and a one-line summary. Select a row to see
@@ -47,6 +50,41 @@ tmux send-keys -t <pane-id> Enter
 Newlines are flattened to spaces for this version. `@` opens an agent list.
 The user message is appended optimistically and disappears when the matching
 user event appears in the session file.
+
+## Roles
+
+The launcher records a role in the pane option `@agent_role`. The viewer reads it
+with the pane list and shows a chip beside the agent name: **Manager** blue,
+**Lead** green, **Worker** gray, each solid with white text. `coordinator` uses
+the manager tone. Any other role (`debugger`, `executor`, `reviewer`, …) gets a
+dimmed neutral chip; a pane with no role gets no chip. Nothing is inferred from
+the session file, so a changed role appears on the next sessions poll.
+
+## Agent messages
+
+Peer traffic is not folded into tool activity. Pi's `SendMessage` tool, the
+older `intercom` tool, and the legacy `intercom_sent` / `intercom_received`
+custom entries become `intercom` events.
+
+Incoming messages are recognised in both formats: the current
+`<cross-session-message>` envelope used by Pi and Claude sessions, and the
+older `**From <name>**` header. The full body is kept (up to 40,000
+characters) and rendered as Markdown; the viewer does not cut it into a
+tool summary.
+
+A sent message appears under the sender's reply. A received message appears
+before the turn it triggered. When both sides of the same message are in the
+channel, one card is shown: the send keeps its timestamp and position, and the
+receiver supplies the message id. Matching uses the message id, or the agent
+pair plus the normalised body within a 30-minute window (receivers can hold a
+message while they finish a turn).
+
+`uds:/run/user/1000/cc-socks/<pid>.sock` targets resolve to a name through
+`~/.claude/sessions/<pid>.json`, so Pi-to-Claude traffic shows the Claude
+session name instead of a socket path.
+
+This version discovers pi panes only. Intercom messages that arrive in a pi
+session are shown; a full Claude Code transcript channel is not included.
 
 ## Data model
 
@@ -70,6 +108,8 @@ unchanged sessions.
 server/
   api.ts        HTTP routes, payload shaping, send-keys
   discover.ts   tmux panes -> pi processes -> session files
+  intercom.ts   agent-message normalisation (Pi and Claude envelopes)
+  peers.ts      Claude/Pi socket address resolution
   session.ts    incremental JSONL parsing and event normalisation
   plugin.ts     Vite dev/preview middleware
 src/
@@ -85,9 +125,13 @@ from `packages/xtrm-app/src/styles.css`.
 ## Checks
 
 ```bash
+npm test
 npm run typecheck
 npm run build
 ```
+
+`npm test` covers the ordering invariant (settle anchors, pending last, stable
+ties) and intercom pairing.
 
 Live API checks:
 

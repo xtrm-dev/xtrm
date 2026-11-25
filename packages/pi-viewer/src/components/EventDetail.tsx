@@ -19,7 +19,7 @@ function Thinking({ part }: { part: ViewerPart }) {
   return (
     <details className="mt-1 text-xs">
       <summary className="cursor-pointer text-ink-faint hover:text-ink-muted">Thought</summary>
-      <div className="scrollbar-thin mt-1 max-h-64 overflow-auto border-l border-border-muted pl-3 whitespace-pre-wrap text-ink-muted">
+      <div className="scrollbar-thin mt-1 max-h-64 overflow-auto rounded-md bg-surface/40 px-3 py-2 whitespace-pre-wrap text-ink-muted">
         {part.text}
       </div>
     </details>
@@ -74,6 +74,25 @@ export function EventBody({ event, className }: { event: ViewerEvent; className?
       <div>
         {event.input ? <CodeBlock text={event.input} /> : null}
         {event.output ? <CodeBlock text={event.output} tone={event.isError ? "error" : "default"} /> : null}
+      </div>
+    )
+  } else if (event.kind === "intercom" && event.intercom) {
+    const meta = event.intercom
+    body = (
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-2 text-2xs text-ink-faint">
+          <span className="font-medium text-ink">{meta.from}</span>
+          <span>→</span>
+          <span className="text-ink-muted">{meta.to}</span>
+          <span className="uppercase tracking-wide">{meta.direction}</span>
+          {meta.expectsReply ? <span className="text-accent">reply requested</span> : null}
+        </div>
+        <Markdown text={meta.body || event.text || event.summary} />
+        <div className="flex flex-wrap gap-x-3 text-2xs text-ink-faint">
+          {meta.delivery ? <span>{meta.delivery}</span> : null}
+          {meta.messageId ? <span className="font-mono">{meta.messageId}</span> : null}
+          {meta.runtime ? <span>{meta.runtime}</span> : null}
+        </div>
       </div>
     )
   } else if (event.kind === "notice" || event.kind === "compaction") {

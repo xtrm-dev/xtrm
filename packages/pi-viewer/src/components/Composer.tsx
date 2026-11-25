@@ -115,12 +115,12 @@ export function Composer({
       <div ref={rootRef} className="relative mx-auto w-full max-w-3xl">
         <div
           className={cn(
-            "relative rounded-lg border border-border-muted bg-surface transition-colors focus-within:border-border-strong",
+            "relative rounded-lg bg-surface transition-colors focus-within:bg-raised",
             disabled && "opacity-60",
           )}
         >
           {menu === "mention" && matches.length ? (
-            <div className="absolute right-2 bottom-full left-2 z-20 mb-2 max-h-60 overflow-y-auto rounded-lg border border-border-muted bg-raised p-1 shadow-float sm:right-auto sm:w-80">
+            <div className="absolute right-2 bottom-full left-2 z-20 mb-2 max-h-60 overflow-y-auto rounded-lg bg-raised p-1 shadow-float sm:right-auto sm:w-80">
               <div className="px-2 py-1 text-2xs text-ink-faint">Send to agent</div>
               {matches.map((agent, position) => (
                 <button
@@ -143,7 +143,7 @@ export function Composer({
           ) : null}
 
           {menu === "to" ? (
-            <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-72 overflow-y-auto rounded-lg border border-border-muted bg-raised p-1 shadow-float">
+            <div className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-72 overflow-y-auto rounded-lg bg-raised p-1 shadow-float">
               <div className="px-2 py-1 text-2xs text-ink-faint">Send to agent</div>
               {agents.map((agent) => (
                 <button

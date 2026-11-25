@@ -27,8 +27,8 @@ export function CodeBlock({
   return (
     <div
       className={cn(
-        "group/code relative mt-1.5 overflow-hidden rounded-md border bg-deep",
-        tone === "error" ? "border-danger/30" : "border-border-muted",
+        "group/code relative mt-1.5 overflow-hidden rounded-md bg-deep",
+        tone === "error" ? "bg-danger/5" : "",
         className,
       )}
     >
@@ -39,7 +39,7 @@ export function CodeBlock({
         type="button"
         onClick={() => void copy()}
         aria-label="Copy"
-        className="absolute top-1.5 right-1.5 rounded-sm border border-border-muted bg-deep p-1 text-ink-faint opacity-0 transition-opacity group-hover/code:opacity-100 hover:text-ink focus-visible:opacity-100"
+        className="absolute top-1.5 right-1.5 rounded-sm bg-deep p-1 text-ink-faint opacity-0 transition-opacity group-hover/code:opacity-100 hover:text-ink focus-visible:opacity-100"
       >
         {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
       </button>

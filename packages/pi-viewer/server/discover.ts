@@ -19,6 +19,7 @@ export interface TmuxPane {
   command: string
   cwd: string
   title: string
+  role: string | null
 }
 
 interface Proc {
@@ -52,13 +53,14 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
     "#{pane_current_command}",
     "#{pane_current_path}",
     "#{pane_title}",
+    "#{@agent_role}",
   ].join("\t")
   const output = run("tmux", ["list-panes", "-a", "-F", format])
   if (output === null) return { panes: [], error: "tmux is not running or not installed" }
   const panes: TmuxPane[] = []
   for (const line of output.split("\n")) {
     if (!line.trim()) continue
-    const [session, windowIndex, windowName, paneIndex, paneId, panePid, command, cwd, title] =
+    const [session, windowIndex, windowName, paneIndex, paneId, panePid, command, cwd, title, role] =
       line.split("\t")
     if (!session || !paneId) continue
     panes.push({
@@ -71,6 +73,7 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
       command: command ?? "",
       cwd: cwd ?? "",
       title: title ?? "",
+      role: role?.trim() || null,
     })
   }
   return { panes }
@@ -255,6 +258,7 @@ function resolvePaneAgent(
     windowName: pane.windowName,
     paneIndex: pane.paneIndex,
     name,
+    role: pane.role,
     title: pane.title,
     cwd: chosen.cwd,
     sessionFile: chosen.file,

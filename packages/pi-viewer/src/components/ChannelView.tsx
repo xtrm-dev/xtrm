@@ -1,19 +1,21 @@
 import { useMemo } from "react"
 
 import { ActivityDisclosure } from "@/components/ActivityDisclosure"
+import { IntercomCard } from "@/components/IntercomCard"
 import { Markdown } from "@/components/Markdown"
+import { RoleChip } from "@/components/RoleChip"
 import { StatusDot } from "@/components/StatusDot"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent } from "@/components/ui/message"
 import { MessageScrollerItem } from "@/components/ui/message-scroller"
 import { clock, dayKey, dayLabel, monogram } from "@/lib/format"
 import type { OptimisticMessage } from "@/lib/optimistic"
-import { channelTurns, type Turn } from "@/lib/thread"
+import { channelTimeline, type Turn } from "@/lib/thread"
 import type { ViewerAgent, ViewerEvent } from "@/shared/types"
 
 function AgentMark({ name }: { name: string }) {
   return (
-    <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border border-border-muted bg-control font-mono text-2xs text-ink-muted">
+    <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-control font-mono text-2xs text-ink-muted">
       {monogram(name)}
     </div>
   )
@@ -34,7 +36,7 @@ function UserMessage({
     <Message align="end">
       <MessageContent className="items-end gap-1">
         <Bubble variant="muted" align="end" className="max-w-[85%]">
-          <BubbleContent className="border-border-muted whitespace-pre-wrap text-ink">
+          <BubbleContent className="border-0 bg-control whitespace-pre-wrap text-ink">
             {event.text ?? event.summary}
           </BubbleContent>
         </Bubble>
@@ -78,15 +80,12 @@ function TurnView({
 
   return (
     <div className="viewer-turn flex flex-col gap-4">
-      {turn.users.map((user) => (
-        <UserMessage key={user.id} event={user} agentName={name} />
-      ))}
-
       <Message align="start" className="gap-3">
         <AgentMark name={name} />
         <MessageContent className="gap-1.5">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-xs font-medium text-ink">{name}</span>
+            <RoleChip role={agent?.role} />
             <StatusDot status={turn.final ? status : "working"} />
             <span className="shrink-0 text-2xs text-ink-faint">
               {clock(turn.final?.at ?? turn.start)}
@@ -103,15 +102,19 @@ function TurnView({
                   : "The turn ended without a reply."}
               </div>
             )
-          ) : (
-            <div className="animate-pulse py-0.5 text-xs text-ink-faint">Working…</div>
-          )}
-
-          {turn.activity.length ? (
-            <ActivityDisclosure turn={turn} session={session} pending={!turn.final} />
           ) : null}
+
+          <ActivityDisclosure turn={turn} session={session} pending={!turn.final} />
         </MessageContent>
       </Message>
+    </div>
+  )
+}
+
+function DayDivider({ at }: { at: number }) {
+  return (
+    <div className="flex items-center justify-center">
+      <span className="text-2xs tracking-wide text-ink-faint uppercase">{dayLabel(at)}</span>
     </div>
   )
 }
@@ -129,10 +132,10 @@ export function ChannelView({
   optimistic: OptimisticMessage[]
   onDismissOptimistic: (id: string) => void
 }) {
-  const turns = useMemo(() => channelTurns(events), [events])
+  const items = useMemo(() => channelTimeline(events, optimistic), [events, optimistic])
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
 
-  if (!turns.length && !optimistic.length) {
+  if (!items.length) {
     return (
       <div className="flex flex-col items-center gap-2 py-24 text-center">
         <div className="text-sm text-ink-muted">No messages in this session yet.</div>
@@ -145,36 +148,33 @@ export function ChannelView({
 
   return (
     <>
-      {turns.map((turn) => {
-        const key = dayKey(turn.start)
+      {items.map((item) => {
+        const key = dayKey(item.at)
         const divider = key !== lastDay
         lastDay = key
         return (
-          <MessageScrollerItem key={turn.id} messageId={turn.id} className="flex flex-col gap-6">
-            {divider ? (
-              <div className="flex items-center gap-3">
-                <span className="h-px flex-1 bg-border-muted" />
-                <span className="text-2xs tracking-wide text-ink-faint uppercase">
-                  {dayLabel(turn.start)}
-                </span>
-                <span className="h-px flex-1 bg-border-muted" />
-              </div>
-            ) : null}
-            <TurnView turn={turn} agent={byId.get(turn.agentId)} session={session} />
+          <MessageScrollerItem key={item.id} messageId={item.id} className="flex flex-col gap-6">
+            {divider ? <DayDivider at={item.at} /> : null}
+            {item.kind === "turn" ? (
+              <TurnView turn={item.turn} agent={byId.get(item.turn.agentId)} session={session} />
+            ) : item.kind === "user" ? (
+              <UserMessage
+                event={item.event}
+                agentName={byId.get(item.agentId)?.name ?? item.agentName}
+              />
+            ) : item.kind === "intercom" ? (
+              <IntercomCard event={item.event} />
+            ) : (
+              <UserMessage
+                event={{ text: item.message.text, at: item.message.at, summary: item.message.text }}
+                agentName={item.message.agentName}
+                optimistic={{ status: item.message.status, error: item.message.error }}
+                onDismiss={() => onDismissOptimistic(item.message.id)}
+              />
+            )}
           </MessageScrollerItem>
         )
       })}
-
-      {optimistic.map((message) => (
-        <MessageScrollerItem key={message.id} messageId={message.id}>
-          <UserMessage
-            event={{ text: message.text, at: message.at, summary: message.text }}
-            agentName={message.agentName}
-            optimistic={{ status: message.status, error: message.error }}
-            onDismiss={() => onDismissOptimistic(message.id)}
-          />
-        </MessageScrollerItem>
-      ))}
     </>
   )
 }

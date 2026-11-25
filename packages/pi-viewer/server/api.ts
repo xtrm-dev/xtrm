@@ -70,6 +70,7 @@ function isFinal(event: ViewerEvent): boolean {
 function lite(event: ViewerEvent): ViewerEvent {
   const { raw: _raw, ...rest } = event
   if (rest.kind === "user") return { ...rest, parts: undefined }
+  if (rest.kind === "intercom") return { ...rest, text: undefined, parts: undefined, input: undefined, output: undefined }
   if (isFinal(rest)) return { ...rest, parts: rest.parts?.filter((part) => part.type === "text") }
   if (rest.kind === "notice" || rest.kind === "compaction") {
     return { ...rest, parts: undefined, output: undefined, input: undefined }

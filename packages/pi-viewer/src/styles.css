@@ -37,6 +37,10 @@
   --x-accent-soft: rgb(79 70 229 / 0.1);
   --x-danger: #c42b2b;
   --x-success: #1b7f46;
+  /* Solid role chips. White text must stay >= 4.5:1 on each fill in both themes. */
+  --x-role-manager: #2563eb;
+  --x-role-lead: #15803d;
+  --x-role-worker: #52525b;
   /* The badge ink: --x-success on its own 12% tint is 4.30:1 on white and 3.93:1 on the
      canvas, below the 4.5:1 text minimum. Same hue, darker: 5.85:1 and 5.34:1 (§3.2). */
   --x-success-ink: #146839;
@@ -139,6 +143,9 @@
   --color-accent-soft: var(--x-accent-soft);
   --color-danger: var(--x-danger);
   --color-success: var(--x-success);
+  --color-role-manager: var(--x-role-manager);
+  --color-role-lead: var(--x-role-lead);
+  --color-role-worker: var(--x-role-worker);
   --color-success-ink: var(--x-success-ink);
   --color-diff-add: var(--x-diff-add);
   --color-diff-del: var(--x-diff-del);
@@ -291,7 +298,6 @@
     padding: 0.05rem 0.3rem;
     border-radius: 4px;
     background: var(--color-control);
-    border: 1px solid var(--color-border-muted);
   }
   .xtrm-prose pre {
     font-family: var(--font-mono);
@@ -300,7 +306,6 @@
     padding: 0.6rem 0.75rem;
     border-radius: var(--radius-md);
     background: var(--color-deep);
-    border: 1px solid var(--color-border-muted);
     /* A rendered `pre` carries no class, so it takes the thin-scrollbar treatment here rather than
        from `.thin-scrollbar`: same width and colour, declared where this container can hold them. */
     overflow-x: auto;
@@ -313,14 +318,14 @@
     background: transparent;
   }
   .xtrm-prose blockquote {
-    padding-left: 0.75rem;
-    border-left: 2px solid var(--color-border-strong);
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-control);
     color: var(--color-ink-muted);
   }
   .xtrm-prose hr {
     margin: 1rem 0;
     border: 0;
-    border-top: 1px solid var(--color-border-muted);
   }
   /* GitHub bodies carry their own HTML: pr-lens ships diagrams as <img> inside <details>, with a
      second SVG for dark. The image scales to the panel because the SVG declares a large width. */
@@ -329,7 +334,6 @@
     height: auto;
     margin: 0.2rem 0;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border-muted);
     background: var(--color-surface);
   }
   .xtrm-prose details {
@@ -358,13 +362,16 @@
   }
   .xtrm-prose th,
   .xtrm-prose td {
-    border: 1px solid var(--color-border-muted);
+    border: 0;
     padding: 0.3rem 0.5rem;
     text-align: left;
   }
-  .xtrm-prose th {
+  .xtrm-prose thead th {
     background: var(--color-control);
     font-weight: 500;
+  }
+  .xtrm-prose tbody tr:nth-child(even) {
+    background: color-mix(in oklab, var(--color-control) 55%, transparent);
   }
   .xtrm-prose input[type="checkbox"] {
     margin-right: 0.35rem;
@@ -415,17 +422,9 @@
 }
 
 @layer components {
-  /* The trace rail: a hairline down the left of a disclosure, with one dot per step. */
+  /* The trace list: one dot per step, separated by contrast rather than rules. */
   .trace-rail {
     position: relative;
-  }
-  .trace-rail::before {
-    content: "";
-    position: absolute;
-    inset-block: 0.55rem;
-    inset-inline-start: 0.3125rem;
-    width: 1px;
-    background: var(--color-border-muted);
   }
   .trace-dot {
     position: relative;
@@ -457,8 +456,17 @@
   animation: viewer-pulse 1.6s ease-in-out infinite;
 }
 
+@keyframes viewer-fade {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.viewer-fade {
+  animation: viewer-fade 1.8s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .viewer-pulse { animation: none; opacity: 1; }
+  .viewer-fade { animation: none; opacity: 1; }
 }
 
 /* Keep markdown tables from widening the thread column. */

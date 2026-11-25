@@ -84,7 +84,7 @@ function ActivityRow({
         </button>
       </div>
       {expanded ? (
-        <div className="mt-1 mb-2 ml-[1.25rem] flex flex-col gap-2 border-l border-border-muted pl-3">
+        <div className="mt-1 mb-2 ml-[1.25rem] flex flex-col gap-2 rounded-md bg-surface/40 px-3 py-2">
           {item.kind === "thinking" ? (
             thought ? (
               <div className="scrollbar-thin max-h-64 overflow-auto whitespace-pre-wrap text-xs text-ink-muted">
@@ -143,7 +143,18 @@ export function ActivityDisclosure({
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  if (!turn.activity.length) return null
+  const isPending = Boolean(pending && !turn.final)
+  const hasActivity = turn.activity.length > 0
+
+  if (!hasActivity && !isPending) return null
+
+  if (!hasActivity) {
+    return (
+      <div className="mt-0.5 flex items-center py-1 text-xs text-ink-faint">
+        <span className="viewer-fade text-ink-muted">Working…</span>
+      </div>
+    )
+  }
 
   const steps = stepCount(turn)
   const tools = toolCount(turn)
@@ -160,7 +171,7 @@ export function ActivityDisclosure({
   }
 
   return (
-    <div className="mt-1">
+    <div className="mt-0.5">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -170,8 +181,12 @@ export function ActivityDisclosure({
         <ChevronRightIcon
           className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")}
         />
-        <span className={cn("truncate", pending && !turn.final && "text-ink-muted")}>
-          {pending && !turn.final ? "Working" : `${steps} ${steps === 1 ? "step" : "steps"}`}
+        <span className="truncate">
+          {isPending ? (
+            <span className="viewer-fade text-ink-muted">Working</span>
+          ) : (
+            `${steps} ${steps === 1 ? "step" : "steps"}`
+          )}
           {tools ? ` · ${tools} ${tools === 1 ? "tool" : "tools"}` : ""}
           {span ? ` · ${duration(span)}` : ""}
           {failed ? ` · ${failed} failed` : ""}
