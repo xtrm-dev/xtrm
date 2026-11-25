@@ -80,7 +80,7 @@
   /* Dark ladder: the rail sits at #232323 and the raised plane at #1e1e1e, so a control that has to
      be readable against the rail (the sources strip at #1c1c1c) is seven steps below it, not two. */
   --x-deep: #0d0d0d;
-  --x-sidebar: #232323;
+  --x-sidebar: #202020; /* operator, 2026-11-25: the sidebar plane is #202020 (the console's is #232323) */
   --x-surface: #151515;
   --x-raised: #1e1e1e;
   --x-control: #262626;

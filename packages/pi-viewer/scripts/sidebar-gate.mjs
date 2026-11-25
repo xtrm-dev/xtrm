@@ -35,11 +35,14 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     const g = await p.evaluate(() => {
       const rows = [...document.querySelectorAll('[role=treeitem]')]
       const r = rows.map((e) => e.getBoundingClientRect())
-      return { n: rows.length, hs: [...new Set(r.map((x) => Math.round(x.height * 10) / 10))], contiguous: r.every((x, i) => i === 0 || Math.abs(x.top - r[i - 1].bottom) < 0.6), levels: [...new Set(rows.map((e) => e.getAttribute("aria-level")))].sort(), windowsRows: rows.filter((e) => e.getAttribute("aria-level") === "2" && e.hasAttribute("aria-expanded")).length, panes: rows.filter((e) => !e.hasAttribute("aria-expanded")).length, groupCounts: rows.filter((e) => e.hasAttribute("aria-expanded")).every((e) => /\d+ agents/.test(e.getAttribute("aria-label"))), total: r.length ? Math.round(r.at(-1).bottom - r[0].top) : 0, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth }
+      const uniq = (els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().height * 10) / 10))]
+      const groups = rows.filter((e) => e.hasAttribute("aria-expanded")), leaves = rows.filter((e) => !e.hasAttribute("aria-expanded"))
+      return { groupHs: uniq(groups), paneHs: uniq(leaves), railLines: document.querySelectorAll('[data-testid=sidebar] [role=tree] .border-l').length, nGroups: groups.length, n: rows.length, hs: [...new Set(r.map((x) => Math.round(x.height * 10) / 10))], contiguous: r.every((x, i) => i === 0 || Math.abs(x.top - r[i - 1].bottom) < 0.6), levels: [...new Set(rows.map((e) => e.getAttribute("aria-level")))].sort(), windowsRows: rows.filter((e) => e.getAttribute("aria-level") === "2" && e.hasAttribute("aria-expanded")).length, panes: rows.filter((e) => !e.hasAttribute("aria-expanded")).length, groupCounts: rows.filter((e) => e.hasAttribute("aria-expanded")).every((e) => /\d+ agents/.test(e.getAttribute("aria-label"))), total: r.length ? Math.round(r.at(-1).bottom - r[0].top) : 0, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth }
     })
-    check(tag + " every row is 28px", g.hs.length === 1 && g.hs[0] === 28, JSON.stringify(g.hs))
-    check(tag + " rows are contiguous (rails unbroken)", g.contiguous)
-    check(tag + " tree is dense: height " + g.total + "px for " + g.panes + " agents", g.total <= g.n * 28 + 1 && g.n < g.panes + 8, g.n + " rows")
+    check(tag + " session and window rows are one 28px line", g.groupHs.length === 1 && g.groupHs[0] === 28, JSON.stringify(g.groupHs))
+    check(tag + " pane rows are two lines, 46px", g.paneHs.length === 1 && g.paneHs[0] === 46, JSON.stringify(g.paneHs))
+    check(tag + " rows are contiguous and draw no rail lines", g.contiguous && g.railLines === 0, "rails " + g.railLines)
+    check(tag + " tree height " + g.total + "px for " + g.panes + " agents", g.total <= g.nGroups * 28 + g.panes * 46 + 1)
     check(tag + " group rows carry counts", g.groupCounts)
     check(tag + " one-pane windows add no row (window rows have 2+ agents)", await p.evaluate(() => [...document.querySelectorAll('[role=treeitem][aria-level="2"][aria-expanded]')].every((e) => Number(/(\d+) agents/.exec(e.getAttribute("aria-label"))[1]) >= 2)))
     check(tag + " no overflow", !g.overflow)
@@ -71,7 +74,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       check(tag + " collapse to 44px rail, focus on Expand", Math.round((await side.boundingBox()).width) === 44 && (await p.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Expand sidebar")
       await p.screenshot({ path: SHOTS + "/g4-" + tag + "-rail.png" })
       await p.keyboard.press("Enter"); await p.waitForTimeout(250)
-      check(tag + " expands back to 264px", Math.round((await side.boundingBox()).width) === 264)
+      check(tag + " expands back to 240px", Math.round((await side.boundingBox()).width) === 240)
     } else {
       await p.getByRole("button", { name: "Expand sidebar" }).click(); await p.waitForTimeout(250)
       await p.screenshot({ path: SHOTS + "/g4-" + tag + "-open.png" })

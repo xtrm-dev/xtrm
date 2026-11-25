@@ -161,7 +161,7 @@ export function Sidebar({
     // opened, because an open sidebar there floats over the thread instead of pushing it.
     <aside
       aria-label="Sessions"
-      className={cn("relative shrink-0 bg-sidebar", collapsed ? RAIL_WIDTH : cn(RAIL_WIDTH, "md:w-[16.5rem]"))}
+      className={cn("relative shrink-0 bg-sidebar", collapsed ? RAIL_WIDTH : cn(RAIL_WIDTH, "md:w-[15rem]"))}
       data-collapsed={collapsed}
       data-testid="sidebar"
     >
