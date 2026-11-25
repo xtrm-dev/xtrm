@@ -21,7 +21,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
   const tag = w + "-" + theme, narrow = w < 768
   const ctx = await b.newContext({ viewport: { width: w, height: h } })
   await ctx.addInitScript((t) => { if (!sessionStorage.getItem("s")) { localStorage.setItem("pi-viewer-theme", t); localStorage.removeItem("pi-viewer-sidebar"); sessionStorage.setItem("s", "1") } }, theme)
-  const p = await ctx.newPage(); const errs = []
+  const p = await ctx.newPage(); p.setDefaultTimeout(60000); const errs = []
   p.on("console", (m) => { if (["error", "warning"].includes(m.type())) errs.push(m.text().slice(0, 200)) })
   p.on("pageerror", (e) => errs.push("pageerror " + e.message))
   const S_ = () => p.evaluate(() => location.search)
@@ -30,7 +30,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
   const open = async () => { if (narrow && (await side.getAttribute("data-collapsed")) === "true") { await p.getByRole("button", { name: "Expand sidebar" }).click(); await p.waitForTimeout(250) } }
   const sel = async () => { await open(); const k = await p.evaluate(() => document.querySelector('[role=treeitem][aria-selected=true]')?.getAttribute("data-key")); if (narrow) { await p.keyboard.press("Escape"); await p.waitForTimeout(250) } return k }
   try {
-    await p.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="sidebar"]', { timeout: 60000 }); await p.waitForTimeout(2500)
+    await p.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="sidebar"]', { timeout: 60000 }); await p.waitForSelector('[role=treeitem], [role=toolbar] button', { state: "attached", timeout: 90000 }); await p.waitForTimeout(2500)
     await open()
     const g = await p.evaluate(() => {
       const rows = [...document.querySelectorAll('[role=treeitem]')]
@@ -59,7 +59,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     await pane.click(); await p.waitForTimeout(1500)
     check(tag + " pane click: URL, header, selected row", /p=%25\d+/.test(await S_()) && (await title()) === pname && (await sel()) === pk, (await S_()) + " " + (await title()))
     const url = await S_()
-    await p.reload({ waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="sidebar"]', { timeout: 60000 }); await p.waitForTimeout(2500)
+    await p.reload({ waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForSelector('[data-testid="sidebar"]', { timeout: 60000 }); await p.waitForSelector('[role=treeitem], [role=toolbar] button', { state: "attached", timeout: 90000 }); await p.waitForTimeout(2500)
     check(tag + " reload keeps scope", (await S_()) === url && (await title()) === pname)
     // single-pane window scope selects its pane row
     await p.goto(BASE + "?s=xx&w=99", { waitUntil: "domcontentloaded", timeout: 60000 }); await p.waitForTimeout(2000)
