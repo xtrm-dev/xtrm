@@ -172,7 +172,7 @@ test("scope row keys match the sidebar tree's keys one to one", () => {
   const keys = rows.map((row) => row.key)
   for (const scope of [
     { kind: "session", session: "xx" },
-    { kind: "window", session: "xx", window: 2 },
+    { kind: "window", session: "xx", window: 0 }, // two panes: has a row
     { kind: "pane", session: "xx", window: 2, paneId: "%12" },
   ] as Scope[]) {
     assert.ok(keys.includes(scopeRowKey(scope)), scopeRowKey(scope))

@@ -93,13 +93,18 @@ test("a pane shows one of three states: a finished turn awaiting input is idle, 
 test("collapsing a session or window hides its rows and keeps the others", () => {
   const tree = buildTree(FIXTURE)
   const all = flatten(tree, new Set())
-  assert.deepEqual(all.map((row) => row.level), [1, 2, 3, 3, 2, 3, 2, 3, 1, 2, 3])
+  assert.deepEqual(all.map((row) => row.level), [1, 2, 3, 3, 2, 2, 1, 2])
   const noXx = flatten(tree, new Set(["s:xx"]))
-  assert.deepEqual(noXx.map((row) => row.key), ["s:xx", "s:yy", "w:yy:0", paneKey("%20")])
+  assert.deepEqual(noXx.map((row) => row.key), ["s:xx", "s:yy", paneKey("%20")])
   const noWindow = flatten(tree, new Set(["w:xx:0"]))
   assert.ok(noWindow.some((row) => row.key === "w:xx:0"))
   assert.ok(!noWindow.some((row) => row.key === paneKey("%1")))
   assert.ok(noWindow.some((row) => row.key === paneKey("%5")))
+  // A window with one pane has no row of its own; its pane sits directly under the session.
+  const single = all.find((row) => row.key === paneKey("%5"))
+  assert.equal(single?.level, 2)
+  assert.equal(single?.parentKey, "s:xx")
+  assert.ok(!all.some((row) => row.key === "w:xx:1"), "no window row for a one-pane window")
 })
 
 test("the keyboard model follows the WAI-ARIA tree pattern", () => {
@@ -175,9 +180,9 @@ test("focus on a vanished row goes to its nearest visible ancestor", () => {
   // A visible row keeps focus; an unknown row has no ancestor.
   assert.equal(survivingFocus(parents, open, paneKey("%1")), paneKey("%1"))
   assert.equal(survivingFocus(parents, open, "p:%never-seen"), null)
-  // A pane that left tmux entirely falls back through the remembered parent.
+  // A pane that left tmux entirely falls back through its remembered parents to the nearest visible row.
   const gone = flatten(buildTree([session("xx", [agent({ paneId: "%2", windowIndex: 0, windowName: "first" })]), FIXTURE[2]]), new Set())
-  assert.equal(survivingFocus(parents, gone, paneKey("%1")), "w:xx:0")
+  assert.equal(survivingFocus(parents, gone, paneKey("%1")), "s:xx", "its window now holds one pane and has no row")
 })
 
 test("the rail toolbar moves one agent at a time and stops at the ends", () => {

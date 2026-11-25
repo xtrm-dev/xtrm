@@ -23,7 +23,6 @@ import {
   ROW_BASE,
   ROW_ONE_LINE,
   ROW_SELECTED,
-  ROW_TWO_LINE,
 } from "./geometry"
 import { SidebarDot } from "./SidebarDot"
 
@@ -97,16 +96,11 @@ function PaneRowBody({ row, pane, selected }: { row: FlatRow; pane: PaneNode; se
     <>
       <Rails level={row.level} />
       {selected && <span aria-hidden className={MARKER} />}
-      <span className="flex shrink-0 items-start" style={{ paddingLeft: "var(--row-indent)" }}>
-        <SidebarDot state={state} className="mt-[0.1875rem]" />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
-        <span className="truncate text-2xs text-ink-faint">
-          {agent.role ? `${agent.role} · ` : ""}
-          {STATE_LABEL[state]}
-        </span>
-      </span>
+      {/* Same leading box as a group row's disclosure, so names line up with group labels. */}
+      <span aria-hidden className={cn("shrink-0", DISCLOSURE)} style={{ marginLeft: "var(--row-indent)" }} />
+      <span className={cn("min-w-0 truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
+      {agent.role ? <span className="shrink-0 text-2xs text-ink-faint">{agent.role}</span> : null}
+      <SidebarDot state={state} className="ml-auto" />
     </>
   )
 }
@@ -132,7 +126,12 @@ export function SessionTree({
   // instead of falling to the page.
   const focusedRef = useRef<string | null>(null)
   const parents = useRef(new Map<string, string | null>())
-  const selectedKey = scope ? scopeRowKey(scope) : null
+  // A window with one pane has no row of its own: its pane row stands for it.
+  const wanted = scope ? scopeRowKey(scope) : null
+  const selectedKey =
+    wanted && !rows.some((row) => row.key === wanted) && scope?.kind === "window"
+      ? (rows.find((row) => row.node.kind === "pane" && row.node.session === scope.session && row.node.agent.windowIndex === scope.window)?.key ?? wanted)
+      : wanted
 
   // Roving tabindex: one row is tabbable. The remembered row if it is still visible, else the
   // selected pane, else the first row.
@@ -183,10 +182,9 @@ export function SessionTree({
   }
 
   return (
-    <div role="tree" aria-label="tmux sessions" className="flex flex-col gap-px">
+    <div role="tree" aria-label="tmux sessions" className="flex flex-col">
       {rows.map((row) => {
         const selected = row.key === selectedKey
-        const pane = row.node.kind === "pane"
         const label =
           row.node.kind === "pane"
             ? `${row.node.agent.name}, ${row.node.agent.role ? `${row.node.agent.role}, ` : ""}${STATE_LABEL[stateOf(row.node.agent.status)]}`
@@ -207,7 +205,7 @@ export function SessionTree({
             aria-expanded={row.expandable ? row.expanded : undefined}
             aria-selected={selected}
             aria-label={label}
-            title={row.node.kind === "pane" ? `${row.node.agent.provider} · ${row.node.agent.cwd}` : undefined}
+            title={row.node.kind === "pane" ? `${row.node.agent.provider} · ${row.node.agent.windowName || `window ${row.node.agent.windowIndex}`} · ${row.node.agent.cwd}` : undefined}
             tabIndex={row.key === tabbable ? 0 : -1}
             data-key={row.key}
             data-provider={row.node.kind === "pane" ? row.node.agent.provider : undefined}
@@ -229,7 +227,7 @@ export function SessionTree({
             }}
             onKeyDown={(event) => handleKeyDown(event, row)}
             style={{ "--row-indent": `${(row.level - 1) * INDENT_REM}rem` } as CSSProperties}
-            className={cn(ROW_BASE, pane ? ROW_TWO_LINE : ROW_ONE_LINE, selected && ROW_SELECTED)}
+            className={cn(ROW_BASE, ROW_ONE_LINE, selected && ROW_SELECTED)}
           >
             {row.node.kind === "pane" ? (
               <PaneRowBody row={row} pane={row.node} selected={selected} />
