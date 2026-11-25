@@ -11,7 +11,6 @@ import {
   navigate,
   paneKey,
   railNext,
-  resolveSelection,
   stateOf,
   survivingFocus,
   type FlatRow,
@@ -81,37 +80,6 @@ test("sessions, windows and panes without an agent are omitted", () => {
   assert.deepEqual(buildTree([session("none", [agent({ paneId: "" })])]), [])
 })
 
-test("the selected pane id is stable across polls, whatever the list order or counts", () => {
-  const first = resolveSelection(null, FIXTURE)
-  assert.deepEqual(first, { session: "xx", paneId: "%1" }, "default: preferred session, first by recency tie-break")
-  const reordered: ViewerSession[] = [
-    FIXTURE[2],
-    session("xx", [...FIXTURE[0].agents].reverse().map((entry) => ({ ...entry, modifiedAt: 999 }))),
-  ]
-  const second = resolveSelection(first, reordered)
-  assert.equal(second, first, "the same object comes back, so nothing reloads")
-  const picked = { session: "xx", paneId: "%5" }
-  assert.equal(resolveSelection(picked, FIXTURE), picked)
-  assert.equal(resolveSelection(picked, reordered), picked)
-})
-
-test("when the selected pane disappears the selection falls back deterministically", () => {
-  const recent = session("xx", [
-    agent({ paneId: "%1", modifiedAt: 10 }),
-    agent({ paneId: "%2", modifiedAt: 50 }),
-  ])
-  assert.deepEqual(resolveSelection({ session: "xx", paneId: "%gone" }, [recent, FIXTURE[2]]), {
-    session: "xx",
-    paneId: "%2",
-  })
-  assert.deepEqual(resolveSelection({ session: "gone", paneId: "%gone" }, [FIXTURE[2], recent]), {
-    session: "xx",
-    paneId: "%2",
-  })
-  assert.deepEqual(resolveSelection({ session: "xx", paneId: "%20" }, FIXTURE), { session: "yy", paneId: "%20" })
-  assert.equal(resolveSelection({ session: "xx", paneId: "%1" }, []), null)
-})
-
 test("a pane shows one of three states: a finished turn awaiting input is idle, not attention", () => {
   assert.equal(stateOf("working"), "running")
   assert.equal(stateOf("waiting"), "idle", "the server's waiting is a finished turn")
@@ -149,9 +117,11 @@ test("the keyboard model follows the WAI-ARIA tree pattern", () => {
   assert.deepEqual(navigate(rows, "s:xx", "ArrowLeft"), { type: "toggle", key: "s:xx", open: false })
   assert.deepEqual(navigate(rows, paneKey("%1"), "ArrowLeft"), { type: "focus", key: "w:xx:0" })
   assert.equal(navigate(closed, "s:xx", "ArrowLeft"), null)
-  // Enter and Space: select a pane, toggle a group. A pane has no ArrowRight.
+  // Enter and Space select the scope of any level (session, window or pane); the arrows expand and
+  // collapse. A pane has no ArrowRight.
   assert.deepEqual(navigate(rows, paneKey("%1"), "Enter"), { type: "activate", key: paneKey("%1") })
-  assert.deepEqual(navigate(rows, "w:xx:0", " "), { type: "toggle", key: "w:xx:0", open: false })
+  assert.deepEqual(navigate(rows, "w:xx:0", " "), { type: "activate", key: "w:xx:0" })
+  assert.deepEqual(navigate(rows, "s:xx", "Enter"), { type: "activate", key: "s:xx" })
   assert.equal(navigate(rows, paneKey("%1"), "ArrowRight"), null)
   assert.equal(navigate(rows, paneKey("%1"), "x"), null)
   assert.equal(navigate(rows, "missing", "ArrowDown"), null)

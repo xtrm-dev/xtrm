@@ -1,7 +1,7 @@
 import { MoonIcon, SunIcon } from "lucide-react"
 
 import { RoleChip } from "@/components/RoleChip"
-import type { ViewerAgent } from "@/shared/types"
+import type { ScopeLabel } from "@/lib/scope"
 import { cn } from "@/lib/utils"
 
 function Segmented({
@@ -40,28 +40,27 @@ function Segmented({
 }
 
 export function ViewerHeader({
-  agent,
+  label,
   view,
   onViewChange,
-  agentCount,
   theme,
   onToggleTheme,
 }: {
-  agent: ViewerAgent | null
+  label: ScopeLabel | null
   view: "channel" | "all"
   onViewChange: (view: "channel" | "all") => void
-  agentCount: number
   theme: "light" | "dark"
   onToggleTheme: () => void
 }) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 px-4 sm:px-5">
       <div className="flex min-w-0 items-baseline gap-2.5">
-        <span className="min-w-0 truncate text-sm font-semibold text-ink">{agent?.name ?? "No agent"}</span>
-        {agent ? <RoleChip role={agent.role} className="self-center" /> : null}
-        <span className="hidden truncate text-2xs text-ink-faint sm:inline">
-          {agent ? `${agent.tmuxSession} · ${agent.windowName || `window ${agent.windowIndex}`} · ` : ""}
-          {agentCount} {agentCount === 1 ? "agent" : "agents"}
+        <span className="min-w-0 truncate text-sm font-semibold text-ink" data-testid="scope-title">
+          {label?.title ?? "No agent"}
+        </span>
+        {label?.role ? <RoleChip role={label.role} className="self-center" /> : null}
+        <span className="hidden truncate text-2xs text-ink-faint sm:inline" data-testid="scope-detail">
+          {label?.detail ?? ""}
         </span>
       </div>
 

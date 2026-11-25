@@ -30,7 +30,7 @@ The left sidebar is a tree of tmux session > window > pane. Only panes that hold
 listed; windows and sessions without an agent are omitted. Session and window rows are one line with an
 agent count and expand/collapse. A pane row has two lines: the agent name, then `role · state`, with one
 status dot (idle, running, error; the server's `waiting` is a finished turn, so it reads as idle, and no state
-is proven to "need attention"). Clicking a pane loads that agent's thread. The sidebar collapses to an icon
+is proven to "need attention"). Every level is a selectable scope (see Scope and URL below). The sidebar collapses to an icon
 rail of status dots (one Tab stop, arrow keys). On a narrow screen it starts as the rail and opens as an overlay
 that closes on Escape, on a click outside, or when a pane is chosen; only the desktop rail/open choice is
 persisted.
@@ -41,6 +41,36 @@ copied from `packages/xtrm-app` (`docs/design/console-ui-system.md` §3, §4.2, 
 `src/agent/AgentSidebar.tsx`, `src/ui/sidebar.tsx`, `src/ui/nav-rail.tsx`); `src/components/sidebar/geometry.ts`
 names the source of each. The tree is keyboard operable (`role="tree"`, `aria-expanded`, roving focus; arrows,
 Home, End, Enter, Space).
+
+## Scope and URL
+
+Each sidebar level is a scope, and the thread, All events, composer and @-mention list all follow it:
+
+| click | scope | thread |
+|---|---|---|
+| a session row | session | the combined Channel of every agent in that tmux session (the default on a fresh page: `xx`, else the first session with agents) |
+| a window row | window | only that window's agents, on the same settle-time timeline |
+| a pane row | pane | one agent; the composer is addressed to it |
+
+A row selects its scope; the chevron (or ArrowRight / ArrowLeft) expands and collapses. Enter and Space select the focused row.
+The composer's **To** picker and the @-mention list show the agents of the scope (a window lists that window's
+agents; a pane lists itself), and the composer addresses the pane itself, else the most recently active agent
+of the scope. All events and its agent tabs show only the scope's agents. In a pane scope the pane's own
+intercom cards stay, sent and received. The viewer filters the already-fetched session payload; the server
+is not asked for a scope.
+
+The scope is in the URL, so a reload, a bookmark and Back/Forward keep it:
+
+```
+?s=xx                 session scope
+?s=xx&w=3             window scope (window index 3)
+?s=xx&w=3&p=%2527     pane scope: pane id %27 (percent-encoded), last seen in window 3
+```
+
+`p` needs a `%`-prefixed pane id and `w` a non-negative integer; a malformed value is ignored and the URL degrades to
+the nearest valid scope. A scope whose target has vanished falls back one level: a vanished pane to its window
+(`w` is why the pane scope carries it), a vanished window to its session, a vanished session to the default.
+A click on the sidebar adds a history entry; a fallback replaces the current one.
 
 ## Views
 

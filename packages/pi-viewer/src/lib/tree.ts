@@ -104,51 +104,6 @@ export function mergeLive(
   return sessions.map((entry) => (entry.name === current ? { ...entry, agents: fresh.agents } : entry))
 }
 
-export interface Selection {
-  session: string
-  paneId: string
-}
-
-function recency(a: ViewerAgent, b: ViewerAgent): number {
-  return (
-    b.modifiedAt - a.modifiedAt ||
-    a.windowIndex - b.windowIndex ||
-    a.paneIndex - b.paneIndex ||
-    a.paneId.localeCompare(b.paneId)
-  )
-}
-
-/**
- * Keep the selected pane across polls. A poll that still lists the pane returns the same
- * object, so nothing re-renders or reloads. When the pane is gone the selection moves to the
- * most recently active agent of its session, then of the preferred session, then of the first.
- */
-export function resolveSelection(
-  current: Selection | null,
-  sessions: ViewerSession[],
-  preferred = "xx",
-): Selection | null {
-  if (current) {
-    const home = sessions.find((session) => session.name === current.session)
-    if (home?.agents.some((agent) => agent.paneId === current.paneId)) return current
-    for (const session of sessions) {
-      if (session.agents.some((agent) => agent.paneId === current.paneId)) {
-        return { session: session.name, paneId: current.paneId }
-      }
-    }
-  }
-  const candidates = [
-    sessions.find((session) => session.name === current?.session),
-    sessions.find((session) => session.name === preferred),
-    ...sessions,
-  ]
-  for (const session of candidates) {
-    const agent = session && [...session.agents].sort(recency)[0]
-    if (session && agent) return { session: session.name, paneId: agent.paneId }
-  }
-  return null
-}
-
 export interface FlatRow {
   key: string
   /** aria-level: session 1, window 2, pane 3. */
@@ -236,7 +191,8 @@ export function navigate(rows: FlatRow[], currentKey: string, key: string): Tree
       return row.parentKey ? { type: "focus", key: row.parentKey } : null
     case "Enter":
     case " ":
-      return row.expandable ? { type: "toggle", key: row.key, open: !row.expanded } : { type: "activate", key: row.key }
+      // Every level is a selectable scope; the arrows expand and collapse.
+      return { type: "activate", key: row.key }
     default:
       return null
   }

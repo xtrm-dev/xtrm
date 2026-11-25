@@ -5,15 +5,14 @@ import {
   STATE_LABEL,
   flatten,
   navigate,
-  paneKey,
   stateOf,
   survivingFocus,
   type FlatRow,
   type PaneNode,
-  type Selection,
   type SessionNode,
   type WindowNode,
 } from "@/lib/tree"
+import { scopeRowKey, type Scope } from "@/lib/scope"
 import { cn } from "@/lib/utils"
 
 import {
@@ -52,13 +51,32 @@ function Rails({ level }: { level: number }) {
   )
 }
 
-function GroupRow({ row, node }: { row: FlatRow; node: SessionNode | WindowNode }) {
+function GroupRow({
+  row,
+  node,
+  selected,
+  onToggle,
+}: {
+  row: FlatRow
+  node: SessionNode | WindowNode
+  selected: boolean
+  onToggle: (key: string, open: boolean) => void
+}) {
   const isSession = node.kind === "session"
   const count = node.kind === "session" ? node.count : node.panes.length
   return (
     <>
       <Rails level={row.level} />
-      <span className="flex min-w-0 items-center" style={{ paddingLeft: "var(--row-indent)" }}>
+      {selected && <span aria-hidden className={MARKER} />}
+      {/* The row selects its scope; the chevron alone expands and collapses (the arrow keys do too). */}
+      <span
+        className="flex min-w-0 items-center"
+        style={{ paddingLeft: "var(--row-indent)" }}
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggle(row.key, !row.expanded)
+        }}
+      >
         <Disclosure expanded={row.expanded} />
       </span>
       <span
@@ -95,16 +113,16 @@ function PaneRowBody({ row, pane, selected }: { row: FlatRow; pane: PaneNode; se
 
 export function SessionTree({
   tree,
-  selection,
+  scope,
   collapsed,
   onToggle,
   onSelect,
 }: {
   tree: SessionNode[]
-  selection: Selection | null
+  scope: Scope | null
   collapsed: ReadonlySet<string>
   onToggle: (key: string, open: boolean) => void
-  onSelect: (session: string, paneId: string) => void
+  onSelect: (scope: Scope) => void
 }) {
   const rows = useMemo(() => flatten(tree, collapsed), [tree, collapsed])
   const refs = useRef(new Map<string, HTMLDivElement>())
@@ -114,7 +132,7 @@ export function SessionTree({
   // instead of falling to the page.
   const focusedRef = useRef<string | null>(null)
   const parents = useRef(new Map<string, string | null>())
-  const selectedKey = selection ? paneKey(selection.paneId) : null
+  const selectedKey = scope ? scopeRowKey(scope) : null
 
   // Roving tabindex: one row is tabbable. The remembered row if it is still visible, else the
   // selected pane, else the first row.
@@ -142,10 +160,16 @@ export function SessionTree({
 
   const activate = useCallback(
     (row: FlatRow) => {
-      if (row.node.kind === "pane") onSelect(row.node.session, row.node.agent.paneId)
-      else onToggle(row.key, !row.expanded)
+      const node = row.node
+      if (node.kind === "pane") {
+        onSelect({ kind: "pane", session: node.session, window: node.agent.windowIndex, paneId: node.agent.paneId })
+      } else if (node.kind === "window") {
+        onSelect({ kind: "window", session: node.session, window: node.index })
+      } else {
+        onSelect({ kind: "session", session: node.name })
+      }
     },
-    [onSelect, onToggle],
+    [onSelect],
   )
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>, row: FlatRow) {
@@ -181,7 +205,7 @@ export function SessionTree({
             aria-posinset={row.index + 1}
             aria-setsize={row.siblings}
             aria-expanded={row.expandable ? row.expanded : undefined}
-            aria-selected={pane ? selected : undefined}
+            aria-selected={selected}
             aria-label={label}
             title={row.node.kind === "pane" ? `${row.node.agent.provider} · ${row.node.agent.cwd}` : undefined}
             tabIndex={row.key === tabbable ? 0 : -1}
@@ -210,7 +234,7 @@ export function SessionTree({
             {row.node.kind === "pane" ? (
               <PaneRowBody row={row} pane={row.node} selected={selected} />
             ) : (
-              <GroupRow row={row} node={row.node} />
+              <GroupRow row={row} node={row.node} selected={selected} onToggle={onToggle} />
             )}
           </div>
         )

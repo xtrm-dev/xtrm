@@ -14,7 +14,18 @@ import {
 } from "@/components/ui/message-scroller"
 import { fetchMeta, fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
 import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
-import { mergeLive, resolveSelection, type Selection } from "@/lib/tree"
+import {
+  agentsInScope,
+  defaultTarget,
+  describeScope,
+  eventsInScope,
+  parseScope,
+  resolveScope,
+  sameScope,
+  serialiseScope,
+  type Scope,
+} from "@/lib/scope"
+import { mergeLive } from "@/lib/tree"
 import type { ThreadMeta, ThreadPayload, ViewerAgent, ViewerEvent, ViewerSession } from "@/shared/types"
 
 function errorText(error: unknown): string {
@@ -24,7 +35,8 @@ function errorText(error: unknown): string {
 export default function App() {
   const [sessions, setSessions] = useState<ViewerSession[]>([])
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
-  const [selection, setSelection] = useState<Selection | null>(null)
+  const [scope, setScope] = useState<Scope | null>(null)
+  const [targetPaneId, setTargetPaneId] = useState<string | null>(null)
   const [meta, setMeta] = useState<ThreadMeta | null>(null)
   const [branch, setBranch] = useState<ThreadPayload | null>(null)
   const [all, setAll] = useState<ThreadPayload | null>(null)
@@ -36,9 +48,15 @@ export default function App() {
     document.documentElement.dataset.theme === "light" ? "light" : "dark",
   )
   const viewRef = useRef(view)
-  const sessionName = selection?.session ?? null
-  const selectedPaneId = selection?.paneId ?? null
-  const scrollerKey = `${selectedPaneId ?? "none"}:${view}`
+  const sessionName = scope?.session ?? null
+  const scopeKey = scope ? serialiseScope(scope) : "none"
+  const scrollerKey = `${scopeKey}:${view}`
+  // The scope of a fresh page comes from the URL; until the first discovery it is only a request.
+  const requestedScope = useRef<Scope | null>(parseScope(window.location.search))
+  const sessionsRef = useRef<ViewerSession[]>([])
+  // How the next URL write is made: a click on the sidebar adds a history entry (Back works);
+  // a fallback or a first resolution replaces the current one.
+  const urlMode = useRef<"push" | "replace">("replace")
 
   useEffect(() => {
     viewRef.current = view
@@ -53,6 +71,31 @@ export default function App() {
     }
   }, [theme])
 
+  // The URL follows the scope: ?s=<session>[&w=<window>[&p=<pane>]].
+  useEffect(() => {
+    if (!scope) return
+    const search = serialiseScope(scope)
+    if (search !== window.location.search) {
+      window.history[urlMode.current === "push" ? "pushState" : "replaceState"](null, "", search)
+    }
+    urlMode.current = "replace"
+  }, [scope])
+
+  // Back and Forward: read the URL again and resolve it against what exists now.
+  useEffect(() => {
+    function onPop() {
+      const next = parseScope(window.location.search)
+      urlMode.current = "replace"
+      setTargetPaneId(null)
+      setScope((current) => {
+        const resolved = resolveScope(next ?? current, sessionsRef.current)
+        return sameScope(resolved, current) ? current : resolved
+      })
+    }
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+  }, [])
+
   useEffect(() => {
     let live = true
     async function load() {
@@ -63,7 +106,11 @@ export default function App() {
         setDiscoveryError(
           payload.error ?? (payload.sessions.length ? null : "No tmux session with a running pi or claude pane."),
         )
-        setSelection((current) => resolveSelection(current, payload.sessions))
+        sessionsRef.current = payload.sessions
+        setScope((current) => {
+          const next = resolveScope(current ?? requestedScope.current, payload.sessions)
+          return sameScope(next, current) ? current : next
+        })
       } catch (error) {
         if (live) setDiscoveryError(errorText(error))
       }
@@ -164,28 +211,36 @@ export default function App() {
     [sessions, sessionName, freshAgents],
   )
 
-  const agents = useMemo<ViewerAgent[]>(
-    () => freshAgents?.agents ?? sessions.find((entry) => entry.name === sessionName)?.agents ?? [],
-    [freshAgents, sessions, sessionName],
-  )
+  // The agents of the scope, in tree order, and the events they wrote. The payload carries the
+  // whole tmux session; the scope filters it here, so no server change is needed.
+  const agents = useMemo<ViewerAgent[]>(() => {
+    const fresh = freshAgents ? mergeLive(sessions, sessionName, freshAgents) : sessions
+    const inScope = agentsInScope(fresh, scope)
+    return inScope.length ? inScope : agentsInScope(sessions, scope)
+  }, [freshAgents, sessions, sessionName, scope])
 
-  const target = agents.find((agent) => agent.id === selectedPaneId) ?? null
+  const scopeEvents = useMemo<ViewerEvent[]>(() => eventsInScope(branch?.events ?? [], agents), [branch, agents])
+  const scopeAllEvents = useMemo<ViewerEvent[]>(() => eventsInScope(all?.events ?? [], agents), [all, agents])
+  const scopeOptimistic = useMemo(() => {
+    const ids = new Set(agents.map((agent) => agent.id))
+    return optimistic.filter((message) => ids.has(message.paneId))
+  }, [optimistic, agents])
 
-  // The thread is the selected agent's. The payload carries the whole tmux session, so the
-  // pane is filtered here; session and window scope views are a separate issue.
-  const paneEvents = useMemo<ViewerEvent[]>(
-    () => (selectedPaneId ? (branch?.events ?? []).filter((event) => event.agentId === selectedPaneId) : []),
-    [branch, selectedPaneId],
+  // The composer addresses one agent of the scope: the one picked, else the pane itself or the
+  // most recently active agent of the window or session.
+  const target = useMemo(
+    () => agents.find((agent) => agent.id === targetPaneId) ?? defaultTarget(agents, scope),
+    [agents, targetPaneId, scope],
   )
-  const paneAllEvents = useMemo<ViewerEvent[]>(
-    () => (selectedPaneId ? (all?.events ?? []).filter((event) => event.agentId === selectedPaneId) : []),
-    [all, selectedPaneId],
-  )
-  const paneAgents = useMemo<ViewerAgent[]>(() => (target ? [target] : []), [target])
-  const paneOptimistic = useMemo(
-    () => optimistic.filter((message) => message.paneId === selectedPaneId),
-    [optimistic, selectedPaneId],
-  )
+  const label = useMemo(() => describeScope(scope, agents), [scope, agents])
+
+  function select(next: Scope) {
+    if (sameScope(next, scope)) return
+    if (next.session !== sessionName) setView("channel")
+    urlMode.current = "push"
+    setTargetPaneId(null)
+    setScope(next)
+  }
 
   async function handleSend(agent: ViewerAgent, text: string) {
     const message: OptimisticMessage = {
@@ -217,18 +272,14 @@ export default function App() {
     <div className="flex h-dvh bg-deep text-ink">
       <Sidebar
         sessions={liveSessions}
-        selection={selection}
-        onSelect={(next) => {
-          if (next.session !== sessionName) setView("channel")
-          setSelection(next)
-        }}
+        scope={scope}
+        onSelect={select}
       />
       <div className="flex min-w-0 flex-1 flex-col">
       <ViewerHeader
-        agent={target}
+        label={label}
         view={view}
         onViewChange={setView}
-        agentCount={agents.length}
         theme={theme}
         onToggleTheme={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
       />
@@ -277,10 +328,10 @@ export default function App() {
                     {view === "channel" ? (
                       branch ? (
                         <ChannelView
-                          events={paneEvents}
-                          agents={paneAgents}
+                          events={scopeEvents}
+                          agents={agents}
                           session={branch.session}
-                          optimistic={paneOptimistic}
+                          optimistic={scopeOptimistic}
                           onDismissOptimistic={(id) =>
                             setOptimistic((previous) => previous.filter((entry) => entry.id !== id))
                           }
@@ -290,9 +341,9 @@ export default function App() {
                       )
                     ) : all ? (
                       <AllEventsView
-                        key={`${sessionName}:${selectedPaneId}`}
-                        events={paneAllEvents}
-                        agents={paneAgents}
+                        key={scopeKey}
+                        events={scopeAllEvents}
+                        agents={agents}
                         session={all.session}
                       />
                     ) : (
@@ -308,7 +359,7 @@ export default function App() {
           <Composer
             agents={agents}
             target={target}
-            onTargetChange={(agent) => setSelection({ session: agent.tmuxSession, paneId: agent.id })}
+            onTargetChange={(agent) => setTargetPaneId(agent.id)}
             onSend={handleSend}
             disabled={!agents.length}
           />

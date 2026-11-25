@@ -1,7 +1,8 @@
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
-import { buildTree, flatten, railNext, stateOf, STATE_LABEL, type Selection } from "@/lib/tree"
+import { agentsInScope, type Scope } from "@/lib/scope"
+import { buildTree, flatten, railNext, stateOf, STATE_LABEL } from "@/lib/tree"
 import type { ViewerSession } from "@/shared/types"
 import { cn } from "@/lib/utils"
 
@@ -58,12 +59,12 @@ function useNarrow(): boolean {
  */
 export function Sidebar({
   sessions,
-  selection,
+  scope,
   onSelect,
 }: {
   sessions: ViewerSession[]
-  selection: Selection | null
-  onSelect: (selection: Selection) => void
+  scope: Scope | null
+  onSelect: (scope: Scope) => void
 }) {
   const [stored] = useState(readStored)
   const narrow = useNarrow()
@@ -132,18 +133,20 @@ export function Sidebar({
     })
   }, [])
 
+  // Choosing any level (session, window or pane) selects its scope; on a narrow screen it also closes the overlay.
   const choose = useCallback(
-    (session: string, paneId: string) => {
-      onSelect({ session, paneId })
+    (next: Scope) => {
+      onSelect(next)
       if (narrow) setOpen(false)
     },
     [onSelect, narrow, setOpen],
   )
+  const inScope = useMemo(() => new Set(agentsInScope(sessions, scope).map((agent) => agent.paneId)), [sessions, scope])
 
   // Rail toolbar: one Tab stop, arrow keys move between agents.
   const railRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [railIndex, setRailIndex] = useState(0)
-  const selectedRail = railPanes.findIndex((pane) => pane.agent.paneId === selection?.paneId)
+  const selectedRail = railPanes.findIndex((pane) => inScope.has(pane.agent.paneId))
   const railTab = Math.min(railIndex >= 0 && railIndex < railPanes.length ? railIndex : Math.max(selectedRail, 0), Math.max(railPanes.length - 1, 0))
   function onRailKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const next = railNext(railPanes.length, index, event.key)
@@ -195,7 +198,7 @@ export function Sidebar({
             <div role="toolbar" aria-label="Agents" aria-orientation="vertical" className="thin-scrollbar flex min-h-0 flex-1 flex-col items-center gap-px overflow-y-auto pb-2">
               {railPanes.map((pane, index) => {
                 const { agent } = pane
-                const selected = selection?.paneId === agent.paneId
+                const selected = inScope.has(agent.paneId)
                 const state = stateOf(agent.status)
                 return (
                   <button
@@ -207,7 +210,7 @@ export function Sidebar({
                     tabIndex={index === railTab ? 0 : -1}
                     onClick={() => {
                       setRailIndex(index)
-                      choose(pane.session, agent.paneId)
+                      choose({ kind: "pane", session: pane.session, window: agent.windowIndex, paneId: agent.paneId })
                     }}
                     onFocus={() => setRailIndex(index)}
                     onKeyDown={(event) => onRailKey(event, index)}
@@ -243,7 +246,7 @@ export function Sidebar({
             </div>
             <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-1 pb-2">
               {tree.length ? (
-                <SessionTree tree={tree} selection={selection} collapsed={closed} onToggle={toggleGroup} onSelect={choose} />
+                <SessionTree tree={tree} scope={scope} collapsed={closed} onToggle={toggleGroup} onSelect={choose} />
               ) : (
                 <p className="px-3 py-2 text-xs text-ink-faint">No pi or claude agent in tmux.</p>
               )}
