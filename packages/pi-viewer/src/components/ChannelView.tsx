@@ -178,19 +178,17 @@ function UserMessage({
           data-action-row="user"
           className="flex w-full min-w-0 items-center justify-end gap-2 text-xs whitespace-nowrap"
         >
-          {/* Time and recipient reveal on hover (pinned on the newest message); the delivery mark stays
-              visible at rest on every sent message, as in a chat app (operator, 2026-11-26). */}
-          <div
-            className="xtrm-meta ml-auto flex min-w-0 items-center gap-1.5 tabular text-ink-muted"
-            data-pinned={pinned || delivery === "failed" ? "true" : undefined}
-          >
+          {/* Time, recipient and the delivery mark read as one line, visible at rest on every sent message,
+              as in a chat app (operator, 2026-11-26): a mark alone looked like a floating icon. Only Copy
+              reveals on hover. */}
+          <div className="ml-auto flex min-w-0 items-center gap-1.5 tabular text-ink-muted">
             <span className="shrink-0" title={fullDate(event.at)}>
               {stamp(event.at)}
             </span>
             <span className="shrink-0 text-border-strong">·</span>
             <span className="min-w-0 truncate">to {agentName}</span>
+            {delivery ? <DeliveryMark delivery={delivery} error={error} /> : null}
           </div>
-          {delivery ? <DeliveryMark delivery={delivery} error={error} /> : null}
           {delivery === "failed" && onDismiss ? (
             <button
               type="button"
