@@ -45,6 +45,10 @@ export function Composer({
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<"none" | "to" | "mention">("none")
   const [mention, setMention] = useState<Mention | null>(null)
+  // The current mention, readable from a callback scheduled before the last render: onChange runs
+  // syncMention in a requestAnimationFrame, whose closure would otherwise hold the mention from
+  // before the keystroke and reset the highlight after a fast ArrowDown.
+  const mentionRef = useRef<Mention | null>(null)
   const [index, setIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -78,10 +82,12 @@ export function Composer({
     const node = textareaRef.current
     if (!node) return
     const next = findMention(node.value, node.selectionStart ?? node.value.length)
+    const previous = mentionRef.current
+    mentionRef.current = next
     setMention(next)
     // Keep the highlighted agent while the same @-query is open: syncMention also runs on keyup, so an
     // unconditional reset sent every ArrowUp/ArrowDown back to the first row (operator, 2026-11-26).
-    if (!next || !mention || next.start !== mention.start || next.query !== mention.query) setIndex(0)
+    if (!next || !previous || next.start !== previous.start || next.query !== previous.query) setIndex(0)
     if (next && agents.length) setMenu("mention")
     else if (menu === "mention") setMenu("none")
   }
@@ -91,6 +97,7 @@ export function Composer({
     if (!mention || !node) return
     const next = `${text.slice(0, mention.start)}@${agent.name} ${text.slice(mention.end)}`
     setText(next)
+    mentionRef.current = null
     setMention(null)
     setMenu("none")
     onTargetChange(agent)
@@ -115,6 +122,7 @@ export function Composer({
       await onSend(target, value)
       onClearReply?.()
       setText("")
+      mentionRef.current = null
       setMention(null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -225,6 +233,7 @@ export function Composer({
                 }
                 if (event.key === "Escape") {
                   event.preventDefault()
+                  mentionRef.current = null
                   setMention(null)
                   setMenu("none")
                   return
