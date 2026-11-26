@@ -11,6 +11,7 @@ import { ViewerHeader } from "@/components/ViewerHeader"
 import { laneValue, loadWidth, saveWidth } from "@/lib/chat-width"
 import {
   MessageScroller,
+  MessageScrollerApi,
   MessageScrollerButton,
   MessageScrollerContent,
   MessageScrollerProvider,
@@ -81,6 +82,7 @@ export default function App() {
   const [all, setAll] = useState<ThreadPayload | null>(null)
   const [view, setView] = useState<"channel" | "all">("channel")
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([])
+  const sendScrollRef = useRef<{ requestSendScroll: () => void } | null>(null)
   const [threadError, setThreadError] = useState<string | null>(null)
   const [earlierLoading, setEarlierLoading] = useState(false)
   const [kick, setKick] = useState(0)
@@ -395,6 +397,8 @@ export default function App() {
       status: "sending",
     }
     setOptimistic((previous) => [...previous, message])
+    // A send is an explicit request for the newest row; the scroller keeps it pinned until a gesture.
+    sendScrollRef.current?.requestSendScroll()
     try {
       await sendPrompt(agent.paneId, text)
       setOptimistic((previous) =>
@@ -469,7 +473,8 @@ export default function App() {
       ) : (
         <>
           <div className="min-h-0 flex-1">
-            <MessageScrollerProvider key={scrollerKey} threadKey={scrollerKey} autoScroll defaultScrollPosition="end">
+            <MessageScrollerProvider key={scrollerKey} threadKey={scrollerKey}>
+              <MessageScrollerApi onReady={(api) => (sendScrollRef.current = api)} />
               <MessageScroller>
                 <MessageScrollerViewport>
                   <MessageScrollerContent
