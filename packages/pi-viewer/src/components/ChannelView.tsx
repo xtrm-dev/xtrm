@@ -182,16 +182,15 @@ function UserMessage({
               visible at rest on every sent message, as in a chat app (operator, 2026-11-26). */}
           <div
             className="xtrm-meta ml-auto flex min-w-0 items-center gap-1.5 tabular text-ink-muted"
-            data-pinned={pinned || Boolean(delivery) ? "true" : undefined}
+            data-pinned={pinned || delivery === "failed" ? "true" : undefined}
           >
             <span className="shrink-0" title={fullDate(event.at)}>
               {stamp(event.at)}
             </span>
             <span className="shrink-0 text-border-strong">·</span>
             <span className="min-w-0 truncate">to {agentName}</span>
-            {delivery && delivery !== "failed" ? <DeliveryMark delivery={delivery} /> : null}
           </div>
-          {delivery === "failed" ? <DeliveryMark delivery={delivery} error={error} /> : null}
+          {delivery ? <DeliveryMark delivery={delivery} error={error} /> : null}
           {delivery === "failed" && onDismiss ? (
             <button
               type="button"
