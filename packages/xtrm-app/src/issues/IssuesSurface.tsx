@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { useAdapters, type IssueSummary } from "../adapters/index.tsx";
 import { projectForRepo, useIssues, useProjects } from "../app/queries.ts";
 import { useShell } from "../shell/context.tsx";
-import { Badge } from "../ui/badge.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
 import { EmptyState, ErrorState, IconButton, LoadingState, SourceBadge, SurfaceToolbar, cx, relativeTime } from "../ui/primitives.tsx";
@@ -12,9 +11,10 @@ import { ListFilter, ToolbarButton, ToolbarFilter, ToolbarMultiFilter } from "..
 import { VirtualList } from "../ui/virtual-list.tsx";
 import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
-import { INDENT_REM, ISSUE_STATUSES, buildTree, defaultDesc, issueStatus, keyNames, matchesIssueStatusSet, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
+import { INDENT_REM, ISSUE_STATUSES, buildTree, defaultDesc, keyNames, matchesIssueStatusSet, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
 import { KeyChip, ListRow, StatPill } from "../ui/list-row.tsx";
 import { TERMINAL, PriorityGlyph, kindIcon } from "./meta.tsx";
+import { IssueStatusBadge } from "./IssueStatusBadge.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
 
@@ -210,7 +210,6 @@ function IssueRow({
 }) {
   const { issue, depth, rollup, hasChildren, collapsed, detached } = row;
   const terminal = TERMINAL.has(issue.lifecycle);
-  const status = issueStatus(issue);
   return (
     // One line, no columns (2026-11-24 ruling): the key is a tinted chip, the status is a solid chip,
     // and the three rollups are pills at the right edge. Nothing is dropped by a measured width; the
@@ -257,16 +256,8 @@ function IssueRow({
           <span data-key-cell="" className="flex min-w-0">
             <KeyChip title={keyNames(issue)}>{issue.locator || issue.ref}</KeyChip>
           </span>
-          {/* Closed work is a fact, not a warning: the terminal state earns the success tone even
-              though the status function still calls it "muted" for the dot surfaces. */}
-          <Badge
-            variant="solid"
-            tone={status.tone === "muted" && TERMINAL.has(issue.lifecycle) ? "success" : status.tone}
-            size="xs"
-            title={status.hint}
-          >
-            {status.label}
-          </Badge>
+          {/* One chip for the list and the drawer: label, tone and fill live in IssueStatusBadge. */}
+          <IssueStatusBadge issue={issue} size="xs" />
         </>
       }
       title={

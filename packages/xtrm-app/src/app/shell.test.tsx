@@ -91,7 +91,8 @@ describe("Console v2 shell", () => {
     expect(screen.getByTestId("context-sidebar").contains(el)).toBe(false);
     await waitFor(() => expect(search(router).inspect).toBe("issue:XTRM-301"));
     expect(await within(el).findByText("Problem")).toBeTruthy();
-    expect(within(el).getByText("Readiness")).toBeTruthy();
+    expect(within(el).getByText("Lifecycle")).toBeTruthy();
+    expect(within(el).getByTestId("issue-title-row").querySelector("[data-testid=issue-status]")).toBeTruthy();
   });
 
   it("opening pushes the sidebar; maximize keeps the push and close restores it", async () => {

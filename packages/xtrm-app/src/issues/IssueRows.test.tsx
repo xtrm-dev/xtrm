@@ -58,11 +58,18 @@ describe("Issues list rows", () => {
     expect(keyTokens.some((t) => t.startsWith("bg-"))).toBe(false);
     expect(key!.style.width).toBe("");
 
-    // The status chip is solid: a filled tone, pure white ink, and a pill (treatment T1).
+    // The status chip is a pill (treatment T1). A state of work is solid (filled tone, white ink); a gap
+    // (Draft, Unattested, Stale, Open) is the quiet muted tint (2026-11-27 ruling).
     const chipTokens = chip!.className.split(/\s+/);
     expect(chipTokens).toContain("rounded-full");
-    expect(chipTokens.some((t) => t.startsWith("bg-chip-"))).toBe(true);
-    expect(chipTokens).toContain("text-white");
+    const quiet = ["Draft", "Unattested", "Stale", "Open"].includes(chip!.textContent ?? "");
+    if (quiet) {
+      expect(chipTokens).toContain("bg-hover");
+      expect(chipTokens).not.toContain("text-white");
+    } else {
+      expect(chipTokens.some((t) => t.startsWith("bg-chip-"))).toBe(true);
+      expect(chipTokens).toContain("text-white");
+    }
     expect(chipTokens).not.toContain("w-[4.25rem]");
     expect((chip!.getAttribute("title") ?? "").length).toBeGreaterThan(0);
 

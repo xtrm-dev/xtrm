@@ -357,8 +357,8 @@ export interface IssueSummary {
   blockedBy: string[];
   /**
    * Real derived readiness from the board projection (PRD §13):
-   * `terminal|deferred|draft|blocked|claimed|ready`. Detail rows report
-   * `ready` when dispatchable and `not_ready` otherwise.
+   * `terminal|deferred|draft|blocked|claimed|ready`. Detail rows carry the same
+   * operational state; `not_ready` appears only when an older `sb` omits it.
    */
   readiness: Readiness;
 }
