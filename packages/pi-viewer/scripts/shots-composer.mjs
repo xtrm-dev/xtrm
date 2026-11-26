@@ -40,7 +40,10 @@ const written = []
 
 try {
   for (const width of [1440, 390]) {
+    for (const theme of ["dark", "light"]) {
     const context = await browser.newContext({ viewport: { width, height: width < 700 ? 844 : 900 } })
+    // The viewer's theme comes from localStorage (index.html reads pi-viewer-theme), not from colorScheme.
+    await context.addInitScript((value) => localStorage.setItem("pi-viewer-theme", value), theme)
     const page = await context.newPage()
     await page.route("**/api/**", async (route) => {
       const url = new URL(route.request().url())
@@ -57,7 +60,7 @@ try {
     await page.waitForTimeout(300)
 
     const shot = async (name) => {
-      const path = `${out}/composer-${name}-${width}.png`
+      const path = `${out}/composer-${name}-${width}-${theme}.png`
       await page.screenshot({ path })
       written.push(path)
     }
@@ -74,6 +77,7 @@ try {
     await page.waitForTimeout(200)
     await shot("claude-target")
     await context.close()
+    }
   }
 } finally {
   await browser.close()
