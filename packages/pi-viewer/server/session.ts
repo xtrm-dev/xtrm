@@ -33,6 +33,8 @@ export interface ParsedFile {
   branchIds: Set<string>
   sessionName: string | null
   model: string | null
+  /** Newest assistant usage block, kept while parsing so context needs no second pass. */
+  usage?: Raw | null
   thinkingLevel: string | null
   modifiedAt: number
   size: number
@@ -234,6 +236,7 @@ export function parseSessionFile(file: string): ParsedFile {
   let sessionName: string | null = null
   let model: string | null = null
   let thinkingLevel: string | null = null
+  let usage: Raw | null = null
 
   for (const entry of raw) {
     if (entry.type === "session_info" && typeof entry.name === "string") sessionName = entry.name
@@ -241,6 +244,10 @@ export function parseSessionFile(file: string): ParsedFile {
       model = typeof entry.provider === "string" ? `${entry.provider}/${entry.modelId}` : entry.modelId
     } else if (entry.type === "thinking_level_change" && typeof entry.thinkingLevel === "string") {
       thinkingLevel = entry.thinkingLevel
+    }
+    const message = entry.message
+    if (isRecord(message) && message.role === "assistant" && isRecord(message.usage)) {
+      usage = message.usage
     }
   }
   // Older sessions carry the model on the assistant message rather than a model_change entry.
@@ -265,6 +272,7 @@ export function parseSessionFile(file: string): ParsedFile {
     branchIds: branchIds(raw),
     sessionName,
     model,
+    usage,
     thinkingLevel,
     modifiedAt: cache.mtimeMs,
     size: cache.size,

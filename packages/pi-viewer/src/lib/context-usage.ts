@@ -51,6 +51,16 @@ function pick(usage: Raw, pi: string, claude: string): number {
   return number(usage[pi]) || number(usage[claude])
 }
 
+/** Tokens that the next turn starts from: input plus the cached prefix, never output. */
+export function contextTokensFromUsage(usage: unknown): number | null {
+  if (!isRecord(usage)) return null
+  const input = pick(usage, "input", "input_tokens")
+  const cacheRead = pick(usage, "cacheRead", "cache_read_input_tokens")
+  const cacheWrite = pick(usage, "cacheWrite", "cache_creation_input_tokens")
+  const used = input + cacheRead + cacheWrite
+  return used > 0 ? used : null
+}
+
 /** The usage block of a transcript record, at either nesting the two runtimes use. */
 function usageOf(record: unknown): Raw | null {
   if (!isRecord(record)) return null
@@ -76,24 +86,69 @@ export function contextTokensUsed(records: readonly unknown[]): number | null {
   for (let index = records.length - 1; index >= 0; index -= 1) {
     const record = records[index]
     if (!isAssistant(record)) continue
-    const usage = usageOf(record)
-    if (!usage) continue
-    const input = pick(usage, "input", "input_tokens")
-    const cacheRead = pick(usage, "cacheRead", "cache_read_input_tokens")
-    const cacheWrite = pick(usage, "cacheWrite", "cache_creation_input_tokens")
-    const used = input + cacheRead + cacheWrite
-    if (used > 0) return used
+    const used = contextTokensFromUsage(usageOf(record))
+    if (used !== null) return used
   }
   return null
 }
 
+/** Usage from a cached assistant usage block. The window may come from Pi's model registry. */
+export function contextUsageFrom(
+  usage: unknown,
+  model: string | null | undefined,
+  windowHint?: number | null,
+): ContextUsage | null {
+  const window = windowHint ?? contextWindowFor(model)
+  if (!window) return null
+  const used = contextTokensFromUsage(usage)
+  if (used === null) return null
+  return { used, window }
+}
+
 /** Usage for one agent: its transcript records and its model id, or null when either is unknown. */
-export function contextUsageOf(records: readonly unknown[], model: string | null | undefined): ContextUsage | null {
-  const window = contextWindowFor(model)
+export function contextUsageOf(
+  records: readonly unknown[],
+  model: string | null | undefined,
+  windowHint?: number | null,
+): ContextUsage | null {
+  const window = windowHint ?? contextWindowFor(model)
   if (!window) return null
   const used = contextTokensUsed(records)
   if (used === null) return null
   return { used, window }
+}
+
+export interface ModelRegistryEntry {
+  id?: unknown
+  contextWindow?: unknown
+}
+
+/** A provider-keyed Pi model registry: models-store.json or models.json's `providers`. */
+export type ModelRegistry = Record<string, { models?: ModelRegistryEntry[] }>
+
+/**
+ * The window from Pi's own model registry. The model id is `provider/model`; the provider key and
+ * the model id are matched exactly, with a `:thinking` suffix ignored. No match means no ring.
+ */
+export function contextWindowFromRegistry(
+  model: string | null | undefined,
+  registry: ModelRegistry | null | undefined,
+): number | null {
+  if (!model || !registry) return null
+  const id = model.trim()
+  const slash = id.indexOf("/")
+  if (slash <= 0 || slash === id.length - 1) return null
+  const provider = id.slice(0, slash)
+  const wanted = id.slice(slash + 1)
+  const entry = registry[provider]
+  if (!entry?.models) return null
+  const match = entry.models.find((candidate) => {
+    if (typeof candidate.id !== "string") return false
+    const candidateId = candidate.id.replace(/:thinking$/, "")
+    return candidateId === wanted || candidateId === wanted.replace(/:thinking$/, "")
+  })
+  const window = number(match?.contextWindow)
+  return window > 0 ? window : null
 }
 
 /** Whole percent of the window used, clamped to 0..100 for the ring. */
