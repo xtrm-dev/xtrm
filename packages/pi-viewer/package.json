@@ -22,7 +22,8 @@
     "test:rows": "node scripts/rows-check.mjs",
     "test:scope": "node scripts/scope-check.mjs",
     "test:composer": "node scripts/composer-check.mjs",
-    "test:sidebar": "node scripts/sidebar-gate.mjs"
+    "test:sidebar": "node scripts/sidebar-gate.mjs",
+    "measure:load": "node scripts/load-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",
@@ -31,7 +32,6 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.70.0",
     "motion": "^13.5.1",
-    "motion-panels": "0.5.2",
     "radix-ui": "^1.4.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

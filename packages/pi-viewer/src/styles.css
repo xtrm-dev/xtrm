@@ -1,6 +1,26 @@
 @import "tailwindcss";
-@import "@fontsource-variable/figtree";
-@import "@fontsource-variable/geist-mono";
+
+/*
+ * Two faces, latin only (XTRM-1067). The packages ship eight subsets each; the viewer reads English
+ * tmux and agent text, so the four latin-ext and cyrillic faces were 58 kB of build weight for
+ * nothing. Both packages are pinned at 5.3.0 (`@fontsource-variable/figtree`, `.geist-mono`), and the
+ * face names and weight ranges match the ones the packages declare, so a swap changes no layout.
+ */
+@font-face {
+  font-family: "Figtree Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 900;
+  src: url("@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "Geist Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 

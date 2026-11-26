@@ -21,6 +21,34 @@ npm run build
 npm run preview    # http://127.0.0.1:5199
 ```
 
+`npm run preview` is the whole production serve: the `/api` middleware comes from `server/plugin.ts`
+(`piViewerApi()` in `vite.config.ts`), so it runs under the dev server and under `vite preview` alike.
+There is no separate node entry point today; mounting `handleApi` in your own server is possible but
+then that server also has to serve `dist/` (XTRM-1067).
+
+To take cold-load numbers for a serve, point the measurement script at it. It opens an empty cache,
+navigates once, and reports the request count, the encoded bytes, and the time to the first message
+bubble:
+
+```bash
+node scripts/load-check.mjs http://127.0.0.1:5199/ preview
+```
+
+Measured on 2026-11-26, 1440x900, real sessions, one cold load each:
+
+| serve | requests | encoded bytes | JS | fonts | first message bubble |
+|---|---|---|---|---|---|
+| `npm run dev` | 75 | 15,505,647 | unbundled modules | 43,884 | 4,539 ms |
+| `npm run preview` | 10 | 669,909 | 188,943 | 43,884 | 2,060 ms |
+
+The remaining bytes in the preview row are the thread JSON (two `/api/thread` calls, 422 kB in that
+session). That payload, not the bundle, is now the largest single cost of a cold load.
+
+The build splits into a `react` chunk, a `markdown` chunk and the app chunk, and loads `AllEventsView`
+on demand, so no chunk exceeds 500 kB. The shell's resize no longer pulls in motion-panels: it is
+`src/shell/resizable.tsx`, 80 lines of pointer and keyboard code with the console's values. Fonts are
+the two latin faces only (XTRM-1067).
+
 Requirements: Linux (`/proc`), tmux, and pi sessions under `~/.pi/agent/sessions`.
 The server binds to `127.0.0.1` only and has no authentication.
 
@@ -236,6 +264,7 @@ npm run typecheck
 npm run build
 npm run test:anchor
 npm run test:follow
+npm run measure:load http://127.0.0.1:5199/   # cold-load numbers, see Run
 ```
 
 `npm test` covers the ordering invariant (settle anchors, pending last, stable
