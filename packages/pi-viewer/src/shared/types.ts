@@ -43,6 +43,14 @@ export interface ViewerAgent {
   statusNote: string | null
   /** The pending request behind `attention` (question, plan or permission prompt), read-only text. */
   statusDetail?: string | null
+  /** How much of the model's window the transcript fills; null when the model or usage is unknown. */
+  context?: ContextUsage | null
+}
+
+/** The prompt size of the newest assistant message and the model's context window, in tokens. */
+export interface ContextUsage {
+  used: number
+  window: number
 }
 
 export interface ViewerSession {

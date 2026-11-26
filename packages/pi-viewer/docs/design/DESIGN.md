@@ -205,9 +205,13 @@ Region roles are the one indirection that makes a palette a palette (`src/styles
 |---|---|---|---|
 | `--x-canvas` (page, header, thread, presence line, composer margin) | `--x-deep` #f4f4f5 / #0d0d0d | `--x-surface` #ffffff / #151515 | `--x-deep` #1f1f1f |
 | `--x-composer-fill` | `--x-surface` #ffffff / #151515 | `--x-raised` #ffffff / #1e1e1e | `--x-surface` #333333 |
-| `--x-composer-focus` | the same fill | the same fill | `--x-control` #383838 |
-| `--x-composer-edge` | `transparent` | `--x-border-muted` (light only) / `transparent` | `transparent` |
-| `--x-composer-edge-focus` | `--x-border-strong` | `--x-border-strong` | `--x-border-strong` (inferred) |
+| `--x-composer-focus` | `--x-raised` (focus rises a plane; in light, white is the ceiling and the shadow deepens) | `--x-raised` (the fill cannot step: the shadow deepens) | `--x-control` #383838 |
+| `--x-composer-shadow` | a light two-part shadow | the same two-part shape at dark alpha | the dark pair |
+| `--x-composer-shadow-focus` | the same shape, deeper | the same shape, deeper | the same shape, deeper |
+
+The composer carries no border and no ring in any palette, preset, theme or state (XTRM-1087): the fill
+step and the drop shadow are its only separation, and focus either rises a plane or deepens the shadow.
+
 | `--x-inset` (activity detail, intercom card) | `--x-surface` | `--x-control` | `--x-surface` |
 | `--x-code` / `--x-code-edge` | `--x-surface` / `--x-border-muted` (light), `transparent` (dark) | `--x-deep` / `--x-border-muted` | `--x-deep` / `--x-border` |
 | `--x-read` (thread prose, operator bubble) | `--x-ink` | `--x-ink` | `#c8c8c8` |
@@ -336,7 +340,7 @@ Every animation, its reason, and its reduced-motion branch. All of it is in `src
 | `xtrm-shimmer` | `2.2s steps(30) infinite` | a stepped sweep over muted text while a step runs; pauses off-screen via `data-paused` | none |
 | `xtrm-fade-in` | `600ms ease-out both` | a block that arrives after first paint; never replays on reopen | none |
 | `.xtrm-meta` | `200ms ease-out` opacity | hover reveal of row metadata | no transition |
-| composer box | `150ms` background and inset ring | focus state | none needed (not motion) |
+| composer box | `150ms` background and drop shadow | focus state | none needed (not motion) |
 | shell resize | `250ms cubic-bezier(0.32, 0.72, 0, 1)` | the sidebar plane and its collapse, never during a drag | none needed (a user gesture) |
 | fold fade | static mask, 4rem eased stops | the cut of a folded message | none needed (not motion) |
 
@@ -556,18 +560,26 @@ cut-outs against any palette's canvas (`docs/design/palette-console.md`).
 
 Purpose: send one operator message to one agent, and answer a specific agent without retyping.
 
-Geometry: a 52px one-line box that grows to `max-h-52` (`208px`), no visible border, a fill one step
-above the canvas, an inset focus ring, `15px/24px` prompt, a 32px send button overlaying the box's bottom
-right, and an empty attach slot on the left for a control that does not exist yet
-(`src/components/Composer.tsx:237-262`). The box carries `--x-composer-fill`, `--x-composer-edge` and
-`--x-composer-edge-focus` (`.xtrm-composer-box`, `src/styles.css:722-736`), so a palette decides the step
-and the focus signal without touching the component.
+Geometry: a 52px one-line box that grows to `max-h-52` (`208px`), no border and no ring in any palette or
+state, a fill one step above the canvas, a slight drop shadow, `15px/24px` prompt, a 32px send button
+overlaying the box's bottom right, and an empty attach slot on the left for a control that does not exist
+yet (`src/components/Composer.tsx:237-262`). The box carries `--x-composer-fill`, `--x-composer-focus`,
+`--x-composer-shadow` and `--x-composer-shadow-focus` (`.xtrm-composer-box`, `src/styles.css:749-765`), so
+a palette decides the step, the elevation and the focus signal without touching the component.
 
 The target row sits under the box, right-aligned, 12px apart: the target (status dot, name, chevron),
 its model, and its bare effort — for example `lead  claude-opus-4-8  high` (`:264-341`). The values come
 from the agent's `model` and `thinkingLevel` through `composerMeta` (`src/lib/composer-meta.ts`); a missing
 value is omitted, never invented. The row is 14px against the 15px prompt, muted, with no chips and no
 borders.
+
+Beside the model name the composer draws the agent's context usage (XTRM-1087): a 14px ring whose arc is
+the fraction of the model's window the transcript fills, with the track at 22% of the tone colour. The
+tone steps from `ink-muted` under 75% to `ink` from 75% and `danger` from 90%, and the accessible name and
+tooltip carry the number, for example `46% of 200k tokens` (`src/components/ContextRing.tsx`). The
+fraction is the newest assistant message's input plus its cached prefix, read from either runtime's
+transcript, and the window comes from a model table in `src/lib/context-usage.ts`; a model the table does
+not know, or an agent with no usage, draws no ring rather than a guess.
 
 The agent menu opens upward from the target it belongs to, anchored to the right edge of the target group
 so it meets the send button's right edge, sizing to its rows between `14rem` and `20rem` and never wider

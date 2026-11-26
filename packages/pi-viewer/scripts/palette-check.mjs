@@ -3,7 +3,8 @@
 // Runs the app in-process with a mocked API (its own port, stopped at the end) and, for 1440 and 390
 // wide, dark and light, asserts:
 // - Threads is the default; the page canvas, the sidebar (at 1440) and the composer wear the values in
-//   docs/design/palette-console.md for the active palette, and the composer's hairline only where no
+//   docs/design/palette-console.md for the active palette, and the composer carries no border and no ring
+//   in any of them: a drop shadow sets it above the canvas (XTRM-1087), so
 //   fill step exists (console light, XTRM-1054);
 // - choosing Console in the header control switches at once: the root data-palette changes, the
 //   scroll position of the thread does not move, nothing reloads, and the choice survives a reload;
@@ -58,7 +59,7 @@ const EXPECT = {
   "console dark": { canvas: "rgb(21, 21, 21)", sidebar: "rgb(35, 35, 35)", composer: "rgb(30, 30, 30)", edge: false, prose: "rgb(236, 236, 239)", muted: "rgb(160, 160, 168)" },
   "desktop dark": { canvas: "rgb(31, 31, 31)", sidebar: "rgb(36, 36, 36)", composer: "rgb(51, 51, 51)", edge: false, prose: "rgb(200, 200, 200)", muted: "rgb(161, 161, 161)", selected: "rgb(69, 69, 69)" },
   "threads light": THREADS_LIGHT,
-  "console light": { canvas: "rgb(255, 255, 255)", sidebar: "rgb(244, 244, 245)", composer: "rgb(255, 255, 255)", edge: true, prose: "rgb(24, 24, 27)", muted: "rgb(95, 95, 104)" },
+  "console light": { canvas: "rgb(255, 255, 255)", sidebar: "rgb(244, 244, 245)", composer: "rgb(255, 255, 255)", edge: false, prose: "rgb(24, 24, 27)", muted: "rgb(95, 95, 104)" },
   "desktop light": THREADS_LIGHT,
 }
 // Soft text (XTRM-1053): the base's surfaces, Desktop's text; in light the base's light values.
@@ -77,7 +78,8 @@ function expectPalette(seen, palette, theme, width, label) {
   assert.equal(seen.canvas, want.canvas, `${tag} canvas`)
   assert.equal(seen.composer, want.composer, `${tag} composer`)
   if (width >= 1024) assert.equal(seen.sidebar, want.sidebar, `${tag} sidebar`)
-  assert.equal(/inset/.test(seen.shadow) && !/rgba\(0, 0, 0, 0\) 0px 0px 0px 1px inset/.test(seen.shadow), want.edge, `${tag} composer edge`)
+  // XTRM-1087: the composer never draws an inset ring; a drop shadow sets it above the canvas instead.
+  assert.equal(/inset/.test(seen.shadow), want.edge, `${tag} composer inset ring`)
   assert.equal(seen.prose, want.prose, `${tag} thread prose colour`)
   assert.equal(seen.muted, want.muted, `${tag} muted text colour`)
   if (want.ink) assert.equal(seen.ink, want.ink, `${tag} primary text colour`)
