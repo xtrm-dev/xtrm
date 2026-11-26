@@ -110,7 +110,7 @@ test("the sessions payload carries context for a Claude and a Pi fixture", async
     agent("%1", "claude", claudeFile(), contextUsageOfParsed(claude)),
     agent("%2", "pi", piFile(), contextUsageOfParsed(pi)),
   ]
-  assert.deepEqual(agents[0].context, { used: 46_395, window: 200_000 })
+  assert.deepEqual(agents[0].context, { used: 46_395, window: 1_000_000 })
   assert.deepEqual(agents[1].context, { used: 104_077, window: 1_000_000 })
   assert.equal(contextPercent(agents[1].context!), 10, "Pi's ring must match its footer percentage")
 
@@ -127,7 +127,7 @@ test("the sessions payload carries context for a Claude and a Pi fixture", async
     assert.equal(reply.status, 200)
     const payload = (await reply.json()) as SessionsPayload
     const found = payload.sessions[0].agents
-    assert.deepEqual(found[0].context, { used: 46_395, window: 200_000 })
+    assert.deepEqual(found[0].context, { used: 46_395, window: 1_000_000 })
     assert.deepEqual(found[1].context, { used: 104_077, window: 1_000_000 })
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))

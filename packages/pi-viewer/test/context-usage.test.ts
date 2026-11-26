@@ -30,8 +30,11 @@ const claudeUsage = { input_tokens: 2, cache_creation_input_tokens: 46_393, cach
 const piUsage = { input: 525, output: 340, cacheRead: 103_552, cacheWrite: 0, totalTokens: 104_417 }
 
 test("the window comes from the model id, and an unknown model has none", () => {
-  assert.equal(contextWindowFor("claude-opus-5-5"), 200_000)
-  assert.equal(contextWindowFor("claude-sonnet-5-5"), 200_000)
+  // Opus and Sonnet 5.x run with the 1M window (Claude Code's footer reads "/1.0M" for them); Haiku and 4.x stay 200k.
+  assert.equal(contextWindowFor("claude-opus-5-5"), 1_000_000)
+  assert.equal(contextWindowFor("claude-sonnet-5-5"), 1_000_000)
+  assert.equal(contextWindowFor("anthropic/claude-sonnet-5-5"), 1_000_000)
+  assert.equal(contextWindowFor("claude-haiku-5-5"), 200_000)
   assert.equal(contextWindowFor("claude-opus-4-8"), 200_000)
   assert.equal(contextWindowFor("anthropic/claude-sonnet-4-5"), 200_000)
   assert.equal(contextWindowFor("claude-opus-5-5[1m]"), 1_000_000)
@@ -69,7 +72,8 @@ test("no usage anywhere means no ring", () => {
 
 test("usage is reported only when both the window and the usage are known", () => {
   const records = [piAssistant(piUsage)]
-  assert.deepEqual(contextUsageOf(records, "claude-opus-5-5"), { used: 104_077, window: 200_000 })
+  assert.deepEqual(contextUsageOf(records, "claude-opus-4-8"), { used: 104_077, window: 200_000 })
+  assert.deepEqual(contextUsageOf(records, "claude-opus-5-5"), { used: 104_077, window: 1_000_000 })
   assert.equal(contextUsageOf(records, "deepseek/deepseek-v4.1-flash"), null)
   assert.equal(contextUsageOf(records, null), null)
   assert.equal(contextUsageOf([], "claude-opus-5-5"), null)

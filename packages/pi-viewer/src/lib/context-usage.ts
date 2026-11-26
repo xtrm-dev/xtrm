@@ -22,6 +22,10 @@ interface WindowRule {
  */
 const WINDOWS: WindowRule[] = [
   { pattern: /\[1m\]$/i, window: 1_000_000 },
+  // Opus and Sonnet 5.x run with the 1M window here: Claude Code's own footer reads e.g. "68.0%/1.0M" for
+  // claude-opus-5-5 and "12.0%/1.0M" for claude-sonnet-5-5 (operator's panes, 2026-11-26), and the transcript
+  // names the model without a [1m] suffix.
+  { pattern: /^(anthropic\/)?claude-(opus|sonnet)-5([-.]|$)/i, window: 1_000_000 },
   { pattern: /^claude-(opus|sonnet|haiku)-[\d.]*(-|$)/i, window: 200_000 },
   { pattern: /^claude-(opus|sonnet|haiku)$/i, window: 200_000 },
   { pattern: /^(anthropic\/)?claude-(opus|sonnet|haiku)[-\d.]*$/i, window: 200_000 },
