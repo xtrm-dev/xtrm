@@ -20,7 +20,8 @@
     "test:reply": "node scripts/reply-check.mjs",
     "test:palette": "node scripts/palette-check.mjs",
     "test:rows": "node scripts/rows-check.mjs",
-    "test:composer": "node scripts/composer-check.mjs"
+    "test:composer": "node scripts/composer-check.mjs",
+    "test:sidebar": "node scripts/sidebar-gate.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",

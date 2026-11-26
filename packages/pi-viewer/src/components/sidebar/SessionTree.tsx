@@ -85,7 +85,7 @@ function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) 
         {/* Line 2, in the operator's order (XTRM-1048): the role, then the runtime, then the folder and
             the repo. Spacing only, no separators; the state rides on the dot alone and is not written
             here a second time. */}
-        <span data-testid="pane-row-line2" className="flex min-w-0 items-center gap-1.5 text-2xs text-ink-faint">
+        <span data-testid="pane-row-line2" className="flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
           <RoleLabel role={agent.role} />
           <span className="shrink-0">{PROVIDER_LABEL[agent.provider]}</span>
           {agent.repo ? (
