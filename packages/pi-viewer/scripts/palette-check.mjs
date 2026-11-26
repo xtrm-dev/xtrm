@@ -150,7 +150,10 @@ const paint = (page) =>
         return node ? getComputedStyle(node).color : null
       })(),
       muted: (() => {
-        const node = document.querySelector(".xtrm-meta")
+        // The agent turn's meta row (ChannelView `data-action-row="agent"`): the one quiet row that always
+        // wears text-ink-muted. A bare `.xtrm-meta` also matches the user row's wrapper, which carries no
+        // colour and inherits ink, so the probe names the row it means.
+        const node = document.querySelector('[data-action-row="agent"].xtrm-meta')
         return node ? getComputedStyle(node).color : null
       })(),
       selected: (() => {
