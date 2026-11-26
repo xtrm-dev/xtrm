@@ -22,10 +22,10 @@ const events = [
 ]
 
 const sessions = { sessions: [{ name: SESSION, serverId: "test:tmux", agents: [agent] }], capturedAt: now, error: null }
-let echoed = false
+let queued = false
+let delivered = false
 let replied = false
-let echoServed = false
-let replyServed = false
+let sendAt = null
 const sends = []
 
 const server = await createServer({ root: process.cwd(), logLevel: "error", server: { host: "127.0.0.1", port: PORT, strictPort: true } })
@@ -43,23 +43,23 @@ await page.route("**/api/**", async (route) => {
   if (url.pathname === "/api/sessions") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sessions) })
   if (url.pathname === "/api/send") {
     sends.push(JSON.parse(route.request().postData() ?? "{}"))
-    setTimeout(() => { echoed = true }, 120)
-    setTimeout(() => { replied = true }, 2200)
+    sendAt = Date.now()
+    setTimeout(() => { queued = true }, 120)
+    setTimeout(() => { delivered = true }, 2200)
+    setTimeout(() => { replied = true }, 3200)
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) })
   }
   if (url.pathname !== "/api/thread") return route.fulfill({ status: 404, contentType: "application/json", body: "{}" })
   const list = events.map((event) => ({ ...event }))
-  if (echoed && !echoServed) {
-    echoServed = true
-    list.push({ id: "a1:echo", agentId: "a1", agentName: "flicker-agent", seq: 2, at: Date.now(), kind: "user", role: "user", summary: MARKER, text: MARKER, onBranch: true })
+  if (queued && sendAt != null) {
+    list.push({ id: "a1:echo", agentId: "a1", agentName: "flicker-agent", seq: 2, at: sendAt, kind: "user", role: "user", summary: MARKER, text: MARKER, queued: delivered ? undefined : true, onBranch: true })
   }
-  if (replied && !replyServed) {
-    replyServed = true
+  if (replied) {
     list.push({ id: "a1:reply", agentId: "a1", agentName: "flicker-agent", seq: 3, at: Date.now(), kind: "assistant", role: "assistant", summary: "Reply", text: "Flicker reply.", parts: [{ type: "text", text: "Flicker reply." }], stopReason: "stop", onBranch: true })
   }
   return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
     session: SESSION, serverId: "test:tmux", version: `v${list.length}`, agents: [agent], capturedAt: Date.now(),
-    events: list, cursor: list.length, revision: "r1", hasEarlier: false, earlier: null, earlierTurns: 0,
+    events: list, cursor: list.length, revision: replied ? "r4" : delivered ? "r3" : queued ? "r2" : "r1", hasEarlier: false, earlier: null, earlierTurns: 0,
   }) })
 })
 
@@ -109,6 +109,7 @@ try {
         docTop: rect && viewport ? rect.top + viewport.scrollTop : null,
         scrollTop: viewport?.scrollTop ?? null,
         deliveryHeight: delivery ? delivery.getBoundingClientRect().height : null,
+        mark: delivery?.getAttribute("data-delivery") ?? null,
         presence: document.querySelector('[data-presence]')?.textContent ?? null,
       })
       if (performance.now() - start < 4200) requestAnimationFrame(frame)
@@ -119,7 +120,7 @@ try {
   const composer = page.locator("[data-composer-input]")
   await composer.fill(MARKER)
   await composer.press("Enter")
-  await page.waitForTimeout(4300)
+  await page.waitForTimeout(5200)
   const capture = await page.evaluate(() => window.__flicker)
   assert.deepEqual(sends, [{ paneId: "%1", text: MARKER }], "send was not mocked cleanly")
 
@@ -130,6 +131,7 @@ try {
   const docTops = frames.map((f) => f.docTop).filter((v) => v != null)
   const maxShift = Math.max(0, ...docTops.slice(1).map((v, i) => Math.abs(v - docTops[i])))
   const heights = [...new Set(frames.map((f) => f.height).filter((v) => v != null).map((v) => Math.round(v * 10) / 10))]
+  const marks = [...new Set(capture.frames.map((f) => f.mark).filter(Boolean))]
   console.log(JSON.stringify({ mutations: capture.mutations, gaps, maxShift, heights, frames: frames.slice(0, 12), errors }, null, 2))
 
   assert.equal(errors.length, 0, `console errors: ${errors.join(" | ")}`)
@@ -137,6 +139,7 @@ try {
   assert.ok(!(removed.length && added.length), "the bubble was removed and re-added (remount)")
   assert.ok(maxShift <= 1, `the bubble jumped ${maxShift}px in document space`)
   assert.equal(heights.length, 1, `the bubble changed height: ${heights.join(", ")}`)
+  assert.deepEqual(marks, ["queued", "typed", "pending", "seen"], `unexpected delivery marks: ${marks.join(", ")}`)
 } finally {
   await browser.close()
   await server.close()

@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 
-import { isEchoOf, type OptimisticMessage } from "../src/lib/optimistic.ts"
+import { ECHO_WINDOW_MS, isEchoOf, matchEchoes, type OptimisticMessage } from "../src/lib/optimistic.ts"
 import { channelTimeline } from "../src/lib/thread.ts"
 import type { ViewerEvent } from "../src/shared/types.ts"
 
@@ -41,5 +41,28 @@ test("send flicker: an echoed prompt keeps the optimistic row key", () => {
 test("send flicker: echo matching is bounded, so an old send cannot claim a new prompt", () => {
   const echo = event(1, 10_200, "user", { text: "FLICKER PIN" })
   assert.equal(isEchoOf(echo, sent), true)
-  assert.equal(isEchoOf({ ...echo, at: 170_001 }, sent), false)
+  assert.equal(isEchoOf({ ...echo, at: 10_000 + ECHO_WINDOW_MS + 1 }, sent), false)
+})
+
+test("send flicker: a prompt held by a busy agent still matches when it is written minutes later", () => {
+  const queued = event(1, 100_000, "user", { text: "FLICKER PIN", queued: true })
+  assert.equal(isEchoOf(queued, sent), true)
+})
+
+test("busy send: the queued row adopts the optimistic key and survives delivery", () => {
+  const queued = event(3, 10_000 + 5 * 60_000, "user", { id: "queue:abc", text: "FLICKER PIN", queued: true })
+  const view = matchEchoes([queued], [sent])
+  assert.equal(view.visible.length, 0, "the optimistic row must be replaced by its queued echo")
+  assert.equal(view.keys.get(queued.id), "optimistic:m1")
+
+  const pending = channelTimeline([queued], view.visible, view.keys)
+  const pendingRows = pending.filter((item) => item.kind === "user" || item.kind === "optimistic")
+  assert.equal(pendingRows.length, 1)
+  assert.equal(pendingRows[0].id, "optimistic:m1")
+
+  const delivered = { ...queued, queued: undefined, at: queued.at + 1_000 }
+  const settled = channelTimeline([delivered], view.visible, view.keys)
+  const settledRows = settled.filter((item) => item.kind === "user" || item.kind === "optimistic")
+  assert.equal(settledRows.length, 1)
+  assert.equal(settledRows[0].id, "optimistic:m1")
 })
