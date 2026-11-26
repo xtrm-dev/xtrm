@@ -4,7 +4,8 @@ import { homedir } from "node:os"
 import { basename, join } from "node:path"
 
 import type { ViewerAgent, ViewerSession } from "../src/shared/types.ts"
-import { contextUsageOf } from "../src/lib/context-usage.ts"
+import { contextUsageFrom } from "../src/lib/context-usage.ts"
+import { piContextWindow } from "./model-windows.ts"
 import {
   claudeAgentName,
   claudeStatusOf,
@@ -334,9 +335,15 @@ function resolveClaudePane(
     status: state.status,
     statusNote: state.note,
     statusDetail: state.detail ?? null,
-    context: contextUsageOf(parsed?.events ?? [], parsed?.model ?? null),
+    context: contextUsageOfParsed(parsed),
   }
   return { agent, parsed, sessionName: parsed?.sessionName ?? null }
+}
+
+/** Context from the usage block the parser kept; the window may come from Pi's model registry. */
+export function contextUsageOfParsed(parsed: { usage?: unknown; model: string | null } | null | undefined): ViewerAgent["context"] {
+  if (!parsed) return null
+  return contextUsageFrom(parsed.usage, parsed.model, piContextWindow(parsed.model))
 }
 
 type PaneAgent = { kind: "claude"; proc: Proc } | { kind: "pi"; candidates: Proc[] }
@@ -414,7 +421,7 @@ function resolvePaneAgent(
     status: state.status,
     statusNote: state.note,
     statusDetail: state.detail ?? null,
-    context: contextUsageOf(parsed?.events ?? [], parsed?.model ?? null),
+    context: contextUsageOfParsed(parsed),
   }
   return { agent, parsed, sessionName: parsed?.sessionName ?? wanted }
 }

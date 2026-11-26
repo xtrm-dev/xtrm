@@ -6,8 +6,10 @@ import {
   contextPercent,
   contextTokensUsed,
   contextTone,
+  contextUsageFrom,
   contextUsageOf,
   contextWindowFor,
+  contextWindowFromRegistry,
   formatTokens,
 } from "../src/lib/context-usage.ts"
 
@@ -103,4 +105,23 @@ test("token counts read compactly in the tooltip", () => {
 test("the accessible name carries the state, as on the sidebar dot", () => {
   assert.equal(contextLabel({ used: 46_395, window: 200_000 }), "23% of 200k tokens")
   assert.equal(contextLabel({ used: 990_000, window: 1_000_000 }), "99% of 1M tokens")
+})
+
+test("pi's registry resolves the window from provider and model id", () => {
+  const registry = {
+    "opencode-go": { models: [{ id: "deepseek-v4.1-flash", contextWindow: 1_000_000 }] },
+    deepseek: { models: [{ id: "deepseek-v4-pro", contextWindow: 1_048_576 }] },
+  }
+  assert.equal(contextWindowFromRegistry("opencode-go/deepseek-v4.1-flash", registry), 1_000_000)
+  assert.equal(contextWindowFromRegistry("deepseek/deepseek-v4-pro", registry), 1_048_576)
+  assert.equal(contextWindowFromRegistry("deepseek/deepseek-v4-pro:thinking", registry), 1_048_576)
+  assert.equal(contextWindowFromRegistry("opencode-go/unknown", registry), null)
+  assert.equal(contextWindowFromRegistry("deepseek-v4-pro", registry), null)
+  assert.equal(contextWindowFromRegistry("deepseek/deepseek-v4-pro", null), null)
+})
+
+test("context from a cached usage block takes the registry window", () => {
+  assert.deepEqual(contextUsageFrom(piUsage, "opencode-go/deepseek-v4.1-flash", 1_000_000), { used: 104_077, window: 1_000_000 })
+  assert.equal(contextUsageFrom(null, "opencode-go/deepseek-v4.1-flash", 1_000_000), null)
+  assert.equal(contextUsageFrom(piUsage, "unknown/model", null), null)
 })

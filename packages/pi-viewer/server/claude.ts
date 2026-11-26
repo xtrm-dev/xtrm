@@ -375,6 +375,8 @@ interface ClaudeState {
   customTitle: string | null
   agentName: string | null
   model: string | null
+  /** Newest assistant usage block; context reads this, not the normalised entries. */
+  usage: Raw | null
   queue: QueuedPrompt[]
 }
 
@@ -394,6 +396,7 @@ function freshState(rawRef: Raw[]): ClaudeState {
     customTitle: null,
     agentName: null,
     model: null,
+    usage: null,
     queue: [],
   }
 }
@@ -513,6 +516,7 @@ function ingestAssistant(state: ClaudeState, record: Raw, sidechain: boolean): v
   const stopReason = stopReasonOf(record, message)
   const model = asString(message.model)
   if (model && model !== "<synthetic>" && !sidechain) state.model = model
+  if (!sidechain && isRecord(message.usage)) state.usage = message.usage
 
   const touch = (entry: Raw): void => {
     const records = (entry as { _records?: Raw[] })._records
@@ -908,6 +912,7 @@ export function parseClaudeFile(file: string): ParsedFile {
     entryVersions: state.versions.slice(0, events.length),
     sessionName: state.customTitle ?? state.agentName,
     model: state.model,
+    usage: state.usage,
     thinkingLevel: null,
     modifiedAt: cache.mtimeMs,
     size: cache.size,
