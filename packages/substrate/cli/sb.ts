@@ -46,6 +46,7 @@ import { ClosureService } from "../src/service/closure-service.ts";
 import { CLOSURE_OUTCOMES, isClosureOutcome } from "../src/domain/closure.ts";
 import { isoTime, resolveClaimHolder } from "../src/domain/claim.ts";
 import { ResumeService } from "../src/service/resume-service.ts";
+import { syncPaneIssue } from "../src/domain/pane-issue-sync.ts";
 import { ProvenanceService } from "../src/service/provenance-service.ts";
 import { PullRequestService } from "../src/service/pull-request-service.ts";
 import { LinkGateService, gateModeFromEnv } from "../src/service/link-gate-service.ts";
@@ -683,7 +684,12 @@ deactivates the active edge between the endpoints for the given kind.`,
 --holder defaults to SUBSTRATE_HOLDER, the holder an xt session exports for
 itself (xt pi|claude|codex <name> sets it). Pass --holder only to claim on
 someone else's behalf. With neither --holder nor a non-empty SUBSTRATE_HOLDER
-the claim fails closed; there is no implicit unix-user holder.`,
+the claim fails closed; there is no implicit unix-user holder.
+
+Inside a tmux pane, a successful claim, release, close or cancel by the pane's
+own holder (its @agent_holder) also updates that pane's @agent_issue. A claim
+made by another holder, or in a pane launched without @agent_holder, leaves the
+pane alone; a failed update is logged to $XDG_STATE_HOME/xtrm/pane-sync.log.`,
   "issue.renew": `usage: sb issue renew <ref> [--holder <who>] [--ttl-ms <n>] [--activation <id>] [--project <id>]
 
 --holder defaults to SUBSTRATE_HOLDER, exactly as for claim and release. The
@@ -3775,6 +3781,8 @@ const invokedAsMain =
   invokedPath.endsWith("sb.ts") || invokedPath.endsWith("sb.js") || invokedPath.endsWith("/sb") || invokedPath === "sb";
 if (invokedAsMain) {
   const result = runCli(process.argv.slice(2));
+  // CORE-2801: a succeeded claim, release or close moves the owning pane's @agent_issue. Best-effort.
+  if (result.code === 0) syncPaneIssue(process.argv.slice(2));
   // An early-closing reader (`sb ... | head`) makes stdout/stderr emit EPIPE.
   // That is a normal end of output, not a failure: without a handler it
   // surfaces as an unhandled 'error' event that replaces the real exit code.

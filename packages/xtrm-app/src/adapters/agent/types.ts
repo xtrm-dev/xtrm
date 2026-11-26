@@ -13,7 +13,7 @@ export interface AgentSessionSummary {
   provider: "pi" | "claude" | "codex";
   state: SessionState;
   role: string | null;
-  /** Bound Substrate Issue ref (`--bead`). */
+  /** Bound Substrate Issue ref (`--issue`). */
   workRef: string | null;
   /** `owner/name` of the repository the cwd belongs to (host `repository`); null without a remote. */
   repo: string | null;
