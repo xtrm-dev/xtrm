@@ -165,6 +165,11 @@ records are meta; the `<cross-session-message>` envelope goes through `server/in
 (`api-request*`, `data-flow-*`, `mode`, …) is dropped. The pane name is the transcript's `custom-title`,
 else `agent-name`, else the cwd basename plus the short session id.
 
+A prompt typed into a busy pane is queued by Claude. `queue-operation` enqueue with content becomes a
+queued operator row; `remove` plus a `queued_command` attachment of mode `prompt` updates that row in place
+at the attachment time; `dequeue` plus a normal user record shows only the normal turn. A queued row carries
+the `Queued` delivery mark, and its key does not change on delivery, so the bubble is never remounted.
+
 ## Roles
 
 The launcher records a role in the pane option `@agent_role`. The viewer reads it
@@ -265,6 +270,7 @@ npm run build
 npm run test:anchor
 npm run test:follow
 npm run test:flicker   # send → echo must reuse one bubble
+npm run test:queue     # queued prompt → delivered keeps one row
 npm run measure:load http://127.0.0.1:5199/   # cold-load numbers, see Run
 ```
 
@@ -274,8 +280,10 @@ instance on port 5198 with a deterministic fixture and drives headless Chromium
 to prove that a poll growing or appending content above the viewport does not
 move the reader's anchor, and that the bottom stays pinned. `npm run test:flicker`
 sends into a mocked thread and fails if the optimistic bubble is removed and
-re-added when the transcript echo arrives. Both need the Playwright Chromium
-download (`npx playwright install chromium`).
+re-added when the transcript echo arrives. `npm run test:queue` drives a mocked
+Claude queue: a queued row must show the Queued mark, keep the same DOM node when
+the attachment arrives, and show once. Both need the Playwright Chromium download
+(`npx playwright install chromium`).
 
 Live API checks:
 

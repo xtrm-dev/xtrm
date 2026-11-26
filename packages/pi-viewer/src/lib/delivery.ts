@@ -6,12 +6,13 @@ import type { ChannelItem } from "./thread.ts"
  * queued: the request is in flight. typed: send-keys returned; the transcript has no echo yet.
  * seen: the prompt is in the transcript. answered: the same agent has since settled a turn.
  */
-export type Delivery = "queued" | "typed" | "seen" | "answered" | "failed"
+export type Delivery = "queued" | "pending" | "typed" | "seen" | "answered" | "failed"
 
 /** The words behind the delivery marks (operator, 2026-11-26): shown as the mark's label and tooltip, and as
  * text only for a failure, whose reason must stay readable. "answered" reads as "Replied". */
 export const DELIVERY_WORD: Record<Delivery, string> = {
   queued: "Sending",
+  pending: "Queued",
   typed: "Sent",
   seen: "Seen",
   answered: "Replied",
@@ -43,6 +44,7 @@ export function deliveryOfUser(
   item: Extract<ChannelItem, { kind: "user" }>,
   items: ChannelItem[] | Map<string, number>,
 ): Delivery {
+  if (item.event.queued) return "pending"
   const replies = items instanceof Map ? items : latestReplyAt(items)
   const replied = replies.get(item.agentId)
   return replied !== undefined && replied > item.at ? "answered" : "seen"

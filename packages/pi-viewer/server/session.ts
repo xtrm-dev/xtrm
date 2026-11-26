@@ -457,6 +457,7 @@ export function normalizeEvent(
       summary: firstLine(text),
       text: capped.text,
       truncated: capped.truncated || undefined,
+      queued: entry._queued === true || undefined,
     }
   }
 

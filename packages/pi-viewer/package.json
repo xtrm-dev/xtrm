@@ -24,7 +24,8 @@
     "test:composer": "node scripts/composer-check.mjs",
     "test:sidebar": "node scripts/sidebar-gate.mjs",
     "measure:load": "node scripts/load-check.mjs",
-    "test:flicker": "node scripts/send-flicker-check.mjs"
+    "test:flicker": "node scripts/send-flicker-check.mjs",
+    "test:queue": "node scripts/queue-check.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.3.0",

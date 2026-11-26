@@ -140,6 +140,8 @@ export interface ViewerEvent {
   effect?: TurnEffect
   /** A failed assistant message whose error is a context overflow: a compaction resumes its turn. */
   overflow?: boolean
+  /** Operator prompt typed into a busy pane, not yet delivered to the model. */
+  queued?: boolean
   /** False for events that belong to an abandoned branch of the session tree. */
   onBranch: boolean
   /** Compact, capped JSON of the original line for inspection. */
