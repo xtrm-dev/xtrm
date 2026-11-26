@@ -12,7 +12,7 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent } from "@/components/ui/message"
 import { StoppedTurn } from "@/components/presence/StoppedTurn"
 import { MessageScrollerItem, useMessageScroller } from "@/components/ui/message-scroller"
-import { DELIVERY_WORD, deliveryOfOptimistic, deliveryOfUser, latestUserIds, type Delivery } from "@/lib/delivery"
+import { DELIVERY_WORD, deliveryOfOptimistic, deliveryOfUser, latestReplyAt, latestUserIds, type Delivery } from "@/lib/delivery"
 import { dayKey, dayLabel, fullDate, monogram, stamp } from "@/lib/format"
 import type { OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
@@ -178,8 +178,10 @@ function UserMessage({
           data-action-row="user"
           className="flex w-full min-w-0 items-center justify-end gap-2 text-xs whitespace-nowrap"
         >
+          {/* Time and recipient reveal on hover (pinned on the newest message); the delivery mark stays
+              visible at rest on every sent message, as in a chat app (operator, 2026-11-26). */}
           <div
-            className="xtrm-meta ml-auto flex min-w-0 items-center gap-1.5 pr-1 tabular text-ink-muted"
+            className="xtrm-meta ml-auto flex min-w-0 items-center gap-1.5 tabular text-ink-muted"
             data-pinned={pinned || delivery === "failed" ? "true" : undefined}
           >
             <span className="shrink-0" title={fullDate(event.at)}>
@@ -187,18 +189,25 @@ function UserMessage({
             </span>
             <span className="shrink-0 text-border-strong">·</span>
             <span className="min-w-0 truncate">to {agentName}</span>
-            {delivery ? <DeliveryMark delivery={delivery} error={error} /> : null}
-            {delivery === "failed" && onDismiss ? (
-              <button
-                type="button"
-                onClick={onDismiss}
-                className="shrink-0 text-ink-muted underline-offset-2 hover:text-ink hover:underline"
-              >
-                dismiss
-              </button>
-            ) : null}
-            {body ? <CopyButton text={body} label="Copy message" /> : null}
           </div>
+          {delivery ? <DeliveryMark delivery={delivery} error={error} /> : null}
+          {delivery === "failed" && onDismiss ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="shrink-0 text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+            >
+              dismiss
+            </button>
+          ) : null}
+          {body ? (
+            <div
+              className="xtrm-meta flex shrink-0 items-center pr-1"
+              data-pinned={pinned || delivery === "failed" ? "true" : undefined}
+            >
+              <CopyButton text={body} label="Copy message" />
+            </div>
+          ) : null}
         </div>
       </MessageContent>
     </Message>
@@ -325,6 +334,7 @@ export function ChannelView({
   const newest = useMemo(() => items.reduce((max, item) => Math.max(max, item.at), 0), [items])
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
   const latestUsers = useMemo(() => latestUserIds(channel), [channel])
+  const replyTimes = useMemo(() => latestReplyAt(channel), [channel])
 
   // The scroller glides smoothly only while an agent in this thread works.
   const { setWorking, reportNew, atBottom, ready } = useMessageScroller()
@@ -419,7 +429,7 @@ export function ChannelView({
               <UserMessage
                 event={item.event}
                 agentName={byId.get(item.agentId)?.name ?? item.agentName}
-                delivery={latestUsers.has(item.id) ? deliveryOfUser(item, channel) : undefined}
+                delivery={deliveryOfUser(item, replyTimes)}
                 pinned={pinned || latestUsers.has(item.id)}
                 joinsAbove={joinsAbove}
                 joinsBelow={joinsBelow}

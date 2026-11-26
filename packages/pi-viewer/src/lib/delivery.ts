@@ -24,13 +24,28 @@ export function deliveryOfOptimistic(status: OptimisticMessage["status"]): Deliv
   return "typed"
 }
 
-/** A user event in the transcript is `seen`, or `answered` once its agent settled a later turn. */
-export function deliveryOfUser(item: Extract<ChannelItem, { kind: "user" }>, items: ChannelItem[]): Delivery {
-  for (const other of items) {
-    if (other.kind !== "turn" || other.agentId !== item.agentId) continue
-    if (other.turn.final && other.at > item.at) return "answered"
+/**
+ * The newest settled reply time per agent, computed once per timeline so that every operator message can carry
+ * its mark (operator, 2026-11-26) in O(1) instead of a full scan per message.
+ */
+export function latestReplyAt(items: ChannelItem[]): Map<string, number> {
+  const latest = new Map<string, number>()
+  for (const item of items) {
+    if (item.kind !== "turn" || !item.turn.final) continue
+    const previous = latest.get(item.agentId)
+    if (previous === undefined || item.at > previous) latest.set(item.agentId, item.at)
   }
-  return "seen"
+  return latest
+}
+
+/** A user event in the transcript is `seen`, or `answered` once its agent settled a later turn. */
+export function deliveryOfUser(
+  item: Extract<ChannelItem, { kind: "user" }>,
+  items: ChannelItem[] | Map<string, number>,
+): Delivery {
+  const replies = items instanceof Map ? items : latestReplyAt(items)
+  const replied = replies.get(item.agentId)
+  return replied !== undefined && replied > item.at ? "answered" : "seen"
 }
 
 /** Only the newest operator message per agent carries a state; older ones are history. */
