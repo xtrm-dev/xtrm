@@ -8,7 +8,7 @@ import {
   WrenchIcon,
   XIcon,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { memo, useMemo, useState } from "react"
 
 import { CodeBlock } from "@/components/CodeBlock"
 import { Shimmer } from "@/components/Shimmer"
@@ -181,7 +181,7 @@ function GroupRow({
   )
 }
 
-export function ActivityDisclosure({
+export const ActivityDisclosure = memo(function ActivityDisclosure({
   turn,
   session,
   pending,
@@ -272,4 +272,4 @@ export function ActivityDisclosure({
       ) : null}
     </div>
   )
-}
+})

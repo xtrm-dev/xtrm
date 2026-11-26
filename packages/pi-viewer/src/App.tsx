@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { AllEventsView } from "@/components/AllEventsView"
 import { ChannelView } from "@/components/ChannelView"
@@ -52,7 +52,7 @@ function mergeEvents(previous: ViewerEvent[], incoming: ViewerEvent[]): ViewerEv
   const byId = new Map(previous.map((event) => [event.id, event]))
   for (const event of incoming) byId.set(event.id, event)
   return [...byId.values()].sort(
-    (a, b) => a.at - b.at || a.agentId.localeCompare(b.agentId) || a.seq - b.seq,
+    (a, b) => a.at - b.at || (a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0) || a.seq - b.seq,
   )
 }
 
@@ -133,7 +133,10 @@ export default function App() {
   function applyTrack(next: ScopeTrack) {
     track.current = next
     if (next.scope) requestedScope.current = null
-    setScope((current) => (sameScopeState(current, next.scope) ? current : next.scope))
+    const nextScope = next.scope
+    startTransition(() => {
+      setScope((current) => (sameScopeState(current, nextScope) ? current : nextScope))
+    })
   }
 
   // One observation of what exists now (a discovery or a thread poll) advances the scope.
@@ -237,7 +240,14 @@ export default function App() {
           agents: payload.agents,
           capturedAt: payload.capturedAt,
         }
-        setMeta(nextMeta)
+        setMeta((previous) =>
+          previous &&
+          previous.session === nextMeta.session &&
+          previous.serverId === nextMeta.serverId &&
+          previous.version === nextMeta.version
+            ? previous
+            : nextMeta,
+        )
         observe(mergeLive(sessionsRef.current, payload.session, nextMeta))
         setThreadError(null)
         delay = 1_500
@@ -344,6 +354,10 @@ export default function App() {
     return optimistic.filter((message) => ids.has(message.paneId))
   }, [optimistic, agents])
 
+  // One timeline for the thread, its presence line and the delivery rows. ChannelView must not
+  // rebuild it during an unchanged poll.
+  const timeline = useMemo(() => channelTimeline(scopeEvents, scopeOptimistic), [scopeEvents, scopeOptimistic])
+
   // The composer addresses one agent of the scope: the one picked, else the pane itself or the
   // most recently active agent of the window or session.
   const target = useMemo(
@@ -354,8 +368,8 @@ export default function App() {
 
   // The running agents of the scope, shown by the presence line above the composer (XTRM-1035).
   const presence = useMemo(
-    () => splitPresence(channelTimeline(scopeEvents, scopeOptimistic), agents).presence,
-    [scopeEvents, scopeOptimistic, agents],
+    () => splitPresence(timeline, agents).presence,
+    [timeline, agents],
   )
 
   function messageAgent(agent: ViewerAgent) {
@@ -366,10 +380,17 @@ export default function App() {
     })
   }
 
-  function replyToAgent(agent: ViewerAgent) {
-    messageAgent(agent)
-    setReplyPaneId(scope ? replyIdFor(scope.kind, agent.id) : null)
-  }
+  const replyToAgent = useCallback(
+    (agent: ViewerAgent) => {
+      messageAgent(agent)
+      setReplyPaneId(scope ? replyIdFor(scope.kind, agent.id) : null)
+    },
+    [scope],
+  )
+
+  const dismissOptimistic = useCallback((id: string) => {
+    setOptimistic((previous) => previous.filter((entry) => entry.id !== id))
+  }, [])
 
   function select(next: Scope) {
     if (sameScope(next, scope)) {
@@ -473,7 +494,7 @@ export default function App() {
       ) : (
         <>
           <div className="min-h-0 flex-1">
-            <MessageScrollerProvider key={scrollerKey} threadKey={scrollerKey}>
+            <MessageScrollerProvider threadKey={scrollerKey}>
               <MessageScrollerApi onReady={(api) => (sendScrollRef.current = api)} />
               <MessageScroller>
                 <MessageScrollerViewport>
@@ -487,7 +508,7 @@ export default function App() {
                     {view === "channel" ? (
                       branch ? (
                         <ChannelView
-                          events={scopeEvents}
+                          timeline={timeline}
                           agents={agents}
                           session={branch.session}
                           readKey={threadReadKey(branch.serverId, scope ? scopeRowKey(scope) : branch.session)}
@@ -498,10 +519,7 @@ export default function App() {
                               .sort()
                               .join(",")}`,
                           ]}
-                          optimistic={scopeOptimistic}
-                          onDismissOptimistic={(id) =>
-                            setOptimistic((previous) => previous.filter((entry) => entry.id !== id))
-                          }
+                          onDismissOptimistic={dismissOptimistic}
                           hasEarlier={branch.hasEarlier}
                           earlierTurns={branch.earlierTurns}
                           earlierLoading={earlierLoading}
