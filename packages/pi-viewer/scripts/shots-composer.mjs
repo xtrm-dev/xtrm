@@ -70,7 +70,7 @@ try {
     await page.waitForTimeout(150)
     await shot("typed")
     await input.fill("")
-    await page.locator("[data-composer-under-row] button").first().click()
+    await page.locator("[data-composer-under-row] button[aria-expanded]").click()
     await page.waitForTimeout(200)
     await shot("menu")
     await page.locator("[data-composer-menu] button", { hasText: CLAUDE.name }).click()

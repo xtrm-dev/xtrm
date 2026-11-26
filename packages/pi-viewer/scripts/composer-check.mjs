@@ -194,7 +194,9 @@ try {
       assert.ok(Math.abs(focused.sendRightInset - focused.textLeftInset) <= 1, `${label}: send's right inset equals the text's left inset (${focused.sendRightInset} vs ${focused.textLeftInset})`)
 
       // 5. The under-row: right-aligned, the target, its model, its bare effort at 13px, 12px apart.
-      const to = page.locator("[data-composer-under-row] button").first()
+      // The selector is the only under-row button with aria-expanded: when the menu is open its rows
+      // also live inside [data-composer-target-meta] and come first in the DOM (XTRM-1056 follow-up).
+      const to = page.locator("[data-composer-under-row] button[aria-expanded]")
       const pick = async (name) => {
         await to.click()
         await page.locator("[data-composer-menu] button", { hasText: name }).click()
