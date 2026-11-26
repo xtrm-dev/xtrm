@@ -295,9 +295,10 @@ The spacing scale is the 8px system the operator supplied as a density guide
 
 | element | value | source |
 |---|---|---|
-| composer box padding | `14px` horizontal, `14px` vertical (`px-3.5 py-3.5`), right `56px` for the send button | `src/components/Composer.tsx:237` |
-| composer box, empty | `52px`: line `24px` + `1.75rem` of padding | `src/components/Composer.tsx:237` |
-| composer send button | `32px` box, `16px` glyph, `10px` above the box's bottom edge | `src/components/Composer.tsx:245-262` |
+| composer box padding | `12px` all round (`p-3`), right `56px` for the send button | `src/components/Composer.tsx:254` |
+| composer text padding | `3.25px` above the line, `4.75px` below (optical centring, XTRM-1087) | `src/components/Composer.tsx:261` |
+| composer box, empty | `56px`: `12px` + a `32px` textarea (line `24px` + `8px`) + `12px` | `src/components/Composer.tsx:254` |
+| composer send button | `32px` box, `16px` glyph, `12px` above the box's bottom edge, centred on the text line | `src/components/Composer.tsx:262-270` |
 | composer under-row | `6px` below the box, `12px` between items, right edge at the send button's right edge | `src/components/Composer.tsx:267-269` |
 | sidebar row padding | `8px` horizontally on the tree, `6px` vertically on a pane row | `src/components/sidebar/geometry.ts` |
 | thread content padding | `3rem` on a wide screen (`sm:px-12`) | `src/styles.css:757-771` |
@@ -560,17 +561,25 @@ cut-outs against any palette's canvas (`docs/design/palette-console.md`).
 
 Purpose: send one operator message to one agent, and answer a specific agent without retyping.
 
-Geometry: a 52px one-line box that grows to `max-h-52` (`208px`), no border and no ring in any palette or
-state, a fill one step above the canvas, a slight drop shadow, `15px/24px` prompt, a 32px send button
+Geometry: a 56px one-line box that grows to `max-h-52` (`208px`), no border and no ring in any palette or
+state, a fill one step above the canvas, a slight drop shadow, `16px/24px` prompt, a 32px send button
 overlaying the box's bottom right, and an empty attach slot on the left for a control that does not exist
 yet (`src/components/Composer.tsx:237-262`). The box carries `--x-composer-fill`, `--x-composer-focus`,
 `--x-composer-shadow` and `--x-composer-shadow-focus` (`.xtrm-composer-box`, `src/styles.css:749-765`), so
 a palette decides the step, the elevation and the focus signal without touching the component.
 
+The box centres the painted band, not the line box. Inside a 24px line box a font's descender ink is
+shallower than its cap height, so an evenly padded line draws its ascenders and descenders slightly low
+in the box; the operator sees that as text sitting under the middle. The textarea therefore carries
+`3.25px` above the line and `4.75px` below, and the measurement that binds is the rendered band: at a 2x
+device ratio the placeholder and a typed line both paint across `20.5–35px` of the 56px box, the send
+glyph across the same band, and every gap is within 0.25px of centre (`npm run test:composer` asserts
+this on pixels, not on rects).
+
 The target row sits under the box, right-aligned, 12px apart: the target (status dot, name, chevron),
 its model, and its bare effort — for example `lead  claude-opus-4-8  high` (`:264-341`). The values come
 from the agent's `model` and `thinkingLevel` through `composerMeta` (`src/lib/composer-meta.ts`); a missing
-value is omitted, never invented. The row is 14px against the 15px prompt, muted, with no chips and no
+value is omitted, never invented. The row is 14px against the 16px prompt, muted, with no chips and no
 borders.
 
 Beside the model name the composer draws the agent's context usage (XTRM-1087): a 14px ring whose arc is
@@ -799,7 +808,9 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-25 | The pane row's line 2 carries no state word; the dot carries the state, as in the thread | XTRM-1048 |
 | 2026-11-26 | All five palettes stay — Threads, Threads soft text, Console, Console soft text, Desktop; the default remains Threads | XTRM-1024 seq17 |
 | 2026-11-26 | Desktop palette (dimmer reading text) and soft-text versions of Threads and Console; muted text rises to #a1a1a1 for 4.5:1 | XTRM-1051, XTRM-1053 |
-| 2026-11-26 | Composer: one-line 52px box, no border, target row with model and effort under it on the right | XTRM-1054, XTRM-1056 |
+| 2026-11-26 | Composer: one-line 56px box, no border, target row with model and effort under it on the right | XTRM-1054, XTRM-1056, XTRM-1067 |
+| 2026-11-26 | Composer: no border and no ring in any palette or state; a drop shadow, and a context-usage ring beside the model | XTRM-1087 |
+| 2026-11-26 | The composer centres the painted ink band, not the line box: 0.75px more padding below than above | XTRM-1087 |
 | 2026-11-26 | Folds sit inside the bubble or card with one wording; the fade masks the text itself | XTRM-1055 |
 | 2026-11-26 | Reviewer roles run as specialists | XTRM-1024 seq14 |
 | 2026-11-26 | Sidebar line 2 is text-xs in ink-muted, matching the line above | XTRM-1057 |

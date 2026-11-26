@@ -14,6 +14,9 @@
 //   send button's right edge, updates with the target, and omits what the runtime does not report;
 // - the box's gaps are equal: box top to the text line equals the text line to the box bottom, and the
 //   send button is centred with equal top, bottom and right gaps (XTRM-1087);
+// - the PAINTED ink is centred too, not just the line box: the placeholder's and a typed line's ink band
+//   (cap to descender) sits within 1px of the box centre and within 1px of the send glyph's band, which
+//   is what the operator sees (XTRM-1087, optical centring);
 // - a context ring sits beside the model name with its fraction and its accessible name, and no ring
 //   is drawn when the agent reports no usage (XTRM-1087);
 // - every palette and preset, dark and light, draws neither border nor ring, and still separates the box;
@@ -47,6 +50,67 @@ const events = [
   { id: "%1:0", agentId: "%1", agentName: PI.name, seq: 0, at: T0, kind: "user", role: "user", summary: "hi", onBranch: true, text: "hi" },
   { id: "%1:1", agentId: "%1", agentName: PI.name, seq: 1, at: T0 + 5_000, kind: "assistant", role: "assistant", summary: "hello", onBranch: true, text: "hello", parts: [{ type: "text", text: "hello" }], stopReason: "stop" },
 ]
+
+// The painted ink band of one element, measured on the rendered pixels: the element is rasterised, the
+// image is decoded through a canvas, and rows that differ from the region's modal colour by more than 90
+// (sum of channel differences) count as ink. Text is scanned in the box's left columns and the send glyph
+// inside the button's inner area, so the rounded corners never register. This is the measurement the
+// operator makes with their eye; geometry cannot see it, because a font's descender sits below the line
+// box's centre (XTRM-1087).
+async function inkBand(page, selector, mode) {
+  const shot = await page.locator(selector).first().screenshot({ animations: "disabled" })
+  return page.evaluate(
+    async ({ b64, mode }) => {
+      const img = new Image()
+      img.src = `data:image/png;base64,${b64}`
+      await img.decode()
+      const canvas = document.createElement("canvas")
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext("2d", { willReadFrequently: true })
+      ctx.drawImage(img, 0, 0)
+      const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const at = (x, y) => {
+        const index = (y * width + x) * 4
+        return [data[index], data[index + 1], data[index + 2]]
+      }
+      const counts = new Map()
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const key = at(x, y).join(",")
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+        }
+      }
+      const bg = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0].split(",").map(Number)
+      const columnFrom = mode === "text" ? Math.round(width * 0.03) : 6
+      const columnTo = mode === "text" ? Math.round(width * 0.62) : width - 6
+      const rowFrom = mode === "text" ? 0 : 4
+      const rowTo = mode === "text" ? height : height - 4
+      let top = null
+      let bottom = null
+      for (let y = rowFrom; y < rowTo; y += 1) {
+        for (let x = columnFrom; x < columnTo; x += 1) {
+          const [r, g, bl] = at(x, y)
+          if (Math.abs(r - bg[0]) + Math.abs(g - bg[1]) + Math.abs(bl - bg[2]) > 90) {
+            if (top === null) top = y
+            bottom = y
+            break
+          }
+        }
+      }
+      const ratio = window.devicePixelRatio || 1
+      const height1x = height / ratio
+      return {
+        top: Math.round((top / ratio) * 10) / 10,
+        bottom: Math.round((bottom / ratio) * 10) / 10,
+        height: Math.round(height1x * 10) / 10,
+        topGap: Math.round((top / ratio) * 10) / 10,
+        bottomGap: Math.round((height1x - bottom / ratio) * 10) / 10,
+      }
+    },
+    { b64: shot.toString("base64"), mode },
+  )
+}
 
 const read = (page) =>
   page.evaluate(() => {
@@ -191,11 +255,12 @@ try {
       assert.equal(empty.line, 24, `${label}: the prompt line is 24px high (line ${empty.line}px)`)
       assert.equal(empty.promptSize, "16px", `${label}: the prompt text is 16px (${empty.promptSize})`)
       assert.ok(Math.abs(empty.sendBottomGap - 12) <= 1, `${label}: one line: send sits 12px above the box's bottom (gap ${empty.sendBottomGap}px)`)
-      // SUCCESS(1): the box top to the text line equals the text line to the box bottom, and the send
-      // button is centred with equal top, bottom and right gaps.
+      // SUCCESS(1): the ink is centred, and the box's own insets stay symmetric. The LINE box is off centre by
+      // design — 0.75px more padding below — because the painted band (cap to descender) is not centred in a
+      // centred line box; the ink assertions below are the binding ones (XTRM-1087, optical centring).
       assert.ok(
-        Math.abs(empty.textTopGap - empty.textBottomGap) <= 1,
-        `${label}: the text line is centred in the box (top ${empty.textTopGap}px vs bottom ${empty.textBottomGap}px)`,
+        Math.abs(empty.textTopGap - empty.textBottomGap) <= 1.5,
+        `${label}: the text line is optically offset by at most 0.75px (top ${empty.textTopGap}px vs bottom ${empty.textBottomGap}px)`,
       )
       assert.ok(
         Math.abs(empty.sendTopGap - empty.sendBottomGap) <= 1,
@@ -205,6 +270,37 @@ try {
         Math.abs(empty.sendRightInset - empty.textLeftInset) <= 1,
         `${label}: the send's right gap equals the text's left gap (${empty.sendRightInset} vs ${empty.textLeftInset})`,
       )
+      // The painted ink, which is what the operator sees: the placeholder's band and the send glyph's band
+      // must each be centred within 1px, and the text must sit on the glyph's optical line (XTRM-1087).
+      const inkPlaceholder = await inkBand(page, ".xtrm-composer-box", "text")
+      const inkSend = await inkBand(page, "[data-composer-controls] button", "send")
+      const placeholderCentre = Math.round(((inkPlaceholder.top + inkPlaceholder.bottom) / 2) * 10) / 10
+      const sendCentre = Math.round(((inkSend.top + inkSend.bottom) / 2) * 10) / 10
+      assert.ok(
+        Math.abs(inkPlaceholder.topGap - inkPlaceholder.bottomGap) <= 1,
+        `${label}: the placeholder's ink is centred (top ${inkPlaceholder.topGap}px vs bottom ${inkPlaceholder.bottomGap}px)`,
+      )
+      assert.ok(
+        Math.abs(inkSend.topGap - inkSend.bottomGap) <= 1,
+        `${label}: the send glyph's ink is centred (top ${inkSend.topGap}px vs bottom ${inkSend.bottomGap}px)`,
+      )
+      assert.ok(
+        Math.abs(placeholderCentre - (inkPlaceholder.height - inkSend.height) / 2 - sendCentre) <= 1.5,
+        `${label}: the text and the glyph share an optical line (text ${placeholderCentre} vs glyph ${sendCentre + (inkPlaceholder.height - inkSend.height) / 2})`,
+      )
+      await page.locator("[data-composer-input]").fill("Message one two")
+      await page.waitForTimeout(150)
+      const inkTyped = await inkBand(page, ".xtrm-composer-box", "text")
+      assert.ok(
+        Math.abs(inkTyped.topGap - inkTyped.bottomGap) <= 1,
+        `${label}: a typed line's ink is centred (top ${inkTyped.topGap}px vs bottom ${inkTyped.bottomGap}px)`,
+      )
+      assert.ok(
+        Math.abs(inkTyped.top - inkPlaceholder.top) <= 1,
+        `${label}: the placeholder and a typed line sit on the same line (${inkPlaceholder.top} vs ${inkTyped.top})`,
+      )
+      await page.locator("[data-composer-input]").fill("")
+      await page.waitForTimeout(120)
       assert.equal(empty.underInsideBox, false, `${label}: the under-row sits outside the box`)
       assert.ok(empty.underTop >= empty.boxBottom, `${label}: the under-row is below the box (${empty.underTop} < ${empty.boxBottom})`)
       await page.locator("[data-composer-input]").fill("one\ntwo\nthree")
