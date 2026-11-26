@@ -759,7 +759,11 @@ showing it. Scope: the tmux server this process runs under; panes on another ser
 are not reached. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.archive": `usage: sb issue archive <ref> [--project <id>]
 
-alias for: sb issue state <ref> archived.`,
+alias for: sb issue state <ref> archived.
+
+Pane effect: inside tmux, every pane whose @agent_issue is <ref> is unset, whoever
+ran this, exactly like close. Scope: the tmux server this process runs under only.
+Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.resume": `usage: sb issue resume <ref>
 
 builds the continuity capsule (derived, never a source of truth).`,

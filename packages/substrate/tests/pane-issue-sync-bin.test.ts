@@ -33,7 +33,9 @@ describe("runUxCli drives the pane sync", () => {
       tmux("set-option", "-p", "-t", pane, "@agent_holder", "w1");
       const a = (await sb("issue", "create", "--title", "A", "--kind", "task", "--contract", cpath, "--scrutiny", "LOW")).data.humanRef as string;
       const b = (await sb("issue", "create", "--title", "B", "--kind", "task", "--contract", cpath, "--scrutiny", "LOW")).data.humanRef as string;
-      for (const r of [a, b]) await sb("issue", "attest", r, "--outcome", "ready", "--policy", "default", "--attested-by", "t");
+      const c = (await sb("issue", "create", "--title", "C", "--kind", "task", "--contract", cpath, "--scrutiny", "LOW")).data.humanRef as string;
+      const d = (await sb("issue", "create", "--title", "D", "--kind", "task", "--contract", cpath, "--scrutiny", "LOW")).data.humanRef as string;
+      for (const r of [a, b, c, d]) await sb("issue", "attest", r, "--outcome", "ready", "--policy", "default", "--attested-by", "t");
       Object.assign(process.env, { TMUX: `${socket},0,0`, TMUX_PANE: pane, SUBSTRATE_HOLDER: "w1", XDG_STATE_HOME: join(dir, "state") });
       const held = () => tmux("show-options", "-p", "-t", pane, "-qv", "@agent_issue").stdout.trim();
       await sb("issue", "claim", a);
@@ -46,6 +48,16 @@ describe("runUxCli drives the pane sync", () => {
       Object.assign(process.env, { SUBSTRATE_HOLDER: "lead", TMUX_PANE: "%99" });
       await sb("issue", "state", b, "done");
       assert.equal(held(), "", "a terminal state by another holder unsets the worker pane");
+      // `archive` and an upper-case state target end the hold too.
+      Object.assign(process.env, { SUBSTRATE_HOLDER: "w1", TMUX_PANE: pane });
+      await sb("issue", "claim", c);
+      assert.equal(held(), c);
+      await sb("issue", "archive", c);
+      assert.equal(held(), "", "archive unsets the pane");
+      await sb("issue", "claim", d);
+      assert.equal(held(), d);
+      await sb("issue", "state", d, "DONE");
+      assert.equal(held(), "", "an upper-case terminal state unsets the pane");
     } finally {
       for (const k of ["TMUX", "TMUX_PANE", "SUBSTRATE_HOLDER", "XDG_STATE_HOME"]) { if (k in saved) process.env[k] = saved[k]; else delete process.env[k]; }
       tmux("kill-server");

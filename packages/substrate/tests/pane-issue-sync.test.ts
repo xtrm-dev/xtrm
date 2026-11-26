@@ -15,6 +15,8 @@ describe("parsePaneSyncRequest", () => {
     assert.deepEqual(parsePaneSyncRequest(["issue", "state", "CORE-5", "done"]), { effect: "end", ref: "CORE-5", holder: null });
     assert.deepEqual(parsePaneSyncRequest(["issue", "state", "CORE-5", "cancelled"])?.effect, "end");
     assert.equal(parsePaneSyncRequest(["issue", "state", "CORE-5", "archived"])?.effect, "end");
+    assert.equal(parsePaneSyncRequest(["issue", "state", "CORE-5", "DONE"])?.effect, "end");
+    assert.equal(parsePaneSyncRequest(["issue", "archive", "CORE-5"])?.effect, "end");
     assert.equal(parsePaneSyncRequest(["issue", "state", "CORE-5", "open"]), null);
     assert.equal(parsePaneSyncRequest(["issue", "close", "--outcome", "completed", "--reason", "r", "CORE-4"])?.ref, "CORE-4");
   });
@@ -65,6 +67,9 @@ describe("syncPaneIssue", () => {
     const lines: string[] = [];
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: { SUBSTRATE_HOLDER: "w1" }, tmux: t.run, log: (l) => lines.push(l) }), "skipped");
     assert.ok(lines.join("\n").includes("TMUX unset"), "an out-of-scope skip is logged");
+    const endLines: string[] = [];
+    assert.equal(syncPaneIssue(["issue", "close", "CORE-1", "--outcome", "completed", "--reason", "r"], { env: {}, tmux: t.run, log: (l) => endLines.push(l) }), "skipped");
+    assert.ok(endLines.join("\n").includes("TMUX unset"), "the end effect logs an out-of-scope skip too");
     assert.deepEqual(t.ops, []);
   });
   it("close, release and a terminal state unset every pane that holds the ref, whoever ran them", () => {

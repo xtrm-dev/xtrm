@@ -29,7 +29,8 @@ import { TERMINAL_STATES } from "./issue.ts";
 
 const PANE_ID = /^%[0-9]+$/;
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const END_VERBS = new Set(["release", "close", "cancel"]);
+// `archive` is the alias of `state <ref> archived`.
+const END_VERBS = new Set(["release", "close", "cancel", "archive"]);
 const TMUX_TIMEOUT_MS = 2_000;
 
 export type TmuxRunner = (args: string[]) => { status: number | null; stdout: string };
@@ -61,7 +62,7 @@ export function parsePaneSyncRequest(argv: readonly string[]): PaneSyncRequest |
   const holder = Array.isArray(holderFlag) ? (holderFlag[0] ?? "").trim() || null : null;
   if (verb === "claim") return { effect: "claim", ref, holder };
   if (END_VERBS.has(verb)) return { effect: "end", ref, holder };
-  if (verb === "state" && target && (TERMINAL_STATES as readonly string[]).includes(target)) return { effect: "end", ref, holder };
+  if (verb === "state" && target && (TERMINAL_STATES as readonly string[]).includes(target.toLowerCase())) return { effect: "end", ref, holder };
   return null;
 }
 
