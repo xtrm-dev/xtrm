@@ -31,11 +31,45 @@ function AgentMark({ name }: { name: string }) {
 }
 
 const DELIVERY_TITLE: Record<Delivery, string> = {
-  queued: "The send request is in flight.",
-  typed: "The keys reached the pane. The prompt has not appeared in the transcript yet.",
-  seen: "The prompt is in the agent's transcript.",
-  answered: "The agent has replied since this prompt.",
-  failed: "The keys did not reach the pane.",
+  queued: "Sending: the send request is in flight.",
+  typed: "Sent: the keys reached the pane. The prompt has not appeared in the transcript yet.",
+  seen: "Seen: the prompt is in the agent's transcript.",
+  answered: "Replied: the agent has replied since this prompt.",
+  failed: "Not sent: the keys did not reach the pane.",
+}
+
+/**
+ * The delivery state of the operator's newest message as a mark, not a word (operator, 2026-11-26):
+ * a spinner while sending, one check when sent, two checks when seen, two accent checks when the agent
+ * replied. The word stays as the accessible name and the tooltip. A failure keeps its reason as text
+ * beside a danger mark, because the reason is what the operator needs to read.
+ */
+function DeliveryMark({ delivery, error }: { delivery: Delivery; error?: string }) {
+  const title = DELIVERY_TITLE[delivery]
+  if (delivery === "failed") {
+    return (
+      <span title={title} className="flex min-w-0 shrink items-center gap-1 text-danger">
+        <Icon name="circleX" size="text" className="shrink-0" />
+        <span className="min-w-0 truncate">{error ?? DELIVERY_WORD.failed}</span>
+      </span>
+    )
+  }
+  const icon = delivery === "queued" ? "loader" : delivery === "typed" ? "check" : "checkCheck"
+  return (
+    <span
+      role="img"
+      aria-label={DELIVERY_WORD[delivery]}
+      title={title}
+      data-delivery={delivery}
+      className={cn("flex shrink-0 items-center", delivery === "answered" ? "text-accent-ink" : "text-ink-muted")}
+    >
+      <Icon
+        name={icon}
+        size="text"
+        className={cn(delivery === "queued" && "animate-spin motion-reduce:animate-none")}
+      />
+    </span>
+  )
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -153,14 +187,7 @@ function UserMessage({
             </span>
             <span className="shrink-0 text-border-strong">·</span>
             <span className="min-w-0 truncate">to {agentName}</span>
-            {delivery ? (
-              <span
-                title={DELIVERY_TITLE[delivery]}
-                className={cn("min-w-0 shrink truncate", delivery === "failed" && "text-danger")}
-              >
-                · {delivery === "failed" ? (error ?? DELIVERY_WORD.failed) : DELIVERY_WORD[delivery]}
-              </span>
-            ) : null}
+            {delivery ? <DeliveryMark delivery={delivery} error={error} /> : null}
             {delivery === "failed" && onDismiss ? (
               <button
                 type="button"

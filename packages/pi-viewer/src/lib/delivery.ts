@@ -8,12 +8,14 @@ import type { ChannelItem } from "./thread.ts"
  */
 export type Delivery = "queued" | "typed" | "seen" | "answered" | "failed"
 
+/** The words behind the delivery marks (operator, 2026-11-26): shown as the mark's label and tooltip, and as
+ * text only for a failure, whose reason must stay readable. "answered" reads as "Replied". */
 export const DELIVERY_WORD: Record<Delivery, string> = {
-  queued: "queued",
-  typed: "typed",
-  seen: "seen",
-  answered: "answered",
-  failed: "not sent",
+  queued: "Sending",
+  typed: "Sent",
+  seen: "Seen",
+  answered: "Replied",
+  failed: "Not sent",
 }
 
 export function deliveryOfOptimistic(status: OptimisticMessage["status"]): Delivery {
