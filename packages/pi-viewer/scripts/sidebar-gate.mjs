@@ -41,9 +41,9 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       return { groupHs: uniq(groups), paneHs: uniq(leaves), railLines: document.querySelectorAll('[data-testid=sidebar] [role=tree] .border-l').length, nGroups: groups.length, n: rows.length, hs: [...new Set(r.map((x) => Math.round(x.height * 10) / 10))], contiguous: r.every((x, i) => i === 0 || Math.abs(x.top - r[i - 1].bottom) < 0.6), levels: [...new Set(rows.map((e) => e.getAttribute("aria-level")))].sort(), windowsRows: rows.filter((e) => e.getAttribute("aria-level") === "2" && e.hasAttribute("aria-expanded")).length, panes: rows.filter((e) => !e.hasAttribute("aria-expanded")).length, groupCounts: rows.filter((e) => e.hasAttribute("aria-expanded")).every((e) => /\d+ agents/.test(e.getAttribute("aria-label"))), total: r.length ? Math.round(r.at(-1).bottom - r[0].top) : 0, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth }
     })
     check(tag + " session and window rows are one 28px line", g.groupHs.length === 1 && g.groupHs[0] === 28, JSON.stringify(g.groupHs))
-    check(tag + " pane rows are two lines, 46px (name, then role, runtime, repo)", g.paneHs.length === 1 && g.paneHs[0] === 46, JSON.stringify(g.paneHs))
+    check(tag + " pane rows are two lines, 48px (name, then role, runtime, repo)", g.paneHs.length === 1 && g.paneHs[0] === 48, JSON.stringify(g.paneHs))
     check(tag + " rows are contiguous and draw no rail lines", g.contiguous && g.railLines === 0, "rails " + g.railLines)
-    check(tag + " tree height " + g.total + "px for " + g.panes + " agents", g.total <= g.nGroups * 28 + g.panes * 46 + 1)
+    check(tag + " tree height " + g.total + "px for " + g.panes + " agents", g.total <= g.nGroups * 28 + g.panes * 48 + 1)
     check(tag + " group rows carry counts", g.groupCounts)
     // XTRM-1048: the dot carries the state. Line 2 names role, repo and runtime only; every pane row's
     // dot is labelled and titled with the state word, the row's aria-label carries the same word, and
@@ -180,6 +180,14 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       check(tag + " reload keeps the width", (await panelW()) === w3, String(await panelW()))
     } else {
       await open(); await p.screenshot({ path: SHOTS + "/g4-" + tag + "-open.png" })
+      // Overlay header: the collapse button, its tooltip and the "Sessions" heading never intersect.
+      const boxes = () => p.evaluate(() => { const bx = (e) => { if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, r: r.right, b: r.bottom } }; return { btn: bx(document.querySelector("[data-testid=sidebar-collapse]")), h2: bx([...document.querySelectorAll("h2")].find((e) => e.textContent === "Sessions")), tip: bx(document.querySelector("[role=tooltip]")?.closest("[data-radix-popper-content-wrapper]")) } })
+      const hit = (a, c) => !!a && !!c && a.x < c.r && c.x < a.r && a.y < c.b && c.y < a.b
+      await p.waitForTimeout(500); const ov = await boxes()
+      check(tag + " overlay: collapse button and Sessions heading do not intersect", !!ov.btn && !!ov.h2 && !hit(ov.btn, ov.h2), JSON.stringify(ov))
+      check(tag + " overlay: no tooltip pops up when the overlay opens", ov.tip === null, JSON.stringify(ov))
+      await p.locator('[data-testid="sidebar-collapse"]').hover(); await p.waitForTimeout(900); const hv = await boxes()
+      check(tag + " overlay: the collapse tooltip shows on hover and does not cover the heading", hv.tip !== null && !hit(hv.tip, hv.h2) && !hit(hv.tip, hv.btn), JSON.stringify(hv))
       await p.keyboard.press("Escape"); await p.waitForTimeout(250)
       check(tag + " Escape closes the overlay", (await side.count()) === 0)
       check(tag + " overlay never persisted as closed", (await p.evaluate(() => JSON.parse(localStorage.getItem("xtrm.console.layout.v1") ?? '{"sidebarOpen":true}').sidebarOpen)) !== false)

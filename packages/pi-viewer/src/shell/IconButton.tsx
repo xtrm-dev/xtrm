@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react"
+import { useRef, useState, type ComponentProps } from "react"
 
 import { Tooltip } from "radix-ui"
 
@@ -16,12 +16,33 @@ export function IconButton({
   label,
   shortcut,
   className,
+  tooltipSide = "bottom",
   ...props
-}: Omit<ComponentProps<"button">, "children"> & { icon: IconName; label: string; shortcut?: string }) {
+}: Omit<ComponentProps<"button">, "children"> & {
+  icon: IconName
+  label: string
+  shortcut?: string
+  /** Where the tooltip opens. The sidebar's collapse button uses "right" so it never lands on the "Sessions" heading below it. */
+  tooltipSide?: "top" | "right" | "bottom" | "left"
+}) {
+  // Focus moved by the shell (the overlay opening, a toggle by click) must not pop the tooltip: only the
+  // pointer or keyboard focus (:focus-visible) opens it.
+  const ref = useRef<HTMLButtonElement>(null)
+  const pointer = useRef(false)
+  const [open, setOpen] = useState(false)
   return (
-    <Tooltip.Root>
+    <Tooltip.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (next && !pointer.current && !ref.current?.matches(":focus-visible")) return
+        setOpen(next)
+      }}
+    >
       <Tooltip.Trigger asChild>
         <button
+          ref={ref}
+          onPointerEnter={() => { pointer.current = true }}
+          onPointerLeave={() => { pointer.current = false }}
           type="button"
           aria-label={label}
           {...props}
@@ -34,7 +55,7 @@ export function IconButton({
         </button>
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content side="bottom" sideOffset={6} className="z-50 flex items-center gap-2 rounded-md bg-raised px-2 py-1 text-xs text-ink shadow-float">
+        <Tooltip.Content side={tooltipSide} sideOffset={6} className="z-50 flex items-center gap-2 rounded-md bg-raised px-2 py-1 text-xs text-ink shadow-float">
         {label}
         {shortcut ? <kbd className="rounded-sm border border-border px-1 font-sans text-2xs text-ink-faint">{shortcut}</kbd> : null}
         </Tooltip.Content>

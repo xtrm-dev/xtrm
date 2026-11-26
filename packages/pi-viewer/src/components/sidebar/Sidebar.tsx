@@ -67,7 +67,7 @@ export function Sidebar({
     <aside aria-label="Sessions" data-testid="sidebar" className="flex h-full min-h-0 min-w-0 flex-col bg-sidebar">
       <div className="flex h-11 shrink-0 items-center gap-1.5 px-2">
         <HalfSwitch />
-        <IconButton data-testid="sidebar-collapse" icon="sidebar" label="Collapse sidebar" shortcut={modShortcut("B")} aria-expanded onClick={onCollapse} />
+        <IconButton data-testid="sidebar-collapse" tooltipSide="right" icon="sidebar" label="Collapse sidebar" shortcut={modShortcut("B")} aria-expanded onClick={onCollapse} />
       </div>
       <div className="flex h-8 shrink-0 items-center gap-1.5 pl-3">
         <h2 className="text-xs font-medium text-ink-faint">Sessions</h2>
