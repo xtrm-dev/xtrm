@@ -180,6 +180,14 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       check(tag + " reload keeps the width", (await panelW()) === w3, String(await panelW()))
     } else {
       await open(); await p.screenshot({ path: SHOTS + "/g4-" + tag + "-open.png" })
+      // Overlay header: the collapse button, its tooltip and the "Sessions" heading never intersect.
+      const boxes = () => p.evaluate(() => { const bx = (e) => { if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, r: r.right, b: r.bottom } }; return { btn: bx(document.querySelector("[data-testid=sidebar-collapse]")), h2: bx([...document.querySelectorAll("h2")].find((e) => e.textContent === "Sessions")), tip: bx(document.querySelector("[role=tooltip]")?.closest("[data-radix-popper-content-wrapper]")) } })
+      const hit = (a, c) => !!a && !!c && a.x < c.r && c.x < a.r && a.y < c.b && c.y < a.b
+      await p.waitForTimeout(500); const ov = await boxes()
+      check(tag + " overlay: collapse button and Sessions heading do not intersect", !!ov.btn && !!ov.h2 && !hit(ov.btn, ov.h2), JSON.stringify(ov))
+      check(tag + " overlay: no tooltip pops up when the overlay opens", ov.tip === null, JSON.stringify(ov))
+      await p.locator('[data-testid="sidebar-collapse"]').hover(); await p.waitForTimeout(900); const hv = await boxes()
+      check(tag + " overlay: the collapse tooltip shows on hover and does not cover the heading", hv.tip !== null && !hit(hv.tip, hv.h2) && !hit(hv.tip, hv.btn), JSON.stringify(hv))
       await p.keyboard.press("Escape"); await p.waitForTimeout(250)
       check(tag + " Escape closes the overlay", (await side.count()) === 0)
       check(tag + " overlay never persisted as closed", (await p.evaluate(() => JSON.parse(localStorage.getItem("xtrm.console.layout.v1") ?? '{"sidebarOpen":true}').sidebarOpen)) !== false)
