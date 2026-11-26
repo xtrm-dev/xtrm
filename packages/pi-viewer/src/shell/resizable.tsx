@@ -42,7 +42,7 @@ export function ResizableGroup({ children, className }: { children: ReactNode; c
   const split = useRef<Split>({ width: 0, min: 0, max: Number.POSITIVE_INFINITY, setWidth: () => undefined })
   const [dragging, setDragging] = useState(false)
   return (
-    <div className={cn("flex min-w-0 flex-1", className)}>
+    <div className={cn("relative flex min-w-0 flex-1", className)}>
       <SplitContext.Provider value={{ split, dragging, setDragging }}>{children}</SplitContext.Provider>
     </div>
   )
@@ -101,9 +101,11 @@ export function FillPanel({ children, className, ...rest }: { children: ReactNod
 }
 
 /**
- * Hairline separator; the hit area is wider than the visible line. Drag with the pointer, or focus it
- * and use the arrow keys (Home and End jump to the limits). Always mounted, hidden when the sidebar is
- * closed, as before.
+ * Hairline separator; the hit area is wider than the visible line. It sits ON the panel's edge rather
+ * than in the flow, so the content beside the sidebar starts exactly at the sidebar's width — the console
+ * does the same, and a separator that took 8px of flow would shift every row of the channel by 8px.
+ * Drag with the pointer, or focus it and use the arrow keys (Home and End jump to the limits). Always
+ * mounted, hidden when the sidebar is closed, as before.
  */
 export function ResizeHandle({ label, hidden }: { label: string; hidden?: boolean }) {
   const { split, setDragging } = useSplit()
@@ -152,7 +154,8 @@ export function ResizeHandle({ label, hidden }: { label: string; hidden?: boolea
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onKeyDown={onKeyDown}
-      className={cn("group/sep relative z-10 w-2 shrink-0 cursor-col-resize outline-none", hidden && "hidden")}
+      style={{ position: "absolute", left: split.current.width - 4, top: 0, bottom: 0 }}
+      className={cn("group/sep z-10 w-2 cursor-col-resize outline-none", hidden && "hidden")}
     >
       <span className="absolute inset-y-3 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-focus-visible/sep:bg-accent" />
     </div>
