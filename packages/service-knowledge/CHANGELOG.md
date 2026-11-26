@@ -4,6 +4,21 @@ All notable changes to the `service-knowledge` package.
 
 ## [Unreleased]
 
+### Changed — the per-edit Claude hooks are opt-in (DARTHFEEDOR-1359)
+- **Default off.** `install` and `update` no longer wire the `PreToolUse` `skill_activator.py`
+  and `PostToolUse` `drift_detector.py check-hook` entries in `.claude/settings.json`. They
+  measured 82–358 ms per tool call in `darth-feedor` (PreToolUse) against
+  `hook_prefilter.sh`'s 20 ms design budget, so no consumer pays that cost without asking.
+- **Opt in.** `service-knowledge install --per-edit-hooks` (or `update --per-edit-hooks`) wires
+  both entries and records `per_edit_hooks: true` in `.xtrm/config/service-knowledge.json`, so a
+  later plain `install` / `update` keeps them. Only the JSON literal `true` opts in.
+- **Opt out.** `--no-per-edit-hooks` records `false` and strips both entries, keeping the
+  `SessionStart` cataloger. `remove` still strips every machinery hook as before.
+- **Legacy consumers.** With no config the installer adds nothing but still repairs an entry it
+  finds (packaged command and timeout), so a repo wired by an older package keeps working until
+  it opts out explicitly; the installer never removes a hook it did not add in that run.
+- Output of `install` / `update` reports `per-edit hooks: on|off`.
+
 ## [0.9.1]
 
 ### Fixed — the MCP answers say what they read, what they cut and how old it is (XTRM-974)
