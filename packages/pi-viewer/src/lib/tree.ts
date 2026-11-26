@@ -122,13 +122,36 @@ export function buildTree(sessions: ViewerSession[]): SessionNode[] {
  * A thread payload that belongs to another session (a stale one, right after a cross-session
  * select) is ignored, so no session shows another session's agents and no pane key repeats.
  */
+function sameAgent(a: ViewerAgent, b: ViewerAgent): boolean {
+  const keys = Object.keys(a) as (keyof ViewerAgent)[]
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key])
+}
+
+/** Keep agent object identity while its fields are unchanged: a poll that only re-lists the same
+ *  agents must not invalidate every memoized turn row. */
+export function mergeAgents(previous: ViewerAgent[], fresh: ViewerAgent[]): ViewerAgent[] {
+  const byId = new Map(previous.map((agent) => [agent.id, agent]))
+  let changed = previous.length !== fresh.length
+  const merged = fresh.map((agent) => {
+    const prior = byId.get(agent.id)
+    if (prior && sameAgent(prior, agent)) return prior
+    changed = true
+    return agent
+  })
+  return changed ? merged : previous
+}
+
 export function mergeLive(
   sessions: ViewerSession[],
   current: string | null,
   fresh: { session: string; agents: ViewerAgent[] } | null,
 ): ViewerSession[] {
   if (!fresh || !current || fresh.session !== current) return sessions
-  return sessions.map((entry) => (entry.name === current ? { ...entry, agents: fresh.agents } : entry))
+  const entry = sessions.find((candidate) => candidate.name === current)
+  if (!entry) return sessions
+  const agents = mergeAgents(entry.agents, fresh.agents)
+  if (agents === entry.agents) return sessions
+  return sessions.map((candidate) => (candidate.name === current ? { ...candidate, agents } : candidate))
 }
 
 export interface FlatRow {

@@ -539,7 +539,7 @@ export default function App() {
                           onReply={replyToAgent}
                         />
                       ) : (
-                        <div className="py-20 text-center text-xs text-ink-muted">Loading thread…</div>
+                        <div data-testid="thread-loading" className="py-20 text-center text-xs text-ink-muted">Loading thread…</div>
                       )
                     ) : all ? (
                       <AllEventsView
@@ -553,7 +553,7 @@ export default function App() {
                         onLoadEarlier={() => void loadEarlier()}
                       />
                     ) : (
-                      <div className="py-20 text-center text-xs text-ink-muted">Loading events…</div>
+                      <div data-testid="thread-loading" className="py-20 text-center text-xs text-ink-muted">Loading events…</div>
                     )}
                   </MessageScrollerContent>
                 </MessageScrollerViewport>
