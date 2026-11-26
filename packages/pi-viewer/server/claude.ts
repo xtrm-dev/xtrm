@@ -1,8 +1,9 @@
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 
 import type { ViewerEvent } from "../src/shared/types.ts"
+import { listOnce, statOnce } from "./stat-pass.ts"
 import {
   RAW_CAP,
   cap,
@@ -253,7 +254,7 @@ export function resolveClaudeTranscript(query: ClaudeTranscriptQuery): ClaudeTra
   for (const dir of projectDirs(configDir, cwds)) {
     let names: string[]
     try {
-      names = readdirSync(dir)
+      names = listOnce(dir)
     } catch {
       continue
     }
@@ -263,7 +264,7 @@ export function resolveClaudeTranscript(query: ClaudeTranscriptQuery): ClaudeTra
       const file = join(dir, name)
       if (claimed.has(file) || others.has(id)) continue
       try {
-        const mtimeMs = statSync(file).mtimeMs
+        const mtimeMs = statOnce(file).mtimeMs
         if (start.ms !== null && mtimeMs < start.ms - 2_000) continue
         candidates.push({ file, mtimeMs })
       } catch {
