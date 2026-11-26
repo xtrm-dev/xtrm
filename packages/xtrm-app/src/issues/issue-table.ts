@@ -86,8 +86,14 @@ export function matchesIssueStatusSet(i: IssueSummary, statuses: ReadonlySet<str
 /**
  * The badge for one row. The derived status supplies the tone; an open issue is refined by what it
  * lacks (a complete contract, an attestation against the current revision) so the board says why.
+ *
+ * `quiet` marks the statuses that describe a gap, not a state of work: Draft, Unattested, Stale and
+ * plain Open. They render as the dim tint (2026-11-27 ruling); only a state of work earns a fill,
+ * the same rule the Activity feed applies to its chips.
  */
-export function issueStatus(i: IssueSummary): { label: string; tone: StatusTone; hint: string } {
+export type IssueStatus = { label: string; tone: StatusTone; hint: string; quiet?: boolean };
+
+export function issueStatus(i: IssueSummary): IssueStatus {
   const status = issueStatusId(i);
   if (status === "done" || status === "cancelled" || status === "archived") {
     return { label: lifecycleLabel(i.lifecycle), tone: "muted", hint: "Closed" };
@@ -100,11 +106,11 @@ export function issueStatus(i: IssueSummary): { label: string; tone: StatusTone;
       ? { label: "Attested", tone: "neutral", hint: "Attested, but the scrutiny policy denies dispatch" }
       : { label: "Ready", tone: "accent", hint: "Attested and dispatchable" };
   }
-  if (i.contractComplete === false) return { label: "Draft", tone: "muted", hint: "The work contract is incomplete" };
+  if (i.contractComplete === false) return { label: "Draft", tone: "muted", hint: "The work contract is incomplete", quiet: true };
   if (i.attestation === "rejected") return { label: "Rejected", tone: "danger", hint: "Attestation rejected this revision" };
-  if (i.attestation === "stale") return { label: "Stale", tone: "neutral", hint: "Attested on an older revision" };
-  if (i.attestation === "none") return { label: "Unattested", tone: "neutral", hint: "The contract is complete but not attested" };
-  return { label: "Open", tone: "neutral", hint: "Open, not ready for dispatch" };
+  if (i.attestation === "stale") return { label: "Stale", tone: "neutral", hint: "Attested on an older revision", quiet: true };
+  if (i.attestation === "none") return { label: "Unattested", tone: "neutral", hint: "The contract is complete but not attested", quiet: true };
+  return { label: "Open", tone: "neutral", hint: "Open, not ready for dispatch", quiet: true };
 }
 
 export interface Rollup {
