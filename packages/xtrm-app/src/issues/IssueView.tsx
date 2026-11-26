@@ -31,8 +31,10 @@ import {
   priorityOptions,
   readinessLabel,
   scrutinyOptions,
-  IssueKey,
 } from "./meta.tsx";
+import { IssueKeyPill } from "../ui/issue-key-pill.tsx";
+import { Badge } from "../ui/badge.tsx";
+import { issueStatus } from "./issue-table.ts";
 import { ReferenceActionsProvider, ReferenceChip, type ContextReference } from "../refs/references.tsx";
 
 type Variant = "page" | "panel";
@@ -144,13 +146,13 @@ function IssueBreadcrumb({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
                 {
                   key: "parent",
                   icon: kindIcon(issue.parent.kind ?? "epic"),
-                  label: <IssueKey locator={null} humanRef={issue.parent.ref} />,
+                  label: <IssueKeyPill locator={issue.parent.locator} humanRef={issue.parent.ref} />,
                   title: issue.parent.locator ?? issue.parent.ref,
                   onClick: () => nav.onOpenIssue(issue.parent!.ref),
                 },
               ]
             : []),
-          { key: "self", icon: kindIcon(issue.kind), label: <IssueKey locator={null} humanRef={issue.ref} />, title: issue.locator ?? issue.ref },
+          { key: "self", icon: kindIcon(issue.kind), label: <IssueKeyPill locator={issue.locator} humanRef={issue.ref} /> },
         ]}
       />
       <span>·</span>
@@ -186,11 +188,23 @@ function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; ca
   const [reasonsOpen, setReasonsOpen] = useState(false);
   const jira = useJiraRow(issue.ref);
   const progress = issue.release ?? (issue.childCount ? { childrenDone: issue.childrenDone, childrenTotal: issue.childCount } : null);
+  // The derived status, not the raw lifecycle: `issueStatus()` is the one authority for the label and
+  // tone, so the drawer cannot say "Open" for an issue the list badges "In progress".
+  const status = issueStatus(issue);
   const rows: Array<[ReactNode, ReactNode]> = [
     [
       "Status",
+      <div className="flex flex-wrap items-center gap-2" data-testid="issue-derived-status">
+        <Badge tone={status.tone} size="xs">
+          {status.label}
+        </Badge>
+        <span className="text-xs text-ink-faint">{status.hint}</span>
+      </div>,
+    ],
+    [
+      "Lifecycle",
       <SelectField
-        label="Status"
+        label="Lifecycle"
         value={LIFECYCLES.some((l) => l.value === issue.lifecycle) ? (issue.lifecycle as (typeof LIFECYCLES)[number]["value"]) : null}
         options={lifecycleOptions}
         canEdit={canWrite}
@@ -381,7 +395,7 @@ function LineageTab({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
             {items.map((l) => (
               <Row key={l.ref} density="sidebar" onActivate={() => nav.onOpenIssue(l.ref)}>
                 <StatusDot tone={lifecycleTone(l.lifecycle)} label={lifecycleLabel(l.lifecycle)} />
-                <IssueKey locator={l.locator} humanRef={l.ref} className="shrink-0" />
+                <IssueKeyPill locator={l.locator} humanRef={l.ref} className="shrink-0" />
                 <span className={cx("min-w-0 flex-1 truncate", TERMINAL.has(l.lifecycle) ? "text-ink-muted" : "text-ink")}>{l.title}</span>
                 <span className="text-xs text-ink-faint">{lifecycleLabel(l.lifecycle)}</span>
               </Row>

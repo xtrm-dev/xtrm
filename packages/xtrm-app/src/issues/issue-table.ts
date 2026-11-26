@@ -20,15 +20,82 @@ export function refOrder(a: string, b: string) {
 export type StatusTone = "accent" | "active" | "danger" | "neutral" | "muted";
 
 /**
- * One status per issue, in Substrate's vocabulary. The stored lifecycle wins once settled; otherwise
- * the derived readiness, with `draft` split by what is missing and `ready` by whether dispatch is allowed.
+ * The status vocabulary `sb issue list --status` accepts (XTRM: the console must not invent its own).
+ * Only the terminal lifecycle states are stored; `in_progress`, `ready`, `blocked` and `open` are derived
+ * views over readiness and claim, exactly as `packages/substrate/src/presentation/terminal.ts` derives them.
+ */
+export type IssueStatusId = "open" | "in_progress" | "ready" | "blocked" | "deferred" | "done" | "cancelled" | "archived";
+
+/** Filter-only aggregate: every settled lifecycle state, which is what `--status closed|terminal` means. */
+export type IssueStatusFilter = IssueStatusId | "closed";
+
+export const ISSUE_STATUSES: ReadonlyArray<{ id: IssueStatusId; label: string }> = [
+  { id: "open", label: "Open" },
+  { id: "in_progress", label: "In progress" },
+  { id: "ready", label: "Ready" },
+  { id: "blocked", label: "Blocked" },
+  { id: "deferred", label: "Deferred" },
+  { id: "done", label: "Done" },
+  { id: "cancelled", label: "Cancelled" },
+  { id: "archived", label: "Archived" },
+];
+
+/** Every status filter, including the `closed` aggregate, in the order Substrate lists them. */
+export const ISSUE_STATUS_FILTERS: ReadonlyArray<{ value: IssueStatusFilter; label: string }> = [
+  ...ISSUE_STATUSES.map((s) => ({ value: s.id as IssueStatusFilter, label: s.label })),
+  { value: "closed", label: "Closed" },
+];
+
+/**
+ * The derived status, in Substrate's order: a settled lifecycle wins, then deferred, then a live claim
+ * (`in_progress`), then a blocker, then dispatchability. Anything else is still `open`.
+ */
+export function issueStatusId(i: IssueSummary): IssueStatusId {
+  if (TERMINAL.has(i.lifecycle)) return i.lifecycle as IssueStatusId;
+  if (i.lifecycle === "deferred" || i.readiness === "deferred") return "deferred";
+  if (i.readiness === "claimed") return "in_progress";
+  if (i.blockedBy.length > 0 || i.readiness === "blocked") return "blocked";
+  if (i.dispatchable === true || i.readiness === "ready") return "ready";
+  return "open";
+}
+
+/**
+ * `sb issue list --status` semantics. `open` is the stored lifecycle (so a claimed or ready issue is
+ * still open), `closed`/`terminal` is every settled state, and anything else matches the derived status,
+ * the lifecycle or the readiness.
+ */
+export function matchesIssueStatus(i: IssueSummary, requested: string | null): boolean {
+  if (requested === null || requested === "" || requested === "all") return true;
+  const wanted = requested.trim().toLowerCase();
+  if (wanted === "closed" || wanted === "terminal") return TERMINAL.has(i.lifecycle);
+  if (wanted === "open") return i.lifecycle === "open";
+  return issueStatusId(i) === wanted || i.lifecycle === wanted || i.readiness === wanted;
+}
+
+/**
+ * The multi-select form of the status filter (§2026-11-26 ruling). The set holds the eight disjoint
+ * `IssueStatusId` values only, and a row matches when its derived status is in the set. Overlapping
+ * members are refused by construction: `closed` is not a set member because it aggregates three
+ * others, so unchecking one item can never leave that item's rows visible. An empty set matches
+ * nothing — "everything" is only ever the full set.
+ */
+export function matchesIssueStatusSet(i: IssueSummary, statuses: ReadonlySet<string>): boolean {
+  return statuses.has(issueStatusId(i));
+}
+
+/**
+ * The badge for one row. The derived status supplies the tone; an open issue is refined by what it
+ * lacks (a complete contract, an attestation against the current revision) so the board says why.
  */
 export function issueStatus(i: IssueSummary): { label: string; tone: StatusTone; hint: string } {
-  if (TERMINAL.has(i.lifecycle)) return { label: lifecycleLabel(i.lifecycle), tone: "muted", hint: "Closed" };
-  if (i.lifecycle === "deferred" || i.readiness === "deferred") return { label: "Deferred", tone: "muted", hint: "Deferred" };
-  if (i.blockedBy.length > 0 || i.readiness === "blocked") return { label: "Blocked", tone: "danger", hint: `Blocked by ${i.blockedBy.join(", ") || "an open issue"}` };
-  if (i.readiness === "claimed") return { label: "In progress", tone: "active", hint: "Claimed by a worker" };
-  if (i.readiness === "ready") {
+  const status = issueStatusId(i);
+  if (status === "done" || status === "cancelled" || status === "archived") {
+    return { label: lifecycleLabel(i.lifecycle), tone: "muted", hint: "Closed" };
+  }
+  if (status === "deferred") return { label: "Deferred", tone: "muted", hint: "Deferred" };
+  if (status === "in_progress") return { label: "In progress", tone: "active", hint: "Claimed by a worker" };
+  if (status === "blocked") return { label: "Blocked", tone: "danger", hint: `Blocked by ${i.blockedBy.join(", ") || "an open issue"}` };
+  if (status === "ready") {
     return i.dispatchable === false
       ? { label: "Attested", tone: "neutral", hint: "Attested, but the scrutiny policy denies dispatch" }
       : { label: "Ready", tone: "accent", hint: "Attested and dispatchable" };
@@ -37,7 +104,7 @@ export function issueStatus(i: IssueSummary): { label: string; tone: StatusTone;
   if (i.attestation === "rejected") return { label: "Rejected", tone: "danger", hint: "Attestation rejected this revision" };
   if (i.attestation === "stale") return { label: "Stale", tone: "neutral", hint: "Attested on an older revision" };
   if (i.attestation === "none") return { label: "Unattested", tone: "neutral", hint: "The contract is complete but not attested" };
-  return { label: "Draft", tone: "muted", hint: "Not ready for dispatch" };
+  return { label: "Open", tone: "neutral", hint: "Open, not ready for dispatch" };
 }
 
 export interface Rollup {

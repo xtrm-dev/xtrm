@@ -47,7 +47,7 @@ export function NavRailItem({
         // `text-sm` is the token the parent row inherits (0.8125rem): the same class, not a copy of
         // its current px value, so a root font size other than 16px cannot make the child larger
         // than its parent (XTRM-897).
-        "-ml-[var(--x-rail-pull)] h-7 pl-[var(--x-rail-text)] text-sm font-medium",
+        "-ml-[var(--x-rail-pull)] h-7 pl-[var(--x-rail-text)] text-base font-medium",
         // The marker sits on the rail (the indent, measured from the pulled-in box), so it covers the
         // hairline on this row only.
         selected

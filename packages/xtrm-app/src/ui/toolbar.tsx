@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ComponentProps, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Icon, type IconName } from "./icon.tsx";
-import { OptionsMenu, type OptionItem } from "./menu.tsx";
+import { Menu, OptionsMenu, type OptionItem } from "./menu.tsx";
 import { IconButton, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx } from "./primitives.tsx";
 
 /**
@@ -34,25 +34,38 @@ export function ToolbarButton({ icon, primary, className, children, ...button }:
  * set, a `Clear` item reports `null`. Options therefore take `Omit<OptionItem, "onSelect">`:
  * the label is the value, and a caller's own `onSelect` would be silently dropped.
  */
-export function ToolbarFilter({ label, value, options, onChange }: { label: string; value: string | null; options: Array<Omit<OptionItem, "onSelect">>; onChange: (v: string | null) => void }) {
+export function ToolbarFilter({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  /** `value` is what the filter compares; `label` is what the operator reads. Defaults to the label. */
+  options: Array<Omit<OptionItem, "onSelect"> & { value?: string }>;
+  onChange: (v: string | null) => void;
+}) {
   const clear: OptionItem = { label: "Clear", icon: "close", onSelect: () => onChange(null) };
   const items: OptionItem[] = [
-    ...options.map((item) => ({ ...item, onSelect: () => onChange(item.label) })),
+    ...options.map(({ value: optionValue, ...item }) => ({ ...item, onSelect: () => onChange(optionValue ?? item.label) })),
     ...(value === null ? [] : [clear]),
   ];
+  // The trigger names the choice in the operator's words, not the internal id.
+  const chosen = options.find((option) => (option.value ?? option.label) === value)?.label ?? value;
   return (
     <OptionsMenu
       label={`${label} filter`}
       trigger={
         <button
           type="button"
-          aria-label={value === null ? `${label} filter` : `${label} filter: ${value}`}
+          aria-label={value === null ? `${label} filter` : `${label} filter: ${chosen}`}
           className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)}
         >
           {label}
           {value !== null && (
             <>
-              : <span className="font-medium text-ink">{value}</span>
+              : <span className="font-medium text-ink">{chosen}</span>
             </>
           )}
           <Icon name="chevronDown" size="micro" className="text-ink-faint" />
@@ -64,11 +77,104 @@ export function ToolbarFilter({ label, value, options, onChange }: { label: stri
 }
 
 /**
+ * A filter over several values of one dimension, checked one by one. Defaults are the caller's:
+ * a dimension starts all-on, and an empty set means *nothing* selected, never "everything".
+ * Items are `Menu.CheckboxItem` with `closeOnClick={false}` so several values can be set in one
+ * visit; the footer is the only place a whole set is written at once.
+ */
+export function ToolbarMultiFilter<T extends string>({
+  label,
+  values,
+  options,
+  onChange,
+}: {
+  label: string;
+  values: ReadonlySet<T>;
+  options: ReadonlyArray<{ value: T; label: string; count?: number }>;
+  onChange: (next: Set<T>) => void;
+}) {
+  const total = options.length;
+  const chosen = options.filter((option) => values.has(option.value));
+  // The trigger names the choice in the operator's words and stays short: one or two names, then a
+  // count. `null` means "all on", which is the resting state and gets no value text at all.
+  const summary =
+    values.size === total
+      ? null
+      : values.size === 0
+        ? "none"
+        : values.size <= 2
+          ? chosen.map((option) => option.label).join(", ")
+          : `${values.size} of ${total}`;
+  const toggle = (value: T) => {
+    const next = new Set(values);
+    if (!next.delete(value)) next.add(value);
+    onChange(next);
+  };
+  const itemClass =
+    "flex h-8 cursor-default items-center gap-2 rounded-md px-2 text-ink-muted outline-none data-[disabled]:opacity-40 data-[highlighted]:bg-hover data-[highlighted]:text-ink data-[checked]:text-ink";
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        render={
+          <button
+            type="button"
+            aria-label={summary === null ? `${label} filter` : `${label} filter: ${summary}`}
+            className={cx(TOOLBAR_CONTROL, TOOLBAR_GHOST)}
+          >
+            {label}
+            {summary !== null && (
+              <>
+                : <span className="font-medium text-ink">{summary}</span>
+              </>
+            )}
+            <Icon name="chevronDown" size="micro" className="text-ink-faint" />
+          </button>
+        }
+      />
+      <Menu.Portal>
+        <Menu.Positioner align="start" sideOffset={4} className="z-50">
+          <Menu.Popup className="min-w-52 rounded-lg bg-raised p-1 text-sm shadow-float outline-none">
+            {options.map((option) => (
+              <Menu.CheckboxItem
+                key={option.value}
+                checked={values.has(option.value)}
+                onCheckedChange={() => toggle(option.value)}
+                closeOnClick={false}
+                className={itemClass}
+              >
+                <Menu.CheckboxItemIndicator className="inline-flex size-3.5 shrink-0 items-center justify-center">
+                  <Icon name="check" size="micro" />
+                </Menu.CheckboxItemIndicator>
+                <span className="flex-1">{option.label}</span>
+                {option.count !== undefined && (
+                  <span aria-hidden className="text-xs text-ink-faint">
+                    {option.count}
+                  </span>
+                )}
+              </Menu.CheckboxItem>
+            ))}
+            <div className="my-1 h-px bg-border-subtle" />
+            <Menu.Item onClick={() => onChange(new Set(options.map((option) => option.value)))} className={itemClass}>
+              <span className="inline-flex size-3.5 shrink-0" />
+              Select all
+            </Menu.Item>
+            <Menu.Item onClick={() => onChange(new Set())} className={itemClass}>
+              <span className="inline-flex size-3.5 shrink-0" />
+              Clear
+            </Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
+/**
  * Tabs for one surface. Selected is ink text plus a 2px ink bottom bar; there is no fill (R5).
  * Keyboard follows WAI-ARIA tabs: a roving `tabIndex` keeps one stop in the tablist, Left/Right
  * wrap, Home/End jump, and selection follows focus (automatic activation suits a local view switch).
  */
-export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id: string; label: string; count?: number }>; value: string; onChange: (id: string) => void; label: string }) {
+export function ToolbarTabs({ tabs, value, onChange, label }: { tabs: Array<{ id: string; label: string; count?: number | string }>; value: string; onChange: (id: string) => void; label: string }) {
   const buttons = useRef<Array<HTMLButtonElement | null>>([]);
   const select = (index: number) => {
     const tab = tabs[index];

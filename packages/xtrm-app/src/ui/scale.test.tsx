@@ -65,9 +65,8 @@ describe("the new rows and controls use the existing tokens", () => {
       </SidebarRow>,
     );
     const child = screen.getByText("Overview").closest("[role='button']") as HTMLElement;
-    // `body` sets `--text-sm`; the parent row inherits it. The child must name that token, never a
-    // copy of its current px value.
-    expect(child.className).toContain("text-sm");
+    // `body` sets `--text-base`; the child must name that token, never a copy of its px value.
+    expect(child.className).toContain("text-base");
     expect(child.className).not.toMatch(/text-\[\d+px\]/);
     // Line height comes with the token, so the two rows cannot diverge there either.
     expect(child.className).not.toMatch(/(^|\s)leading-/);
@@ -83,16 +82,17 @@ describe("the new rows and controls use the existing tokens", () => {
     expect(remOf(sizeClass(filterGlyph)) * 16).toBe(13);
   });
 
-  it("lets an icon button name a glyph size, and defaults to the button's own text step", () => {
+  it("lets an icon button name a glyph size, and fills a 28px control with a 16px glyph", () => {
     const named = render(<IconButton icon="filter" label="Filter" iconSize="text" />);
     expect(sizeClass(named.getByRole("button", { name: "Filter" }).querySelector("svg")!)).toBe("size-[0.8125rem]");
-    // XTRM-934: a size-7 control took a 16px glyph and outweighed the 11.5px label beside it.
+    // 2026-11-24: a 28px chrome control carries 16px, the ratio the operator asked for after XTRM-934
+    // shrank it to 13px and every control read as undersized.
     const fallback = render(<IconButton icon="filter" label="Default" />);
-    expect(sizeClass(fallback.getByRole("button", { name: "Default" }).querySelector("svg")!)).toBe("size-[0.8125rem]");
+    expect(sizeClass(fallback.getByRole("button", { name: "Default" }).querySelector("svg")!)).toBe("size-4");
     // A 36px control keeps the step it had.
     const large = render(<IconButton icon="filter" label="Large" size="md" />);
     expect(sizeClass(large.getByRole("button", { name: "Large" }).querySelector("svg")!)).toBe("size-[1.125rem]");
-    // A 16px mark is still available, but now it is an explicit decision.
+    // A toolbar button of 20px still names 13px explicitly, and a 24px control names 14px.
     const mark = render(<IconButton icon="filter" label="Mark" iconSize="sm" />);
     expect(sizeClass(mark.getByRole("button", { name: "Mark" }).querySelector("svg")!)).toBe("size-4");
   });

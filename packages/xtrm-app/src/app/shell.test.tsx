@@ -30,7 +30,7 @@ describe("Console v2 shell", () => {
     expect(screen.getByTestId("inspector-rail")).toBeTruthy();
     // The list shows the hierarchical locator alone; the flat ref lives in the key cell's tooltip.
     const key = await screen.findByText("XTRM-300.1");
-    expect(key.closest("[data-key-cell]")?.getAttribute("title")).toBe("XTRM-300.1 / XTRM-301");
+    expect(key.getAttribute("title")).toBe("XTRM-300.1 / XTRM-301");
   });
 
   it("groups destinations as Workspace, GitHub and System, with Project's repository sub-routes nested", async () => {
@@ -227,7 +227,8 @@ describe("Jira-style issue editing", () => {
     fireEvent.click(within(details).getByRole("button", { name: /^Priority:/ }));
     fireEvent.click(await screen.findByRole("menuitemradio", { name: /P0 · Highest/ }));
     await waitFor(async () => expect((await substrate.getIssue("XTRM-301")).priority).toBe(0));
-    fireEvent.click(within(details).getByRole("button", { name: /^Status:/ }));
+    // The Status row is now the derived badge (read-only); the writes moved to the Lifecycle row.
+    fireEvent.click(within(details).getByRole("button", { name: /^Lifecycle:/ }));
     fireEvent.click(await screen.findByRole("menuitemradio", { name: /Deferred/ }));
     await waitFor(async () => expect((await substrate.getIssue("XTRM-301")).lifecycle).toBe("deferred"));
   });

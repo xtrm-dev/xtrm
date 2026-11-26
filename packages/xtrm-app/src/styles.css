@@ -56,6 +56,22 @@
   --x-rail-pull: calc(var(--x-rail-indent) + 1px); /* 16px at a 16px root: rail x + the 1px hairline */
   --x-rail-text: calc(var(--x-rail-pull) + var(--x-rail-gutter)); /* 34px: the aligned label column */
   --x-shadow-float: 0 10px 30px -12px rgb(15 15 20 / 0.22), 0 0 0 1px rgb(15 15 20 / 0.06);
+  /* The sidebar strip and its drop-up carry no ring (operator ruling on XTRM-765): separation is the
+     shadow stack alone, which is why this token exists instead of reusing --x-shadow-float. */
+  --x-shadow-strip: 0 3px 6px rgb(15 15 20 / 0.2), 0 14px 30px -6px rgb(15 15 20 / 0.34);
+  --x-shadow-strip-open: 0 6px 16px -4px rgb(15 15 20 / 0.24), 0 24px 56px -16px rgb(15 15 20 / 0.38);
+  /* Solid status chips (2026-11-24 treatment ruling): one tone set for both themes, pure white ink.
+     Each value clears 5.02:1 against #ffffff and 3.36:1 against #151515, so a chip needs no
+     per-theme ink swap and keeps a visible edge in dark mode. */
+  --x-chip-accent: #5b54ea;
+  --x-chip-attention: #b45309;
+  --x-chip-success: #157f4d;
+  --x-chip-danger: #c0392b;
+  --x-chip-neutral: #6b6b76;
+  /* One row height for the sidebar and every list (2026-11-24). 36px holds a 14px label and a
+     14px glyph; the two-line row is 52px, which holds that label plus a 12px meta line. */
+  --x-row: 2rem;
+  --x-row-tall: 3rem;
   /* Panel elevation without a hairline: the inspector carries no border (no-borders policy), so the
      ring inside --x-shadow-float would outline it in a colour that is not its background. */
   --x-shadow-panel: 0 10px 30px -12px rgb(15 15 20 / 0.22);
@@ -102,6 +118,8 @@
   --x-diff-add: #5ccb8a;
   --x-diff-del: #f07171;
   --x-shadow-float: 0 18px 44px -12px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.08);
+  --x-shadow-strip: 0 3px 6px rgb(0 0 0 / 0.5), 0 14px 30px -6px rgb(0 0 0 / 0.7);
+  --x-shadow-strip-open: 0 6px 16px -4px rgb(0 0 0 / 0.6), 0 24px 56px -16px rgb(0 0 0 / 0.82);
   --x-shadow-panel: 0 18px 44px -12px rgb(0 0 0 / 0.72);
   --x-strip: #1c1c1c;
   --x-strip-open: #262626;
@@ -143,12 +161,25 @@
   --color-diff-add: var(--x-diff-add);
   --color-diff-del: var(--x-diff-del);
 
+  --color-chip-accent: var(--x-chip-accent);
+  --color-chip-attention: var(--x-chip-attention);
+  --color-chip-success: var(--x-chip-success);
+  --color-chip-danger: var(--x-chip-danger);
+  --color-chip-neutral: var(--x-chip-neutral);
+
+  /* The chrome rounds up (2026-11-24): 4px badges become pills, 6px controls become 10px,
+     8px popovers become 14px. A row highlight stays at 10px, the ceiling at a 36px row. */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
 
   --shadow-float: var(--x-shadow-float);
   --shadow-panel: var(--x-shadow-panel);
+  --shadow-strip: var(--x-shadow-strip);
+  --shadow-strip-open: var(--x-shadow-strip-open);
+
+  --spacing-row: var(--x-row);
+  --spacing-row-tall: var(--x-row-tall);
   --color-strip: var(--x-strip);
   --color-strip-open: var(--x-strip-open);
   --color-strip-ink: var(--x-strip-ink);

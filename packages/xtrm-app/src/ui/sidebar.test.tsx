@@ -25,19 +25,22 @@ describe("SidebarSection", () => {
 });
 
 describe("SidebarRow", () => {
-  it("renders the 30px sidebar geometry: 16px icon at stroke 2, 600 label", () => {
+  it("renders the 28px sidebar geometry: 14px icon at stroke 2.25, 600 label at 14px", () => {
+    // 2026-11-24: the row sits at the Work/Agent switch height (28px) and the glyph sits on the
+    // label's own step (14px), so the icon no longer outweighs the word and no row outweighs the switch.
     const onActivate = vi.fn();
     const { container } = render(<SidebarRow icon="program" label="Project" onActivate={onActivate} />);
     const row = container.firstElementChild as HTMLElement;
-    expect(row.className).toContain("h-[30px]");
+    expect(row.className).toContain("h-7");
 
     const icon = row.querySelector("svg")!;
-    expect(icon.getAttribute("width")).toBe("16");
+    expect(icon.getAttribute("width")).toBe("14");
     // 2.25 is the app weight (docs/mocks/sidebar-weight-connection-activity.html, A1).
     expect(icon.getAttribute("stroke-width")).toBe("2.25");
 
     const label = screen.getByText("Project");
     expect(label.className).toContain("font-semibold");
+    expect(label.className).toContain("text-base");
 
     fireEvent.click(label);
     expect(onActivate).toHaveBeenCalledOnce();

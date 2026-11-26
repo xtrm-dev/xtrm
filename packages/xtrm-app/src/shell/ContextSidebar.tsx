@@ -128,7 +128,7 @@ function SourceFooter() {
         {/* Inset from the panel edges, one compact line: it is a status strip, not a header. */}
         <Popover.Trigger
           aria-label="Data sources"
-          className="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-xs text-strip-ink shadow-float outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
+          className="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-xs text-strip-ink shadow-strip outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
         >
           <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
           <span className="truncate">{live === items.length ? "All sources live" : `${live} of ${items.length} live`}</span>
@@ -138,7 +138,7 @@ function SourceFooter() {
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner side="top" align="start" sideOffset={6} className="z-50">
-            <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-lg bg-strip p-1.5 text-xs text-strip-ink shadow-float outline-none">
+            <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-md bg-strip p-1.5 text-sm text-strip-ink shadow-strip-open outline-none">
               <div className="flex items-baseline gap-2 px-1.5 pt-0.5 pb-1">
                 <span className="text-xs text-strip-ink-faint">Data sources</span>
                 <span className="ml-auto text-xs tabular text-strip-ink-faint">

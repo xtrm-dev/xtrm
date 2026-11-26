@@ -43,16 +43,20 @@ describe("board PR column", () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const router = createAppRouter({ adapters: { ...fixtureAdapters, substrate: createFixtureSubstrate() }, history, queryClient });
     render(<RouterProvider router={router} />);
-    const header = await screen.findByRole("columnheader", { name: /PR/ });
-    expect(header).toBeTruthy();
-    // The column shows the key alone. The row's lifecycle badge already carries the colour, so the
-    // key stays quiet (§4.4 Restraint rule 1) and the state travels in the glyph and the aria-label.
-    const key = await screen.findByLabelText("Pull request #211, merged");
+    // The list has no header row after the 2026-11-24 ruling, so the PR number is a sort key in the
+    // Order by menu instead of a clickable column head (L3/R4), and the key itself stays quiet in the
+    // row because the status chip already carries the colour (§4.4 Restraint rule 1).
+    const order = await screen.findByRole("button", { name: /Order by/ });
+    fireEvent.click(order);
+    expect(await screen.findByText("PR number")).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    const key = await screen.findByLabelText("Pull request #211");
     expect(key.textContent).toContain("#211");
+    // A dim address: the status chip beside it owns the colour.
     expect(key.className).toContain("text-ink-muted");
-    expect(key.querySelector("svg")).not.toBeNull();
-    fireEvent.click(within(header).getByRole("button"));
-    expect(header.getAttribute("aria-sort")).not.toBe("none");
+    expect(key.className).not.toContain("bg-");
+    expect(key.getAttribute("title")).toContain("created_from");
   });
 });
 
@@ -66,7 +70,7 @@ describe("pull request live state", () => {
     expect(within(section).getByText("Add console feature")).toBeTruthy();
     const merged = within(section).getByText("Merged");
     expect(merged.closest("[data-slot='badge']")).toBeTruthy();
-    expect(merged.closest("[data-slot='badge']")!.className).toContain("bg-accent-soft");
+    expect(merged.closest("[data-slot='badge']")!.className).toContain("bg-chip-accent");
     expect(within(section).getByText("Unknown")).toBeTruthy();
     expect(within(section).getByText(/provenance/)).toBeTruthy();
   });

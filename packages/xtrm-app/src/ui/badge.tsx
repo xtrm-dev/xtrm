@@ -5,6 +5,13 @@ import { cx } from "./primitives.tsx";
 export type BadgeTone = "accent" | "active" | "danger" | "success" | "neutral" | "muted" | "inverse";
 
 /**
+ * `tint` is the quiet chip: a 10–12 % wash with the tone's ink. `solid` is the status chip after the
+ * 2026-11-24 treatment ruling: the tone is the background and the ink is pure white, so a state reads
+ * from across the room and never changes meaning between themes (one tone set, see `--x-chip-*`).
+ */
+export type BadgeVariant = "tint" | "solid";
+
+/**
  * Ink and soft fills only: the surface stays monochrome and a badge borrows colour from the tone
  * it names (§15.1). Text is a step smaller than body copy so a badge never competes with a label.
  */
@@ -20,6 +27,17 @@ const TONE: Record<BadgeTone, string> = {
   inverse: "bg-strip-chip text-strip-chip-ink",
 };
 
+/** Solid fills carry white ink. The five tones are the same values in light and dark. */
+const SOLID: Record<BadgeTone, string> = {
+  accent: "bg-chip-accent text-white",
+  active: "bg-chip-attention text-white",
+  danger: "bg-chip-danger text-white",
+  success: "bg-chip-success text-white",
+  neutral: "bg-chip-neutral text-white",
+  muted: "bg-chip-neutral text-white",
+  inverse: "bg-strip-chip text-strip-chip-ink",
+};
+
 const SIZE = {
   /** Dense table cells and footer rows. */
   xs: "h-4 px-1 text-2xs leading-none",
@@ -29,6 +47,7 @@ const SIZE = {
 
 export interface BadgeProps extends Omit<ComponentProps<"span">, "children"> {
   tone?: BadgeTone;
+  variant?: BadgeVariant;
   size?: keyof typeof SIZE;
   /** Tabular mono for values that must line up (latency, counts, versions). */
   mono?: boolean;
@@ -43,14 +62,14 @@ export interface BadgeProps extends Omit<ComponentProps<"span">, "children"> {
   children?: ReactNode;
 }
 
-export function Badge({ tone = "neutral", size = "sm", mono, shrink, className, children, ...props }: BadgeProps) {
+export function Badge({ tone = "neutral", variant = "tint", size = "sm", mono, shrink, className, children, ...props }: BadgeProps) {
   return (
     <span
       data-slot="badge"
       className={cx(
-        "inline-flex items-center justify-center gap-1 rounded font-medium whitespace-nowrap tabular",
+        "inline-flex items-center justify-center gap-1 rounded-full font-medium whitespace-nowrap tabular",
         shrink ? "min-w-0 shrink" : "shrink-0",
-        TONE[tone],
+        variant === "solid" ? SOLID[tone] : TONE[tone],
         SIZE[size],
         mono && "font-mono",
         className,

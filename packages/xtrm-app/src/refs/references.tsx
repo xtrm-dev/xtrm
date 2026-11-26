@@ -4,7 +4,8 @@ import { projectForRepo, useGithubIssue, useIssues, useProjects, usePull } from 
 import { pullStateLabel, pullUrl, resolvePullReference } from "../github/pr.ts";
 import { PrKey } from "../ui/pr-key.tsx";
 import { githubIssueUrl, issueStateLabel, issueStateTone, parseGithubIssueRef } from "../github/issues.ts";
-import { IssueKey, lifecycleLabel, lifecycleTone } from "../issues/meta.tsx";
+import { IssueKeyPill } from "../ui/issue-key-pill.tsx";
+import { lifecycleLabel } from "../issues/meta.tsx";
 import { JiraChip, JiraKeyReference, useJiraIssueIndex } from "../project/jira/JiraChip.tsx";
 import { useShell } from "../shell/context.tsx";
 import { Icon } from "../ui/icon.tsx";
@@ -257,7 +258,7 @@ function GithubIssueReferenceChip({ reference, showTitle, fallback, className }:
           window.open(href, "_blank", "noreferrer");
         }}
         onDoubleClick={(e) => e.stopPropagation()}
-        className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40"
+        className="inline-flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40"
       >
         {issue.data ? <StatusDot tone={issueStateTone(issue.data.state)} label={issueStateLabel(issue.data.state)} /> : <Icon name="comment" size="xs" className="shrink-0 text-ink-faint" />}
         <span className="truncate font-mono text-xs text-accent-ink">
@@ -310,12 +311,14 @@ function PullReferenceChip({ reference, showTitle, fallback, className }: { refe
           window.open(href, "_blank", "noreferrer");
         }}
         onDoubleClick={(e) => e.stopPropagation()}
-        className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40"
+        className="inline-flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40"
       >
-        <PrKey number={parsed.number} state={state ?? null} draft={pull.data.draft} glyph={false} className="min-w-0" />
-        <span className="truncate font-mono text-xs text-ink-faint">{parsed.fullName}</span>
+        <PrKey number={parsed.number} state={state ?? null} draft={pull.data.draft} glyph={false} className="shrink-0" />
+        {/* Truncation order (2026-11-26 ruling): the key is never cut, the repository is cut first,
+            the title last — the repository is almost always this surface's own repo. */}
+        <span className="min-w-0 shrink-[4] truncate font-mono text-xs text-ink-faint">{parsed.fullName}</span>
         {title && (
-          <span className={cx("text-ink", showTitle ? "text-sm" : "text-xs text-ink-muted")} data-testid="pr-chip-title">
+          <span className={cx("min-w-0 shrink truncate text-ink", showTitle ? "text-sm" : "text-xs text-ink-muted")} data-testid="pr-chip-title">
             {title}
           </span>
         )}
@@ -360,22 +363,30 @@ function IssueReferenceChip({
     <button
       type="button"
       data-reference={formatReference({ kind: "issue", ref: issue.ref })}
-      aria-label={`${issue.locator} ${issue.title}`}
+      aria-label={`${issue.locator ?? issue.ref} ${issue.title}`}
       onClick={open}
       onDoubleClick={(e) => e.stopPropagation()}
       className={cx(
-        "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40",
+        "inline-flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm px-1 align-baseline leading-5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/40",
         className,
       )}
     >
-      <StatusDot tone={lifecycleTone(issue.lifecycle)} label={lifecycleLabel(issue.lifecycle)} />
-      <IssueKey locator={issue.locator} humanRef={issue.ref} showAlias={showAlias} />
-      {showTitle && <span className={cx("truncate text-sm", issue.lifecycle === "open" ? "text-ink" : "text-ink-muted")}>{issue.title}</span>}
+      <IssueKeyPill locator={issue.locator} humanRef={issue.ref} className="shrink-0" />
+      {showTitle && <span className={cx("min-w-0 truncate text-sm", issue.lifecycle === "open" ? "text-ink" : "text-ink-muted")}>{issue.title}</span>}
     </button>
   );
-  // The alias a compact cell cannot show still travels in the tooltip, so nothing is lost.
-  const alias = !showAlias && issue.locator && issue.locator !== issue.ref ? ` · ${issue.ref}` : "";
-  return showTitle ? chip : <Tip label={`${issue.title} · ${lifecycleLabel(issue.lifecycle)}${alias}`}>{chip}</Tip>;
+  // The pill always carries the flat ref, so the tooltip never repeats it.
+  // No status dot (2026-11-25 ruling): the lifecycle lives in the tooltip instead.
+  // The tooltip wrapper is a flex item in every relations row, so it has to be shrinkable: a bare
+  // `<span title>` computes `min-width: auto` and cannot shrink below its chip, which overflows the
+  // inspector drawer horizontally instead of ellipsising the title.
+  return showTitle ? (
+    <span title={lifecycleLabel(issue.lifecycle)} className="inline-flex min-w-0 max-w-full">
+      {chip}
+    </span>
+  ) : (
+    <Tip label={`${issue.title} · ${lifecycleLabel(issue.lifecycle)}`}>{chip}</Tip>
+  );
 }
 
 /**

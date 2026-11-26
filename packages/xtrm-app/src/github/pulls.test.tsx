@@ -54,13 +54,18 @@ describe("PR linkage helpers", () => {
     expect(parseProvenancePr("not a pr", "xtrm-dev/xtrm")).toBeNull();
   });
 
-  it("filters by view and query, sorts by updated/created/comments", () => {
+  it("filters by state and query, sorts by updated/created/comments", () => {
     const pulls = fixturePulls("xtrm-dev/xtrm");
-    expect(filterPulls(pulls, "open", "").every((p) => p.state === "open")).toBe(true);
-    expect(filterPulls(pulls, "merged", "").every((p) => p.state === "merged")).toBe(true);
-    expect(filterPulls(pulls, "closed", "").every((p) => p.state === "closed")).toBe(true);
-    expect(filterPulls(pulls, "open", "XTRM-301").map((p) => p.number)).toEqual([212]);
-    expect(filterPulls(pulls, "open", "xt/o8h2").map((p) => p.number)).toEqual([212]);
+    expect(filterPulls(pulls, new Set(["open"]), "").every((p) => p.state === "open")).toBe(true);
+    expect(filterPulls(pulls, new Set(["merged"]), "").every((p) => p.state === "merged")).toBe(true);
+    expect(filterPulls(pulls, new Set(["closed"]), "").every((p) => p.state === "closed")).toBe(true);
+    // The set is a union: two states selected keeps both, and an empty set keeps nothing.
+    expect(filterPulls(pulls, new Set(["open", "merged"]), "").length).toBeGreaterThan(
+      filterPulls(pulls, new Set(["open"]), "").length,
+    );
+    expect(filterPulls(pulls, new Set(), "")).toEqual([]);
+    expect(filterPulls(pulls, new Set(["open"]), "XTRM-301").map((p) => p.number)).toEqual([212]);
+    expect(filterPulls(pulls, new Set(["open"]), "xt/o8h2").map((p) => p.number)).toEqual([212]);
     const byComments = sortPulls(pulls, "comments");
     expect(byComments[0]!.comments).toBeGreaterThanOrEqual(byComments[1]!.comments);
     const byUpdated = sortPulls(pulls, "updated");
@@ -69,18 +74,26 @@ describe("PR linkage helpers", () => {
 });
 
 describe("Pull requests surface", () => {
-  it("lists PRs with Open/Merged/Closed views, filter, and sort", async () => {
+  it("lists every state by default and narrows through the state filter", async () => {
     renderAt("/rep/xtrm-dev/xtrm/code/pulls");
     expect(await screen.findByRole("region", { name: "Pull requests" })).toBeTruthy();
-    // Open view shows the XTRM-301 PR with its linked issue chip.
+    // Every state is on by default: one multi-select replaces the three state tabs.
     expect(await screen.findByText("feat(XTRM-301): rail keyboard model v2")).toBeTruthy();
+    expect(screen.getByText("feat(XTRM-94): Substrate Documentation vNext")).toBeTruthy();
     expect(screen.getByText("#212")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("tab", { name: /Merged/ }));
-    expect(await screen.findByText("feat(XTRM-94): Substrate Documentation vNext")).toBeTruthy();
-    expect(screen.queryByText("feat(XTRM-301): rail keyboard model v2")).toBeNull();
-
-    fireEvent.click(screen.getByRole("tab", { name: /^Open/ }));
+    fireEvent.click(screen.getByRole("button", { name: "State filter" }));
+    fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Open" }));
+    // Unchecking one state hides exactly that state and leaves the others.
+    await waitFor(() => expect(screen.queryByText("feat(XTRM-301): rail keyboard model v2")).toBeNull());
+    expect(screen.getByText("feat(XTRM-94): Substrate Documentation vNext")).toBeTruthy();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    // The trigger names the remaining choice instead of a count when two states are off.
+    expect(screen.getByRole("button", { name: /State filter: (Merged|Closed)/ })).toBeTruthy();
+    // Put every state back before the query step: the filter is a set, not a tab switch.
+    fireEvent.click(screen.getByRole("button", { name: /State filter: (Merged|Closed)/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Select all" }));
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     // The sort control is a ghost button: a menu affordance, not a chip (the chip fill was `bg-pressed`).
     expect(screen.getByRole("button", { name: /Recently updated/ }).className.split(/\s+/)).not.toContain("bg-pressed");
     fireEvent.click(screen.getByRole("button", { name: "Filter this list" }));
@@ -95,13 +108,14 @@ describe("Pull requests surface", () => {
     const counted = await screen.findByText("chore(XTRM-857): two reviews, three comments");
     const countedRow = counted.closest('[data-testid="pull-row"]') as HTMLElement;
     // Restraint rule 1: the key is the one coloured element in the list, so the diff is plain ink.
-    const diff = within(countedRow).getByTitle("24 added, 7 removed").querySelector("span") as HTMLElement;
+    // The treatment puts the counts at the row edge as plain tabular text, not as a column cell.
+    const diff = within(countedRow).getByTitle("24 added, 7 removed");
     expect(diff.textContent).toBe("+24 \u22127");
-    expect(diff.className).toContain("text-ink-muted");
-    // Checks stay neutral in the list: no coloured dot survives in the row.
+    expect(diff.className).toContain("tabular");
+    // The check state keeps its dot: it is the only carrier that survives a 12px reading distance.
     const dots = Array.from(countedRow.querySelectorAll("[title^='checks']"));
     expect(dots.length).toBeGreaterThan(0);
-    for (const dot of dots) expect(dot.querySelector(".bg-danger, .bg-success, .bg-ink-faint")).toBeNull();
+    expect(dots[0]!.querySelector(".bg-success, .bg-danger, .bg-ink-faint")).not.toBeNull();
     expect(within(countedRow).getByTitle(/3 conversation comments/)).toBeTruthy();
     expect(within(countedRow).getByTitle("24 added, 7 removed")).toBeTruthy();
     expect(within(countedRow).getByTitle("approved \u00b7 2 reviews")).toBeTruthy();
@@ -191,13 +205,13 @@ describe("PR identity (§4.4-4.5)", () => {
     renderAt("/rep/xtrm-dev/xtrm/code/pulls");
     const title = await screen.findByText("feat(XTRM-301): rail keyboard model v2");
     const row = title.closest("[data-testid='pull-row']") as HTMLElement;
-    const key = within(row).getByLabelText("Pull request #212, open");
-    expect(key.className).toContain("text-success");
-    expect(key.querySelector("svg")).not.toBeNull();
-    // Restraint rule 1: the key is the row's only coloured element, and the state word never repeats.
-    expect(row.querySelectorAll("[class*='text-success']")).toHaveLength(1);
-    expect(row.querySelector("[title='checks accepted']")).toBeNull();
-    expect(within(row).queryByText("open")).toBeNull();
+    // The key is a dim address; the state is the solid chip beside it (2026-11-24 follow-up).
+    const key = within(row).getByLabelText("Pull request #212");
+    expect(key.className).toContain("text-ink-muted");
+    expect(key.className).not.toContain("bg-");
+    const chip = within(row).getByText("Open", { selector: "[data-slot='badge']" });
+    expect(chip.className).toContain("bg-chip-success");
+    expect(chip.className).toContain("text-white");
     expect(within(row).getByLabelText("Copy xtrm-dev/xtrm#212")).toBeTruthy();
   });
 
@@ -225,7 +239,9 @@ describe("PR identity (§4.4-4.5)", () => {
     fireEvent.keyDown(more, { key: "Enter" });
     expect(screen.queryByTestId("inspector-drawer")).toBeNull();
     fireEvent.click(more);
-    expect(await screen.findByRole("button", { name: /XTRM-94/ })).toBeTruthy();
+    // Several rows may link the same issue now that every state renders by default: the popover is
+    // what has to carry the chip, not the page.
+    expect((await screen.findAllByRole("button", { name: /XTRM-94/ })).length).toBeGreaterThan(0);
   });
 
   it("renders the §4.5 inspector header: key, state chip, branch, diff, files, author, dates", async () => {
@@ -234,7 +250,7 @@ describe("PR identity (§4.4-4.5)", () => {
     const header = await within(el).findByTestId("pull-header");
     expect(within(header).getByLabelText("Pull request #212, open")).toBeTruthy();
     const chip = within(header).getByText("Open").closest("[data-slot='badge']") as HTMLElement;
-    expect(chip.className).toContain("bg-success");
+    expect(chip.className).toContain("bg-chip-success");
     expect(within(header).getByText(/xt\/o8h2 → main/)).toBeTruthy();
     expect(within(header).getByText("+412")).toBeTruthy();
     expect(within(header).getByText("−88")).toBeTruthy();
