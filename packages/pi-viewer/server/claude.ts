@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -352,6 +353,14 @@ const SKIPPED_TYPES = new Set([
   "tools-used",
 ])
 
+interface QueuedPrompt {
+  content?: string
+  entry?: Raw
+  removed?: boolean
+  /** False for peer envelopes and task notifications, which are not typed into the pane. */
+  operator?: boolean
+}
+
 interface ClaudeState {
   /** The raw array of the file cache this state was built from; a new array means a reset. */
   rawRef: Raw[]
@@ -366,6 +375,7 @@ interface ClaudeState {
   customTitle: string | null
   agentName: string | null
   model: string | null
+  queue: QueuedPrompt[]
 }
 
 const states = new Map<string, ClaudeState>()
@@ -384,6 +394,7 @@ function freshState(rawRef: Raw[]): ClaudeState {
     customTitle: null,
     agentName: null,
     model: null,
+    queue: [],
   }
 }
 
@@ -559,6 +570,73 @@ function slashCommand(text: string): string | null {
   return args ? `${name} ${args}` : name
 }
 
+function queuedText(value: string): string {
+  return value.replace(/\s+/g, " ").trim()
+}
+
+/** Task notifications and peer envelopes are not operator prompts typed into the pane. */
+function operatorQueuedText(text: string): boolean {
+  const body = text.trim()
+  if (!body) return false
+  return !/^(?:<(?:task-notification|system-reminder|cross-session-message|channel|local-command|user-prompt-submit-hook|command-)[\s>]|\[Request interrupted by user)/i.test(body)
+}
+
+function queueEntryId(at: unknown, text: string): string {
+  return `queue:${createHash("sha1").update(`${String(at ?? "")}\n${text}`).digest("hex").slice(0, 16)}`
+}
+
+function addQueuedEntry(state: ClaudeState, at: unknown, text: string, sidechain: boolean): Raw {
+  const entry: Raw = {
+    type: "message",
+    id: queueEntryId(at, text),
+    timestamp: at,
+    message: { role: "user", content: text },
+    _queued: true,
+  }
+  addEntry(state, entry, { type: "queue-operation", operation: "enqueue", timestamp: at }, sidechain)
+  return entry
+}
+
+function findQueued(state: ClaudeState, text: string): QueuedPrompt | undefined {
+  const wanted = queuedText(text)
+  return (
+    state.queue.find((item) => item.operator !== false && item.content && queuedText(item.content) === wanted) ??
+    state.queue.find((item) => item.operator !== false && item.removed === true) ??
+    state.queue.find((item) => item.operator !== false)
+  )
+}
+
+/** A peer envelope is delivered through the intercom mapper; drop its queue slot, not the message. */
+function consumeQueued(state: ClaudeState, text: string): void {
+  const wanted = queuedText(text)
+  const pending = state.queue.find((item) => item.content && queuedText(item.content) === wanted) ?? state.queue.find((item) => item.operator === false)
+  if (pending) state.queue = state.queue.filter((item) => item !== pending)
+}
+
+function deliverQueued(state: ClaudeState, record: Raw, text: string, sidechain: boolean): void {
+  const pending = findQueued(state, text)
+  if (pending) {
+    state.queue = state.queue.filter((item) => item !== pending)
+    if (pending.entry) {
+      const entry = pending.entry
+      entry.timestamp = record.timestamp
+      if (isRecord(entry.message) && typeof text === "string" && text.trim()) entry.message.content = text
+      entry._queued = false
+      entry._hidden = false
+      const index = state.entries.indexOf(entry)
+      if (index >= 0) state.versions[index] += 1
+      return
+    }
+  }
+  const at = record.timestamp
+  addEntry(
+    state,
+    { type: "message", id: queueEntryId(at, text), parentId: asString(record.parentUuid), timestamp: at, message: { role: "user", content: text } },
+    record,
+    sidechain,
+  )
+}
+
 function ingestUserText(state: ClaudeState, record: Raw, text: string, sidechain: boolean, suffix: string): void {
   const uuid = asString(record.uuid)
   const id = uuid ? `${uuid}${suffix}` : undefined
@@ -717,12 +795,53 @@ function ingest(state: ClaudeState, record: Raw): void {
       return
     }
     case "attachment": {
-      const attachment = isRecord(record.attachment) ? asString(record.attachment.type) : undefined
+      const attachmentRecord = isRecord(record.attachment) ? record.attachment : null
+      const attachment = attachmentRecord ? asString(attachmentRecord.type) : undefined
+      if (attachment === "queued_command" && asString(attachmentRecord?.commandMode) === "prompt") {
+        const prompt = asString(attachmentRecord?.prompt) ?? ""
+        // A peer envelope is not an operator prompt; it goes through the intercom mapper.
+        if (ENVELOPE.test(prompt)) {
+          consumeQueued(state, prompt)
+          ingestUserText(state, record, prompt, sidechain, "")
+        } else if (operatorQueuedText(prompt)) {
+          deliverQueued(state, record, prompt, sidechain)
+        }
+        return
+      }
       addEntry(state, { ...eventEntry("attachment", `attachment · ${attachment ?? "?"}`), ...stamped }, record, sidechain)
       return
     }
     case "queue-operation": {
       const operation = asString(record.operation) ?? "?"
+      const content = asString(record.content)?.trim()
+      if (operation === "enqueue") {
+        const pending: QueuedPrompt = { content, operator: !content || operatorQueuedText(content) }
+        if (content && pending.operator) {
+          pending.entry = addQueuedEntry(state, carried, content, sidechain)
+        }
+        state.queue.push(pending)
+        return
+      }
+      if (operation === "dequeue") {
+        const pending = state.queue.shift()
+        if (pending?.entry) {
+          pending.entry._queued = false
+          pending.entry._hidden = true
+          const index = state.entries.indexOf(pending.entry)
+          if (index >= 0) state.versions[index] += 1
+        }
+        return
+      }
+      if (operation === "remove") {
+        const pending = state.queue[0] ?? { operator: true }
+        if (state.queue[0] !== pending) state.queue.unshift(pending)
+        pending.removed = true
+        if (!pending.content && content) pending.content = content
+        if (!pending.entry && content && pending.operator !== false && operatorQueuedText(content)) {
+          pending.entry = addQueuedEntry(state, carried, content, sidechain)
+        }
+        return
+      }
       addEntry(state, { ...eventEntry("queue", `queue · ${operation}`), ...stamped }, record, sidechain)
       return
     }
@@ -816,6 +935,12 @@ export function normalizeClaudeEvent(
   options: { raw?: boolean } = {},
 ): ViewerEvent {
   const event = normalizeEvent(entry, agent, seq, onBranch, options)
+  if (entry._hidden === true) {
+    event.kind = "meta"
+    event.summary = "queued message delivered as a turn"
+    event.detail = "queued"
+    event.queued = undefined
+  }
   if (entry.type === "claude-event") {
     event.kind = "meta"
     event.summary = typeof entry._summary === "string" ? entry._summary : event.summary

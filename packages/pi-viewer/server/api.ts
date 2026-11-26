@@ -154,6 +154,7 @@ function lite(event: ViewerEvent, scope: "branch" | "all"): ViewerEvent {
     summary: event.summary,
   }
   if (event.isError) base.isError = true
+  if (event.queued) base.queued = true
   if (event.effect) base.effect = event.effect
   if (event.overflow) base.overflow = true
 

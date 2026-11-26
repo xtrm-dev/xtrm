@@ -31,6 +31,7 @@ function AgentMark({ name }: { name: string }) {
 
 const DELIVERY_TITLE: Record<Delivery, string> = {
   queued: "Sending: the send request is in flight.",
+  pending: "Queued: waiting for the current turn to finish.",
   typed: "Sent: the keys reached the pane. The prompt has not appeared in the transcript yet.",
   seen: "Seen: the prompt is in the agent's transcript.",
   answered: "Replied: the agent has replied since this prompt.",
@@ -53,7 +54,7 @@ function DeliveryMark({ delivery, error }: { delivery: Delivery; error?: string 
       </span>
     )
   }
-  const icon = delivery === "queued" ? "loader" : delivery === "typed" ? "check" : "checkCheck"
+  const icon = delivery === "queued" || delivery === "pending" ? "loader" : delivery === "typed" ? "check" : "checkCheck"
   return (
     <span
       role="img"
@@ -65,7 +66,7 @@ function DeliveryMark({ delivery, error }: { delivery: Delivery; error?: string 
       <Icon
         name={icon}
         size="text"
-        className={cn(delivery === "queued" && "animate-spin motion-reduce:animate-none")}
+        className={cn((delivery === "queued" || delivery === "pending") && "animate-spin motion-reduce:animate-none")}
       />
     </span>
   )
