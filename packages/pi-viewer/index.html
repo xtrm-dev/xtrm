@@ -12,13 +12,28 @@
         document.documentElement.dataset.theme = "dark"
       }
       try {
-        var palette = localStorage.getItem("pi-viewer-palette")
-        var known = ["threads", "threads-soft", "console", "console-soft", "desktop"]
-        if (known.indexOf(palette) < 0) palette = "threads"
-        document.documentElement.dataset.palette = palette.replace("-soft", "")
-        if (palette.indexOf("-soft") > 0) document.documentElement.dataset.text = "soft"
+        // Colours (sidebar, chat, text) are set before first paint; see src/lib/palette.ts.
+        var planes = ["threads", "console", "desktop"]
+        var presets = {
+          threads: ["threads", "threads", "standard"],
+          "threads-soft": ["threads", "threads", "soft"],
+          console: ["console", "console", "standard"],
+          "console-soft": ["console", "console", "soft"],
+          desktop: ["desktop", "desktop", "soft"],
+        }
+        var chosen = presets[localStorage.getItem("pi-viewer-palette")] || presets.threads
+        try {
+          var c = JSON.parse(localStorage.getItem("pi-viewer-colours") || "null")
+          if (c && planes.indexOf(c.sidebar) >= 0 && planes.indexOf(c.chat) >= 0 && (c.text === "standard" || c.text === "soft")) {
+            chosen = [c.sidebar, c.chat, c.text]
+          }
+        } catch (error) {}
+        document.documentElement.dataset.sidebar = chosen[0]
+        document.documentElement.dataset.palette = chosen[1]
+        if (chosen[2] === "soft") document.documentElement.dataset.text = "soft"
       } catch (error) {
         document.documentElement.dataset.palette = "threads"
+        document.documentElement.dataset.sidebar = "threads"
       }
     </script>
   </head>

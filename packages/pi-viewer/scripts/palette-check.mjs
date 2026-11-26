@@ -82,7 +82,7 @@ function expectPalette(seen, palette, theme, width, label) {
   assert.equal(seen.muted, want.muted, `${tag} muted text colour`)
   if (want.ink) assert.equal(seen.ink, want.ink, `${tag} primary text colour`)
   // Soft text keeps the base's attributes: data-palette is the base, data-text marks the layer.
-  assert.equal(seen.text, palette.endsWith("-soft") ? "soft" : null, `${tag} data-text`)
+  assert.equal(seen.text, (palette.endsWith("-soft") || palette === "desktop") ? "soft" : null, `${tag} data-text`)
   if (want.selected && seen.selected) assert.equal(seen.selected, want.selected, `${tag} selected sidebar row`)
 }
 
@@ -212,9 +212,35 @@ try {
         await page.locator('[data-slot="message-scroller-item"]').first().waitFor({ state: "visible" })
         const reloaded = await paint(page)
         assert.equal(reloaded.palette, palette.replace("-soft", ""), `${palette} persists across a reload`)
-        assert.equal(reloaded.text, palette.endsWith("-soft") ? "soft" : null, `${palette} text layer persists across a reload`)
+        assert.equal(reloaded.text, (palette.endsWith("-soft") || palette === "desktop") ? "soft" : null, `${palette} text layer persists across a reload`)
         assert.equal(await page.evaluate(() => localStorage.getItem("pi-viewer-palette")), palette)
         assert.equal(reloaded.overflow, 0, `${label} ${theme} ${palette}: no horizontal overflow`)
+      }
+
+      // Independent mix (operator, 2026-11-26): Desktop sidebar, Threads chat, standard text. Each region keeps
+      // its own plane, the trigger reads Custom, and the mix survives a reload.
+      await page.getByRole("button", { name: /^Colours:/ }).click()
+      await page.getByRole("radiogroup", { name: "Sidebar" }).getByRole("radio", { name: "Desktop", exact: true }).click()
+      await page.getByRole("radiogroup", { name: "Chat" }).getByRole("radio", { name: "Threads", exact: true }).click()
+      await page.getByRole("radiogroup", { name: "Text" }).getByRole("radio", { name: "Standard", exact: true }).click()
+      await page.keyboard.press("Escape")
+      await page.waitForTimeout(150)
+      for (const pass of ["live", "reload"]) {
+        if (pass === "reload") {
+          await page.reload({ waitUntil: "domcontentloaded" })
+          await page.locator('[data-slot="message-scroller-item"]').first().waitFor({ state: "visible" })
+        }
+        const mix = await paint(page)
+        const tag = `${label} ${theme} mix (${pass})`
+        assert.equal(mix.palette, "threads", `${tag}: the chat palette is Threads`)
+        assert.equal(mix.text, null, `${tag}: standard text`)
+        assert.equal(mix.canvas, EXPECT[`threads ${theme}`].canvas, `${tag}: the chat canvas is Threads'`)
+        assert.equal(mix.prose, EXPECT[`threads ${theme}`].prose, `${tag}: prose reads in standard ink`)
+        if (width >= 1024) {
+          assert.equal(mix.sidebar, theme === "dark" ? "rgb(36, 36, 36)" : EXPECT[`threads ${theme}`].sidebar, `${tag}: the sidebar is Desktop's in dark, the shared light sidebar in light`)
+        }
+        assert.match(await page.getByRole("button", { name: /^Colours:/ }).getAttribute("aria-label"), /Custom$/, `${tag}: the trigger names the mix Custom`)
+        assert.equal(mix.overflow, 0, `${tag}: no horizontal overflow`)
       }
 
       // And back; the choice list offers all three.

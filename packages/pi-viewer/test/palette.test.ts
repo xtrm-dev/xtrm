@@ -3,7 +3,7 @@ import { test } from "node:test"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
-import { DEFAULT_PALETTE, PALETTES, PALETTE_KEY, applyPalette, loadPalette, paletteBase, paletteHint, paletteLabel, paletteSoft, parsePalette, savePalette } from "../src/lib/palette.ts"
+import { COLOURS_KEY, DEFAULT_PALETTE, PALETTES, PALETTE_KEY, PRESETS, applyColours, applyPalette, coloursLabel, loadColours, loadPalette, paletteBase, paletteHint, paletteLabel, paletteSoft, parseColours, parsePalette, presetOf, saveColours, savePalette } from "../src/lib/palette.ts"
 
 function fakeWindow(initial: Record<string, string> = {}, blocked = false) {
   const store = new Map(Object.entries(initial))
@@ -88,7 +88,7 @@ test("applyPalette writes the root attribute", () => {
   assert.equal(root.dataset.text, undefined)
 })
 
-test("a soft version keeps the base on data-palette and adds data-text=soft; any other choice removes it", () => {
+test("a soft version keeps the base on data-palette and adds data-text=soft; a standard-text choice removes it", () => {
   const root = { dataset: {} as Record<string, string> } as unknown as HTMLElement
   applyPalette("console-soft", root)
   assert.equal(root.dataset.palette, "console")
@@ -98,7 +98,8 @@ test("a soft version keeps the base on data-palette and adds data-text=soft; any
   assert.equal(root.dataset.text, "soft")
   applyPalette("desktop", root)
   assert.equal(root.dataset.palette, "desktop")
-  assert.equal(root.dataset.text, undefined)
+  assert.equal(root.dataset.sidebar, "desktop")
+  assert.equal(root.dataset.text, "soft", "Desktop reads in soft text, now as the independent text layer")
   applyPalette("console", root)
   assert.equal(root.dataset.text, undefined)
 })
@@ -179,8 +180,10 @@ test("in the light theme a soft version equals its base: no light rule names the
 
 test("the soft text values are Desktop's text set and Desktop's surfaces are unchanged", () => {
   assert.deepEqual(layer, { ink: "#e4e4e4", read: "#c8c8c8", "ink-muted": "#a1a1a1", "ink-muted-selected": "#c8c8c8" })
-  // Desktop wears the same layer through the shared selector, so its text equals the soft versions'.
-  assert.match(css, /:root\[data-palette="desktop"\]\[data-theme="dark"\],\s*:root\[data-text="soft"\]\[data-theme="dark"\]\s*\{/)
+  // Desktop wears the same layer through its preset (text: soft), so its text equals the soft versions'; the
+  // layer is no longer tied to the Desktop palette, so Desktop surfaces can read in standard text too.
+  assert.equal(PRESETS.desktop.text, "soft")
+  assert.doesNotMatch(css, /:root\[data-palette="desktop"\]\[data-theme="dark"\],\s*:root\[data-text="soft"\]/)
   assert.deepEqual(desktopDark, {
     deep: "#1f1f1f",
     sidebar: "#242424",
@@ -196,4 +199,68 @@ test("the soft text values are Desktop's text set and Desktop's surfaces are unc
     "code-edge": "var(--x-border)",
   })
   assert.deepEqual(differing(threadsDark, { ...threadsDark, ...layer }).sort(), ["ink", "ink-muted", "ink-muted-selected", "read"].sort())
+})
+
+
+test("every preset maps to its three settings, and the mapping round-trips", () => {
+  for (const palette of PALETTES) assert.equal(presetOf(PRESETS[palette]), palette)
+  assert.deepEqual(PRESETS.desktop, { sidebar: "desktop", chat: "desktop", text: "soft" })
+  assert.deepEqual(PRESETS["console-soft"], { sidebar: "console", chat: "console", text: "soft" })
+})
+
+test("a mix that matches no preset is Custom", () => {
+  const mix = { sidebar: "console", chat: "desktop", text: "standard" } as const
+  assert.equal(presetOf(mix), null)
+  assert.equal(coloursLabel(mix), "Custom")
+  assert.equal(coloursLabel(PRESETS.threads), "Threads")
+})
+
+test("applyColours writes the three root attributes independently", () => {
+  const root = { dataset: {} as Record<string, string> } as unknown as HTMLElement
+  applyColours({ sidebar: "console", chat: "desktop", text: "standard" }, root)
+  assert.equal(root.dataset.sidebar, "console")
+  assert.equal(root.dataset.palette, "desktop")
+  assert.equal(root.dataset.text, undefined)
+  applyColours({ sidebar: "threads", chat: "threads", text: "soft" }, root)
+  assert.equal(root.dataset.text, "soft")
+})
+
+test("parseColours accepts only known values", () => {
+  assert.deepEqual(parseColours({ sidebar: "desktop", chat: "console", text: "soft" }), { sidebar: "desktop", chat: "console", text: "soft" })
+  assert.equal(parseColours({ sidebar: "Desktop", chat: "console", text: "soft" }), null)
+  assert.equal(parseColours({ sidebar: "desktop", chat: "console" }), null)
+  assert.equal(parseColours(null), null)
+  assert.equal(parseColours("threads"), null)
+})
+
+test("colours round-trip through storage; an older preset-only save loads as that preset; a preset mix also writes the preset key", () => {
+  const legacy = fakeWindow({ [PALETTE_KEY]: "console-soft" })
+  legacy.install()
+  assert.deepEqual(loadColours(), PRESETS["console-soft"])
+
+  const fake = fakeWindow()
+  fake.install()
+  assert.deepEqual(loadColours(), PRESETS.threads)
+  saveColours({ sidebar: "desktop", chat: "threads", text: "soft" })
+  assert.deepEqual(loadColours(), { sidebar: "desktop", chat: "threads", text: "soft" })
+  assert.equal(fake.store.get(PALETTE_KEY), undefined, "a custom mix leaves the preset key alone")
+  saveColours({ ...PRESETS.console })
+  assert.equal(fake.store.get(PALETTE_KEY), "console")
+  assert.ok(fake.store.get(COLOURS_KEY)?.includes('"chat":"console"'))
+
+  fakeWindow({ [COLOURS_KEY]: "{not json" }, false).install()
+  assert.deepEqual(loadColours(), PRESETS.threads)
+})
+
+test("the sidebar plane blocks come after the palettes and set only the sidebar fill and selected row", () => {
+  const sidebarStart = css.indexOf(':root[data-sidebar="threads"][data-theme="dark"]')
+  assert.ok(sidebarStart > css.indexOf(':root[data-palette="desktop"][data-theme="dark"] {'), "after the Desktop palette")
+  assert.ok(sidebarStart > css.indexOf(':root[data-palette="console"][data-theme="dark"]'), "after the Console palette")
+  for (const plane of ["threads", "console", "desktop"]) {
+    const set = tokens(block(`:root[data-sidebar="${plane}"][data-theme="dark"] {`))
+    assert.deepEqual(Object.keys(set).sort(), ["selected", "sidebar"], `${plane}: only the sidebar fill and selected row`)
+  }
+  assert.equal(tokens(block(':root[data-sidebar="desktop"][data-theme="dark"] {')).sidebar, "#242424")
+  assert.equal(tokens(block(':root[data-sidebar="console"][data-theme="dark"] {')).sidebar, "#232323")
+  assert.equal(tokens(block(':root[data-sidebar="threads"][data-theme="dark"] {')).sidebar, "#181818")
 })

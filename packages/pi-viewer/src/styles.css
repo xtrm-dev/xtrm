@@ -216,12 +216,35 @@
    #a1a1a1 (operator ruling 2026-11-26: #a0a0a0, one step up so it is 4.5:1 on #383838): meta, time,
    unselected labels, resting icons. The selected-row rule above belongs to Desktop's #454545 fill only; the
    Threads and Console selected fills are the hover wash, where #a1a1a1 already passes. */
-:root[data-palette="desktop"][data-theme="dark"],
 :root[data-text="soft"][data-theme="dark"] {
   --x-ink: #e4e4e4;
   --x-read: #c8c8c8;
   --x-ink-muted: #a1a1a1;
   --x-ink-muted-selected: #c8c8c8; /* inside Desktop's selected row: #a1a1a1 is 3.7:1 on #454545 */
+}
+
+/* Sidebar plane (operator, 2026-11-26): the sidebar's fill and selected row follow data-sidebar, set
+   independently of the chat palette (data-palette). These blocks come after the palettes and match with the
+   same specificity, so they win for these two variables only. Dark only: in the light theme every palette's
+   sidebar is #f4f4f5 and the selected row is the hover wash, so nothing here applies. Values: Threads #181818
+   (the dark ladder above), Console #232323 (console src/styles.css:79), Desktop #242424 with the #454545
+   selected row (the Desktop block above). */
+:root[data-sidebar="threads"][data-theme="dark"] {
+  --x-sidebar: #181818;
+  --x-selected: var(--x-hover);
+}
+:root[data-sidebar="console"][data-theme="dark"] {
+  --x-sidebar: #232323;
+  --x-selected: var(--x-hover);
+}
+:root[data-sidebar="desktop"][data-theme="dark"] {
+  --x-sidebar: #242424;
+  --x-selected: #454545;
+}
+/* On the #454545 selected row muted text reads one step brighter, whatever the text tone: standard muted
+   (#a0a0a8) and soft muted (#a1a1a1) are both under 4.5:1 there; #c8c8c8 is 6.4:1. */
+:root[data-sidebar="desktop"][data-theme="dark"] [data-testid="sidebar"] [aria-selected="true"] {
+  --x-ink-muted: #c8c8c8;
 }
 
 @theme inline {
