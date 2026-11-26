@@ -4,11 +4,11 @@ const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
 const errors = []
 page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()) })
-await page.goto("http://127.0.0.1:5299/", { waitUntil: "networkidle" })
+await page.goto(`${process.env.PI_VIEWER_URL ?? "http://127.0.0.1:5299"}/`, { waitUntil: "networkidle" })
 await page.waitForSelector('[data-slot="message-scroller-content"]')
 await page.waitForTimeout(2500)
 
-const sessions = (await (await fetch("http://127.0.0.1:5299/api/sessions")).json()).sessions
+const sessions = (await (await fetch(`${process.env.PI_VIEWER_URL ?? "http://127.0.0.1:5299"}/api/sessions`)).json()).sessions
 const session = sessions.find((item) => item.name === "xx") ?? sessions[0]
 const agents = session.agents
 const heavy = [...agents].sort((a, b) => b.eventCount - a.eventCount)

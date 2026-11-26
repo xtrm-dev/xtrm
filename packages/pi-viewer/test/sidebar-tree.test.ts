@@ -179,6 +179,19 @@ test("a thread payload of another session never overrides a session's agents", (
   assert.equal(new Set(keys).size, keys.length)
 })
 
+test("an unchanged agent poll keeps every row's identity", () => {
+  const mine = FIXTURE[0]
+  const original = mine.agents[0]
+  const same = mergeLive(FIXTURE, "xx", { session: "xx", agents: mine.agents })
+  assert.equal(same, FIXTURE)
+  assert.equal(same[0].agents[0], original)
+
+  const changed = mergeLive(FIXTURE, "xx", { session: "xx", agents: [{ ...original, status: "working", eventCount: 99 }, ...mine.agents.slice(1)] })
+  assert.notEqual(changed, FIXTURE)
+  assert.equal(changed[0].agents[0].eventCount, 99)
+  assert.equal(changed[0].agents[1], mine.agents[1])
+})
+
 test("focus on a vanished row goes to its nearest visible ancestor", () => {
   const tree = buildTree(FIXTURE)
   const open = flatten(tree, new Set())
