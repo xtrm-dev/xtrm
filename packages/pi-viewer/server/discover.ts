@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process"
-import { existsSync, readdirSync, readlinkSync, realpathSync, statSync } from "node:fs"
+import { execFile, execFileSync } from "node:child_process"
+import { existsSync, readdirSync, readlinkSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, join } from "node:path"
 
@@ -17,6 +17,7 @@ import {
   type ClaudeTranscript,
 } from "./claude.ts"
 import { repoNameOf } from "./repo.ts"
+import { listOnce, statOnce, withStatPass } from "./stat-pass.ts"
 import { prunePaneReads, withPaneAttention } from "./attention.ts"
 import { lastWriteAt, parseSessionFile, readSessionName, sessionIdFromFile, statusOf, type AgentState } from "./session.ts"
 
@@ -59,23 +60,36 @@ function run(command: string, args: string[]): string | null {
   }
 }
 
-export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
-  const format = [
-    "#{session_name}",
-    "#{window_index}",
-    "#{window_id}",
-    "#{window_name}",
-    "#{pane_index}",
-    "#{pane_id}",
-    "#{pane_pid}",
-    "#{pane_current_command}",
-    "#{pane_current_path}",
-    "#{pane_title}",
-    "#{@agent_role}",
-    "#{pid}",
-    "#{socket_path}",
-  ].join("\t")
-  const output = run("tmux", ["list-panes", "-a", "-F", format])
+function runAsync(command: string, args: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(
+      command,
+      args,
+      { encoding: "utf8", timeout: 5_000, maxBuffer: 16 * 1024 * 1024 },
+      (error, stdout) => resolve(error ? null : stdout),
+    )
+  })
+}
+
+const TMUX_FORMAT = [
+  "#{session_name}",
+  "#{window_index}",
+  "#{window_id}",
+  "#{window_name}",
+  "#{pane_index}",
+  "#{pane_id}",
+  "#{pane_pid}",
+  "#{pane_current_command}",
+  "#{pane_current_path}",
+  "#{pane_title}",
+  "#{@agent_role}",
+  "#{pid}",
+  "#{socket_path}",
+].join("\t")
+const TMUX_ARGS = ["list-panes", "-a", "-F", TMUX_FORMAT]
+const PS_ARGS = ["-eo", "pid=,ppid=,comm=,args="]
+
+function parseTmuxPanes(output: string | null): { panes: TmuxPane[]; error?: string } {
   if (output === null) return { panes: [], error: "tmux is not running or not installed" }
   const panes: TmuxPane[] = []
   for (const line of output.split("\n")) {
@@ -102,8 +116,11 @@ export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
   return { panes }
 }
 
-function processTable(): Map<number, Proc> {
-  const output = run("ps", ["-eo", "pid=,ppid=,comm=,args="])
+export function listTmuxPanes(): { panes: TmuxPane[]; error?: string } {
+  return parseTmuxPanes(run("tmux", TMUX_ARGS))
+}
+
+function parseProcessTable(output: string | null): Map<number, Proc> {
   const table = new Map<number, Proc>()
   if (!output) return table
   for (const line of output.split("\n")) {
@@ -177,11 +194,11 @@ function sessionFiles(dir: string): Array<{ file: string; mtimeMs: number }> {
   if (!existsSync(dir)) return []
   const files: Array<{ file: string; mtimeMs: number }> = []
   try {
-    for (const name of readdirSync(dir)) {
+    for (const name of listOnce(dir)) {
       if (!name.endsWith(".jsonl")) continue
       const file = join(dir, name)
       try {
-        files.push({ file, mtimeMs: statSync(file).mtimeMs })
+        files.push({ file, mtimeMs: statOnce(file).mtimeMs })
       } catch {
         // vanished during listing
       }
@@ -410,10 +427,12 @@ function serverIdentity(panes: TmuxPane[]): string {
   return `${pane.serverPid || "0"}:${pane.socketPath || "default"}`
 }
 
-export function discover(): Discovery {
-  const { panes, error } = listTmuxPanes()
-  if (error) return { sessions: [], error }
-  const table = processTable()
+/** Pure of subprocesses: tmux and ps output in, sessions out (reads transcripts, in one stat pass). */
+function build(panes: TmuxPane[], table: Map<number, Proc>): Discovery {
+  return withStatPass(() => buildSessions(panes, table))
+}
+
+function buildSessions(panes: TmuxPane[], table: Map<number, Proc>): Discovery {
   const bySession = new Map<string, TmuxPane[]>()
   for (const pane of panes) {
     const list = bySession.get(pane.session) ?? []
@@ -445,6 +464,21 @@ export function discover(): Discovery {
   sessions.sort((a, b) => a.name.localeCompare(b.name))
   prunePaneReads(new Set(sessions.flatMap((session) => session.agents.map((agent) => agent.paneId))))
   return { sessions }
+}
+
+/** Blocking: waits for tmux and ps. Kept for callers that cannot await. */
+export function discover(): Discovery {
+  const { panes, error } = parseTmuxPanes(run("tmux", TMUX_ARGS))
+  if (error) return { sessions: [], error }
+  return build(panes, parseProcessTable(run("ps", PS_ARGS)))
+}
+
+/** The same result without blocking the event loop on the two subprocesses. */
+export async function discoverAsync(): Promise<Discovery> {
+  const [tmux, ps] = await Promise.all([runAsync("tmux", TMUX_ARGS), runAsync("ps", PS_ARGS)])
+  const { panes, error } = parseTmuxPanes(tmux)
+  if (error) return { sessions: [], error }
+  return build(panes, parseProcessTable(ps))
 }
 
 export function findAgent(session: string, paneId: string): ViewerAgent | null {
