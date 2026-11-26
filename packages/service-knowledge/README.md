@@ -207,14 +207,18 @@ service-knowledge status      # confirm install state + package vs consumer vers
 service-knowledge update      # pull the current package version into this repo
 ```
 
-`install` is idempotent — safe to re-run after upgrading the package.
+`install` is idempotent — safe to re-run after upgrading the package. The per-edit Claude
+hooks (`PreToolUse` activator, `PostToolUse` drift detector) are opt-in: pass
+`--per-edit-hooks` once and the choice is recorded in
+`.xtrm/config/service-knowledge.json`; without it neither entry is written (see
+"Activator (PreToolUse hook)").
 
 ---
 
 ## CLI surface
 
 ```
-service-knowledge install     # vendor machinery + wire hooks (idempotent)
+service-knowledge install     # vendor machinery + wire hooks (idempotent; per-edit hooks opt-in)
 service-knowledge update      # pull installed package version into a consumer
 service-knowledge status      # report install state (+ drift marker state)
 service-knowledge migrate     # one-time service-skills → service-knowledge rename
@@ -393,7 +397,23 @@ or command text match a service's territory, injects a compact routing hint into
 tool context so the agent loads the expert skill before proceeding. It reads the same
 FTS5 index the MCP tools do — one source of truth for territory routing.
 
-Wired automatically by `service-knowledge install` (writes `.claude/settings.json`).
+`service-knowledge install` wires the `SessionStart` cataloger on every run. The two
+**per-edit** hooks — this `PreToolUse` activator and the `PostToolUse` drift detector —
+are **opt-in**, because they run on every tool call: they measured 82–358 ms per call in
+`darth-feedor` against `hook_prefilter.sh`'s 20 ms design budget.
+
+```bash
+service-knowledge install --per-edit-hooks      # opt in (records the decision)
+service-knowledge install --no-per-edit-hooks   # opt out and strip both entries
+```
+
+The decision is persisted as `per_edit_hooks: true|false` in
+`.xtrm/config/service-knowledge.json`, so later `install` / `update` runs keep it. With no
+config file (the default) the installer **adds nothing**: a repo that never opts in has
+no per-edit hook cost. An entry that is already present in `.claude/settings.json` is
+repaired in place (packaged command and timeout) rather than removed, so a consumer wired
+by an older package keeps running until it opts out explicitly. Only the JSON literal
+`true` opts in.
 
 ---
 

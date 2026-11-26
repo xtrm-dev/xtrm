@@ -24,6 +24,7 @@ SKILLS_ROOT = Path(".xtrm") / "skills"
 MACHINERY_REL = SKILLS_ROOT / "default" / "service-knowledge"
 CACHE_REL = Path(".xtrm") / "cache" / "service-knowledge.sqlite"
 VERSION_REL = MACHINERY_REL / "VERSION"
+CONFIG_REL = Path(".xtrm") / "config" / "service-knowledge.json"
 RESERVED_PACK_NAMES = {"default", "optional", "user", "active", "local-legacy"}
 
 LEGACY_UMBRELLA = "service-skills"
@@ -144,8 +145,15 @@ def _is_machinery_hook(entry: dict, script: str) -> bool:
     return False
 
 
-_DESIRED_HOOKS = {
+# Wired on every install/update: cheap (SessionStart only) and the routing entry point.
+_ALWAYS_HOOKS = {
     "SessionStart": {"script": "cataloger.py", "extra": "", "mode": "", "matcher": None, "timeout": None},
+}
+
+# Per-edit hooks: OPT-IN per consumer (DARTHFEEDOR-1359). They run on every tool call and
+# cost 82-358 ms per call in a real consumer (darth-feedor, measured against
+# hook_prefilter.sh's 20 ms design budget), so the installer must not wire them by default.
+_PER_EDIT_HOOKS = {
     "PreToolUse": {
         "script": "skill_activator.py",
         "extra": "",
@@ -164,6 +172,46 @@ _DESIRED_HOOKS = {
     },
 }
 
+# Backwards-compatible alias: the full hook set the package knows how to wire.
+_DESIRED_HOOKS = {**_ALWAYS_HOOKS, **_PER_EDIT_HOOKS}
+
+PER_EDIT_CONFIG_KEY = "per_edit_hooks"
+
+
+def config_path(root: Path) -> Path:
+    return root / CONFIG_REL
+
+
+def read_config(root: Path) -> dict:
+    """Read the consumer's service-knowledge config; a missing or malformed file is {}."""
+    path = config_path(root)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_config(root: Path, updates: dict) -> list[str]:
+    """Merge ``updates`` into the consumer config. Idempotent: returns [] when unchanged."""
+    path = config_path(root)
+    current = read_config(root)
+    merged = {**current, **updates}
+    if merged == current:
+        return []
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_text(path, json.dumps(merged, indent=2, sort_keys=True) + "\n")
+    return [CONFIG_REL.as_posix()]
+
+
+def per_edit_hooks_enabled(root: Path) -> bool:
+    """Opt-in is the JSON literal ``true`` for ``per_edit_hooks``; anything else is off.
+
+    A truthy string (``"true"``) does NOT opt in: a typo must fail towards the cheap
+    default rather than towards a hook chain nobody asked for.
+    """
+    return read_config(root).get(PER_EDIT_CONFIG_KEY) is True
+
 
 def _build_hook_entry(spec: dict) -> dict:
     hook: dict = {"type": "command", "command": _hook_command(spec["script"], spec["extra"], spec.get("mode", ""))}
@@ -175,8 +223,27 @@ def _build_hook_entry(spec: dict) -> dict:
     return entry
 
 
-def wire_hooks(root: Path) -> list[str]:
-    """Ensure service-knowledge hooks exist without replacing sibling hooks or metadata."""
+def wire_hooks(root: Path, per_edit_hooks: bool | None = None) -> list[str]:
+    """Ensure service-knowledge hooks exist without replacing sibling hooks or metadata.
+
+    The SessionStart cataloger is always ensured. The per-edit hooks (PreToolUse
+    activator, PostToolUse drift detector) are opt-in: ``per_edit_hooks`` overrides the
+    consumer config (``.xtrm/config/service-knowledge.json``), whose default is off.
+
+    Off means *do not add*. Entries already present in settings.json are left in place and
+    only repaired to the packaged command/timeout, so a consumer that carries them from an
+    older package keeps working until it opts out explicitly with ``--no-per-edit-hooks``;
+    the installer never silently removes a hook it did not add in this run.
+    """
+    enabled = per_edit_hooks_enabled(root) if per_edit_hooks is None else per_edit_hooks
+    desired_hooks = dict(_ALWAYS_HOOKS)
+    if enabled:
+        desired_hooks.update(_PER_EDIT_HOOKS)
+    # ``append`` False = repair-if-present, never add (the default-off path).
+    specs = [(event, spec, True) for event, spec in desired_hooks.items()]
+    if not enabled:
+        specs += [(event, spec, False) for event, spec in _PER_EDIT_HOOKS.items()]
+
     settings_path = root / ".claude" / "settings.json"
     try:
         settings = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.exists() else {}
@@ -185,7 +252,7 @@ def wire_hooks(root: Path) -> list[str]:
 
     hooks = settings.setdefault("hooks", {})
     changed = False
-    for event, spec in _DESIRED_HOOKS.items():
+    for event, spec, append in specs:
         desired = _build_hook_entry(spec)
         desired_hook = desired["hooks"][0]
         entries = hooks.get(event, [])
@@ -202,10 +269,11 @@ def wire_hooks(root: Path) -> list[str]:
                 break
             if found:
                 break
-        if not found:
-            entries.append(desired)
+        if not found and append:
+            entries = [*entries, desired]
             changed = True
-        hooks[event] = entries
+        if event in hooks or entries:
+            hooks[event] = entries
 
     if not changed:
         return []
@@ -428,9 +496,19 @@ def ensure_runtime_gitignored(root: Path) -> list[str]:
 
 
 # --- orchestration ------------------------------------------------------------
-def apply(root: Path, event: str, all_worktrees: bool = False) -> tuple[str | None, list[str], float]:
+def apply(
+    root: Path,
+    event: str,
+    all_worktrees: bool = False,
+    per_edit_hooks: bool | None = None,
+) -> tuple[str | None, list[str], float]:
     """Full idempotent apply: vendor machinery, migrate umbrellas, wire hooks, install
-    git hooks, ensure cache, emit telemetry. Shared by ``install`` and ``update``."""
+    git hooks, ensure cache, emit telemetry. Shared by ``install`` and ``update``.
+
+    ``per_edit_hooks`` is the CLI opt-in/opt-out (None = use the consumer config). A
+    decision is persisted to the consumer config so the next ``install``/``update``
+    keeps it; opting out also strips the two hooks from settings.json.
+    """
     from service_knowledge.cli import telemetry
 
     t0 = time.monotonic()
@@ -438,7 +516,11 @@ def apply(root: Path, event: str, all_worktrees: bool = False) -> tuple[str | No
     touched: list[str] = []
     touched += vendor_machinery(root)
     touched += migrate_umbrellas(root)
-    touched += wire_hooks(root)
+    if per_edit_hooks is not None:
+        touched += write_config(root, {PER_EDIT_CONFIG_KEY: per_edit_hooks})
+    touched += wire_hooks(root, per_edit_hooks=per_edit_hooks)
+    if per_edit_hooks is False:
+        touched += unwire_per_edit_hooks(root)
     touched += install_git_hooks(root, all_worktrees=all_worktrees)
     touched += ensure_cache(root)
     touched += ensure_runtime_gitignored(root)
@@ -455,6 +537,21 @@ def apply(root: Path, event: str, all_worktrees: bool = False) -> tuple[str | No
 def unwire_hooks(root: Path) -> list[str]:
     """Strip service-knowledge/service-skills machinery hooks from .claude/settings.json.
     Idempotent. Returns ['.claude/settings.json'] when the file changed."""
+    return _remove_machinery_hooks(
+        root, ("cataloger.py", "skill_activator.py", "drift_detector.py")
+    )
+
+
+def unwire_per_edit_hooks(root: Path) -> list[str]:
+    """Strip only the opt-in per-edit hooks, keeping the SessionStart cataloger.
+
+    Used by ``install``/``update --no-per-edit-hooks``; idempotent.
+    """
+    return _remove_machinery_hooks(root, ("skill_activator.py", "drift_detector.py"))
+
+
+def _remove_machinery_hooks(root: Path, scripts: tuple[str, ...]) -> list[str]:
+    """Remove entries whose command runs one of ``scripts``. Idempotent."""
     settings_path = root / ".claude" / "settings.json"
     if not settings_path.exists():
         return []
@@ -464,7 +561,6 @@ def unwire_hooks(root: Path) -> list[str]:
         return []
     hooks = settings.get("hooks", {})
     changed = False
-    scripts = ("cataloger.py", "skill_activator.py", "drift_detector.py")
     for event in list(hooks.keys()):
         kept = [e for e in hooks[event] if not any(_is_machinery_hook(e, sc) for sc in scripts)]
         if len(kept) != len(hooks[event]):

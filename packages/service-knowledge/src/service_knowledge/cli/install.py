@@ -10,12 +10,19 @@ from service_knowledge.cli import common
 def run(args: argparse.Namespace) -> int:
     root = common.resolve_consumer_root(args.path)
     from_version, touched, duration_ms = common.apply(
-        root, "install", all_worktrees=getattr(args, "all_worktrees", False)
+        root, "install",
+        all_worktrees=getattr(args, "all_worktrees", False),
+        per_edit_hooks=getattr(args, "per_edit_hooks", None),
     )
 
     print(f"{common.GREEN}service-knowledge v{__version__} installed into:{common.NC} {root}")
     if from_version and from_version != __version__:
         print(f"  upgraded from v{from_version}")
+    enabled = common.per_edit_hooks_enabled(root)
+    print(
+        f"  per-edit hooks: {'on' if enabled else 'off'}"
+        + ("" if enabled else " (opt in with --per-edit-hooks)")
+    )
     if touched:
         print(f"  files touched ({len(touched)}):")
         for t in touched[:20]:

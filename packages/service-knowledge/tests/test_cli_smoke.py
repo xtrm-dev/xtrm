@@ -37,12 +37,13 @@ def test_install_migrates_and_is_idempotent(consumer_repo: Path) -> None:
     # umbrella regenerated with the new name
     assert "name: acme-infra-service-knowledge" in (new_umb / "SKILL.md").read_text()
 
-    # hooks wired to project-local service-knowledge machinery
+    # hooks wired to project-local service-knowledge machinery: SessionStart always,
+    # the per-edit hooks only on explicit opt-in (DARTHFEEDOR-1359).
     settings = json.loads((consumer_repo / ".claude/settings.json").read_text())
     cmds = json.dumps(settings["hooks"])
     assert "service-knowledge/scripts/cataloger.py" in cmds
-    assert "service-knowledge/scripts/skill_activator.py" in cmds
-    assert "service-knowledge/scripts/drift_detector.py" in cmds
+    assert "skill_activator.py" not in cmds
+    assert "drift_detector.py" not in cmds
 
     # empty cache + telemetry
     assert (consumer_repo / ".xtrm/cache/service-knowledge.sqlite").exists()

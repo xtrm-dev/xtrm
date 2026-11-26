@@ -102,6 +102,18 @@ def build_parser() -> argparse.ArgumentParser:
                 help="Chain + self-check git hooks in every linked worktree "
                 "(default: only the current worktree's active hooks dir).",
             )
+            group = sp.add_mutually_exclusive_group()
+            group.add_argument(
+                "--per-edit-hooks", dest="per_edit_hooks", action="store_true", default=None,
+                help="Opt in to the per-edit Claude hooks (PreToolUse activator, "
+                "PostToolUse drift detector) and record per_edit_hooks: true in "
+                ".xtrm/config/service-knowledge.json. Default: off.",
+            )
+            group.add_argument(
+                "--no-per-edit-hooks", dest="per_edit_hooks", action="store_false", default=None,
+                help="Record per_edit_hooks: false and remove the per-edit hooks from "
+                ".claude/settings.json (the SessionStart cataloger stays).",
+            )
     # `index` and `canary` carry nested actions; register them separately.
     index_cmd.register(sub)
     canary_cmd.register(sub)

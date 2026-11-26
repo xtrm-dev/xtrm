@@ -15,7 +15,8 @@ EPILOGS: dict[str, str] = {
     "install": """\
 Wires machinery into a consumer repo: vendors the reference SKILLs into
 `.xtrm/skills/<pack>/service-knowledge/`, installs the Claude hooks
-(SessionStart catalog · PreToolUse activator · PostToolUse drift), the git
+(SessionStart catalog; the PreToolUse activator and PostToolUse drift detector are
+OPT-IN — see --per-edit-hooks), the git
 hooks (marker-only touches-gated post-merge / post-checkout / post-rewrite —
 see `help hooks`), and builds the initial FTS5 evidence index. A post-install
 self-check fails loudly when no hook can fire. Idempotent — safe to re-run
@@ -25,6 +26,7 @@ Examples:
   service-knowledge install                    # bootstrap the current repo
   service-knowledge install --path ~/my/repo   # bootstrap a specific repo
   service-knowledge install --all-worktrees    # chain + self-check every linked worktree
+  service-knowledge install --per-edit-hooks   # also wire the per-edit hooks (opt-in)
 
 Runs `git rev-parse --show-toplevel` when --path is omitted.
 """,
@@ -359,11 +361,15 @@ injects a compact routing hint so the agent loads the expert skill before
 proceeding.
 
 Reads the same FTS5 index the MCP tools do (single source of truth for
-territory routing). Wired automatically by `service-knowledge install`
-(writes `.claude/settings.json`).
+territory routing).
 
-Turn it off temporarily by editing settings.json; turn it back on with
-`service-knowledge install --path .`.
+The per-edit Claude hooks — this activator and the PostToolUse drift detector —
+are OPT-IN: they run on every tool call and cost 82-358 ms per call in a real
+consumer. Wire them with `service-knowledge install --per-edit-hooks` (or
+`update`); the decision persists as `per_edit_hooks: true` in
+`.xtrm/config/service-knowledge.json`. Without it the installer adds nothing.
+Turn them off again with `--no-per-edit-hooks`, which strips both entries and
+records the opt-out; the SessionStart cataloger always stays.
 
 Design: narrow blocking (only when high-confidence match), evidence bundle
 in the injected hint (small; token cost is <300 typical).
