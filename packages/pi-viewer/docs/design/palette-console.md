@@ -41,9 +41,10 @@ Every `--x-*` colour token in the viewer already equals the console's, with one 
 | `--x-surface` | `#151515` | `#151515` | `styles.css:80` |
 | `--x-raised` | `#1e1e1e` | `#1e1e1e` | `styles.css:81` |
 | `--x-control` | `#262626` | `#262626` | `styles.css:82` |
-| `--x-composer-focus` | `var(--x-raised)` = `#1e1e1e` | `var(--x-surface)` = `#151515` | `agent/Composer.tsx:279` |
-| `--x-composer-edge` | `transparent` | `var(--x-border)` = `rgb(255 255 255 / .12)` | `styles.css:90` |
-| `--x-composer-edge-focus` | `transparent` | `var(--x-border-strong)` = `rgb(255 255 255 / .18)` | `styles.css:91` |
+| `--x-composer-fill` | `var(--x-surface)` = `#151515` | `var(--x-raised)` = `#1e1e1e` | `styles.css:84`, `:151` |
+| `--x-composer-focus` | `var(--x-surface)` = `#151515` | `var(--x-raised)` = `#1e1e1e` | `styles.css:85`, `:152` |
+| `--x-composer-edge` | `transparent` | `transparent` (the raised fill is the step) | `styles.css:86`, `:160` |
+| `--x-composer-edge-focus` | `var(--x-border-strong)` = `rgb(255 255 255 / .18)` | `var(--x-border-strong)` | `styles.css:87` |
 | `--x-inset` | `var(--x-surface)` | `var(--x-control)` = `#262626` | viewer role |
 | `--x-code` | `var(--x-surface)` | `var(--x-deep)` = `#0d0d0d` | `styles.css:302` |
 | `--x-code-edge` | `transparent` | `var(--x-border-muted)` = `rgb(255 255 255 / .08)` | `styles.css:88`, `:303` |
@@ -57,9 +58,10 @@ Every `--x-*` colour token in the viewer already equals the console's, with one 
 | `--x-surface` | `#ffffff` | `#ffffff` | `styles.css:18` |
 | `--x-raised` | `#ffffff` | `#ffffff` | `styles.css:19` |
 | `--x-control` | `#efeff1` | `#efeff1` | `styles.css:20` |
-| `--x-composer-focus` | `var(--x-raised)` = `#ffffff` | `var(--x-surface)` = `#ffffff` | `agent/Composer.tsx:279` |
-| `--x-composer-edge` | `transparent` | `var(--x-border)` = `rgb(15 15 20 / .11)` | `styles.css:29` |
-| `--x-composer-edge-focus` | `transparent` | `var(--x-border-strong)` = `rgb(15 15 20 / .2)` | `styles.css:30` |
+| `--x-composer-fill` | `var(--x-surface)` = `#ffffff` | `var(--x-raised)` = `#ffffff` | `styles.css:84`, `:151` |
+| `--x-composer-focus` | `var(--x-surface)` = `#ffffff` | `var(--x-raised)` = `#ffffff` | `styles.css:85`, `:152` |
+| `--x-composer-edge` | `transparent` | `var(--x-border-muted)` = `rgb(15 15 20 / .07)` (no fill step on white) | `styles.css:86`, `:153` |
+| `--x-composer-edge-focus` | `var(--x-border-strong)` = `rgb(15 15 20 / .2)` | `var(--x-border-strong)` | `styles.css:87` |
 | `--x-inset` | `var(--x-surface)` | `var(--x-control)` = `#efeff1` | viewer role |
 | `--x-code` | `var(--x-surface)` | `var(--x-deep)` = `#f4f4f5` | `styles.css:302` |
 | `--x-code-edge` | `var(--x-border-muted)` | `var(--x-border-muted)` = `rgb(15 15 20 / .07)` | `styles.css:26`, `:303` |
@@ -77,7 +79,7 @@ sticky header; `bg-inset` on the four quiet panels; `xtrm-composer-box` on the c
 
 `npm run test:contrast` resolves the tokens for all ten sets (Threads, Threads · soft, Console, Console · soft and Desktop, dark and light)
 and checks ink, ink at 90%, read (thread prose), ink-muted, accent-ink and danger against deep, surface,
-raised, control, canvas, sidebar, composer-focus, code, inset, the sidebar's selected row and the segmented
+raised, control, canvas, sidebar, composer-fill, composer-focus, code, inset, the sidebar's selected row and the segmented
 track: every pair is at least 4.5:1. Thread prose is also held to 7:1 on the canvas in every palette.
 `ink-faint` stays a glyph role (INFO lines).
 
@@ -97,9 +99,10 @@ row). Both equal `ink` and `hover` in Threads and Console, so nothing changes th
 |---|---|---|
 | base | `#1f1f1f` | `--x-deep` (so `--x-canvas`: page, header, thread, presence line) |
 | sidebar | `#242424` | `--x-sidebar` |
-| surface | `#333333` | `--x-surface` and `--x-raised` (cards, composer, quiet panels, popovers) |
+| surface | `#333333` | `--x-surface` and `--x-raised` (cards, composer fill, quiet panels, popovers) |
 | selected | `#454545` | `--x-selected` (sidebar row) and `--x-segment` (selected segment of the two switches) |
 | input | `#383838` | `--x-control`, and the focused composer fill (`--x-composer-focus`) |
+| composer | `#333333` | `--x-composer-fill` on the `#1f1f1f` base: one step up, no border (XTRM-1054) |
 | text primary | `#e4e4e4` | `--x-ink` (names, titles, selected rows) |
 | text secondary | `#c8c8c8` | `--x-read` (thread prose, operator bubble text); also the "icon primary" value |
 | text muted | `#8e8e8e`, ruled up to `#a1a1a1` (see below) | `--x-ink-muted` (meta, time, unselected labels, resting icons); inside a selected row `--x-ink-muted-selected` = `#c8c8c8` |
@@ -122,8 +125,10 @@ row). Both equal `ink` and `hover` in Threads and Console, so nothing changes th
 | `--x-read` | ink `#ececef` | ink `#ececef` | `#c8c8c8` |
 | `--x-ink-muted` | `#a0a0a8` | `#a0a0a8` | `#a1a1a1` (inside a selected row: `#c8c8c8`) |
 | `--x-border` | `rgb(255 255 255 / .12)` | same | `#383838` |
-| `--x-composer-focus` | raised `#1e1e1e` | surface `#151515` | control `#383838` |
-| `--x-composer-edge` | none | border | none (as Threads) |
+| `--x-composer-fill` | surface `#151515` | raised `#1e1e1e` | surface `#333333` |
+| `--x-composer-focus` | surface `#151515` | raised `#1e1e1e` | control `#383838` |
+| `--x-composer-edge` | none | border-muted (light only) | none (as Threads) |
+| `--x-composer-edge-focus` | border-strong | border-strong | border-strong |
 | `--x-inset` | surface | control `#262626` | surface `#333333` (at 40 / 70%) |
 | `--x-code` / `--x-code-edge` | surface / none | deep / border-muted | deep `#1f1f1f` / border `#383838` |
 | `--x-danger` | `#f07171` | `#f07171` | `#f58f8f` (inferred, see below) |

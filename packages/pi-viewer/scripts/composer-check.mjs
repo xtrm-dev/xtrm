@@ -104,7 +104,10 @@ try {
   for (const width of [1440, 390]) {
     for (const theme of ["dark", "light"]) {
       const label = `${width} ${theme}`
-      const context = await browser.newContext({ viewport: { width, height: width < 700 ? 844 : 900 }, colorScheme: theme })
+      const context = await browser.newContext({ viewport: { width, height: width < 700 ? 844 : 900 } })
+      // The viewer's theme comes from localStorage, not from prefers-color-scheme: colorScheme alone
+      // left every "light" pass rendering the dark Threads values.
+      await context.addInitScript((value) => localStorage.setItem("pi-viewer-theme", value), theme)
       const page = await context.newPage()
       const errors = []
       page.on("console", (message) => message.type() === "error" && errors.push(message.text()))
@@ -136,11 +139,20 @@ try {
       await page.locator("[data-composer-input]").fill("")
       await page.waitForTimeout(150)
 
-      // 2. No visible border at rest: a fill step, or a hairline at most barely visible.
+      // 2. No visible border at rest: a fill step, or a hairline at most barely visible. Nothing may
+      //    hold focus here, or the reading is the focus ring (that was the "hairline 0.18" false alarm).
+      await page.evaluate(() => document.querySelector("[data-composer-input]")?.blur())
+      await page.waitForTimeout(200)
       const rest = await read(page)
       const restAlpha = shadowAlpha(rest.shadow)
       const step = rest.fill !== rest.canvas
-      assert.ok(step || restAlpha <= 0.09, `${label}: the box needs no visible border (fill ${rest.fill} on ${rest.canvas}, hairline ${restAlpha})`)
+      const want = theme === "dark"
+        ? { canvas: "rgb(13, 13, 13)", fill: "rgb(21, 21, 21)" }
+        : { canvas: "rgb(244, 244, 245)", fill: "rgb(255, 255, 255)" }
+      assert.equal(rest.canvas, want.canvas, `${label}: the ${theme} Threads canvas is applied (${rest.canvas})`)
+      assert.equal(rest.fill, want.fill, `${label}: the ${theme} composer fill is applied (${rest.fill})`)
+      assert.equal(step, true, `${label}: the fill is a step up from the canvas`)
+      assert.ok(restAlpha <= 0.09, `${label}: the rest state carries no visible hairline (alpha ${restAlpha})`)
 
       // 3. Focus draws the ring, and the ring is the only border the box ever shows.
       await page.locator("[data-composer-input]").click()
@@ -184,7 +196,7 @@ try {
       await pick(PI.name)
 
       assert.deepEqual(errors, [], `${label}: no console error`)
-      shots.push(`${label}: box ${empty.box}px, fill ${rest.fill} on ${rest.canvas}, hairline ${restAlpha}, focus ring ${shadowAlpha(focused.shadow)}, row gap ${pi.gap}px`)
+      shots.push(`${label}: box ${empty.box}px, fill ${rest.fill} on ${rest.canvas}, rest hairline ${restAlpha}, focus ring ${shadowAlpha(focused.shadow)}, row gap ${pi.gap}px`)
       await context.close()
     }
   }
