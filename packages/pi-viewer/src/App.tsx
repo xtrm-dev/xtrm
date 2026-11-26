@@ -96,6 +96,10 @@ export default function App() {
   const sessionName = scope?.session ?? null
   // Remount keys use the scope's identity, not its URL: a pane scope with or without its window is one scope.
   const scopeKey = scope ? scopeRowKey(scope) : "none"
+  // The server cuts the thread to the pane or window, so its newest turns are that scope's own.
+  const scopePane = scope?.kind === "pane" ? scope.paneId : null
+  const scopeWindow =
+    scope?.kind === "window" ? (scope.windowId || (scope.window !== null ? String(scope.window) : null)) : null
   const scrollerKey = `${scopeKey}:${view}`
   // The scope of a fresh page comes from the URL. It is a request, read only until a scope has
   // resolved; after that the user's selection is never replaced by the page-open URL.
@@ -105,6 +109,8 @@ export default function App() {
   const sessionsRef = useRef<ViewerSession[]>([])
   // Consecutive discovery polls that found no agent at all.
   const emptyPolls = useRef(0)
+  // The session and view the thread payload belongs to; a scope change alone does not reset it.
+  const stream = useRef<{ session: string | null; view: string }>({ session: null, view: "" })
   // How the next URL write is made: a click on the sidebar adds a history entry (Back works);
   // a fallback or a first resolution replaces the current one.
   const urlMode = useRef<"push" | "replace">("replace")
@@ -205,10 +211,14 @@ export default function App() {
     let cursor: number | null = null
     let delay = 1_500
     let timer: number | undefined
-    setPayload(null)
+    // A scope change inside one session keeps what is on screen until the scoped window arrives.
+    if (stream.current.session !== sessionName || stream.current.view !== view) {
+      setPayload(null)
+      setOptimistic([])
+    }
+    stream.current = { session: sessionName, view }
     setThreadError(null)
     setEarlierLoading(false)
-    setOptimistic([])
     invalidateDetails(sessionName)
 
     async function tick() {
@@ -217,8 +227,8 @@ export default function App() {
         const payload = await fetchThread(
           sessionName!,
           cursor == null || revision == null
-            ? { scope: activeScope, limit: 150, signal: controller.signal }
-            : { scope: activeScope, since: cursor, revision, signal: controller.signal },
+            ? { scope: activeScope, limit: 150, pane: scopePane, window: scopeWindow, signal: controller.signal }
+            : { scope: activeScope, since: cursor, revision, pane: scopePane, window: scopeWindow, signal: controller.signal },
         )
         if (cancelled) return
         if (cursor == null || revision == null || payload.reset) {
@@ -256,7 +266,7 @@ export default function App() {
       controller.abort()
       if (timer != null) window.clearTimeout(timer)
     }
-  }, [sessionName, view, kick])
+  }, [sessionName, view, scopePane, scopeWindow, kick])
 
   async function loadEarlier() {
     const active = view === "all" ? all : branch
@@ -268,6 +278,8 @@ export default function App() {
         before: active.earlier,
         revision: active.revision,
         limit: 150,
+        pane: scopePane,
+        window: scopeWindow,
       })
       if (payload.reset) {
         setKick((value) => value + 1)

@@ -41,7 +41,27 @@ interface SessionCache {
   counter: number
   dirty: boolean
   agents: Map<string, AgentEntry>
+  /** Scope views, rebuilt only when the cache counter moves. */
+  views: Map<string, ScopeView>
 }
+
+/**
+ * The events one (scope, agent set) pair shows, plus the windows already cut from them.
+ * A view is valid for one cache counter: any change to the session list moves the counter.
+ */
+interface ScopeView {
+  counter: number
+  /** The session revision the view was cut from. */
+  base: string
+  /** The revision a client sees: the base, extended by the scope's agent-set tag. */
+  revision: string
+  sorted: ViewerEvent[]
+  filtered: ViewerEvent[]
+  pages: Map<string, ThreadPayload>
+}
+
+const VIEWS_MAX = 12
+const PAGES_MAX = 8
 
 const agentCache = new Map<string, AgentEntry>()
 const sessionCache = new Map<string, SessionCache>()
@@ -144,6 +164,7 @@ function sessionOf(name: string): SessionCache {
       counter: 0,
       dirty: false,
       agents: new Map(),
+      views: new Map(),
     }
     sessionCache.set(name, cache)
   }
@@ -211,14 +232,17 @@ function includeTurn(set: Set<string>, turn: ReturnType<typeof channelTurns>[num
 
 function page(
   cache: SessionCache,
+  view: ScopeView,
   serverId: string,
   scope: "branch" | "all",
   limit: number,
   before: number | null,
 ): ThreadPayload {
-  const all = sortedEvents(cache)
-  const filtered =
-    scope === "all" ? all : all.filter((event) => channelEvent(event))
+  const memoKey = `${limit}|${before ?? ""}`
+  const memo = view.pages.get(memoKey)
+  if (memo) return memo
+
+  const filtered = view.filtered
   const boundary = before == null ? filtered.length : indexOfCursor(cache, filtered, before)
   const universe = before == null ? filtered : filtered.slice(0, boundary)
   const turns = channelTurns(universe)
@@ -249,7 +273,7 @@ function page(
   const first = events[0]
   const earlier = first ? cursorOf(cache, first) : null
   const earlierTurns = Math.max(0, start)
-  return {
+  const result: ThreadPayload = {
     session: cache.revision.split(":")[0],
     serverId,
     version: "",
@@ -257,11 +281,17 @@ function page(
     capturedAt: Date.now(),
     events,
     cursor: cache.counter,
-    revision: cache.revision,
+    revision: view.revision,
     hasEarlier: earlierTurns > 0 || (before != null && boundary > 0 && start > 0),
     earlier,
     earlierTurns,
   }
+  if (view.pages.size >= PAGES_MAX) {
+    const oldest = view.pages.keys().next().value
+    if (oldest !== undefined) view.pages.delete(oldest)
+  }
+  view.pages.set(memoKey, result)
+  return result
 }
 
 function indexOfCursor(cache: SessionCache, events: ViewerEvent[], cursor: number): number {
@@ -275,6 +305,57 @@ export interface ThreadQuery {
   before?: number | null
   since?: number | null
   revision?: string | null
+  /**
+   * The agents the pane or window scope shows. Omitted (or null) means the whole session.
+   * An empty list is a scope that currently matches no agent: an empty thread, not the session's.
+   */
+  agentIds?: readonly string[] | null
+}
+
+/** Short stable tag of an agent set; part of the revision so a changed set reloads the window. */
+function agentSetTag(ids: readonly string[]): string {
+  let hash = 0x811c9dc5
+  for (const char of ids.join(",")) {
+    hash ^= char.charCodeAt(0)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+/**
+ * The view of one (display scope, agent set): the session's sorted events filtered once per
+ * counter. Both the channel filter and the agent filter run here and nowhere else.
+ */
+function viewOf(cache: SessionCache, scope: "branch" | "all", agentIds: readonly string[] | null): ScopeView {
+  const sorted = sortedEvents(cache)
+  const ids = agentIds ? [...agentIds].sort() : null
+  const tag = ids ? agentSetTag(ids) : ""
+  const key = `${scope}|${tag}`
+  const known = cache.views.get(key)
+  if (known && known.counter === cache.counter && known.base === cache.revision && known.sorted === sorted) {
+    cache.views.delete(key)
+    cache.views.set(key, known)
+    return known
+  }
+  const inScope = ids ? new Set(ids) : null
+  const filtered = sorted.filter(
+    (event) => (scope === "all" || channelEvent(event)) && (!inScope || inScope.has(event.agentId)),
+  )
+  const view: ScopeView = {
+    counter: cache.counter,
+    base: cache.revision,
+    revision: tag ? `${cache.revision}~${tag}` : cache.revision,
+    sorted,
+    filtered,
+    pages: new Map(),
+  }
+  cache.views.delete(key)
+  cache.views.set(key, view)
+  if (cache.views.size > VIEWS_MAX) {
+    const oldest = cache.views.keys().next().value
+    if (oldest !== undefined) cache.views.delete(oldest)
+  }
+  return view
 }
 
 export function cachedThread(
@@ -283,21 +364,19 @@ export function cachedThread(
 ): ThreadPayload & { reset?: boolean; unchanged?: boolean } {
   const cache = sessionOf(session.name)
   rebuild(cache, session.agents)
-  const sorted = sortedEvents(cache)
   const limit = Math.min(MAX_TURNS, Math.max(1, query.limit ?? DEFAULT_TURNS))
-  const reset = query.revision != null && query.revision !== cache.revision
-  const filtered =
-    query.scope === "all"
-      ? sorted
-      : sorted.filter((event) => channelEvent(event))
+  const view = viewOf(cache, query.scope, query.agentIds ?? null)
+  const reset = query.revision != null && query.revision !== view.revision
 
   let result: ThreadPayload & { reset?: boolean; unchanged?: boolean }
   if (query.before != null || query.since == null || reset) {
-    result = page(cache, session.serverId, query.scope, limit, query.before ?? null)
+    // The memoized page is shared between requests: copy before stamping per-request fields.
+    result = { ...page(cache, view, session.serverId, query.scope, limit, query.before ?? null) }
     if (reset) result.reset = true
   } else {
     const since = query.since
-    const fresh = filtered.filter((event) => cursorOf(cache, event) > since)
+    const fresh =
+      since === cache.counter ? [] : view.filtered.filter((event) => cursorOf(cache, event) > since)
     result = {
       session: session.name,
       serverId: session.serverId,
@@ -306,14 +385,14 @@ export function cachedThread(
       capturedAt: Date.now(),
       events: fresh,
       cursor: cache.counter,
-      revision: cache.revision,
+      revision: view.revision,
       hasEarlier: false,
       earlier: null,
       earlierTurns: 0,
       unchanged: fresh.length === 0,
     }
     if (since > cache.counter) {
-      result = page(cache, session.serverId, query.scope, limit, null)
+      result = { ...page(cache, view, session.serverId, query.scope, limit, null) }
       result.reset = true
     }
   }
