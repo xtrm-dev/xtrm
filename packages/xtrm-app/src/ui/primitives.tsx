@@ -50,11 +50,11 @@ type IconButtonProps = Omit<ComponentProps<"button">, "children"> & {
 /**
  * Icon-only button with a required accessible label and tooltip.
  *
- * The default glyph follows the control (XTRM-934): a `size-7` control takes `text` (0.8125rem,
- * the step of the label beside it), a `size-9` control takes `md`. It used to default to `sm`
- * (1rem), so 18 of 20 call sites rendered a 16px glyph in a 28px box next to 11.5px text, and the
- * icon outweighed its own label. Pass `iconSize="sm"` where a 16px mark is intended on purpose
- * (brand marks, the source tree).
+ * The default glyph follows the control: a `size-7` (28px) control takes `sm` (16px, 0.57 of the
+ * box), a `size-9` (36px) control takes `md`. XTRM-934 briefly defaulted the 28px control to 13px
+ * to stop the glyph outweighing its neighbouring label; the operator rejected that on 2026-11-24
+ * ("the icons ... are way too small and disproportionate"), because a chrome control reads by its
+ * glyph, not by the label it never has. A control smaller than 28px passes `iconSize="xs"`.
  */
 export function IconButton({ icon, label, shortcut, size = "sm", iconSize, active, tooltipSide, className, ...props }: IconButtonProps) {
   return (
@@ -70,7 +70,7 @@ export function IconButton({ icon, label, shortcut, size = "sm", iconSize, activ
           className,
         )}
       >
-        <Icon name={icon} size={iconSize ?? (size === "sm" ? "text" : "md")} />
+        <Icon name={icon} size={iconSize ?? (size === "sm" ? "sm" : "md")} />
       </button>
     </Tip>
   );

@@ -59,7 +59,7 @@ describe("PrStateChip", () => {
   it("renders the state word in its tone, with the glyph", () => {
     render(<PrStateChip state="open" />);
     const badge = screen.getByText("Open").closest("[data-slot='badge']") as HTMLElement;
-    expect(badge.className).toContain("bg-success");
+    expect(badge.className).toContain("bg-chip-success");
     expect(badge.querySelector("svg")).not.toBeNull();
   });
 

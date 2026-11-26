@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { JiraIssue, JiraSearchPage } from "../../adapters/jira/types.ts";
 import { useJiraIssues } from "../../app/queries.ts";
 import { Icon } from "../../ui/icon.tsx";
-import { StatusDot, cx, type Tone } from "../../ui/primitives.tsx";
+import { cx, type Tone } from "../../ui/primitives.tsx";
 
 /**
  * Jira links and their one resolution point (ADR-002 D6).
@@ -90,7 +90,6 @@ export function JiraChip({ issue, showStatusText, className }: { issue: JiraIssu
         className,
       )}
     >
-      {issue.status !== null && <StatusDot tone={jiraStatusTone(issue.status)} label={issue.status} />}
       <span className="truncate font-mono">{issue.key}</span>
       {showStatusText && issue.status !== null && <span data-testid="jira-chip-status" className="truncate text-ink-muted">{issue.status}</span>}
       <Icon name="external" size="text" className="shrink-0 text-ink-faint" />

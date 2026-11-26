@@ -1,25 +1,20 @@
 import { useMemo, useState } from "react";
 import type { PullRequestSummary } from "../adapters/index.tsx";
 import { usePulls } from "../app/queries.ts";
-import { filterPulls, usePrLinkedRefs, checkLabel, checkShortLabel, reviewLabel, sortPulls, type PullSort, type PullView } from "./pr.ts";
+import { ALL_PULL_STATES, filterPulls, usePrLinkedRefs, checkLabel, checkShortLabel, reviewLabel, sortPulls, type PullSort, type PullState } from "./pr.ts";
 import { ReferenceActionsProvider } from "../refs/references.tsx";
 import { GithubNotice } from "./auth.tsx";
 import { useShell } from "../shell/context.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, Row, SourceBadge, StatusDot, SurfaceToolbar, ago, cx } from "../ui/primitives.tsx";
-import { ListFilter, ToolbarButton, ToolbarTabs } from "../ui/toolbar.tsx";
+import { EmptyState, ErrorState, LoadingState, SourceBadge, StatusDot, SurfaceToolbar, ago, cx } from "../ui/primitives.tsx";
+import { ListFilter, ToolbarButton, ToolbarMultiFilter } from "../ui/toolbar.tsx";
 import { LinkedRefs } from "../ui/linked-refs.tsx";
-import { PrKey } from "../ui/pr-key.tsx";
+import { PrStateChip, prStateMeta } from "../ui/pr-key.tsx";
+import { KeyChip, ListRow } from "../ui/list-row.tsx";
 import { RowAction } from "../ui/row-action.tsx";
 import { VirtualList } from "../ui/virtual-list.tsx";
-
-const VIEWS: Array<{ id: PullView; label: string }> = [
-  { id: "open", label: "Open" },
-  { id: "merged", label: "Merged" },
-  { id: "closed", label: "Closed" },
-];
 
 const SORTS: Array<{ id: PullSort; label: string }> = [
   { id: "updated", label: "Recently updated" },
@@ -27,26 +22,16 @@ const SORTS: Array<{ id: PullSort; label: string }> = [
   { id: "comments", label: "Most commented" },
 ];
 
-/** The row grid: one line per PR, same column rhythm as the issues table. */
-const COLUMNS: Array<{ key: string; label: string; width: string; align?: "right"; sort?: PullSort }> = [
-  { key: "pull", label: "Pull request", width: "minmax(0,1fr)" },
-  { key: "linked", label: "Linked", width: "9.5rem" },
-  { key: "author", label: "Author", width: "6.5rem" },
-  { key: "diff", label: "Diff", width: "5.5rem", align: "right" },
-  { key: "checks", label: "Checks", width: "6.5rem" },
-  { key: "review", label: "Review", width: "6rem" },
-  { key: "comments", label: "Comments", width: "5rem", align: "right", sort: "comments" },
-  { key: "updated", label: "Updated", width: "4.5rem", align: "right", sort: "updated" },
-];
-const GRID = { gridTemplateColumns: COLUMNS.map((c) => c.width).join(" ") };
-const CELL = "flex h-full min-w-0 items-center px-2";
-
 function PullRow({ pull, fullName, selected, onOpen }: { pull: PullRequestSummary; fullName: string; selected: boolean; onOpen: () => void }) {
   const refs = usePrLinkedRefs(pull);
+  const checkTone = pull.checks === "passing" ? "done" : pull.checks === "failing" ? "danger" : "muted";
+  const diff = pull.additions === null || pull.deletions === null ? null : `+${pull.additions} −${pull.deletions}`;
   return (
-    <Row
-      density="table"
-      data-testid="pull-row"
+    // One line, no columns (2026-11-24 ruling): identity, state, title, then the rollups at the right
+    // edge. The trailing cluster sheds widest-first (linked, then review), so nothing is dropped by a
+    // measured column width and no header has to name a track.
+    <ListRow
+      testId="pull-row"
       selected={selected}
       onActivate={onOpen}
       actions={
@@ -57,87 +42,69 @@ function PullRow({ pull, fullName, selected, onOpen }: { pull: PullRequestSummar
           onAct={() => void navigator.clipboard?.writeText(`${fullName}#${pull.number}`)}
         />
       }
-    >
-      <div className="grid h-full w-full items-center overflow-hidden" style={GRID}>
-        <div className={cx(CELL, "gap-2")}>
-          <PrKey number={pull.number} state={pull.state} draft={pull.draft} />
-          <span className="truncate text-ink" title={`${pull.headBranch ?? "unknown"} → ${pull.baseBranch ?? "unknown"}`}>
-            {pull.title}
+      leading={
+        <>
+          <KeyChip label={`Pull request #${pull.number}`} title={`#${pull.number} · ${prStateMeta(pull.state, pull.draft).word}`}>
+            #{pull.number}
+          </KeyChip>
+          <PrStateChip state={pull.state} draft={pull.draft} size="xs" />
+        </>
+      }
+      title={<span title={`${pull.headBranch ?? "unknown"} → ${pull.baseBranch ?? "unknown"}`}>{pull.title}</span>}
+      titleClassName={pull.state === "merged" || pull.state === "closed" ? "text-ink-muted" : undefined}
+      trailing={
+        <>
+          <span className="hidden items-center 2xl:inline-flex">
+            <LinkedRefs refs={refs} max={1} />
           </span>
-        </div>
-        <div className={cx(CELL, "text-xs")}>
-          <LinkedRefs refs={refs} max={1} />
-        </div>
-        <div className={cx(CELL, "text-xs text-ink-faint")}>
-          <span className="truncate">{pull.author}</span>
-        </div>
-        <div
-          className={cx(CELL, "justify-end gap-1.5 text-xs tabular")}
-          title={pull.additions === null || pull.deletions === null ? "Diff counts unknown" : `${pull.additions} added, ${pull.deletions} removed`}
-        >
-          {pull.additions === null || pull.deletions === null ? (
-            <span className="text-ink-faint">unknown</span>
-          ) : (
-            // Restraint rule 1: in the list the key is the one coloured element, so the diff is ink.
-            <span className="text-ink-muted">
-              +{pull.additions} −{pull.deletions}
-            </span>
-          )}
-        </div>
-        <div className={cx(CELL, "gap-1.5 text-xs text-ink-faint")} title={checkLabel(pull.checks)}>
-          <StatusDot tone="neutral" label={checkLabel(pull.checks)} />
-          <span className="truncate">
-            {checkShortLabel(pull.checks)}
+          <span className="truncate" title={pull.author}>
+            {pull.author}
           </span>
-        </div>
-        <div
-          className={cx(CELL, "text-xs text-ink-faint")}
-          title={pull.reviewCount === null ? `Review state: ${reviewLabel(pull.review)}` : `${reviewLabel(pull.review)} · ${pull.reviewCount} reviews`}
-        >
-          <span className="truncate">
+          {/* An absent metric is stated, not shouted: it keeps its accessible name and drops to the
+              faint ink, so a poller that has not enriched a row does not turn the list into noise. */}
+          <span className={cx("tabular", !diff && "text-ink-faint")} title={diff ? `${pull.additions} added, ${pull.deletions} removed` : "Diff counts unknown"}>
+            {diff ?? "unknown"}
+          </span>
+          <span className="inline-flex items-center gap-1" title={checkLabel(pull.checks)}>
+            <StatusDot tone={checkTone} label={checkLabel(pull.checks)} />
+            <span className={cx("hidden lg:inline", pull.checks == null && "text-ink-faint")}>{checkShortLabel(pull.checks)}</span>
+          </span>
+          <span className="hidden items-center xl:inline-flex" title={pull.reviewCount ? `${reviewLabel(pull.review)} · ${pull.reviewCount} reviews` : `Review state: ${reviewLabel(pull.review)}`}>
             {reviewLabel(pull.review)}
-            {pull.reviewCount !== null && pull.reviewCount > 0 && <span className="tabular"> · {pull.reviewCount}</span>}
           </span>
-        </div>
-        <div
-          className={cx(CELL, "justify-end gap-1 text-xs text-ink-faint tabular")}
-          title={
-            pull.comments === null
-              ? "Conversation comment count unknown"
-              : `${pull.comments} conversation comments · review comments excluded`
-          }
-        >
-          <Icon name="comment" size="xs" />
-          {pull.comments ?? "unknown"}
-        </div>
-        <div className={cx(CELL, "justify-end text-xs text-ink-faint tabular")} title={new Date(pull.updatedAt).toLocaleString()}>
-          {ago(pull.updatedAt)}
-        </div>
-      </div>
-    </Row>
+          <span
+            className="inline-flex items-center gap-1 tabular"
+            title={pull.comments === null ? "Conversation comment count unknown" : `${pull.comments} conversation comments · review comments excluded`}
+          >
+            <Icon name="comment" size="micro" />
+            {pull.comments ?? "unknown"}
+          </span>
+          <span className="tabular" title={new Date(pull.updatedAt).toLocaleString()}>
+            {ago(pull.updatedAt)}
+          </span>
+        </>
+      }
+    />
   );
 }
 
 export function PullsSurface() {
   const { repo, inspect, inspected } = useShell();
   const { github } = useAdapters();
-  const [view, setView] = useState<PullView>("open");
+  const [states, setStates] = useState<ReadonlySet<PullState>>(() => new Set(ALL_PULL_STATES));
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<PullSort>("updated");
   const pulls = usePulls(repo.fullName, "all", false);
 
   const rows = useMemo(() => {
     if (!pulls.data) return [];
-    return sortPulls(filterPulls(pulls.data, view, query), sort);
-  }, [pulls.data, view, query, sort]);
+    return sortPulls(filterPulls(pulls.data, states, query), sort);
+  }, [pulls.data, states, query, sort]);
 
-  const visibleCounts = useMemo(() => {
-    if (!pulls.data) return { open: 0, merged: 0, closed: 0 };
-    return {
-      open: pulls.data.filter((p) => p.state === "open").length,
-      merged: pulls.data.filter((p) => p.state === "merged").length,
-      closed: pulls.data.filter((p) => p.state === "closed").length,
-    };
+  const stateCounts = useMemo(() => {
+    const counts: Record<PullState, number> = { open: 0, merged: 0, closed: 0 };
+    for (const pull of pulls.data ?? []) counts[pull.state] += 1;
+    return counts;
   }, [pulls.data]);
 
   const sortLabel = SORTS.find((s) => s.id === sort)?.label ?? "Recently updated";
@@ -147,8 +114,19 @@ export function PullsSurface() {
   else if (pulls.isError) body = <ErrorState title="GitHub backend is unavailable" error={pulls.error} />;
   else if (!rows.length)
     body = (
-      <EmptyState icon="pull" title={`No ${view} pull requests${query ? ` matching “${query}”` : ` for ${repo.fullName}`}`}>
-        {query ? "Clear the filter or try another view." : "Open PRs appear here once the backend poller records them."}
+      <EmptyState
+        icon="pull"
+        title={
+          states.size === 0
+            ? "No state is selected"
+            : `No pull requests${query ? ` matching “${query}”` : ` for ${repo.fullName}`}`
+        }
+      >
+        {states.size === 0
+          ? "Open the State filter and choose at least one state, or use Select all."
+          : query
+            ? "Clear the filter or widen the state filter."
+            : "Pull requests appear here once the backend poller records them."}
       </EmptyState>
     );
   else
@@ -159,31 +137,8 @@ export function PullsSurface() {
           items={rows}
           rowHeight={32}
           flush
-          minWidth="28rem"
+          minWidth="24rem"
           getKey={(p) => `${p.number}`}
-          header={
-            <div role="row" data-testid="pulls-table-head" className="grid h-8 shrink-0 border-b border-border-subtle" style={GRID}>
-              {COLUMNS.map((c) => (
-                <div key={c.key} role="columnheader" aria-sort={c.sort && sort === c.sort ? "descending" : "none"} className={CELL}>
-                  {c.sort ? (
-                    <button
-                      type="button"
-                      onClick={() => setSort(c.sort!)}
-                      className={cx(
-                        "flex h-full w-full items-center overflow-hidden text-xs font-normal outline-none hover:text-ink focus-visible:bg-hover",
-                        c.align === "right" && "justify-end",
-                        sort === c.sort ? "text-ink" : "text-ink-faint",
-                      )}
-                    >
-                      {c.label}
-                    </button>
-                  ) : (
-                    <span className={cx("truncate text-xs font-normal text-ink-faint", c.align === "right" && "w-full text-right")}>{c.label}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          }
           renderRow={(p) => (
             <PullRow
               pull={p}
@@ -200,7 +155,12 @@ export function PullsSurface() {
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Pull requests">
       <SurfaceToolbar>
         <SourceBadge source={github.source} />
-        <ToolbarTabs label="Pull request state" value={view} onChange={(id) => setView(id as PullView)} tabs={VIEWS.map((v) => ({ id: v.id, label: v.label, count: visibleCounts[v.id] }))} />
+        <ToolbarMultiFilter
+          label="State"
+          values={states}
+          options={ALL_PULL_STATES.map((state) => ({ value: state, label: state[0]!.toUpperCase() + state.slice(1), count: stateCounts[state] }))}
+          onChange={setStates}
+        />
         <ListFilter value={query} onChange={setQuery} placeholder="Filter pull requests" count={rows.length} total={pulls.data?.length} />
         <OptionsMenu
           label="Sort pull requests"

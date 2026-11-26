@@ -119,7 +119,7 @@ export function PrStateChip({ state, draft, stateSource, showSource = false, siz
   const title = assumed ? `${meta.hint} — assumed: the PR opener recorded this state and no reconciler has read it yet` : meta.hint;
   return (
     <span className={cx("inline-flex shrink-0 items-center gap-1", className)}>
-      <Badge tone={meta.chipTone} size={size} title={title}>
+      <Badge variant="solid" tone={meta.chipTone} size={size} title={title}>
         <Icon name={meta.icon} size="micro" className="shrink-0" />
         {meta.word}
       </Badge>

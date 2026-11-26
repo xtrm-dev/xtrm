@@ -204,20 +204,27 @@ export function reviewLabel(state: ReviewState | null): string {
   }
 }
 
-export type PullView = "open" | "merged" | "closed";
+/** `all` is the mixed view: open, merged and closed together, newest activity first. */
+export type PullView = "all" | "open" | "merged" | "closed";
 
-export function pullViewOf(p: Pick<PullRequestSummary, "state">): PullView {
+/** The three states a pull request can be in: the disjoint members of the state filter. */
+export type PullState = Exclude<PullView, "all">;
+
+/** The default: every state on. An empty set is a deliberate "nothing", never "everything". */
+export const ALL_PULL_STATES: ReadonlyArray<PullState> = ["open", "merged", "closed"];
+
+export function pullViewOf(p: Pick<PullRequestSummary, "state">): PullState {
   return p.state;
 }
 
 export function filterPulls(
   pulls: PullRequestSummary[],
-  view: PullView,
+  states: ReadonlySet<PullState>,
   query: string,
 ): PullRequestSummary[] {
   const q = query.trim().toLowerCase();
   return pulls.filter((p) => {
-    if (pullViewOf(p) !== view) return false;
+    if (!states.has(pullViewOf(p))) return false;
     if (!q) return true;
     return (
       p.title.toLowerCase().includes(q) ||
