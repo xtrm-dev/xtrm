@@ -6,6 +6,7 @@ import { after, test } from "node:test"
 
 import { claudeStatusOf, dropClaudeCache, normalizeClaudeEvent, parseClaudeFile } from "../server/claude.ts"
 import { deliveryOfUser } from "../src/lib/delivery.ts"
+import { matchEchoes, type OptimisticMessage } from "../src/lib/optimistic.ts"
 import { channelTimeline } from "../src/lib/thread.ts"
 import type { ViewerEvent } from "../src/shared/types.ts"
 
@@ -168,4 +169,39 @@ test("plugin and task-notification queue entries are not operator rows", () => {
     { ...enqueue, timestamp: LATER, content: "<task-notification>done</task-notification>" },
   ])
   assert.equal(eventsOf(file).filter((event) => event.kind === "user").length, 0)
+})
+
+test("an app send adopts the real queued row and keeps it through delivery", () => {
+  const file = fileOf("app-send")
+  dropClaudeCache(file)
+  write(file, [enqueue])
+  const queued = eventsOf(file).find((event) => event.kind === "user")
+  assert.ok(queued)
+  const message: OptimisticMessage = {
+    id: "app-1",
+    paneId: AGENT.id,
+    agentName: AGENT.name,
+    text: TEXT,
+    at: Date.parse(AT) - 1_000,
+    status: "sent",
+  }
+  const pending = matchEchoes([queued], [message])
+  assert.equal(pending.visible.length, 0, "the optimistic row must not sit next to its queued echo")
+  assert.equal(pending.keys.get(queued.id), "optimistic:app-1")
+  const pendingRows = channelTimeline([queued], pending.visible, pending.keys).filter(
+    (item) => item.kind === "user" || item.kind === "optimistic",
+  )
+  assert.equal(pendingRows.length, 1)
+  assert.equal(pendingRows[0].id, "optimistic:app-1")
+
+  append(file, [remove, attachment])
+  const delivered = eventsOf(file).find((event) => event.kind === "user")
+  assert.ok(delivered)
+  const settled = matchEchoes([delivered], [message])
+  assert.equal(settled.keys.get(delivered.id), "optimistic:app-1")
+  const settledRows = channelTimeline([delivered], settled.visible, settled.keys).filter(
+    (item) => item.kind === "user" || item.kind === "optimistic",
+  )
+  assert.equal(settledRows.length, 1)
+  assert.equal(settledRows[0].id, "optimistic:app-1")
 })

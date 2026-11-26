@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/message-scroller"
 import { fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
 
-import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
+import { matchEchoes, type OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
 import { replyBarAgent, replyIdFor } from "@/lib/reply"
 import { channelTimeline } from "@/lib/thread"
@@ -364,21 +364,7 @@ export default function App() {
   // An optimistic prompt and its transcript echo are one row. Replacing the optimistic message
   // during render (not in an effect afterwards) avoids a frame with two bubbles, and the echo
   // keeps the optimistic key so React updates the row instead of unmounting it.
-  const echoView = useMemo(() => {
-    const keys = new Map<string, string>()
-    const matched = new Set<string>()
-    const visible: OptimisticMessage[] = []
-    for (const message of scopeOptimistic) {
-      const echo = scopeEvents.find((event) => !matched.has(event.id) && isEchoOf(event, message))
-      if (echo) {
-        matched.add(echo.id)
-        keys.set(echo.id, `optimistic:${message.id}`)
-      } else {
-        visible.push(message)
-      }
-    }
-    return { visible, keys }
-  }, [scopeEvents, scopeOptimistic])
+  const echoView = useMemo(() => matchEchoes(scopeEvents, scopeOptimistic), [scopeEvents, scopeOptimistic])
 
   // One timeline for the thread, its presence line and the delivery rows. ChannelView must not
   // rebuild it during an unchanged poll.
