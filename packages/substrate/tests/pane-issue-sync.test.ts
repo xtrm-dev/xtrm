@@ -9,9 +9,12 @@ import { parsePaneSyncRequest, syncPaneIssue, type TmuxRunner } from "../src/dom
 
 describe("parsePaneSyncRequest", () => {
   it("reads verb, ref and holder", () => {
-    assert.deepEqual(parsePaneSyncRequest(["issue", "claim", "CORE-1", "--holder", "w1"]), { verb: "claim", ref: "CORE-1", holder: "w1" });
-    assert.deepEqual(parsePaneSyncRequest(["--json", "issue", "release", "--holder=w2", "CORE-2"]), { verb: "release", ref: "CORE-2", holder: "w2" });
-    assert.deepEqual(parsePaneSyncRequest(["issue", "close", "--json", "CORE-3", "--outcome", "completed", "--reason", "done"]), { verb: "close", ref: "CORE-3", holder: null });
+    assert.deepEqual(parsePaneSyncRequest(["issue", "claim", "CORE-1", "--holder", "w1"]), { effect: "claim", ref: "CORE-1", holder: "w1" });
+    assert.deepEqual(parsePaneSyncRequest(["--json", "issue", "release", "CORE-2", "--holder", "w2"]), { effect: "end", ref: "CORE-2", holder: "w2" });
+    assert.deepEqual(parsePaneSyncRequest(["issue", "close", "--json", "CORE-3", "--outcome", "completed", "--reason", "done"]), { effect: "end", ref: "CORE-3", holder: null });
+    assert.deepEqual(parsePaneSyncRequest(["issue", "state", "CORE-5", "done"]), { effect: "end", ref: "CORE-5", holder: null });
+    assert.deepEqual(parsePaneSyncRequest(["issue", "state", "CORE-5", "cancelled"])?.effect, "end");
+    assert.equal(parsePaneSyncRequest(["issue", "state", "CORE-5", "open"]), null);
     assert.equal(parsePaneSyncRequest(["issue", "close", "--outcome", "completed", "--reason", "r", "CORE-4"])?.ref, "CORE-4");
   });
   it("ignores every other command", () => {
@@ -22,48 +25,58 @@ describe("parsePaneSyncRequest", () => {
   });
 });
 
-function fakeTmux(options: Record<string, string>): { run: TmuxRunner; sets: Array<[string, string]> } {
-  const sets: Array<[string, string]> = [];
+function fakeTmux(panes: Record<string, Record<string, string>>): { run: TmuxRunner; ops: string[] } {
+  const ops: string[] = [];
   const run: TmuxRunner = (args) => {
-    if (args[0] === "show-options") return { status: 0, stdout: `${options[args[args.length - 1] as string] ?? ""}\n` };
-    if (args[0] === "set-option") { options[args[4] as string] = args[5] as string; sets.push([args[4] as string, args[5] as string]); return { status: 0, stdout: "" }; }
+    if (args[0] === "list-panes") return { status: 0, stdout: Object.entries(panes).map(([id, o]) => `${id}\t${o["@agent_issue"] ?? ""}`).join("\n") + "\n" };
+    const pane = args[args.indexOf("-t") + 1] as string;
+    if (args[0] === "show-options") return { status: 0, stdout: `${panes[pane]?.[args[args.length - 1] as string] ?? ""}\n` };
+    if (args[0] === "set-option") {
+      if (args.includes("-u")) { delete panes[pane]?.[args[args.length - 1] as string]; ops.push(`unset ${pane}`); }
+      else { (panes[pane] ??= {})[args[args.length - 2] as string] = args[args.length - 1] as string; ops.push(`set ${pane} ${args[args.length - 1]}`); }
+      return { status: 0, stdout: "" };
+    }
     return { status: 1, stdout: "" };
   };
-  return { run, sets };
+  return { run, ops };
 }
 const ENV = { TMUX: "/tmp/x,1,0", TMUX_PANE: "%3", SUBSTRATE_HOLDER: "w1" };
 
 describe("syncPaneIssue", () => {
   it("claim sets the owning pane's issue", () => {
-    const t = fakeTmux({ "@agent_holder": "w1" });
+    const t = fakeTmux({ "%3": { "@agent_holder": "w1" } });
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: ENV, tmux: t.run }), "updated");
-    assert.deepEqual(t.sets, [["@agent_issue", "CORE-1"]]);
+    assert.deepEqual(t.ops, ["set %3 CORE-1"]);
   });
-  it("never touches a pane owned by another holder (in-process specialist)", () => {
-    const t = fakeTmux({ "@agent_holder": "w1" });
+  it("never claims into a pane owned by another holder (in-process specialist)", () => {
+    const t = fakeTmux({ "%3": { "@agent_holder": "w1" } });
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: { ...ENV, SUBSTRATE_HOLDER: "sp-executor-abc12345" }, tmux: t.run }), "skipped");
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1", "--holder", "someone-else"], { env: ENV, tmux: t.run }), "skipped");
-    assert.deepEqual(t.sets, []);
+    assert.deepEqual(t.ops, []);
   });
-  it("skips a pane with no owner (launched before the rename) and runs outside tmux", () => {
-    const t = fakeTmux({});
+  it("skips a claim in a pane with no owner and outside tmux", () => {
+    const t = fakeTmux({ "%3": {} });
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: ENV, tmux: t.run }), "skipped");
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: { SUBSTRATE_HOLDER: "w1" }, tmux: t.run }), "skipped");
-    assert.deepEqual(t.sets, []);
+    assert.deepEqual(t.ops, []);
   });
-  it("release and close clear only the issue they ended", () => {
-    const t = fakeTmux({ "@agent_holder": "w1", "@agent_issue": "CORE-1" });
-    assert.equal(syncPaneIssue(["issue", "release", "CORE-9"], { env: ENV, tmux: t.run }), "skipped");
+  it("close, release and a terminal state unset every pane that holds the ref, whoever ran them", () => {
+    const panes = { "%3": { "@agent_holder": "lead" }, "%4": { "@agent_holder": "w9", "@agent_issue": "CORE-1" }, "%5": { "@agent_holder": "w8", "@agent_issue": "CORE-2" }, "%6": { "@agent_issue": "core-1" } };
+    const t = fakeTmux(panes);
     assert.equal(syncPaneIssue(["issue", "close", "CORE-1", "--outcome", "completed", "--reason", "r"], { env: ENV, tmux: t.run }), "updated");
-    assert.deepEqual(t.sets, [["@agent_issue", ""]]);
+    assert.deepEqual(t.ops, ["unset %4", "unset %6"]);
+    assert.equal(syncPaneIssue(["issue", "state", "CORE-2", "done"], { env: ENV, tmux: t.run }), "updated");
+    assert.equal(panes["%5"]["@agent_issue"], undefined);
+    assert.equal(syncPaneIssue(["issue", "release", "CORE-7"], { env: ENV, tmux: t.run }), "skipped");
   });
   it("logs and never throws when tmux fails", () => {
     const lines: string[] = [];
     const broken: TmuxRunner = () => { throw new Error("tmux exploded"); };
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: ENV, tmux: broken, log: (l) => lines.push(l) }), "failed");
-    assert.ok(String(lines.join("\n")).includes("tmux exploded"));
+    assert.ok(lines.join("\n").includes("tmux exploded"));
     const unreadable: TmuxRunner = () => ({ status: 1, stdout: "" });
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: ENV, tmux: unreadable, log: (l) => lines.push(l) }), "failed");
+    assert.equal(syncPaneIssue(["issue", "close", "CORE-1"], { env: ENV, tmux: unreadable, log: (l) => lines.push(l) }), "failed");
   });
 });
 

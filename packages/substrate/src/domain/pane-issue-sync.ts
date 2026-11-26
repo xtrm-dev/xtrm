@@ -1,12 +1,20 @@
 // CORE-2801: keep the tmux pane's `@agent_issue` in step with the Issue its agent holds.
 //
-// `sb issue claim|release|close|cancel` is the one place that knows an agent took
-// or dropped an Issue. After the operation succeeds, this module updates the pane
-// the process runs in, and only that pane, and only when the operation was made
-// by the pane's owner: the pane's `@agent_holder` (written by the xt launcher)
-// must equal the holder of the operation. An in-process specialist (another
-// SUBSTRATE_HOLDER) or a claim made on behalf of another holder never changes the
-// pane. The schema is documented in core `docs/agent-identity.md`.
+// `sb issue claim` and every transition that ends a hold (`release`, `close`,
+// `cancel`, `state <ref> done|cancelled`) go through `runCli`, the one dispatch
+// the shipped bin (`cli/sb-ux.ts`) and `cli/sb.ts` share. After the operation
+// succeeds, this module updates panes:
+//
+// - claim: the pane the process runs in, and only when the pane's `@agent_holder`
+//   (written by the xt launcher) equals the operation's holder. An in-process
+//   specialist (another SUBSTRATE_HOLDER) or a claim made on behalf of another
+//   holder never changes the pane.
+// - end of a hold: EVERY pane of the tmux server whose `@agent_issue` equals the
+//   ref is unset, whoever ended the hold. A lead that closes a worker's Issue
+//   must not leave the worker pane advertising it. Unset, not empty: absent means
+//   none.
+//
+// The schema is documented in core `docs/agent-identity.md`.
 //
 // It runs in the client process, after the result is known, so it does not
 // depend on the Substrate remote. Every failure is logged and swallowed.
@@ -15,11 +23,12 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { BOOLEAN_FLAGS } from "./argv.ts";
+import { parseArgs } from "./argv.ts";
 
 const PANE_ID = /^%[0-9]+$/;
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const PANE_VERBS = new Set(["claim", "release", "close", "cancel"]);
+const END_VERBS = new Set(["release", "close", "cancel"]);
+const TERMINAL_STATES = new Set(["done", "cancelled"]);
 const TMUX_TIMEOUT_MS = 2_000;
 
 export type TmuxRunner = (args: string[]) => { status: number | null; stdout: string };
@@ -31,39 +40,28 @@ export interface PaneSyncDeps {
 }
 
 export interface PaneSyncRequest {
-  verb: "claim" | "release" | "close" | "cancel";
+  /** `claim` takes the pane; `end` clears every pane that holds the ref. */
+  effect: "claim" | "end";
   ref: string;
   /** `--holder`, else null. */
   holder: string | null;
 }
 
-/** The pane operation an `sb` argv asks for, or null when it is not a claim-state verb. */
+/**
+ * The pane effect of an `sb` argv, or null when the command does not change who
+ * holds an Issue. A terminal lifecycle state (`state <ref> done|cancelled`) ends
+ * a hold exactly like `close`.
+ */
 export function parsePaneSyncRequest(argv: readonly string[]): PaneSyncRequest | null {
-  const at = argv.indexOf("issue");
-  if (at < 0) return null;
-  const verb = argv[at + 1];
-  if (!verb || !PANE_VERBS.has(verb)) return null;
-  let ref: string | null = null;
-  let holder: string | null = null;
-  const rest = argv.slice(at + 2);
-  for (let i = 0; i < rest.length; i += 1) {
-    const token = rest[i] as string;
-    if (token === "--holder") {
-      holder = (rest[i + 1] ?? "").trim() || null;
-      i += 1;
-    } else if (token.startsWith("--holder=")) {
-      holder = token.slice("--holder=".length).trim() || null;
-    } else if (token.startsWith("--")) {
-      // Same rule as parseArgs: a non-boolean flag consumes the next token as its value.
-      const key = token.slice(2);
-      const next = rest[i + 1];
-      if (!token.includes("=") && !BOOLEAN_FLAGS.has(key) && next !== undefined && !next.startsWith("--")) i += 1;
-    } else if (ref === null) {
-      ref = token;
-    }
-  }
-  if (!ref || !SAFE_REF.test(ref)) return null;
-  return { verb: verb as PaneSyncRequest["verb"], ref, holder };
+  const { flags, positionals } = parseArgs([...argv]);
+  const [group, verb, ref, target] = positionals;
+  if (group !== "issue" || !verb || !ref || !SAFE_REF.test(ref)) return null;
+  const holderFlag = flags.get("holder");
+  const holder = Array.isArray(holderFlag) ? (holderFlag[0] ?? "").trim() || null : null;
+  if (verb === "claim") return { effect: "claim", ref, holder };
+  if (END_VERBS.has(verb)) return { effect: "end", ref, holder };
+  if (verb === "state" && target && TERMINAL_STATES.has(target)) return { effect: "end", ref, holder };
+  return null;
 }
 
 // The environment is handed to tmux explicitly: it is the one the caller read $TMUX from.
@@ -81,6 +79,20 @@ function defaultLog(line: string): void {
   } catch { /* a log that cannot be written is not an error */ }
 }
 
+function clearHeldPanes(request: PaneSyncRequest, tmux: TmuxRunner, log: (line: string) => void): PaneSyncOutcome {
+  const listing = tmux(["list-panes", "-a", "-F", "#{pane_id}\t#{@agent_issue}"]);
+  if (listing.status !== 0) { log(`end ${request.ref}: list-panes failed`); return "failed"; }
+  let outcome: PaneSyncOutcome = "skipped";
+  for (const line of listing.stdout.split("\n")) {
+    const [pane = "", issue = ""] = line.split("\t");
+    if (!PANE_ID.test(pane) || issue.trim().toLowerCase() !== request.ref.toLowerCase()) continue;
+    const cleared = tmux(["set-option", "-p", "-u", "-t", pane, "@agent_issue"]);
+    if (cleared.status !== 0) { log(`end ${request.ref}: unset @agent_issue on ${pane} failed`); outcome = "failed"; }
+    else { log(`end ${request.ref}: unset @agent_issue on ${pane}`); if (outcome !== "failed") outcome = "updated"; }
+  }
+  return outcome;
+}
+
 export type PaneSyncOutcome = "updated" | "skipped" | "failed";
 
 /**
@@ -94,33 +106,23 @@ export function syncPaneIssue(argv: readonly string[], deps: PaneSyncDeps = {}):
     const request = parsePaneSyncRequest(argv);
     if (!request) return "skipped";
     // TMUX proves a server to ask; TMUX_PANE alone could be a leftover variable.
+    if (!env.TMUX) return "skipped";
+    const tmux = deps.tmux ?? tmuxIn(env);
+    if (request.effect === "end") return clearHeldPanes(request, tmux, log);
     const pane = (env.TMUX_PANE ?? "").trim();
-    if (!env.TMUX || !PANE_ID.test(pane)) return "skipped";
+    if (!PANE_ID.test(pane)) return "skipped";
     const actor = request.holder ?? (env.SUBSTRATE_HOLDER ?? "").trim();
     if (!actor) return "skipped";
-    const tmux = deps.tmux ?? tmuxIn(env);
-    const read = (option: string): string | null => {
-      const result = tmux(["show-options", "-p", "-t", pane, "-qv", option]);
-      return result.status === 0 ? result.stdout.trim() : null;
-    };
-    const owner = read("@agent_holder");
-    if (owner === null) {
-      log(`skip ${request.verb} ${request.ref}: pane ${pane} unreadable`);
+    const read = tmux(["show-options", "-p", "-t", pane, "-qv", "@agent_holder"]);
+    if (read.status !== 0) {
+      log(`skip claim ${request.ref}: pane ${pane} unreadable`);
       return "failed";
     }
+    const owner = read.stdout.trim();
     // No owner (a pane launched before CORE-2801) or another owner: not this pane's claim.
     if (owner === "" || owner !== actor) return "skipped";
-    if (request.verb === "claim") {
-      const set = tmux(["set-option", "-p", "-t", pane, "@agent_issue", request.ref]);
-      if (set.status !== 0) { log(`claim ${request.ref}: set @agent_issue on ${pane} failed`); return "failed"; }
-      return "updated";
-    }
-    // release, close, cancel: clear only the Issue this operation ended.
-    const current = read("@agent_issue");
-    if (current === null) { log(`${request.verb} ${request.ref}: read @agent_issue on ${pane} failed`); return "failed"; }
-    if (current.toLowerCase() !== request.ref.toLowerCase()) return "skipped";
-    const cleared = tmux(["set-option", "-p", "-t", pane, "@agent_issue", ""]);
-    if (cleared.status !== 0) { log(`${request.verb} ${request.ref}: clear @agent_issue on ${pane} failed`); return "failed"; }
+    const set = tmux(["set-option", "-p", "-t", pane, "@agent_issue", request.ref]);
+    if (set.status !== 0) { log(`claim ${request.ref}: set @agent_issue on ${pane} failed`); return "failed"; }
     return "updated";
   } catch (error) {
     try { log(`pane sync error: ${error instanceof Error ? error.message : String(error)}`); } catch { /* ignore */ }

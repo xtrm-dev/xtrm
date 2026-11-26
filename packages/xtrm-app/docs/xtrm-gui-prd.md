@@ -1716,7 +1716,7 @@ The extension:
   - `command_result`: the outcome of each host command, by `commandId` (`status`, optional `reason`, such as `busy` or `session_idle`);
   - `notification` and `subagent_end`: sent only by the Claude hook reporter (§35.8 item 4);
 - **accepts** commands from the agent host: user message (`pi.sendUserMessage`), steer / follow-up, abort, and extension-UI responses (§20);
-- **attaches identity**: session id, cwd, worktree, role, bead / Substrate Issue, parent session, and tmux pane. This is the §11 identity read from the `xt pi` launch context (`@agent_task`, `@agent_parent_session`, `XTMUX_AGENT_BEAD`).
+- **attaches identity**: session id, cwd, worktree, role, bead / Substrate Issue, parent session, and tmux pane. This is the §11 identity read from the `xt pi` launch context (`@agent_task`, `@agent_parent_session`, `XTMUX_AGENT_ISSUE`).
 
 A session without the extension remains visible as history only (§35.5).
 

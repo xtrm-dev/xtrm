@@ -686,10 +686,11 @@ itself (xt pi|claude|codex <name> sets it). Pass --holder only to claim on
 someone else's behalf. With neither --holder nor a non-empty SUBSTRATE_HOLDER
 the claim fails closed; there is no implicit unix-user holder.
 
-Inside a tmux pane, a successful claim, release, close or cancel by the pane's
-own holder (its @agent_holder) also updates that pane's @agent_issue. A claim
-made by another holder, or in a pane launched without @agent_holder, leaves the
-pane alone; a failed update is logged to $XDG_STATE_HOME/xtrm/pane-sync.log.`,
+Inside tmux, a successful claim by the pane's own holder (its @agent_holder) sets
+that pane's @agent_issue. A claim by another holder, or in a pane launched
+without @agent_holder, leaves the pane alone.
+Pane effects are logged to $XDG_STATE_HOME/xtrm/pane-sync.log; a failure never
+changes the exit status.`,
   "issue.renew": `usage: sb issue renew <ref> [--holder <who>] [--ttl-ms <n>] [--activation <id>] [--project <id>]
 
 --holder defaults to SUBSTRATE_HOLDER, exactly as for claim and release. The
@@ -698,7 +699,11 @@ lease keeps its generation; only its expiry moves.`,
 
 --holder defaults to SUBSTRATE_HOLDER, so a session releases its own claim
 without restating the name. Releasing another holder's claim still requires
-the explicit flag, and the same fail-closed rule applies when neither is set.`,
+the explicit flag, and the same fail-closed rule applies when neither is set.
+
+Pane effect: inside tmux, every pane whose @agent_issue is <ref> is unset, whoever
+ran this, so a lead closing a worker's Issue does not leave the worker pane
+showing it. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.close": `usage: sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> [--actor <who>] [--participant <id>] [--run <id>] [--activation <id>] [--attempt <id>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--force-close-with-open-blocker <why>] [--project <id>]
 
 writes an immutable Closure row (outcome, reason, actor, session, revision/hash, refs) and rests on done (cancelled for the cancelled outcome). Bare \`sb issue close <ref>\` stays the legacy lifecycle alias (no Closure invented).
@@ -723,11 +728,19 @@ bounded outcome, --validation/--receipt/--artifact for the proof. Each
 evidence flag accepts a comma-separated list and may be repeated; repeated
 values accumulate in caller order, never silently drop a value. Closure
 rows are immutable history -- a mistaken close reopens, it never rewrites.
-Stopping one execution is NOT a close: release the claim instead.`,
+Stopping one execution is NOT a close: release the claim instead.
+
+Pane effect: inside tmux, every pane whose @agent_issue is <ref> is unset, whoever
+ran this, so a lead closing a worker's Issue does not leave the worker pane
+showing it. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>] [--link-gate warn|enforce|off] [--gate-override <reason>]
 
 sets the lifecycle state; every transition emits a durable issue.lifecycle event.
---until sets/clears the deferral timestamp (meaningful with deferred).`,
+--until sets/clears the deferral timestamp (meaningful with deferred).
+
+Pane effect: a terminal state (done, cancelled) unsets @agent_issue on every tmux pane
+whose @agent_issue is <ref>, exactly like close. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log;
+never changes the exit status.`,
   "issue.reopen": `usage: sb issue reopen <ref> --reason <r> [--actor <who>] [--project <id>]
 
 keeps every historical Closure row untouched, appends a reopen event, and restores lifecycle state to open. Bare \`sb issue reopen <ref>\` stays the legacy lifecycle alias (alias for: sb issue state <ref> open).`,
@@ -736,7 +749,11 @@ keeps every historical Closure row untouched, appends a reopen event, and restor
 alias for: sb issue state <ref> deferred [--until <ms|clear>].`,
   "issue.cancel": `usage: sb issue cancel <ref> --reason <r> [--actor <who>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--project <id>]
 
-writes a terminal Closure with the cancelled outcome resting on the cancelled lifecycle state. Each evidence flag accepts a comma-separated list and may be repeated; repeated values accumulate in caller order. Stopping one execution is NOT this verb: release the claim (\`sb issue release\`) instead, which leaves lifecycle and Closure untouched. Bare \`sb issue cancel <ref>\` stays the legacy lifecycle alias (alias for: sb issue state <ref> cancelled).`,
+writes a terminal Closure with the cancelled outcome resting on the cancelled lifecycle state. Each evidence flag accepts a comma-separated list and may be repeated; repeated values accumulate in caller order. Stopping one execution is NOT this verb: release the claim (\`sb issue release\`) instead, which leaves lifecycle and Closure untouched. Bare \`sb issue cancel <ref>\` stays the legacy lifecycle alias (alias for: sb issue state <ref> cancelled).
+
+Pane effect: inside tmux, every pane whose @agent_issue is <ref> is unset, whoever
+ran this, so a lead closing a worker's Issue does not leave the worker pane
+showing it. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.archive": `usage: sb issue archive <ref> [--project <id>]
 
 alias for: sb issue state <ref> archived.`,
@@ -1678,7 +1695,22 @@ function assertArity(command: string, rest: string[]): void {
   );
 }
 
-export function runCli(argv: string[], opts?: { dbPath?: string; env?: NodeJS.ProcessEnv; transport?: RemoteTransport; readStdin?: () => string }): CliResult {
+type RunCliOptions = { dbPath?: string; env?: NodeJS.ProcessEnv; transport?: RemoteTransport; readStdin?: () => string };
+
+/**
+ * The dispatch every entry point shares (cli/sb.ts and the shipped bin cli/sb-ux.ts).
+ * CORE-2801: after a succeeded claim, release, close, cancel or terminal state
+ * change, the tmux pane identity follows. Best-effort: it never changes the result.
+ * A caller that injects `dbPath` is a test or embedding on a scratch store, which
+ * must never touch the operator's panes.
+ */
+export function runCli(argv: string[], opts?: RunCliOptions): CliResult {
+  const result = runCliOperation(argv, opts);
+  if (result.code === 0 && opts?.dbPath === undefined) syncPaneIssue(argv, opts?.env ? { env: opts.env } : {});
+  return result;
+}
+
+function runCliOperation(argv: string[], opts?: RunCliOptions): CliResult {
   // env/transport are injection seams for tests and embedding; production
   // callers pass neither.
   const remoteDeps = { env: opts?.env ?? process.env, transport: opts?.transport };
@@ -3781,8 +3813,6 @@ const invokedAsMain =
   invokedPath.endsWith("sb.ts") || invokedPath.endsWith("sb.js") || invokedPath.endsWith("/sb") || invokedPath === "sb";
 if (invokedAsMain) {
   const result = runCli(process.argv.slice(2));
-  // CORE-2801: a succeeded claim, release or close moves the owning pane's @agent_issue. Best-effort.
-  if (result.code === 0) syncPaneIssue(process.argv.slice(2));
   // An early-closing reader (`sb ... | head`) makes stdout/stderr emit EPIPE.
   // That is a normal end of output, not a failure: without a handler it
   // surfaces as an unhandled 'error' event that replaces the real exit code.
