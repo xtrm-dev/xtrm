@@ -360,7 +360,7 @@ export async function startPi(state: RealHostState, name = PI_NAME, extensions: 
     `XTRM_AGENT_HOST_SOCKET=${state.socket}`,
     `XTRM_SESSION_NAME=${name}`,
     ...(opts.role ? [`XTMUX_AGENT_ROLE=${opts.role}`] : []),
-    ...(opts.bead ? [`XTMUX_AGENT_BEAD=${opts.bead}`] : []),
+    ...(opts.bead ? [`XTMUX_AGENT_ISSUE=${opts.bead}`] : []),
   ];
   const loads = [...(opts.hostExtension === false ? [] : [ext]), ...extensions].flatMap((e) => ["-e", e]);
   tmux(state, "new-session", "-d", "-s", name, "-x", "200", "-y", "50", "-c", cwd, "env", ...piEnv, "pi", ...loads, "--model", model);
