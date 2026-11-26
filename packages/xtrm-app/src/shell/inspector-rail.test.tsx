@@ -92,6 +92,29 @@ describe("command list shortcuts", () => {
     expect(screen.getByText("Ctrl I").tagName.toLowerCase()).toBe("kbd");
   });
 
+  it("keeps the context hint whole and budgeted: the label shrinks, the key stays readable", () => {
+    render(
+      <CommandMenu
+        open
+        onOpenChange={() => {}}
+        query=""
+        onQueryChange={() => {}}
+        placeholder="Search"
+        groups={[{ heading: "Issues", entries: [{ id: "i", label: "a very long issue title that must not push the key out", hint: "XTRM-1234 · open", icon: "issues", onSelect: () => {} }] }]}
+      />,
+    );
+    const label = screen.getByText("a very long issue title that must not push the key out");
+    expect(label.className).toContain("min-w-0");
+    expect(label.className).toContain("flex-1");
+    expect(label.className).toContain("truncate");
+    // The hint carries the issue key: it never shrinks and never squeezes the label
+    // to zero, so it is capped and its own tail ellipsises instead (truncate).
+    const hint = screen.getByText("XTRM-1234 · open");
+    expect(hint.className).toContain("shrink-0");
+    expect(hint.className).toContain("max-w-[45%]");
+    expect(hint.className).toContain("truncate");
+  });
+
   it("renders the maximize shortcut with the Kbd primitive", () => {
     render(
       <CommandMenu

@@ -45,12 +45,12 @@ describe("Activity surface (XTRM-757)", () => {
     // One <ol>: three stacked lists would fail this.
     expect(within(list).getAllByRole("listitem").length).toBeGreaterThan(3);
     const order = sourceOrder(list);
-    expect(new Set(order)).toEqual(new Set(["substrate", "github", "git"]));
+    expect(new Set(order)).toEqual(new Set(["substrate", "github"]));
 
-    // Ordering is the property a stacked list breaks. The GitHub fixture is
-    // pinned to 2026-09-16 and the git fixture to 2026-11-12 and the substrate
-    // journal at a fixed later date, so a MERGED feed interleaves them; three
-    // stacked lists would emit one contiguous block per source.
+    // Ordering is the property a stacked list breaks. GitHub (pushes included,
+    // XTRM-1090 seq 2: the git source is gone) and the substrate journal are
+    // dated apart, so a MERGED feed interleaves them; stacked lists would emit
+    // one contiguous block per source.
     const transitions = order.filter((s, i) => i > 0 && s !== order[i - 1]).length;
     expect(transitions).toBeGreaterThan(0);
   });
@@ -62,7 +62,7 @@ describe("Activity surface (XTRM-757)", () => {
     expect(tabs.join("|")).toMatch(/All/);
     expect(tabs.join("|")).toMatch(/Substrate/);
     expect(tabs.join("|")).toMatch(/GitHub/);
-    expect(tabs.some((t) => /^Git\d+$/.test(t))).toBe(true);
+    expect(tabs.some((t) => /^Git\d+$/.test(t))).toBe(false);
     expect(tabs.join("|")).not.toMatch(/Jira/);
     // The first tab is the resting selection.
     expect(screen.getByRole("tab", { name: /^All/ }).getAttribute("aria-selected")).toBe("true");
@@ -72,12 +72,12 @@ describe("Activity surface (XTRM-757)", () => {
     renderActivity();
     const list = await feed();
     const before = sourceOrder(list);
-    const gitTab = screen.getAllByRole("tab").find((tab) => /^Git\d*$/.test(tab.textContent ?? "Git0"))!;
-    await userEvent.click(gitTab);
+    const githubTab = screen.getAllByRole("tab").find((tab) => /^GitHub\d*$/.test(tab.textContent ?? ""))!;
+    await userEvent.click(githubTab);
     const after = sourceOrder(await feed());
-    expect(after.every((s) => s === "git")).toBe(true);
+    expect(after.every((s) => s === "github")).toBe(true);
     // Filtering is a projection, not a re-sort: the surviving rows keep their order.
-    expect(after).toEqual(before.filter((s) => s === "git"));
+    expect(after).toEqual(before.filter((s) => s === "github"));
   });
 
   it("never draws a divider between rows and keeps every row at 32px", async () => {
