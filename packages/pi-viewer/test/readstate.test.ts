@@ -27,6 +27,16 @@ test("the new pill counts rows appended after leaving the bottom, not earlier pa
   assert.equal(unseenTimelineItems(items, new Set(items.map((item) => item.id)), 100, false), 0)
 })
 
+test("the pill does not count the reader's own rows as new", () => {
+  const items = [
+    { id: "turn:1", at: 100, kind: "turn" },
+    { id: "user:2", at: 200, kind: "user" },
+    { id: "optimistic:3", at: 300, kind: "optimistic" },
+    { id: "turn:4", at: 400, kind: "turn" },
+  ]
+  assert.equal(unseenTimelineItems(items, new Set(["turn:1"]), 100, false), 1)
+})
+
 test("a restore that never finds its row gives up at the deadline, not after a sync count", () => {
   assert.equal(restoreExpired(500, 2_000), false)
   assert.equal(restoreExpired(2_000, 2_000), false)

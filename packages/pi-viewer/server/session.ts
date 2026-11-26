@@ -1,6 +1,7 @@
-import { closeSync, openSync, readSync, statSync } from "node:fs"
+import { closeSync, openSync, readSync } from "node:fs"
 import { StringDecoder } from "node:string_decoder"
 import { basename } from "node:path"
+import { statOnce } from "./stat-pass.ts"
 
 import type { AgentStatus, EventKind, TurnEffect, ViewerEvent, ViewerPart } from "../src/shared/types.ts"
 import { isContextOverflow, resolveTurnState } from "../src/lib/turn-state.ts"
@@ -152,7 +153,7 @@ function atOf(entry: Raw): number {
 }
 
 export function mergeFile(file: string): FileCache {
-  const stat = statSync(file)
+  const stat = statOnce(file)
   let cache = fileCache.get(file)
   if (!cache || stat.size < cache.offset) {
     cache = {
@@ -278,7 +279,7 @@ const nameCache = new Map<string, { mtimeMs: number; name: string | null }>()
 
 export function readSessionName(file: string): string | null {
   try {
-    const stat = statSync(file)
+    const stat = statOnce(file)
     const cached = nameCache.get(file)
     if (cached && cached.mtimeMs === stat.mtimeMs) return cached.name
     const limit = Math.min(stat.size, 512 * 1024)

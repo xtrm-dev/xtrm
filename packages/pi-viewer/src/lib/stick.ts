@@ -9,7 +9,10 @@ export function followMode(input: {
   atBottom: boolean
   working: boolean
   reducedMotion: boolean
+  /** A send explicitly asks for the newest row, even when the reader had scrolled up. */
+  sendPending?: boolean
 }): FollowMode {
+  if (input.sendPending) return "instant"
   if (!input.atBottom) return "none"
   if (input.working && !input.reducedMotion) return "smooth"
   return "instant"

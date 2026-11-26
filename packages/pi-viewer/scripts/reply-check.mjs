@@ -184,7 +184,20 @@ try {
   // 6. A send clears it and goes to the replied agent.
   await page.locator('button[aria-label="Reply to agent-alpha"]').click({ force: true })
   await composer(page).fill("hello alpha")
+  await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.scrollTop = 0
+  })
+  await page.waitForTimeout(100)
   await composer(page).press("Enter")
+  await page.waitForFunction(
+    () => {
+      const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+      return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 2
+    },
+    undefined,
+    { timeout: 4_000 },
+  )
   await page.waitForTimeout(300)
   assert.equal(await bar(page).count(), 0, "a send clears the bar")
   assert.deepEqual(sends.at(-1), { paneId: "%1", text: "hello alpha" }, "the send reaches alpha, plain text")

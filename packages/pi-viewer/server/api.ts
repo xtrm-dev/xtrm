@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { gzipSync } from "node:zlib"
+import { gzip } from "node:zlib"
+import { promisify } from "node:util"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
 import type {
@@ -12,7 +13,7 @@ import type {
   ViewerSession,
 } from "../src/shared/types.ts"
 import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
-import { discover } from "./discover.ts"
+import { discoverAsync, type Discovery } from "./discover.ts"
 import { applyIntercomResults, intercomPairKey } from "./intercom.ts"
 import { normalizeEvent, parseSessionFile } from "./session.ts"
 import { cachedThread } from "./thread-cache.ts"
@@ -20,20 +21,81 @@ import { cachedThread } from "./thread-cache.ts"
 const MAX_TEXT = 20_000
 const MAX_BODY = 64 * 1024
 
-function sendJson(req: IncomingMessage, res: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body)
+const gzipAsync = promisify(gzip)
+
+/** Responses under this size are sent as they are; gzip would cost more than it saves. */
+const GZIP_MIN = 1024
+
+function wantsGzip(req: IncomingMessage): boolean {
+  return /\bgzip\b/.test(req.headers["accept-encoding"] ?? "")
+}
+
+function sendBody(res: ServerResponse, status: number, payload: string, gz: Buffer | null): void {
   res.statusCode = status
   res.setHeader("content-type", "application/json; charset=utf-8")
   res.setHeader("cache-control", "no-store")
   res.setHeader("vary", "accept-encoding")
-  // The thread payload is repetitive JSON; gzip cuts it by roughly 5x on the wire.
-  if (payload.length > 1024 && /\bgzip\b/.test(req.headers["accept-encoding"] ?? "")) {
-    const compressed = gzipSync(payload)
+  if (gz) {
     res.setHeader("content-encoding", "gzip")
-    res.end(compressed)
+    res.end(gz)
     return
   }
   res.end(payload)
+}
+
+async function sendJson(req: IncomingMessage, res: ServerResponse, status: number, body: unknown): Promise<void> {
+  const payload = JSON.stringify(body)
+  // The thread payload is repetitive JSON; gzip cuts it by roughly 5x on the wire.
+  const gz = payload.length > GZIP_MIN && wantsGzip(req) ? await gzipAsync(payload) : null
+  sendBody(res, status, payload, gz)
+}
+
+/**
+ * A thread response is a pure function of (query, scope, session version, cache counter,
+ * revision). While those hold, the encoded body is reused instead of re-serialized and
+ * re-compressed. Compression runs on the thread pool, never on the event loop.
+ */
+interface Frame {
+  json: string
+  gz: Promise<Buffer> | null
+}
+
+const FRAME_MAX = 16
+const FRAME_BYTES_MAX = 24 * 1024 * 1024
+const frames = new Map<string, Frame>()
+let frameBytes = 0
+
+function rememberFrame(key: string, frame: Frame): void {
+  const stale = frames.get(key)
+  if (stale) frameBytes -= stale.json.length
+  frames.delete(key)
+  frames.set(key, frame)
+  frameBytes += frame.json.length
+  while (frames.size > FRAME_MAX || frameBytes > FRAME_BYTES_MAX) {
+    const oldest = frames.keys().next().value
+    if (oldest === undefined) break
+    frameBytes -= frames.get(oldest)!.json.length
+    frames.delete(oldest)
+  }
+}
+
+async function sendFrame(req: IncomingMessage, res: ServerResponse, key: string, build: () => string): Promise<void> {
+  let frame = frames.get(key)
+  if (!frame) {
+    frame = { json: build(), gz: null }
+    rememberFrame(key, frame)
+  }
+  let gz: Buffer | null = null
+  if (frame.json.length > GZIP_MIN && wantsGzip(req)) {
+    frame.gz ??= gzipAsync(frame.json)
+    try {
+      gz = await frame.gz
+    } catch (error) {
+      frame.gz = null
+      throw error
+    }
+  }
+  sendBody(res, 200, frame.json, gz)
 }
 
 class ApiError extends Error {
@@ -167,10 +229,49 @@ function readerFor(agent: ViewerAgent): {
     : { parse: parseSessionFile, normalize: normalizeEvent }
 }
 
+/** `lite` is pure per event object; unchanged events keep their object across polls, so the summary is reused. */
+const liteMemo = { branch: new WeakMap<ViewerEvent, ViewerEvent>(), all: new WeakMap<ViewerEvent, ViewerEvent>() }
+
+function liteOf(event: ViewerEvent, scope: "branch" | "all"): ViewerEvent {
+  const memo = liteMemo[scope]
+  let value = memo.get(event)
+  if (!value) {
+    value = lite(event, scope)
+    memo.set(event, value)
+  }
+  return value
+}
+
+/**
+ * The agents of the requested pane (`p=%N`) or window (`w=@N`, or a window index): the client's
+ * `agentsInScope`, applied to the session snapshot. No parameter means the whole session (null).
+ * A scope that matches nothing is an empty list, which the cache answers with an empty thread.
+ */
+export function scopeAgentIds(session: ViewerSession, window: string | null, pane: string | null): string[] | null {
+  if (pane !== null && pane !== "") {
+    if (!/^%\d+$/.test(pane)) throw new ApiError(400, "invalid pane id")
+    return session.agents.filter((agent) => agent.paneId === pane).map((agent) => agent.id)
+  }
+  if (window !== null && window !== "") {
+    const byId = /^@\d+$/.test(window)
+    if (!byId && !/^\d+$/.test(window)) throw new ApiError(400, "invalid window id")
+    return session.agents
+      .filter((agent) => agent.paneId && (byId ? agent.windowId === window : agent.windowIndex === Number(window)))
+      .map((agent) => agent.id)
+  }
+  return null
+}
+
 function threadOf(
   session: ViewerSession,
   scope: "branch" | "all",
-  query: { limit?: number; before?: number | null; since?: number | null; revision?: string | null },
+  query: {
+    limit?: number
+    before?: number | null
+    since?: number | null
+    revision?: string | null
+    agentIds?: readonly string[] | null
+  },
 ): ThreadPayload {
   return cachedThread(
     {
@@ -184,17 +285,72 @@ function threadOf(
   )
 }
 
-let discovery: { at: number; value: ReturnType<typeof discover> } | null = null
+/**
+ * Discovery (tmux, ps, /proc, transcript stats) runs on a timer, off the request path. A request
+ * reads the last snapshot; only the very first one waits. The timer runs while the viewer is in
+ * use and stops after a minute without a request, so an idle server does no work.
+ */
+export const DISCOVERY_INTERVAL_MS = 2_000
+const DISCOVERY_IDLE_MS = 60_000
+const DISCOVERY_STALE_MS = 6_000
 
-/** Discovery walks /proc and parses each transcript; one second is enough. */
-function currentDiscovery() {
-  if (discovery && Date.now() - discovery.at < 1_000) return discovery.value
-  discovery = { at: Date.now(), value: discover() }
-  return discovery.value
+let snapshot: Discovery | null = null
+let snapshotAt = 0
+let refreshing: Promise<Discovery> | null = null
+let discoveryTimer: ReturnType<typeof setTimeout> | null = null
+let lastRequestAt = 0
+
+/** One discovery at a time; concurrent callers share it. */
+export function refreshDiscovery(): Promise<Discovery> {
+  refreshing ??= discoverAsync()
+    .then((found) => {
+      snapshot = found
+      snapshotAt = Date.now()
+      return found
+    })
+    .finally(() => {
+      refreshing = null
+    })
+  return refreshing
 }
 
-function resolveSession(name: string | null): { session: ViewerSession; all: ViewerSession[] } {
-  const found = currentDiscovery()
+function scheduleDiscovery(): void {
+  if (discoveryTimer) return
+  discoveryTimer = setTimeout(() => {
+    discoveryTimer = null
+    if (Date.now() - lastRequestAt > DISCOVERY_IDLE_MS) return
+    void refreshDiscovery()
+      .catch(() => undefined)
+      .finally(scheduleDiscovery)
+  }, DISCOVERY_INTERVAL_MS)
+  discoveryTimer.unref()
+}
+
+async function currentDiscovery(): Promise<Discovery> {
+  lastRequestAt = Date.now()
+  scheduleDiscovery()
+  // The timer keeps the snapshot a few seconds old at most; after an idle stop it may be older.
+  if (!snapshot || Date.now() - snapshotAt > DISCOVERY_STALE_MS) return refreshDiscovery()
+  return snapshot
+}
+
+/** Test hook: serve this discovery as the snapshot, with no tmux. */
+export function seedDiscovery(found: Discovery): void {
+  snapshot = found
+  snapshotAt = Date.now()
+}
+
+/** Test hook: forget the snapshot and stop the timer. */
+export function resetDiscovery(): void {
+  snapshot = null
+  snapshotAt = 0
+  if (discoveryTimer) clearTimeout(discoveryTimer)
+  discoveryTimer = null
+  lastRequestAt = 0
+}
+
+async function resolveSession(name: string | null): Promise<{ session: ViewerSession; all: ViewerSession[] }> {
+  const found = await currentDiscovery()
   if (!found.sessions.length) {
     throw new ApiError(404, found.error || "no tmux session with a running pi or claude pane found")
   }
@@ -290,23 +446,23 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
   const method = req.method ?? "GET"
 
   if (url.pathname === "/api/health" && method === "GET") {
-    sendJson(req, res, 200, { ok: true, pid: process.pid })
+    await sendJson(req, res, 200, { ok: true, pid: process.pid })
     return true
   }
 
   if (url.pathname === "/api/sessions" && method === "GET") {
-    const found = currentDiscovery()
+    const found = await currentDiscovery()
     const payload: SessionsPayload = {
       sessions: found.sessions,
       capturedAt: Date.now(),
       error: found.error,
     }
-    sendJson(req, res, found.error ? 503 : 200, payload)
+    await sendJson(req, res, found.error ? 503 : 200, payload)
     return true
   }
 
   if (url.pathname === "/api/thread" && method === "GET") {
-    const { session } = resolveSession(url.searchParams.get("session"))
+    const { session } = await resolveSession(url.searchParams.get("session"))
     if (url.searchParams.get("meta") === "1") {
       const meta: ThreadMeta = {
         session: session.name,
@@ -315,7 +471,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
         agents: session.agents,
         capturedAt: Date.now(),
       }
-      sendJson(req, res, 200, meta)
+      await sendJson(req, res, 200, meta)
       return true
     }
     const scope = url.searchParams.get("scope") === "all" ? "all" : "branch"
@@ -325,25 +481,44 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
       const value = Number(raw)
       return Number.isSafeInteger(value) && value >= 0 ? value : null
     }
-    const payload = threadOf(session, scope, {
+    const agentIds = scopeAgentIds(session, url.searchParams.get("w"), url.searchParams.get("p"))
+    const query = {
       limit: number("limit") ?? undefined,
       before: number("before"),
       since: number("since"),
       revision: url.searchParams.get("revision"),
-    })
-    payload.events = payload.events.map((event) => lite(event, scope))
-    sendJson(req, res, 200, payload)
+      agentIds,
+    }
+    // Everything the body depends on is in the key: a repeat poll that changed nothing is one lookup.
+    const payload = threadOf(session, scope, query)
+    const key = [
+      session.name,
+      scope,
+      agentIds ? [...agentIds].sort().join(",") : "*",
+      query.limit ?? "",
+      query.before ?? "",
+      query.since ?? "",
+      query.revision ?? "",
+      // The body carries the agent list; its status and attention change without a file change.
+      createHash("sha1").update(JSON.stringify(payload.agents)).digest("base64url").slice(0, 16),
+      payload.cursor,
+      payload.revision,
+      "reset" in payload && payload.reset ? "r" : "",
+    ].join("|")
+    await sendFrame(req, res, key, () =>
+      JSON.stringify({ ...payload, events: payload.events.map((event) => liteOf(event, scope)) }),
+    )
     return true
   }
 
   if (url.pathname === "/api/event" && method === "GET") {
-    const { session } = resolveSession(url.searchParams.get("session"))
+    const { session } = await resolveSession(url.searchParams.get("session"))
     const paneId = url.searchParams.get("paneId") ?? ""
     const seq = Number(url.searchParams.get("seq"))
     if (!Number.isInteger(seq) || seq < 0) throw new ApiError(400, "invalid seq")
     const agent = session.agents.find((entry) => entry.paneId === paneId)
     if (!agent) throw new ApiError(404, "unknown pane in this session")
-    sendJson(req, res, 200, detailOf(agent, seq))
+    await sendJson(req, res, 200, detailOf(agent, seq))
     return true
   }
 
@@ -361,7 +536,8 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
     const text = typeof record.text === "string" ? record.text.trim() : ""
     if (!/^%\d+$/.test(paneId)) throw new ApiError(400, "invalid pane id")
     if (!text) throw new ApiError(400, "empty message")
-    const target = discover().sessions.some((session) =>
+    // A send checks the pane against a fresh discovery, not the snapshot.
+    const target = (await refreshDiscovery()).sessions.some((session) =>
       session.agents.some((agent) => agent.paneId === paneId),
     )
     if (!target) throw new ApiError(404, "pane is not a pi or claude agent in an open tmux session")
@@ -376,7 +552,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
       const message = error instanceof Error ? error.message : String(error)
       throw new ApiError(502, `tmux send-keys failed: ${message}`)
     }
-    sendJson(req, res, 200, { ok: true, paneId, at: Date.now() })
+    await sendJson(req, res, 200, { ok: true, paneId, at: Date.now() })
     return true
   }
 
@@ -390,11 +566,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     return await route(req, res)
   } catch (error) {
     if (error instanceof ApiError) {
-      sendJson(req, res, error.status, { error: error.message })
+      await sendJson(req, res, error.status, { error: error.message })
       return true
     }
     const message = error instanceof Error ? error.message : String(error)
-    sendJson(req, res, 500, { error: message })
+    await sendJson(req, res, 500, { error: message })
     return true
   }
 }

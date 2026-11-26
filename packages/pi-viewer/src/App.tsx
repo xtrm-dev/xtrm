@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { ChannelView } from "@/components/ChannelView"
 import { Composer } from "@/components/Composer"
@@ -10,6 +10,7 @@ import { ViewerHeader } from "@/components/ViewerHeader"
 import { laneValue, loadWidth, saveWidth } from "@/lib/chat-width"
 import {
   MessageScroller,
+  MessageScrollerApi,
   MessageScrollerButton,
   MessageScrollerContent,
   MessageScrollerProvider,
@@ -57,7 +58,7 @@ function mergeEvents(previous: ViewerEvent[], incoming: ViewerEvent[]): ViewerEv
   const byId = new Map(previous.map((event) => [event.id, event]))
   for (const event of incoming) byId.set(event.id, event)
   return [...byId.values()].sort(
-    (a, b) => a.at - b.at || a.agentId.localeCompare(b.agentId) || a.seq - b.seq,
+    (a, b) => a.at - b.at || (a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0) || a.seq - b.seq,
   )
 }
 
@@ -87,6 +88,7 @@ export default function App() {
   const [all, setAll] = useState<ThreadPayload | null>(null)
   const [view, setView] = useState<"channel" | "all">("channel")
   const [optimistic, setOptimistic] = useState<OptimisticMessage[]>([])
+  const sendScrollRef = useRef<{ requestSendScroll: () => void } | null>(null)
   const [threadError, setThreadError] = useState<string | null>(null)
   const [earlierLoading, setEarlierLoading] = useState(false)
   const [kick, setKick] = useState(0)
@@ -102,6 +104,10 @@ export default function App() {
   const sessionName = scope?.session ?? null
   // Remount keys use the scope's identity, not its URL: a pane scope with or without its window is one scope.
   const scopeKey = scope ? scopeRowKey(scope) : "none"
+  // The server cuts the thread to the pane or window, so its newest turns are that scope's own.
+  const scopePane = scope?.kind === "pane" ? scope.paneId : null
+  const scopeWindow =
+    scope?.kind === "window" ? (scope.windowId || (scope.window !== null ? String(scope.window) : null)) : null
   const scrollerKey = `${scopeKey}:${view}`
   // The scope of a fresh page comes from the URL. It is a request, read only until a scope has
   // resolved; after that the user's selection is never replaced by the page-open URL.
@@ -111,6 +117,8 @@ export default function App() {
   const sessionsRef = useRef<ViewerSession[]>([])
   // Consecutive discovery polls that found no agent at all.
   const emptyPolls = useRef(0)
+  // The session and view the thread payload belongs to; a scope change alone does not reset it.
+  const stream = useRef<{ session: string | null; view: string }>({ session: null, view: "" })
   // How the next URL write is made: a click on the sidebar adds a history entry (Back works);
   // a fallback or a first resolution replaces the current one.
   const urlMode = useRef<"push" | "replace">("replace")
@@ -137,7 +145,10 @@ export default function App() {
   function applyTrack(next: ScopeTrack) {
     track.current = next
     if (next.scope) requestedScope.current = null
-    setScope((current) => (sameScopeState(current, next.scope) ? current : next.scope))
+    const nextScope = next.scope
+    startTransition(() => {
+      setScope((current) => (sameScopeState(current, nextScope) ? current : nextScope))
+    })
   }
 
   // One observation of what exists now (a discovery or a thread poll) advances the scope.
@@ -211,10 +222,14 @@ export default function App() {
     let cursor: number | null = null
     let delay = 1_500
     let timer: number | undefined
-    setPayload(null)
+    // A scope change inside one session keeps what is on screen until the scoped window arrives.
+    if (stream.current.session !== sessionName || stream.current.view !== view) {
+      setPayload(null)
+      setOptimistic([])
+    }
+    stream.current = { session: sessionName, view }
     setThreadError(null)
     setEarlierLoading(false)
-    setOptimistic([])
     invalidateDetails(sessionName)
 
     async function tick() {
@@ -223,8 +238,8 @@ export default function App() {
         const payload = await fetchThread(
           sessionName!,
           cursor == null || revision == null
-            ? { scope: activeScope, limit: 150, signal: controller.signal }
-            : { scope: activeScope, since: cursor, revision, signal: controller.signal },
+            ? { scope: activeScope, limit: 150, pane: scopePane, window: scopeWindow, signal: controller.signal }
+            : { scope: activeScope, since: cursor, revision, pane: scopePane, window: scopeWindow, signal: controller.signal },
         )
         if (cancelled) return
         if (cursor == null || revision == null || payload.reset) {
@@ -241,7 +256,14 @@ export default function App() {
           agents: payload.agents,
           capturedAt: payload.capturedAt,
         }
-        setMeta(nextMeta)
+        setMeta((previous) =>
+          previous &&
+          previous.session === nextMeta.session &&
+          previous.serverId === nextMeta.serverId &&
+          previous.version === nextMeta.version
+            ? previous
+            : nextMeta,
+        )
         observe(mergeLive(sessionsRef.current, payload.session, nextMeta))
         setThreadError(null)
         delay = 1_500
@@ -262,7 +284,7 @@ export default function App() {
       controller.abort()
       if (timer != null) window.clearTimeout(timer)
     }
-  }, [sessionName, view, kick])
+  }, [sessionName, view, scopePane, scopeWindow, kick])
 
   async function loadEarlier() {
     const active = view === "all" ? all : branch
@@ -274,6 +296,8 @@ export default function App() {
         before: active.earlier,
         revision: active.revision,
         limit: 150,
+        pane: scopePane,
+        window: scopeWindow,
       })
       if (payload.reset) {
         setKick((value) => value + 1)
@@ -348,6 +372,10 @@ export default function App() {
     return optimistic.filter((message) => ids.has(message.paneId))
   }, [optimistic, agents])
 
+  // One timeline for the thread, its presence line and the delivery rows. ChannelView must not
+  // rebuild it during an unchanged poll.
+  const timeline = useMemo(() => channelTimeline(scopeEvents, scopeOptimistic), [scopeEvents, scopeOptimistic])
+
   // The composer addresses one agent of the scope: the one picked, else the pane itself or the
   // most recently active agent of the window or session.
   const target = useMemo(
@@ -358,8 +386,8 @@ export default function App() {
 
   // The running agents of the scope, shown by the presence line above the composer (XTRM-1035).
   const presence = useMemo(
-    () => splitPresence(channelTimeline(scopeEvents, scopeOptimistic), agents).presence,
-    [scopeEvents, scopeOptimistic, agents],
+    () => splitPresence(timeline, agents).presence,
+    [timeline, agents],
   )
 
   function messageAgent(agent: ViewerAgent) {
@@ -370,10 +398,17 @@ export default function App() {
     })
   }
 
-  function replyToAgent(agent: ViewerAgent) {
-    messageAgent(agent)
-    setReplyPaneId(scope ? replyIdFor(scope.kind, agent.id) : null)
-  }
+  const replyToAgent = useCallback(
+    (agent: ViewerAgent) => {
+      messageAgent(agent)
+      setReplyPaneId(scope ? replyIdFor(scope.kind, agent.id) : null)
+    },
+    [scope],
+  )
+
+  const dismissOptimistic = useCallback((id: string) => {
+    setOptimistic((previous) => previous.filter((entry) => entry.id !== id))
+  }, [])
 
   function select(next: Scope) {
     if (sameScope(next, scope)) {
@@ -401,6 +436,8 @@ export default function App() {
       status: "sending",
     }
     setOptimistic((previous) => [...previous, message])
+    // A send is an explicit request for the newest row; the scroller keeps it pinned until a gesture.
+    sendScrollRef.current?.requestSendScroll()
     try {
       await sendPrompt(agent.paneId, text)
       setOptimistic((previous) =>
@@ -475,7 +512,8 @@ export default function App() {
       ) : (
         <>
           <div className="min-h-0 flex-1">
-            <MessageScrollerProvider key={scrollerKey} threadKey={scrollerKey} autoScroll defaultScrollPosition="end">
+            <MessageScrollerProvider threadKey={scrollerKey}>
+              <MessageScrollerApi onReady={(api) => (sendScrollRef.current = api)} />
               <MessageScroller>
                 <MessageScrollerViewport>
                   <MessageScrollerContent
@@ -488,7 +526,7 @@ export default function App() {
                     {view === "channel" ? (
                       branch ? (
                         <ChannelView
-                          events={scopeEvents}
+                          timeline={timeline}
                           agents={agents}
                           session={branch.session}
                           readKey={threadReadKey(branch.serverId, scope ? scopeRowKey(scope) : branch.session)}
@@ -499,10 +537,7 @@ export default function App() {
                               .sort()
                               .join(",")}`,
                           ]}
-                          optimistic={scopeOptimistic}
-                          onDismissOptimistic={(id) =>
-                            setOptimistic((previous) => previous.filter((entry) => entry.id !== id))
-                          }
+                          onDismissOptimistic={dismissOptimistic}
                           hasEarlier={branch.hasEarlier}
                           earlierTurns={branch.earlierTurns}
                           earlierLoading={earlierLoading}
@@ -510,7 +545,7 @@ export default function App() {
                           onReply={replyToAgent}
                         />
                       ) : (
-                        <div className="py-20 text-center text-xs text-ink-muted">Loading thread…</div>
+                        <div data-testid="thread-loading" className="py-20 text-center text-xs text-ink-muted">Loading thread…</div>
                       )
                     ) : all ? (
                       <Suspense fallback={<div className="py-20 text-center text-xs text-ink-muted">Loading events…</div>}>
@@ -526,7 +561,7 @@ export default function App() {
                         />
                       </Suspense>
                     ) : (
-                      <div className="py-20 text-center text-xs text-ink-muted">Loading events…</div>
+                      <div data-testid="thread-loading" className="py-20 text-center text-xs text-ink-muted">Loading events…</div>
                     )}
                   </MessageScrollerContent>
                 </MessageScrollerViewport>

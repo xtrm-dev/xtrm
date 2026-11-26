@@ -74,6 +74,11 @@ let metaCalls = 0
 let fullCalls = 0
 let armed = false
 let appended = 0
+let echoed = false
+let echoServed = false
+let tailAppend = false
+let tailAppended = false
+const sends = []
 
 const server = await createServer({
   root: process.cwd(),
@@ -100,6 +105,11 @@ await page.route("**/api/**", async (route) => {
   const url = new URL(route.request().url())
   if (url.pathname === "/api/sessions") {
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sessions) })
+  }
+  if (url.pathname === "/api/send") {
+    sends.push(JSON.parse(route.request().postData() ?? "{}"))
+    echoed = true
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) })
   }
   if (url.pathname !== "/api/thread") {
     return route.fulfill({ status: 404, contentType: "application/json", body: "{}" })
@@ -148,6 +158,40 @@ await page.route("**/api/**", async (route) => {
       raw: null,
     })
     appended += 1
+  }
+  if (echoed && !echoServed) {
+    echoServed = true
+    events.push({
+      id: "a1:echo",
+      agentId: "a1",
+      agentName: "anchor-agent",
+      seq: 10_003,
+      at: Date.now(),
+      kind: "user",
+      role: "user",
+      summary: "SEND PIN",
+      text: "SEND PIN",
+      onBranch: true,
+      raw: null,
+    })
+  }
+  if (tailAppend && !tailAppended) {
+    tailAppended = true
+    events.push({
+      id: "a1:tail",
+      agentId: "a1",
+      agentName: "anchor-agent",
+      seq: 10_004,
+      at: Date.now(),
+      kind: "assistant",
+      role: "assistant",
+      summary: "TAIL APPEND",
+      text: "TAIL APPEND",
+      parts: [{ type: "text", text: "TAIL APPEND" }],
+      stopReason: "stop",
+      onBranch: true,
+      raw: null,
+    })
   }
   return route.fulfill({
     status: 200,
@@ -221,8 +265,84 @@ try {
   const back = await state()
   assert.ok(back.distance <= 2, `pill did not return to the end: ${back.distance}px`)
   assert.equal(back.pill, "false")
+
+  // 4. A send from mid-thread overrides the follow policy: the new row is visible at once.
+  await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.scrollTop = 0
+  })
+  await settle(page)
+  const composer = page.locator("[data-composer-input]")
+  await composer.fill("SEND PIN")
+  await composer.press("Enter")
+  await page.waitForFunction(
+    () => {
+      const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+      return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 2
+    },
+    undefined,
+    { timeout: 4_000 },
+  )
+  await settle(page)
+  const sentState = await state()
+  assert.ok(sentState.distance <= 2, `send did not reach the end: ${sentState.distance}px`)
+  assert.equal(sentState.pill, "false", "the pill shows after the reader sent a message")
+  assert.deepEqual(sends.at(-1), { paneId: "%1", text: "SEND PIN" }, "the send reached the agent")
+
+  // 5. The echo replaces the optimistic row without losing the pin or counting itself as new.
+  await page.waitForFunction(
+    () => !document.querySelector('[data-slot="message-scroller-viewport"]')?.dataset.restoring,
+    undefined,
+    { timeout: 1_000 },
+  ).catch(() => {})
+  await page.waitForTimeout(2_200)
+  await settle(page)
+  const echoedState = await state()
+  assert.ok(echoedState.distance <= 2, `the echo lost the pin: ${echoedState.distance}px`)
+  assert.equal(echoedState.pill, "false", "the echo counted as new")
+  const pinRows = await page.locator('[data-slot="message-scroller-item"]', { hasText: "SEND PIN" }).count()
+  assert.equal(pinRows, 1, `the optimistic row and its echo both rendered (${pinRows})`)
+
+  // 6. The @mention path uses the same send intent: scroll away, pick an agent, send, land at the end.
+  await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.scrollTop = 0
+  })
+  await settle(page)
+  await composer.fill("@")
+  await page.locator("[data-composer-menu] button").first().click()
+  await composer.press("End")
+  await composer.type(" MENTION PIN")
+  await composer.press("Enter")
+  await page.waitForFunction(
+    () => {
+      const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+      return viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 2
+    },
+    undefined,
+    { timeout: 4_000 },
+  )
+  await settle(page)
+  const mentionState = await state()
+  assert.ok(mentionState.distance <= 2, `mention send did not reach the end: ${mentionState.distance}px`)
+  assert.equal(mentionState.pill, "false", "the pill shows after a mention send")
+  assert.match(sends.at(-1)?.text ?? "", /MENTION PIN/, "the mention send reached the agent")
+
+  // 7. A reader gesture clears the send intent: later growth must not pull them down.
+  await page.evaluate(() => {
+    const viewport = document.querySelector('[data-slot="message-scroller-viewport"]')
+    viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }))
+    viewport.scrollTop = 0
+  })
+  await settle(page)
+  tailAppend = true
+  await page.waitForTimeout(2_200)
+  await settle(page)
+  const gestureState = await state()
+  assert.ok(gestureState.scrollTop < 4, `the reader was pulled back to ${gestureState.scrollTop}px after a gesture`)
+  assert.equal(gestureState.pill, "true", "the pill is hidden after the reader scrolls away")
   assert.equal(errors.length, 0, `console errors: ${errors.join(" | ")}`)
-  console.log(JSON.stringify({ atEnd, away, back }, null, 2))
+  console.log(JSON.stringify({ atEnd, away, back, sent: sentState, echoed: echoedState }, null, 2))
 } finally {
   await browser.close()
   await server.close()

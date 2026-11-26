@@ -31,6 +31,9 @@ export interface ThreadRequest {
   before?: number | null
   since?: number | null
   revision?: string | null
+  /** The pane (%N) or window (@N, or an index) the thread is cut to; none means the whole session. */
+  pane?: string | null
+  window?: string | null
   signal?: AbortSignal
 }
 
@@ -49,6 +52,8 @@ export function fetchThread(session: string, options: ThreadRequest | "branch" |
   if (requestOptions.before != null) params.set("before", String(requestOptions.before))
   if (requestOptions.since != null) params.set("since", String(requestOptions.since))
   if (requestOptions.revision) params.set("revision", requestOptions.revision)
+  if (requestOptions.pane) params.set("p", requestOptions.pane)
+  else if (requestOptions.window) params.set("w", requestOptions.window)
   const signal = requestOptions.signal
   const run = threadQueue.then(
     () => {

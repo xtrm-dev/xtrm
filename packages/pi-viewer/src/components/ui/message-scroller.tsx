@@ -20,8 +20,12 @@ interface ScrollerContextValue {
   registerViewport: (element: HTMLDivElement | null) => void
   registerContent: (element: HTMLDivElement | null) => void
   sync: () => void
+  scheduleSync: () => void
+  scheduleScroll: () => void
   handleScroll: () => void
   scrollToEnd: (options?: ScrollOptions) => void
+  /** A send overrides the follow policy and any pending restore until the reader scrolls. */
+  requestSendScroll: () => void
 }
 
 const ScrollerContext = React.createContext<ScrollerContextValue | null>(null)
@@ -50,14 +54,13 @@ function MessageScrollerProvider({
   children: React.ReactNode
   /** Names the thread; its scroll position is remembered per key. */
   threadKey?: string
-  autoScroll?: boolean
-  defaultScrollPosition?: "start" | "end" | "last-anchor"
-  scrollEdgeThreshold?: number
-  scrollMargin?: number
-  scrollPreviousItemPeek?: number
 }) {
   const viewportRef = React.useRef<HTMLDivElement | null>(null)
   const contentRef = React.useRef<HTMLDivElement | null>(null)
+  const rowIndexRef = React.useRef<Map<string, HTMLElement>>(new Map())
+  const rowTopsRef = React.useRef<{ id: string; top: number; bottom: number }[]>([])
+  const scrollFrameRef = React.useRef(0)
+  const syncFrameRef = React.useRef(0)
   const atBottomRef = React.useRef(true)
   const anchorRef = React.useRef<{ id: string; top: number } | null>(null)
   const initializedRef = React.useRef(false)
@@ -76,6 +79,8 @@ function MessageScrollerProvider({
   const restoreRef = React.useRef<{ id: string; top: number } | null>(null)
   const restoreDeadlineRef = React.useRef(0)
   const restoreFrameRef = React.useRef(0)
+  // Set by a send; survives the optimistic-to-echo swap and is cleared only by a reader gesture.
+  const sendIntentRef = React.useRef(false)
   const threadKeyRef = React.useRef(threadKey)
   threadKeyRef.current = threadKey
 
@@ -132,23 +137,51 @@ function MessageScrollerProvider({
     if (next) setNewCount(0)
   }, [])
 
-  const captureAnchor = React.useCallback(() => {
-    const viewport = viewportRef.current
+  const indexRows = React.useCallback(() => {
     const content = contentRef.current
-    if (!viewport || !content) return
-    const viewportTop = viewport.getBoundingClientRect().top
-    let next: { id: string; top: number } | null = null
+    if (!content) return
+    const index = new Map<string, HTMLElement>()
+    const tops: { id: string; top: number; bottom: number }[] = []
+    const contentTop = content.getBoundingClientRect().top
     for (const child of Array.from(content.children)) {
       if (!(child instanceof HTMLElement)) continue
       const id = child.dataset.messageId
       if (!id) continue
+      index.set(id, child)
       const rect = child.getBoundingClientRect()
-      if (rect.bottom > viewportTop + 1) {
-        next = { id, top: rect.top - viewportTop }
-        break
+      tops.push({ id, top: rect.top - contentTop, bottom: rect.bottom - contentTop })
+    }
+    rowIndexRef.current = index
+    rowTopsRef.current = tops
+  }, [])
+
+  const elementFor = React.useCallback((id: string) => rowIndexRef.current.get(id), [])
+
+  const captureAnchor = React.useCallback(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const rows = rowTopsRef.current
+    if (!rows.length) {
+      anchorRef.current = null
+      return
+    }
+    // Rows are measured once per content change, not on every scroll event. Find the first
+    // row whose bottom passes the top edge.
+    const y = viewport.scrollTop + 1
+    let low = 0
+    let high = rows.length - 1
+    let found = -1
+    while (low <= high) {
+      const middle = (low + high) >> 1
+      if (rows[middle].bottom > y) {
+        found = middle
+        high = middle - 1
+      } else {
+        low = middle + 1
       }
     }
-    anchorRef.current = next
+    const row = found >= 0 ? rows[found] : rows[rows.length - 1]
+    anchorRef.current = { id: row.id, top: row.top - viewport.scrollTop }
   }, [])
 
   const scrollToEnd = React.useCallback(
@@ -178,6 +211,11 @@ function MessageScrollerProvider({
     [setBottom, stopGlide],
   )
 
+  const requestSendScroll = React.useCallback(() => {
+    sendIntentRef.current = true
+    scrollToEnd()
+  }, [scrollToEnd])
+
   const sync = React.useCallback(() => {
     const viewport = viewportRef.current
     if (!viewport) return
@@ -200,9 +238,27 @@ function MessageScrollerProvider({
       return
     }
 
+    if (sendIntentRef.current) {
+      // A send wins over a remembered position or an anchor: the new row must be visible.
+      restoreRef.current = null
+      delete viewport.dataset.restoring
+      if (restoreFrameRef.current) cancelAnimationFrame(restoreFrameRef.current)
+      restoreFrameRef.current = 0
+      anchorRef.current = null
+      atBottomRef.current = true
+      setBottom(true)
+      setReady(true)
+      const target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      if (Math.abs(viewport.scrollTop - target) > 1) {
+        stopGlide()
+        suppressRef.current = target
+        viewport.scrollTop = target
+      }
+      return
+    }
+
     if (restoreRef.current) {
       const wanted = restoreRef.current
-      const content = contentRef.current
       if (restoreExpired(performance.now(), restoreDeadlineRef.current)) {
         restoreRef.current = null
         delete viewport.dataset.restoring
@@ -216,11 +272,7 @@ function MessageScrollerProvider({
             if (restoreRef.current) sync()
           })
         }
-        const element = content
-          ? Array.from(content.children).find(
-              (child): child is HTMLElement => child instanceof HTMLElement && child.dataset.messageId === wanted.id,
-            )
-          : undefined
+        const element = elementFor(wanted.id)
         if (element) {
           restoreRef.current = null
           delete viewport.dataset.restoring
@@ -262,15 +314,7 @@ function MessageScrollerProvider({
       return
     }
 
-    const content = contentRef.current
-    if (!content) return
-    let element: HTMLElement | undefined
-    for (const child of Array.from(content.children)) {
-      if (child instanceof HTMLElement && child.dataset.messageId === anchor.id) {
-        element = child
-        break
-      }
-    }
+    const element = elementFor(anchor.id)
     if (!element) {
       captureAnchor()
       return
@@ -286,12 +330,35 @@ function MessageScrollerProvider({
     } else {
       anchor.top = top
     }
-  }, [captureAnchor, glide, stopGlide])
+  }, [captureAnchor, elementFor, glide, stopGlide])
+
+  const scheduleSync = React.useCallback(() => {
+    if (syncFrameRef.current) return
+    syncFrameRef.current = requestAnimationFrame(() => {
+      syncFrameRef.current = 0
+      sync()
+    })
+  }, [sync])
+
+  const scheduleScroll = React.useCallback(() => {
+    if (scrollFrameRef.current) return
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = 0
+      handleScrollRef.current()
+    })
+  }, [])
 
   const handleScroll = React.useCallback(() => {
     const viewport = viewportRef.current
     if (!viewport) return
     if (glidingRef.current) return
+    if (sendIntentRef.current) {
+      // The send owns the viewport until a reader gesture clears the intent. Growth and the
+      // optimistic-to-echo swap both land here; the pill must not appear meanwhile.
+      setBottom(true)
+      anchorRef.current = null
+      return
+    }
 
     if (suppressRef.current !== null) {
       if (Math.abs(viewport.scrollTop - suppressRef.current) < 1) {
@@ -333,7 +400,49 @@ function MessageScrollerProvider({
 
   const registerContent = React.useCallback((element: HTMLDivElement | null) => {
     contentRef.current = element
-  }, [])
+    if (element) requestAnimationFrame(indexRows)
+  }, [indexRows])
+
+  // The provider stays mounted across a scope switch. Save the old thread and apply the new
+  // thread's remembered position (or its end) without remounting every row.
+  const lastThreadKeyRef = React.useRef(threadKey)
+  React.useEffect(() => {
+    if (lastThreadKeyRef.current === threadKey) return
+    const previous = lastThreadKeyRef.current
+    lastThreadKeyRef.current = threadKey
+    if (previous) {
+      const anchor = anchorRef.current
+      remember(previous, {
+        atEnd: atBottomRef.current,
+        anchorId: anchor?.id ?? null,
+        anchorTop: anchor?.top ?? 0,
+      })
+    }
+    sendIntentRef.current = false
+    restoreRef.current = null
+    anchorRef.current = null
+    suppressRef.current = null
+    stopGlide()
+    if (pinTimerRef.current) clearTimeout(pinTimerRef.current)
+    const saved = threadKey ? recall(threadKey) : undefined
+    const viewport = viewportRef.current
+    if (saved && !saved.atEnd && saved.anchorId) {
+      restoreRef.current = { id: saved.anchorId, top: saved.anchorTop }
+      restoreDeadlineRef.current = performance.now() + RESTORE_MS
+      atBottomRef.current = false
+      setBottom(false)
+      setReady(false)
+      if (viewport) viewport.dataset.restoring = "true"
+    } else {
+      atBottomRef.current = true
+      setBottom(true)
+      setReady(true)
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight
+      }
+    }
+    scheduleSync()
+  }, [threadKey, scheduleSync, setBottom, stopGlide])
 
   // Leaving a thread remembers where the reader was and ends any glide or pin timer.
   React.useEffect(() => {
@@ -355,19 +464,35 @@ function MessageScrollerProvider({
     const content = contentRef.current
     const viewport = viewportRef.current
     if (!content || typeof ResizeObserver === "undefined") return
-    const observer = new ResizeObserver(() => sync())
+    const observer = new ResizeObserver(() => {
+      indexRows()
+      scheduleSync()
+    })
     observer.observe(content)
     // A composer growth or window resize changes only the viewport height. At the
     // bottom the reader must follow; mid-thread the anchor must survive.
     if (viewport) observer.observe(viewport)
     return () => observer.disconnect()
-  }, [sync])
+  }, [indexRows, scheduleSync])
+
+  React.useEffect(() => {
+    const content = contentRef.current
+    if (!content || typeof MutationObserver === "undefined") return
+    const observer = new MutationObserver(() => {
+      indexRows()
+      scheduleSync()
+    })
+    observer.observe(content, { childList: true })
+    indexRows()
+    return () => observer.disconnect()
+  }, [indexRows, scheduleSync])
 
   React.useEffect(() => {
     const viewport = viewportRef.current
     if (!viewport) return
     const cancel = () => {
-      // A reader gesture ends a pending restore: their position wins over the remembered one.
+      // A reader gesture ends a pending restore and any send intent: their position wins.
+      sendIntentRef.current = false
       restoreRef.current = null
       delete viewport.dataset.restoring
       if (restoreFrameRef.current) cancelAnimationFrame(restoreFrameRef.current)
@@ -402,10 +527,27 @@ function MessageScrollerProvider({
       registerViewport,
       registerContent,
       sync,
+      scheduleSync,
+      scheduleScroll,
       handleScroll,
       scrollToEnd,
+      requestSendScroll,
     }),
-    [atBottom, ready, newCount, setWorking, reportNew, registerViewport, registerContent, sync, handleScroll, scrollToEnd],
+    [
+      atBottom,
+      ready,
+      newCount,
+      setWorking,
+      reportNew,
+      registerViewport,
+      registerContent,
+      sync,
+      scheduleSync,
+      scheduleScroll,
+      handleScroll,
+      scrollToEnd,
+      requestSendScroll,
+    ],
   )
 
   return <ScrollerContext.Provider value={value}>{children}</ScrollerContext.Provider>
@@ -425,13 +567,17 @@ function MessageScroller({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function MessageScrollerViewport({ className, onScroll, ...props }: React.ComponentProps<"div">) {
-  const { registerViewport, handleScroll, sync } = useScrollerContext()
-  React.useLayoutEffect(() => sync())
+  const { registerViewport, scheduleScroll, sync, scheduleSync, ready } = useScrollerContext()
+  // First paint is synchronous; every later render coalesces into one frame.
+  React.useLayoutEffect(() => {
+    if (!ready) sync()
+    else scheduleSync()
+  }, [ready, sync, scheduleSync])
   return (
     <div
       ref={registerViewport}
       onScroll={(event) => {
-        handleScroll()
+        scheduleScroll()
         onScroll?.(event)
       }}
       data-slot="message-scroller-viewport"
@@ -458,15 +604,13 @@ function MessageScrollerContent({ className, ...props }: React.ComponentProps<"d
 
 function MessageScrollerItem({
   messageId,
-  scrollAnchor = false,
   className,
   ...props
-}: React.ComponentProps<"div"> & { messageId?: string; scrollAnchor?: boolean }) {
+}: React.ComponentProps<"div"> & { messageId?: string }) {
   return (
     <div
       data-slot="message-scroller-item"
       data-message-id={messageId}
-      data-scroll-anchor={scrollAnchor ? "true" : "false"}
       className={cn("min-w-0 shrink-0", className)}
       {...props}
     />
@@ -511,6 +655,18 @@ function MessageScrollerButton({
   )
 }
 
+function MessageScrollerApi({
+  onReady,
+}: {
+  onReady: (api: { requestSendScroll: () => void; scrollToEnd: (options?: ScrollOptions) => void }) => void
+}) {
+  const { requestSendScroll, scrollToEnd } = useScrollerContext()
+  React.useEffect(() => {
+    onReady({ requestSendScroll, scrollToEnd })
+  }, [onReady, requestSendScroll, scrollToEnd])
+  return null
+}
+
 function useMessageScroller() {
   const { scrollToEnd, setWorking, reportNew, atBottom, ready } = useScrollerContext()
   return {
@@ -531,5 +687,6 @@ export {
   MessageScrollerContent,
   MessageScrollerItem,
   MessageScrollerButton,
+  MessageScrollerApi,
   useMessageScroller,
 }

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { memo, useEffect, useMemo, useRef, useState } from "react"
 
 import { Icon } from "@/shell/icon"
 import { ActivityDisclosure } from "@/components/ActivityDisclosure"
@@ -14,10 +14,9 @@ import { StoppedTurn } from "@/components/presence/StoppedTurn"
 import { MessageScrollerItem, useMessageScroller } from "@/components/ui/message-scroller"
 import { DELIVERY_WORD, deliveryOfOptimistic, deliveryOfUser, latestReplyAt, latestUserIds, type Delivery } from "@/lib/delivery"
 import { dayKey, dayLabel, fullDate, monogram, stamp } from "@/lib/format"
-import type { OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
 import { replyAvailability, replyLabel, replyTitle } from "@/lib/reply"
-import { channelTimeline, type Turn } from "@/lib/thread"
+import type { ChannelItem, Turn } from "@/lib/thread"
 import { migrateLastSeen, newCount, newSinceIndex, saveLastSeen, shouldSaveLastSeen, unseenTimelineItems } from "@/lib/readstate"
 import { cn } from "@/lib/utils"
 import type { ViewerAgent, ViewerEvent } from "@/shared/types"
@@ -120,7 +119,7 @@ export function ReplyButton({
   )
 }
 
-function UserMessage({
+const UserMessage = memo(function UserMessage({
   event,
   agentName,
   delivery,
@@ -140,18 +139,10 @@ function UserMessage({
   onDismiss?: () => void
 }) {
   const body = event.text ?? event.summary
-  const ref = useRef<HTMLDivElement | null>(null)
-  const [tall, setTall] = useState(false)
   const [expanded, setExpanded] = useState(false)
-
-  useLayoutEffect(() => {
-    const node = ref.current
-    if (!node) return
-    // Clamp height is 11rem; measure unclamped content against the same rem.
-    const limit = parseFloat(getComputedStyle(document.documentElement).fontSize) * 11
-    setTall(node.scrollHeight > limit + 4)
-  }, [body])
-
+  // CSS clamps at eleven lines. Estimate from the text instead of measuring every bubble at mount:
+  // the old getComputedStyle + scrollHeight pair forced one layout per operator message.
+  const tall = body.length > 640 || body.split("\n").length > 12
   const folded = tall && !expanded
 
   return (
@@ -166,7 +157,7 @@ function UserMessage({
               joinsBelow && "rounded-br-sm",
             )}
           >
-            <div ref={ref} className={cn(folded && "xtrm-bubble-fold xtrm-fold-fade")}>
+            <div className={cn(folded && "xtrm-bubble-fold xtrm-fold-fade")}>
               {body}
             </div>
             {tall ? <FoldToggle className="mt-2" expanded={expanded} onToggle={() => setExpanded((value) => !value)} /> : null}
@@ -178,19 +169,17 @@ function UserMessage({
           data-action-row="user"
           className="flex w-full min-w-0 items-center justify-end gap-2 text-xs whitespace-nowrap"
         >
-          {/* Time and recipient reveal on hover (pinned on the newest message); the delivery mark stays
-              visible at rest on every sent message, as in a chat app (operator, 2026-11-26). */}
-          <div
-            className="xtrm-meta ml-auto flex min-w-0 items-center gap-1.5 tabular text-ink-muted"
-            data-pinned={pinned || delivery === "failed" ? "true" : undefined}
-          >
+          {/* Time, recipient and the delivery mark read as one line, visible at rest on every sent message,
+              as in a chat app (operator, 2026-11-26): a mark alone looked like a floating icon. Only Copy
+              reveals on hover. */}
+          <div className="ml-auto flex min-w-0 items-center gap-1.5 tabular text-ink-muted">
             <span className="shrink-0" title={fullDate(event.at)}>
               {stamp(event.at)}
             </span>
             <span className="shrink-0 text-border-strong">·</span>
             <span className="min-w-0 truncate">to {agentName}</span>
+            {delivery ? <DeliveryMark delivery={delivery} error={error} /> : null}
           </div>
-          {delivery ? <DeliveryMark delivery={delivery} error={error} /> : null}
           {delivery === "failed" && onDismiss ? (
             <button
               type="button"
@@ -212,9 +201,9 @@ function UserMessage({
       </MessageContent>
     </Message>
   )
-}
+})
 
-function TurnView({
+const TurnView = memo(function TurnView({
   turn,
   agent,
   session,
@@ -227,6 +216,10 @@ function TurnView({
   pinned: boolean
   onReply?: (agent: ViewerAgent) => void
 }) {
+  if (import.meta.env.DEV) {
+    const w = window as Window & { __turnRenders?: number }
+    w.__turnRenders = (w.__turnRenders ?? 0) + 1
+  }
   const name = agent?.name ?? turn.agentName
   const status = agent?.status ?? "unknown"
   const finalText = turn.final?.text?.trim() ?? ""
@@ -274,7 +267,7 @@ function TurnView({
       </Message>
     </div>
   )
-}
+})
 
 function DayDivider({ at }: { at: number }) {
   return (
@@ -297,12 +290,11 @@ function NewDivider({ count }: { count: number }) {
 }
 
 export function ChannelView({
-  events,
+  timeline,
   agents,
   session,
   readKey,
   legacyReadKeys = [],
-  optimistic,
   onDismissOptimistic,
   hasEarlier = false,
   earlierTurns = 0,
@@ -310,14 +302,14 @@ export function ChannelView({
   onLoadEarlier,
   onReply,
 }: {
-  events: ViewerEvent[]
+  /** Built once in App: the channel, inline cards, operator rows and optimistic rows. */
+  timeline: ChannelItem[]
   agents: ViewerAgent[]
   session: string
   /** Stable identity of the scope, prefixed with the tmux server id. */
   readKey: string
   /** Pre-migration keys (server-less scope key, old session:agentIds key). */
   legacyReadKeys?: string[]
-  optimistic: OptimisticMessage[]
   onDismissOptimistic: (id: string) => void
   hasEarlier?: boolean
   earlierTurns?: number
@@ -329,7 +321,7 @@ export function ChannelView({
   // Running turns live in the presence line above the composer (XTRM-1035): the thread shows
   // settled work, and a turn whose agent stopped shows as a stopped row.
   // Delivery reads the unsplit timeline (`channel`); rows render from the split one (`items`).
-  const channel = useMemo(() => channelTimeline(events, optimistic), [events, optimistic])
+  const channel = timeline
   const items = useMemo(() => splitPresence(channel, agents).timeline, [channel, agents])
   const newest = useMemo(() => items.reduce((max, item) => Math.max(max, item.at), 0), [items])
   const byId = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents])
@@ -359,9 +351,14 @@ export function ChannelView({
 
   // "New since you looked": the baseline is the last-read time of this scope when it was opened.
   // It stays frozen for the visit, so the divider does not walk away while the reader reads.
-  const [baseline] = useState(() => migrateLastSeen(readKey, legacyReadKeys))
-  const dividerAt = newSinceIndex(items, baseline)
-  const unread = newCount(items, baseline)
+  // Reading localStorage is a mount-path layout hazard; load it after the first paint.
+  const [baseline, setBaseline] = useState<number | null>(null)
+  const legacyKey = legacyReadKeys.join("|")
+  useEffect(() => {
+    setBaseline(migrateLastSeen(readKey, legacyReadKeys))
+  }, [readKey, legacyKey])
+  const dividerAt = baseline == null ? -1 : newSinceIndex(items, baseline)
+  const unread = baseline == null ? 0 : newCount(items, baseline)
   const [visible, setVisible] = useState(() => !document.hidden)
   useEffect(() => {
     const onChange = () => setVisible(!document.hidden)
