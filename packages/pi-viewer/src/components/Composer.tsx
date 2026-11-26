@@ -257,23 +257,26 @@ export function Composer({
                 void submit()
               }
             }}
-            className="scrollbar-thin block max-h-52 min-h-[calc(1lh+1rem)] w-full resize-none bg-transparent px-3.5 py-2.5 pr-12 text-[0.875rem] leading-5 text-ink placeholder:text-ink-muted focus:outline-none"
+            className="scrollbar-thin block max-h-52 min-h-[calc(1lh+1.75rem)] w-full resize-none bg-transparent px-3.5 py-3.5 pr-[3.5rem] text-[0.9375rem] leading-6 text-ink placeholder:text-ink-muted focus:outline-none"
           />
 
-          {/* The box's inner bottom row, as in Claude Desktop (XTRM-1054 rev 2): an empty slot on the
-              left for a control the viewer does not have yet (attach), send on the right. It overlays
-              the box instead of taking a row, so an empty one-line composer stays 40px high. */}
+          {/* The box's inner bottom row, as in Claude Desktop (XTRM-1054, XTRM-1056): an empty slot on
+              the left for a control the viewer does not have yet (attach), send on the right. It
+              overlays the box instead of taking a row. The send button is 32px around a 16px glyph and
+              sits 10px above the box's bottom edge, which centres it on the last text line (padding
+              14px + half of the 24px line above the bottom padding) in the one-line state and keeps it
+              anchored to the last line as the box grows. Its right inset is the text's left inset. */}
           <div
             data-composer-controls=""
-            className="pointer-events-none absolute inset-x-3.5 bottom-2 flex items-center justify-between"
+            className="pointer-events-none absolute inset-x-3.5 bottom-2.5 flex items-end justify-between"
           >
-            <span data-composer-attach-slot="" aria-hidden="true" className="size-7" />
+            <span data-composer-attach-slot="" aria-hidden="true" className="size-8" />
             <button
               type="button"
               onClick={() => void submit()}
               disabled={!text.trim() || !target || sending}
               aria-label="Send"
-              className="pointer-events-auto flex size-7 items-center justify-center rounded-md bg-github text-github-ink transition-opacity hover:bg-github-hover disabled:opacity-30"
+              className="pointer-events-auto flex size-8 items-center justify-center rounded-md bg-github text-github-ink transition-opacity hover:bg-github-hover disabled:opacity-30"
             >
               {sending ? (
                 <LoaderCircleIcon className="size-4 animate-spin" />
@@ -287,7 +290,9 @@ export function Composer({
         {/* The agent selector lives under the box, as in Claude Desktop (XTRM-1054): right-aligned on
             one line, the target, its model and its bare effort, muted at the 13px step against the
             14px prompt, 12px apart, no chips and no borders. */}
-        <div data-composer-under-row="" className="mt-1.5 flex min-w-0 items-center gap-3 px-1">
+        {/* The row's right edge meets the send button's right edge, not the box's outer edge
+            (XTRM-1056): the group ends at the same 14px inset the box uses for its text and send. */}
+        <div data-composer-under-row="" className="mt-1.5 flex min-w-0 items-center gap-3 pl-1 pr-3.5">
           <span className="hidden min-w-0 truncate text-2xs text-ink-muted sm:block">
             @ to mention · Shift+Enter for a new line
           </span>
@@ -299,7 +304,7 @@ export function Composer({
               onClick={() => setMenu((value) => (value === "to" ? "none" : "to"))}
               aria-expanded={menu === "to"}
               aria-label={`Target: ${target ? [target.name, meta.label].filter(Boolean).join(", ") : "no agent"}`}
-              className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-md text-sm text-ink-muted transition-colors hover:text-ink"
+              className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-md text-base text-ink-muted transition-colors hover:text-ink"
             >
               <StatusDot status={target?.status ?? "unknown"} decorative />
               {target ? (
@@ -314,7 +319,7 @@ export function Composer({
               <span
                 data-composer-target-model=""
                 title={meta.label ?? meta.model}
-                className="min-w-0 max-w-56 truncate text-sm text-ink-muted"
+                className="min-w-0 max-w-56 truncate text-base text-ink-muted"
               >
                 {meta.model}
               </span>
@@ -323,7 +328,7 @@ export function Composer({
               <span
                 data-composer-target-effort=""
                 title={`thinking ${meta.effort}`}
-                className="shrink-0 text-sm text-ink-muted"
+                className="shrink-0 text-base text-ink-muted"
               >
                 {meta.effort}
               </span>

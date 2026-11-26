@@ -1,7 +1,7 @@
-// Composer screenshots (XTRM-1054): the empty box, a typed draft, the To menu and a Claude target.
+// Composer screenshots (XTRM-1054, XTRM-1056): the empty box, a typed draft, the To menu and a Claude target.
 //
 // Runs the app in-process with a mocked API on its own port (stopped at the end) and writes PNGs to
-// docs/design/shots/XTRM-1054/. Not a gate: composer-check.mjs asserts the geometry.
+// docs/design/shots/XTRM-1056/. Not a gate: composer-check.mjs asserts the geometry.
 import { mkdir } from "node:fs/promises"
 
 import { chromium } from "playwright"
@@ -10,7 +10,7 @@ import { createServer } from "vite"
 const PORT = 5298
 const SESSION = "xx"
 const T0 = Date.now() - 60 * 60_000
-const out = "docs/design/shots/XTRM-1054"
+const out = "docs/design/shots/XTRM-1056"
 
 function agent(index, name, provider, model, thinkingLevel) {
   return {

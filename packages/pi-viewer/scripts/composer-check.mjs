@@ -1,13 +1,16 @@
-// Composer browser check (XTRM-1054).
+// Composer browser check (XTRM-1054, XTRM-1056).
 //
 // Runs the app in-process with a mocked API (its own port, stopped at the end) and, for 1440 and 390
-// wide, dark and light, asserts the Claude-Desktop-shaped composer:
-// - an empty composer reserves ONE text row (the input is one line high) and still grows with content;
-// - the To selector sits in a row BELOW the box, outside it;
-// - the box carries no visible border at rest: a fill one step from the canvas, or at most a
-//   barely visible hairline; focus alone draws the ring (>= 0.15 alpha, inset);
-// - the under-row shows the target's model and thinking effort, one text step below the prompt
-//   (13px against 14px), updates with the target, and omits what the runtime does not report;
+// wide, dark and light (the theme is set through localStorage, which is what the viewer reads),
+// asserts the Claude-Desktop-shaped composer:
+// - an empty composer reserves ONE text row: 52px high at 15/24, and still grows with content;
+// - the To selector sits in a row BELOW the box, outside it, right-aligned;
+// - the box carries no visible border at rest: a fill one step from the canvas, and no hairline in
+//   Threads; focus alone draws the ring (>= 0.15 alpha, inset);
+// - send is a 32px hit area around a 16px glyph, centred on the text line and anchored to the last
+//   line when the box grows, its right inset equal to the text's left inset;
+// - the under-row shows the target's model and bare effort at 14px, 12px apart, its right edge on the
+//   send button's right edge, updates with the target, and omits what the runtime does not report;
 // - no console error.
 import assert from "node:assert/strict"
 import { createServer } from "vite"
@@ -55,6 +58,8 @@ const read = (page) =>
     const underRect = rect(under)
     const groupRect = rect(group)
     const sendRect = rect(send)
+    const glyphRect = rect(send?.querySelector("svg"))
+    const inputRect = rect(input)
     const style = getComputedStyle(box)
     return {
       box: Math.round(boxRect.height * 10) / 10,
@@ -78,6 +83,17 @@ const read = (page) =>
       controlsInsideBox: controls ? box.contains(controls) : false,
       attachEmpty: attach ? attach.children.length === 0 && !attach.textContent.trim() : false,
       sendInsideBox: sendRect ? sendRect.bottom <= boxRect.bottom + 0.5 && sendRect.right <= boxRect.right + 0.5 : false,
+      sendW: Math.round(sendRect.width * 10) / 10,
+      sendH: Math.round(sendRect.height * 10) / 10,
+      glyph: glyphRect ? Math.round(glyphRect.width * 10) / 10 : null,
+      sendRightInset: Math.round((boxRect.right - sendRect.right) * 10) / 10,
+      // The textarea spans the box and owns its own padding, so the text starts at its paddingLeft.
+      textLeftInset: Math.round((inputRect.left - boxRect.left + parseFloat(getComputedStyle(input).paddingLeft)) * 10) / 10,
+      sendCentre: Math.round((sendRect.top + sendRect.height / 2 - boxRect.top) * 10) / 10,
+      // The textarea owns the box padding, so the first text line starts paddingTop below its top.
+      lineCentre: Math.round((inputRect.top + parseFloat(getComputedStyle(input).paddingTop) + parseFloat(getComputedStyle(input).lineHeight) / 2 - boxRect.top) * 10) / 10,
+      sendBottomGap: Math.round((boxRect.bottom - sendRect.bottom) * 10) / 10,
+      underRight: groupRect ? Math.round(groupRect.right * 10) / 10 : null,
       fill: style.backgroundColor,
       canvas: canvas ? getComputedStyle(canvas).backgroundColor : null,
       shadow: style.boxShadow,
@@ -127,15 +143,18 @@ try {
 
       // 1. One empty row, and the box still grows with content.
       const empty = await read(page)
-      // Rev 2: one text row, and the empty box is 40px high (14/20 text, py-2.5).
-      assert.ok(Math.abs(empty.box - 40) <= 1, `${label}: the empty box is 40px high (${empty.box}px)`)
-      assert.equal(empty.line, 20, `${label}: body text is 14/20 (line ${empty.line}px)`)
+      // XTRM-1056: one text row, 52px high (15/24 text, py-3.5).
+      assert.ok(Math.abs(empty.box - 52) <= 1, `${label}: the empty box is 52px high (${empty.box}px)`)
+      assert.equal(empty.line, 24, `${label}: the prompt line is 24px high (line ${empty.line}px)`)
+      assert.equal(empty.promptSize, "15px", `${label}: the prompt text is 15px (${empty.promptSize})`)
       assert.equal(empty.underInsideBox, false, `${label}: the under-row sits outside the box`)
       assert.ok(empty.underTop >= empty.boxBottom, `${label}: the under-row is below the box (${empty.underTop} < ${empty.boxBottom})`)
       await page.locator("[data-composer-input]").fill("one\ntwo\nthree")
       await page.waitForTimeout(150)
       const grown = await read(page)
       assert.ok(grown.box > empty.box + empty.line, `${label}: the box grows with content (${empty.box} -> ${grown.box})`)
+      // Anchored to the last line when it grows: the same 10px gap below the button in both states.
+      assert.ok(Math.abs(grown.sendBottomGap - 10) <= 1, `${label}: send stays anchored to the last line as the box grows (gap ${grown.sendBottomGap}px)`)
       await page.locator("[data-composer-input]").fill("")
       await page.waitForTimeout(150)
 
@@ -166,6 +185,14 @@ try {
       assert.equal(focused.attachEmpty, true, `${label}: the attach slot is present and empty`)
       assert.equal(focused.sendInsideBox, true, `${label}: send sits inside the box's bottom-right`)
 
+      // 4b. Send geometry (XTRM-1056): a 32px hit area around a 16px glyph, centred on the text line,
+      //     with its right inset equal to the text's left inset.
+      assert.equal(focused.sendW, 32, `${label}: the send hit area is 32px wide (${focused.sendW})`)
+      assert.equal(focused.sendH, 32, `${label}: the send hit area is 32px high (${focused.sendH})`)
+      assert.equal(focused.glyph, 16, `${label}: the send glyph is 16px (${focused.glyph})`)
+      assert.ok(Math.abs(focused.sendCentre - focused.lineCentre) <= 1, `${label}: send is centred on the text line (${focused.sendCentre} vs ${focused.lineCentre})`)
+      assert.ok(Math.abs(focused.sendRightInset - focused.textLeftInset) <= 1, `${label}: send's right inset equals the text's left inset (${focused.sendRightInset} vs ${focused.textLeftInset})`)
+
       // 5. The under-row: right-aligned, the target, its model, its bare effort at 13px, 12px apart.
       const to = page.locator("[data-composer-under-row] button").first()
       const pick = async (name) => {
@@ -178,11 +205,11 @@ try {
       assert.ok(pi.selectorText?.includes(PI.name), `${label}: the selector names the target (${pi.selectorText})`)
       assert.equal(pi.model, "anthropic/claude-sonnet-4-5", `${label}: the model shows`)
       assert.equal(pi.effort, "high", `${label}: the effort shows as the bare level`)
-      assert.equal(pi.selectorSize, "13px", `${label}: the selector reads at the 13px step`)
-      assert.equal(pi.modelSize, "13px", `${label}: the model reads at the 13px step`)
-      assert.equal(pi.effortSize, "13px", `${label}: the effort reads at the 13px step`)
-      assert.equal(pi.promptSize, "14px", `${label}: the prompt stays at 14px`)
-      assert.ok(pi.groupRight >= pi.boxRight - 8, `${label}: the row is right-aligned (group right ${pi.groupRight} vs box right ${pi.boxRight})`)
+      assert.equal(pi.selectorSize, "14px", `${label}: the selector reads at 14px`)
+      assert.equal(pi.modelSize, "14px", `${label}: the model reads at 14px`)
+      assert.equal(pi.effortSize, "14px", `${label}: the effort reads at 14px`)
+      // 6. The under-row's right edge meets the send button's right edge, not the box's outer edge.
+      assert.ok(Math.abs(pi.underRight - (pi.boxRight - pi.sendRightInset)) <= 1, `${label}: the under-row ends at the send's right edge (${pi.underRight} vs ${Math.round((pi.boxRight - pi.sendRightInset) * 10) / 10})`)
       // On a narrow viewport the row's own width nearly fills the lane, so the right edge is the test.
       if (width >= 700) {
         assert.ok(pi.groupLeft > pi.boxLeft + (pi.boxRight - pi.boxLeft) / 2, `${label}: the row starts in the right half (${pi.groupLeft})`)
@@ -196,7 +223,7 @@ try {
       await pick(PI.name)
 
       assert.deepEqual(errors, [], `${label}: no console error`)
-      shots.push(`${label}: box ${empty.box}px, fill ${rest.fill} on ${rest.canvas}, rest hairline ${restAlpha}, focus ring ${shadowAlpha(focused.shadow)}, row gap ${pi.gap}px`)
+      shots.push(`${label}: box ${empty.box}px, prompt ${pi.promptSize}, send ${pi.sendW}x${pi.sendH} glyph ${pi.glyph}, send centre ${pi.sendCentre} vs line ${pi.lineCentre}, under-row right ${pi.underRight} vs send right ${Math.round((pi.boxRight - pi.sendRightInset) * 10) / 10}, fill ${rest.fill} on ${rest.canvas}, rest hairline ${restAlpha}, focus ring ${shadowAlpha(focused.shadow)}`)
       await context.close()
     }
   }
