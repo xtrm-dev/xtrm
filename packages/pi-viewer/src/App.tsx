@@ -16,7 +16,7 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
-import { fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
+import { fetchSessions, fetchThread, invalidateDetails, sendPrompt, stopAgent } from "@/lib/api"
 
 import { matchEchoes, type OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
@@ -451,6 +451,12 @@ export default function App() {
     }
   }
 
+  // A stop is one Escape to that agent's own pane (XTRM-1088). Nothing is faked locally: the thread poll
+  // reports the aborted turn and the presence poll reports the status the pane settles into.
+  async function handleStop(agent: ViewerAgent) {
+    await stopAgent(agent.paneId)
+  }
+
   return (
     <ConsoleShell
       layout={shell}
@@ -594,6 +600,7 @@ export default function App() {
             replyTo={replyBarAgent(replyPaneId, target)}
             onClearReply={() => setReplyPaneId(null)}
             onSend={handleSend}
+            onStop={handleStop}
             disabled={!agents.length}
           />
         </>

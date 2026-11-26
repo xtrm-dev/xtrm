@@ -16,6 +16,7 @@ import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
 import { discoverAsync, type Discovery } from "./discover.ts"
 import { applyIntercomResults, intercomPairKey } from "./intercom.ts"
 import { normalizeEvent, parseSessionFile } from "./session.ts"
+import { stopPlan } from "./stop.ts"
 import { cachedThread } from "./thread-cache.ts"
 
 const MAX_TEXT = 20_000
@@ -554,6 +555,34 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
       throw new ApiError(502, `tmux send-keys failed: ${message}`)
     }
     await sendJson(req, res, 200, { ok: true, paneId, at: Date.now() })
+    return true
+  }
+
+  // A stop sends one Escape to the pane of a listed agent and nothing else (XTRM-1088). The pane is
+  // checked against a fresh discovery, exactly like a send, so a stale snapshot cannot address a pane
+  // that has since been reused by another program.
+  if (url.pathname === "/api/stop" && method === "POST") {
+    const raw = await readBody(req)
+    let body: unknown
+    try {
+      body = JSON.parse(raw)
+    } catch {
+      throw new ApiError(400, "invalid JSON body")
+    }
+    if (typeof body !== "object" || body === null) throw new ApiError(400, "invalid body")
+    const record = body as Record<string, unknown>
+    const plan = stopPlan(
+      (await refreshDiscovery()).sessions.flatMap((session) => session.agents),
+      typeof record.paneId === "string" ? record.paneId : "",
+    )
+    if (!plan.ok) throw new ApiError(plan.code, plan.reason)
+    try {
+      execFileSync("tmux", plan.argv, { timeout: 5_000 })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new ApiError(502, `tmux stop failed: ${message}`)
+    }
+    await sendJson(req, res, 200, { ok: true, paneId: plan.paneId, at: Date.now() })
     return true
   }
 

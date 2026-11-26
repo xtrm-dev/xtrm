@@ -98,3 +98,14 @@ export async function sendPrompt(paneId: string, text: string): Promise<void> {
     body: JSON.stringify({ paneId, text }),
   })
 }
+
+/**
+ * Stop one agent: the server sends a single Escape to that pane (XTRM-1088). The turn state in the
+ * thread reports the result; the viewer never fakes an abort.
+ */
+export async function stopAgent(paneId: string): Promise<void> {
+  await request<{ ok: boolean }>("/api/stop", {
+    method: "POST",
+    body: JSON.stringify({ paneId }),
+  })
+}

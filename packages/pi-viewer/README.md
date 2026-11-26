@@ -275,6 +275,7 @@ npm run test:anchor
 npm run test:follow
 npm run test:flicker   # send → echo must reuse one bubble
 npm run test:queue     # queued prompt → delivered keeps one row
+npm run test:stop      # Stop while working sends one /api/stop, Esc on an empty box does the same
 npm run measure:load http://127.0.0.1:5199/   # cold-load numbers, see Run
 ```
 
@@ -286,7 +287,11 @@ move the reader's anchor, and that the bottom stays pinned. `npm run test:flicke
 sends into a mocked thread and fails if the optimistic bubble is removed and
 re-added when the transcript echo arrives. `npm run test:queue` drives a mocked
 Claude queue: a queued row must show the Queued mark, keep the same DOM node when
-the attachment arrives, and show once. Both need the Playwright Chromium download
+the attachment arrives, and show once. `npm run test:stop` mocks the send path and
+proves the stop ruling (XTRM-1088): a working target offers Stop, one click and one
+Esc on the empty box each send exactly one `/api/stop` for the target's own pane, and
+an idle target offers none; the server-side mapping (`send-keys … Escape`, listed
+panes only) is unit-tested in `test/stop.test.ts`, so no check here can reach a pane. Both need the Playwright Chromium download
 (`npx playwright install chromium`).
 
 Live API checks:
