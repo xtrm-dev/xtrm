@@ -1,17 +1,22 @@
-// Mixed Activity feed (XTRM-757): one row grammar over three sources.
+// Mixed Activity feed (XTRM-757): one row grammar over its sources.
 //
-// The operator ruling (XTRM-757 journal seq 3) fixed the sources: Substrate
-// journal entries, GitHub pull requests/issues/reviews/comments, and the LOCAL
-// git log of the repository on disk. GitHub never supplies commits, so no row
-// can appear twice and there is no dedupe-by-sha layer.
+// The operator reversed the earlier ruling on 2026-11-26: GitHub pushes replace
+// the LOCAL git log. A push is shared activity, a local commit that was never
+// pushed is not, and a pushed commit carries the same subject, so the two
+// sources would only duplicate the row. Push rows are `source: "github"` with
+// `kind: "push"` because the source axis records where the fact came from.
 //
 // Row identity is per source and stable: the journal entry id, `owner/repo#n`
-// for a GitHub object, the sha for a commit.
+// for a GitHub object, `github:push:<event id>` for a push.
 
-export type ActivitySource = "substrate" | "github" | "git" | "jira";
+export type ActivitySource = "substrate" | "github" | "jira";
 
-/** Sources that exist today. Jira stays absent from the filter row until it is connected. */
-export const LIVE_ACTIVITY_SOURCES: readonly ActivitySource[] = ["substrate", "github", "git"];
+/**
+ * Sources that exist today. Jira stays absent from the filter row until it is
+ * connected. `git` stays in the union but is retired: no loader produces it
+ * since the push ruling, and the activity surface still maps its chip.
+ */
+export const LIVE_ACTIVITY_SOURCES: readonly ActivitySource[] = ["substrate", "github"];
 
 export type ActivityRefKind = "issue" | "pr" | "gh-issue" | "commit" | "branch" | "path";
 

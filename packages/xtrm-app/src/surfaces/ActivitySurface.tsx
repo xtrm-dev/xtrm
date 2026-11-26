@@ -190,7 +190,7 @@ function FeedRow({
   );
 }
 
-const SOURCE_LABEL: Record<ActivitySource, string> = { substrate: "Substrate", github: "GitHub", git: "Git", jira: "Jira" };
+const SOURCE_LABEL: Record<ActivitySource, string> = { substrate: "Substrate", github: "GitHub", jira: "Jira" };
 
 /** The references the inspector can open; a bare branch or path stays text. */
 const OPENABLE = new Set<ActivityRefKind>(["issue", "pr", "gh-issue", "commit"]);
@@ -220,7 +220,7 @@ export function ActivitySurface() {
   const failedSources = new Set(failed.map((s) => s.source));
   const loading = states.every((s) => s.pending);
   // A failure is not "nothing happened": the tab loses its number instead of claiming a zero.
-  const live = (["substrate", "github", "git"] as const).filter((s) => !failedSources.has(s));
+  const live = (["substrate", "github"] as const).filter((s) => !failedSources.has(s));
   const tabs = [
     { id: "all", label: "All", count: counts.all },
     ...live.map((s) => ({ id: s, label: SOURCE_LABEL[s], count: counts.bySource[s] })),

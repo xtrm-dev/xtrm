@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { REPO_SECTIONS, destinationHref, repoHref } from "../app/destinations.ts";
-import { projectForRepo, useIssues, useIssuesForProjects, useProjects, useRepos } from "../app/queries.ts";
+import { projectForRepo, useIssues, useIssuesForProjects, useProjects, usePulls, useRepos } from "../app/queries.ts";
+import { issueStatus } from "../issues/issue-table.ts";
 import { CommandMenu, type CommandEntry, type CommandGroupData } from "../ui/command-menu.tsx";
 import { cx } from "../ui/primitives.tsx";
 import { useGo } from "./ContextSidebar.tsx";
@@ -23,6 +24,8 @@ export function GlobalSearch() {
   const project = projectForRepo(projects.data, repo);
   const repoIssues = useIssues(project?.id);
   const allIssues = useIssuesForProjects(projects.data?.map((p) => p.id) ?? [], searching && workspace);
+  // Pull requests are repository-scoped, like the repository scope of the palette.
+  const pulls = usePulls(repo.fullName, "all");
 
   const groups = useMemo<CommandGroupData[]>(() => {
     if (commandMode) {
@@ -61,11 +64,39 @@ export function GlobalSearch() {
     const issues: CommandEntry[] = matched.map((i) => ({
       id: i.id,
       label: i.title,
-      hint: `${i.locator !== i.ref ? `${i.locator} / ${i.ref}` : i.ref} · ${i.lifecycle.replace(/_/g, " ")}`,
+      // issueStatus is the list's status authority: a claimed issue reads
+      // "In progress", never its raw lifecycle ("open"), in both places. The hint
+      // keeps the locator only, so a child issue cannot spend its width on an
+      // alias; the ref stays searchable through `keywords`.
+      hint: `${i.locator ?? i.ref} · ${issueStatus(i).label}`,
       keywords: [i.ref, i.locator],
       icon: "issues",
       onSelect: () => shell.inspect({ kind: "issue", ref: i.ref }),
     }));
+    // Pull requests rank on the same rules as issues: the number is the key, so
+    // "#212" and "212" both win, and the head branch is a searchable alias.
+    const pullSource = (pulls.data ?? []).map((p) => ({ pull: p, label: p.title, keys: [`#${p.number}`, String(p.number), ...(p.headBranch === null ? [] : [p.headBranch])] }));
+    const pullRequests: CommandEntry[] = rankSearch(pullSource, query, limit).map(({ pull: p }) => ({
+      id: `pr-${p.number}`,
+      label: p.title,
+      hint: `#${p.number} · ${p.state}`,
+      keywords: [`#${p.number}`, String(p.number), ...(p.headBranch === null ? [] : [p.headBranch])],
+      icon: "pull",
+      onSelect: () => shell.inspect({ kind: "pr", ref: `${repo.fullName}#${p.number}` }),
+    }));
+    // The adapter page is capped, so an older pull request is absent from
+    // `pulls.data`; an exact number still resolves, exactly like an issue key.
+    const typedNumber = /^#?(\d+)$/.exec(query.trim())?.[1];
+    if (typedNumber !== undefined && !(pulls.data ?? []).some((p) => String(p.number) === typedNumber)) {
+      pullRequests.unshift({
+        id: `open-pr-${typedNumber}`,
+        label: `Open pull request #${typedNumber}`,
+        hint: "pull request",
+        keywords: [`#${typedNumber}`, typedNumber],
+        icon: "pull",
+        onSelect: () => shell.inspect({ kind: "pr", ref: `${repo.fullName}#${typedNumber}` }),
+      });
+    }
     const repositories: CommandEntry[] = (repos.data ?? [])
       .filter((r) => workspace || r.fullName === repo.fullName || r.owner === repo.owner)
       .map((r) => ({ id: r.fullName, label: r.fullName, icon: "repositories", onSelect: () => go(repoHref(r, "/work/issues")) }));
@@ -85,9 +116,11 @@ export function GlobalSearch() {
     return [
       { heading: "Go to", entries: rank(destinations) },
       { heading: "Issues", entries: issues },
+      // Pull requests load for the current repository only, in either scope.
+      { heading: workspace ? `Pull requests · ${repo.name}` : "Pull requests", entries: pullRequests },
       { heading: "Repositories", entries: rank(repositories) },
     ];
-  }, [commandMode, workspace, layout, repo, repoIssues.data, allIssues, repos.data, palette.query, shell, dispatch, go]);
+  }, [commandMode, workspace, layout, repo, repoIssues.data, allIssues, pulls.data, repos.data, palette.query, shell, dispatch, go]);
 
   const scopeToggle = !commandMode && (
     <div role="radiogroup" aria-label="Search scope" className="flex shrink-0 items-center rounded-md bg-control p-0.5 text-xs">
@@ -121,7 +154,7 @@ export function GlobalSearch() {
       groups={groups}
       shouldFilter={commandMode}
       toolbar={scopeToggle}
-      loading={searching && (repoIssues.isFetching || allIssues.some((q) => q.isFetching))}
+      loading={searching && (repoIssues.isFetching || allIssues.some((q) => q.isFetching) || pulls.isFetching)}
     />
   );
 }

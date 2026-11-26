@@ -1,24 +1,25 @@
-// The three source loaders (XTRM-757). Each one returns a page of rows or an
+// The source loaders (XTRM-757). Each one returns a page of rows or an
 // error, never a partial array: the surface renders a failed source as its own
 // inline state instead of silently dropping its rows.
 
-import type { GithubAdapter, GithubIssueSummary, GitActivityAdapter, PullRequestSummary, SubstrateAdapter } from "../adapters/types.ts";
+import type { GithubAdapter, GithubIssueSummary, PullRequestSummary, SubstrateAdapter } from "../adapters/types.ts";
 import { journalFeedRows } from "./substrate.ts";
 import { githubIssueRow, pullConversationRows, pullRow } from "./github.ts";
-import { commitRows, type GitCommitWire } from "./git.ts";
+import { pushRows } from "./push.ts";
 import type { ActivityPage, ActivityRow, ActivitySource } from "./types.ts";
 
 /** One page size for every source: the console never loads a whole history. */
 export const ACTIVITY_PAGE = 50;
 /** Pull requests whose reviews and comments are read; bounded so the feed costs O(1) calls. */
 export const REVIEWED_PRS = 8;
+/** Push events read per load. The events endpoint is the only source of pushes. */
+export const ACTIVITY_EVENTS = 200;
 
 export interface FeedContext {
   repo: string;
   projectId: string | null;
   github: GithubAdapter;
   substrate: SubstrateAdapter;
-  gitActivity: GitActivityAdapter;
   /** Bridge base path, so tests can point at a stub. */
   bridge?: string;
   fetchImpl?: typeof fetch;
@@ -43,13 +44,21 @@ export async function loadSubstrate(ctx: FeedContext, cursor: string | null): Pr
   return { source: "substrate", rows, cursor: feed.nextCursor };
 }
 
-/** GitHub: pull requests, issues, then reviews and comments for the newest few PRs. */
+/**
+ * GitHub: pull requests, issues and pushes, then reviews and comments for the
+ * newest few PRs. Pushes belong to this source, not to a source of their own:
+ * they are GitHub events, and one failed GitHub read is one failed source.
+ */
 export async function loadGithub(ctx: FeedContext): Promise<ActivityPage> {
-  const pulls: PullRequestSummary[] = await ctx.github.listPulls(ctx.repo, "all");
-  const issues: GithubIssueSummary[] = await ctx.github.listIssues(ctx.repo);
+  const [pulls, issues, events] = await Promise.all([
+    ctx.github.listPulls(ctx.repo, "all"),
+    ctx.github.listIssues(ctx.repo),
+    ctx.github.events(ctx.repo, ACTIVITY_EVENTS),
+  ]);
   const rows: ActivityRow[] = [
     ...pulls.slice(0, ACTIVITY_PAGE).map((pr) => pullRow(pr, ctx.repo)).filter((r): r is ActivityRow => r !== null),
     ...issues.slice(0, ACTIVITY_PAGE).map((issue) => githubIssueRow(issue, ctx.repo)).filter((r): r is ActivityRow => r !== null),
+    ...pushRows(events).slice(0, ACTIVITY_PAGE),
   ];
   const recent = [...pulls].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, REVIEWED_PRS);
   for (const pr of recent) {
@@ -59,19 +68,15 @@ export async function loadGithub(ctx: FeedContext): Promise<ActivityPage> {
   return { source: "github", rows, cursor: null };
 }
 
-/** Git: the local log of the repository on disk, through the adapter. */
-export async function loadGit(ctx: FeedContext): Promise<ActivityPage> {
-  const commits: GitCommitWire[] = await ctx.gitActivity.commits(ctx.repo, ACTIVITY_PAGE);
-  return { source: "git", rows: commitRows(commits), cursor: null };
-}
-
 export type SourceLoader = (ctx: FeedContext, cursor: string | null) => Promise<ActivityPage>;
 
-/** Every source the feed offers today, with its loader. */
-export const SOURCE_LOADERS: Record<Exclude<ActivitySource, "jira">, SourceLoader> = {
+/**
+ * Every source the feed offers today, with its loader. `git` is retired: local
+ * commits are no longer a source, and `LIVE_ACTIVITY_SOURCES` names what runs.
+ */
+export const SOURCE_LOADERS: Partial<Record<Exclude<ActivitySource, "jira">, SourceLoader>> = {
   substrate: loadSubstrate,
   github: (ctx) => loadGithub(ctx),
-  git: (ctx) => loadGit(ctx),
 };
 
 /** Run one source, converting a failure into its own error state. */
@@ -81,7 +86,9 @@ export async function loadSourceState(
   cursor: string | null = null,
 ): Promise<{ source: ActivitySource; rows: ActivityRow[]; cursor: string | null; error: string | null; pending: boolean }> {
   try {
-    const page = await SOURCE_LOADERS[source](ctx, cursor);
+    const loader = SOURCE_LOADERS[source];
+    if (loader === undefined) throw new Error(`activity source ${source} is retired`);
+    const page = await loader(ctx, cursor);
     return { source, rows: page.rows, cursor: page.cursor, error: null, pending: false };
   } catch (err) {
     return { source, rows: [], cursor: null, error: err instanceof Error ? err.message : String(err), pending: false };

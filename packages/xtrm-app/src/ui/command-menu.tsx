@@ -98,13 +98,13 @@ export function CommandMenu({
                         className={cx("flex h-9 cursor-default items-center gap-2.5 rounded-md px-2.5 text-sm text-ink-muted", "data-[selected=true]:bg-hover data-[selected=true]:text-ink")}
                       >
                         <Icon name={e.icon} size="xs" className="text-ink-faint" />
-                        <span className="truncate">{e.label}</span>
+                        <span className="min-w-0 flex-1 truncate">{e.label}</span>
                         {(e.shortcut ?? (e.hint && isShortcutHint(e.hint) ? e.hint : null)) ? (
                           <span className="ml-auto shrink-0 pl-4">
                             <Kbd>{e.shortcut ?? e.hint}</Kbd>
                           </span>
                         ) : (
-                          e.hint && <span className="ml-auto truncate pl-4 text-xs text-ink-faint">{e.hint}</span>
+                          e.hint && <span className="ml-auto max-w-[45%] shrink-0 truncate pl-4 text-xs text-ink-faint">{e.hint}</span>
                         )}
                       </Command.Item>
                     ))}
