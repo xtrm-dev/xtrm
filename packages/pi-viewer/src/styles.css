@@ -106,8 +106,10 @@
   /* The composer's only separation, in every palette and state (XTRM-1087): it carries no border and
      no ring, so a slight drop shadow sets it above the canvas. Focus deepens the shadow, which is the
      one cue that works in a palette whose fill has no plane left to step to (console, threads light). */
-  --x-composer-shadow: 0 1px 2px rgb(15 15 20 / 0.05), 0 8px 20px -16px rgb(15 15 20 / 0.16);
-  --x-composer-shadow-focus: 0 2px 4px rgb(15 15 20 / 0.07), 0 12px 28px -16px rgb(15 15 20 / 0.22);
+  /* One soft layer pulled in by a negative spread: depth without an edge (operator, 2026-11-26: the tight
+     0 1px 2px layer read as a hairline under the box). */
+  --x-composer-shadow: 0 6px 20px -10px rgb(15 15 20 / 0.12);
+  --x-composer-shadow-focus: 0 8px 24px -10px rgb(15 15 20 / 0.16);
   --x-inset: var(--x-surface); /* quiet panels inside the thread: activity detail, intercom card */
   --x-code: var(--x-surface); /* rendered code frame */
   --x-code-edge: var(--x-border-muted);
@@ -156,8 +158,8 @@
   --x-shadow-panel: 0 18px 44px -12px rgb(0 0 0 / 0.72);
   /* The composer's drop shadow in dark: the same two-part shape as light, at the alpha dark needs
      before it reads at all (XTRM-1087). */
-  --x-composer-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 24px -18px rgb(0 0 0 / 0.72);
-  --x-composer-shadow-focus: 0 2px 6px rgb(0 0 0 / 0.5), 0 14px 32px -18px rgb(0 0 0 / 0.88);
+  --x-composer-shadow: 0 6px 22px -10px rgb(0 0 0 / 0.38);
+  --x-composer-shadow-focus: 0 8px 26px -10px rgb(0 0 0 / 0.48);
   --x-strip: #1c1c1c;
   --x-strip-open: #262626;
   --x-strip-ink: rgb(255 255 255 / 0.72);

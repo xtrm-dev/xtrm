@@ -70,7 +70,8 @@ export function Sidebar({
         <IconButton data-testid="sidebar-collapse" tooltipSide="right" icon="sidebar" label="Collapse sidebar" shortcut={modShortcut("B")} aria-expanded onClick={onCollapse} />
       </div>
       <div className="flex h-8 shrink-0 items-center gap-1.5 pl-3">
-        <h2 className="text-xs font-medium text-ink-faint">Sessions</h2>
+        {/* The console header row (xtrm-app AgentSidebar.tsx:223-224): text-sm medium in ink, count text-xs faint. */}
+        <h2 className="text-sm font-medium text-ink">Sessions</h2>
         <span className="text-xs text-ink-faint tabular">{total || ""}</span>
       </div>
       <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-1 pb-2">
