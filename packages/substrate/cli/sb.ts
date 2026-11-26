@@ -703,7 +703,8 @@ the explicit flag, and the same fail-closed rule applies when neither is set.
 
 Pane effect: inside tmux, every pane whose @agent_issue is <ref> is unset, whoever
 ran this, so a lead closing a worker's Issue does not leave the worker pane
-showing it. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
+showing it. Scope: the tmux server this process runs under; panes on another server or host
+are not reached. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.close": `usage: sb issue close <ref> --outcome <completed|superseded|duplicate|wont_fix|invalid|cancelled|abandoned> --reason <r> [--actor <who>] [--participant <id>] [--run <id>] [--activation <id>] [--attempt <id>] [--result <a,b>] [--receipt <a,b>] [--validation <a,b>] [--artifact <a,b>] [--force-close-with-open-blocker <why>] [--project <id>]
 
 writes an immutable Closure row (outcome, reason, actor, session, revision/hash, refs) and rests on done (cancelled for the cancelled outcome). Bare \`sb issue close <ref>\` stays the legacy lifecycle alias (no Closure invented).
@@ -732,15 +733,16 @@ Stopping one execution is NOT a close: release the claim instead.
 
 Pane effect: inside tmux, every pane whose @agent_issue is <ref> is unset, whoever
 ran this, so a lead closing a worker's Issue does not leave the worker pane
-showing it. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
+showing it. Scope: the tmux server this process runs under; panes on another server or host
+are not reached. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.state": `usage: sb issue state <ref> <open|deferred|done|cancelled|archived> [--until <ms|clear>] [--project <id>] [--link-gate warn|enforce|off] [--gate-override <reason>]
 
 sets the lifecycle state; every transition emits a durable issue.lifecycle event.
 --until sets/clears the deferral timestamp (meaningful with deferred).
 
-Pane effect: a terminal state (done, cancelled) unsets @agent_issue on every tmux pane
-whose @agent_issue is <ref>, exactly like close. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log;
-never changes the exit status.`,
+Pane effect: a terminal state (done, cancelled, archived) unsets @agent_issue on every tmux pane
+whose @agent_issue is <ref>, exactly like close. Scope: the tmux server this process runs under only.
+Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.reopen": `usage: sb issue reopen <ref> --reason <r> [--actor <who>] [--project <id>]
 
 keeps every historical Closure row untouched, appends a reopen event, and restores lifecycle state to open. Bare \`sb issue reopen <ref>\` stays the legacy lifecycle alias (alias for: sb issue state <ref> open).`,
@@ -753,7 +755,8 @@ writes a terminal Closure with the cancelled outcome resting on the cancelled li
 
 Pane effect: inside tmux, every pane whose @agent_issue is <ref> is unset, whoever
 ran this, so a lead closing a worker's Issue does not leave the worker pane
-showing it. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
+showing it. Scope: the tmux server this process runs under; panes on another server or host
+are not reached. Logged to $XDG_STATE_HOME/xtrm/pane-sync.log; never changes the exit status.`,
   "issue.archive": `usage: sb issue archive <ref> [--project <id>]
 
 alias for: sb issue state <ref> archived.`,

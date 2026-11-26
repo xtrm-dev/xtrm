@@ -14,8 +14,13 @@ describe("parsePaneSyncRequest", () => {
     assert.deepEqual(parsePaneSyncRequest(["issue", "close", "--json", "CORE-3", "--outcome", "completed", "--reason", "done"]), { effect: "end", ref: "CORE-3", holder: null });
     assert.deepEqual(parsePaneSyncRequest(["issue", "state", "CORE-5", "done"]), { effect: "end", ref: "CORE-5", holder: null });
     assert.deepEqual(parsePaneSyncRequest(["issue", "state", "CORE-5", "cancelled"])?.effect, "end");
+    assert.equal(parsePaneSyncRequest(["issue", "state", "CORE-5", "archived"])?.effect, "end");
     assert.equal(parsePaneSyncRequest(["issue", "state", "CORE-5", "open"]), null);
     assert.equal(parsePaneSyncRequest(["issue", "close", "--outcome", "completed", "--reason", "r", "CORE-4"])?.ref, "CORE-4");
+  });
+  it("reads --holder=<who> only as the flag form sb itself parses", () => {
+    assert.equal(parsePaneSyncRequest(["issue", "claim", "CORE-6", "--holder", "w3"])?.holder, "w3");
+    assert.equal(parsePaneSyncRequest(["issue", "claim", "CORE-6", "--holder=w3"])?.holder ?? null, null);
   });
   it("ignores every other command", () => {
     assert.equal(parsePaneSyncRequest(["issue", "show", "CORE-1"]), null);
@@ -57,7 +62,9 @@ describe("syncPaneIssue", () => {
   it("skips a claim in a pane with no owner and outside tmux", () => {
     const t = fakeTmux({ "%3": {} });
     assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: ENV, tmux: t.run }), "skipped");
-    assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: { SUBSTRATE_HOLDER: "w1" }, tmux: t.run }), "skipped");
+    const lines: string[] = [];
+    assert.equal(syncPaneIssue(["issue", "claim", "CORE-1"], { env: { SUBSTRATE_HOLDER: "w1" }, tmux: t.run, log: (l) => lines.push(l) }), "skipped");
+    assert.ok(lines.join("\n").includes("TMUX unset"), "an out-of-scope skip is logged");
     assert.deepEqual(t.ops, []);
   });
   it("close, release and a terminal state unset every pane that holds the ref, whoever ran them", () => {

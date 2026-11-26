@@ -14,7 +14,8 @@
 //   must not leave the worker pane advertising it. Unset, not empty: absent means
 //   none.
 //
-// The schema is documented in core `docs/agent-identity.md`.
+// Scope is the tmux server this process runs under; another server or host is not reached
+// (cross-host sync is XTRM-1077). The schema is documented in core `docs/agent-identity.md`.
 //
 // It runs in the client process, after the result is known, so it does not
 // depend on the Substrate remote. Every failure is logged and swallowed.
@@ -24,11 +25,11 @@ import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseArgs } from "./argv.ts";
+import { TERMINAL_STATES } from "./issue.ts";
 
 const PANE_ID = /^%[0-9]+$/;
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const END_VERBS = new Set(["release", "close", "cancel"]);
-const TERMINAL_STATES = new Set(["done", "cancelled"]);
 const TMUX_TIMEOUT_MS = 2_000;
 
 export type TmuxRunner = (args: string[]) => { status: number | null; stdout: string };
@@ -60,7 +61,7 @@ export function parsePaneSyncRequest(argv: readonly string[]): PaneSyncRequest |
   const holder = Array.isArray(holderFlag) ? (holderFlag[0] ?? "").trim() || null : null;
   if (verb === "claim") return { effect: "claim", ref, holder };
   if (END_VERBS.has(verb)) return { effect: "end", ref, holder };
-  if (verb === "state" && target && TERMINAL_STATES.has(target)) return { effect: "end", ref, holder };
+  if (verb === "state" && target && (TERMINAL_STATES as readonly string[]).includes(target)) return { effect: "end", ref, holder };
   return null;
 }
 
@@ -106,7 +107,11 @@ export function syncPaneIssue(argv: readonly string[], deps: PaneSyncDeps = {}):
     const request = parsePaneSyncRequest(argv);
     if (!request) return "skipped";
     // TMUX proves a server to ask; TMUX_PANE alone could be a leftover variable.
-    if (!env.TMUX) return "skipped";
+    if (!env.TMUX) {
+      // Scope: the tmux server of THIS process only. Panes on another server or host are not reached.
+      log(`skip ${request.effect} ${request.ref}: TMUX unset, no tmux server in scope`);
+      return "skipped";
+    }
     const tmux = deps.tmux ?? tmuxIn(env);
     if (request.effect === "end") return clearHeldPanes(request, tmux, log);
     const pane = (env.TMUX_PANE ?? "").trim();
