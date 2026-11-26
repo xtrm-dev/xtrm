@@ -1,6 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { AllEventsView } from "@/components/AllEventsView"
 import { ChannelView } from "@/components/ChannelView"
 import { Composer } from "@/components/Composer"
 import { PresenceLine } from "@/components/presence/PresenceLine"
@@ -17,6 +16,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
 import { fetchSessions, fetchThread, invalidateDetails, sendPrompt } from "@/lib/api"
+
 import { isEchoOf, type OptimisticMessage } from "@/lib/optimistic"
 import { splitPresence } from "@/lib/presence"
 import { replyBarAgent, replyIdFor } from "@/lib/reply"
@@ -42,6 +42,12 @@ import {
 import { threadReadKey } from "@/lib/readstate"
 import { mergeLive } from "@/lib/tree"
 import type { ThreadMeta, ThreadPayload, ViewerAgent, ViewerEvent, ViewerSession } from "@/shared/types"
+
+/**
+ * The event list is the heaviest view and the least used: it pulls the markdown stack for event bodies.
+ * Loading it on demand keeps that stack out of the first paint of the thread view (XTRM-1067).
+ */
+const AllEventsView = lazy(() => import("@/components/AllEventsView").then((module) => ({ default: module.AllEventsView })))
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -507,16 +513,18 @@ export default function App() {
                         <div className="py-20 text-center text-xs text-ink-muted">Loading thread…</div>
                       )
                     ) : all ? (
-                      <AllEventsView
-                        key={scopeKey}
-                        events={scopeAllEvents}
-                        agents={agents}
-                        session={all.session}
-                        hasEarlier={all.hasEarlier}
-                        earlierTurns={all.earlierTurns}
-                        earlierLoading={earlierLoading}
-                        onLoadEarlier={() => void loadEarlier()}
-                      />
+                      <Suspense fallback={<div className="py-20 text-center text-xs text-ink-muted">Loading events…</div>}>
+                        <AllEventsView
+                          key={scopeKey}
+                          events={scopeAllEvents}
+                          agents={agents}
+                          session={all.session}
+                          hasEarlier={all.hasEarlier}
+                          earlierTurns={all.earlierTurns}
+                          earlierLoading={earlierLoading}
+                          onLoadEarlier={() => void loadEarlier()}
+                        />
+                      </Suspense>
                     ) : (
                       <div className="py-20 text-center text-xs text-ink-muted">Loading events…</div>
                     )}

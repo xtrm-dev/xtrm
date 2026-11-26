@@ -112,7 +112,7 @@ export function useSidebarLayout() {
   )
   const toggle = useCallback(() => setOpen(!open), [open, setOpen])
 
-  // motion-panels reports sizes while it animates; only a settled, in-range size is a width.
+  // A drag reports a width on every pointer move; only a settled, in-range size is a width.
   const resize = useCallback((width: number) => {
     setLayout((current) =>
       !current.open || width < SIDEBAR.min || clampSidebar(width) === current.width

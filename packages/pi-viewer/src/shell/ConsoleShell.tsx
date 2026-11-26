@@ -10,7 +10,7 @@ type Layout = ReturnType<typeof useSidebarLayout>
 
 /**
  * The console's shell frame (packages/xtrm-app/src/shell/AppShell.tsx `ShellLayout`, XTRM-1044): a
- * motion-panels group of a resizable sidebar panel, a hairline resize handle, and a fill panel. The
+ * split of a resizable sidebar panel, a hairline resize handle, and a fill panel (./resizable). The
  * sidebar collapses to width 0 and its reopen button lives in the top bar, as in the console; the
  * panel is `inert` while collapsed. On a narrow screen the console has no pattern, so the sidebar is an
  * overlay at the console's default width that closes on Escape or a click outside.
