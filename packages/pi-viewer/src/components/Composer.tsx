@@ -205,6 +205,9 @@ export function Composer({
             ref={textareaRef}
             data-composer-input=""
             value={text}
+            // Optical centring (XTRM-1087): inside the 24px line box the painted band (cap to descender) sits
+            // 0.75px low, so the top padding is 0.75px smaller than the bottom. The pair still sums to 8px, which
+            // keeps the one-line box at 56px.
             rows={1}
             disabled={disabled || !target}
             placeholder={target ? `Message ${target.name}…` : "No agent pane available"}
@@ -250,7 +253,7 @@ export function Composer({
                 void submit()
               }
             }}
-            className="scrollbar-thin block max-h-52 min-h-[calc(1lh+0.5rem)] min-w-0 flex-1 resize-none bg-transparent px-0 py-1 text-[1rem] leading-6 text-ink placeholder:text-ink-muted focus:outline-none"
+            className="scrollbar-thin block max-h-52 min-h-[calc(1lh+0.5rem)] min-w-0 flex-1 resize-none bg-transparent px-0 pt-[3.25px] pb-[4.75px] text-[1rem] leading-6 text-ink placeholder:text-ink-muted focus:outline-none"
           />
 
             <div data-composer-controls="" className="flex shrink-0">
