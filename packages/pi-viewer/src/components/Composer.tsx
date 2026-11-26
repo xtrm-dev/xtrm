@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { StatusDot, statusWord } from "@/components/StatusDot"
 import { composerMeta } from "@/lib/composer-meta"
+import { ContextRing } from "@/components/ContextRing"
 import { monogram } from "@/lib/format"
 import { escapeClearsReply } from "@/lib/reply"
 import type { ViewerAgent } from "@/shared/types"
@@ -320,12 +321,15 @@ export function Composer({
             </button>
 
             {meta.model ? (
-              <span
-                data-composer-target-model=""
-                title={meta.label ?? meta.model}
-                className="min-w-0 max-w-56 truncate text-base text-ink-muted"
-              >
-                {meta.model}
+              <span data-composer-context="" className="flex min-w-0 items-center gap-1.5">
+                {target?.context ? <ContextRing usage={target.context} /> : null}
+                <span
+                  data-composer-target-model=""
+                  title={meta.label ?? meta.model}
+                  className="min-w-0 max-w-56 truncate text-base text-ink-muted"
+                >
+                  {meta.model}
+                </span>
               </span>
             ) : null}
             {meta.effort ? (

@@ -4,6 +4,7 @@ import { homedir } from "node:os"
 import { basename, join } from "node:path"
 
 import type { ViewerAgent, ViewerSession } from "../src/shared/types.ts"
+import { contextUsageOf } from "../src/lib/context-usage.ts"
 import {
   claudeAgentName,
   claudeStatusOf,
@@ -333,6 +334,7 @@ function resolveClaudePane(
     status: state.status,
     statusNote: state.note,
     statusDetail: state.detail ?? null,
+    context: contextUsageOf(parsed?.events ?? [], parsed?.model ?? null),
   }
   return { agent, parsed, sessionName: parsed?.sessionName ?? null }
 }
@@ -412,6 +414,7 @@ function resolvePaneAgent(
     status: state.status,
     statusNote: state.note,
     statusDetail: state.detail ?? null,
+    context: contextUsageOf(parsed?.events ?? [], parsed?.model ?? null),
   }
   return { agent, parsed, sessionName: parsed?.sessionName ?? wanted }
 }

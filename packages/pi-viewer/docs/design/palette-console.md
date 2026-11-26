@@ -25,8 +25,8 @@ Every `--x-*` colour token in the viewer already equals the console's, with one 
 |---|---|---|---|
 | Page canvas, thread, presence line, composer margin, header bar | `deep` | `surface` | `shell/AppShell.tsx:82` (`bg-surface`); the top bar has no fill, `shell/AppShell.tsx:25` |
 | Sidebar plane | `sidebar` | `sidebar` | `shell/AppShell.tsx:93` (`bg-sidebar`) |
-| Composer fill | `--x-composer-fill` = `surface`, one step up from the canvas; the fill does not jump on focus | `--x-composer-fill` = `raised` (the canvas is `surface` here, so the box steps up); same on focus | `styles.css:84-85`, `:151-152`; `.xtrm-composer-box` `styles.css:706-716` (Desktop dark focus takes `control`, `styles.css:181`) |
-| Composer edge | no border at rest; a 1px inset focus ring in `border-strong` | no border at rest in dark; a `border-muted` hairline in Console light only (no fill step on white); the same focus ring | `styles.css:86-87`, `:153`, `:160`. The console's own composer (`agent/Composer.tsx:279`: border, `border-strong` on focus) is no longer mirrored |
+| Composer fill | `--x-composer-fill` = `surface`, one step up from the canvas; focus rises to `raised` | `--x-composer-fill` = `raised` (the canvas is `surface` here, so the box steps up); focus keeps that fill and deepens the shadow | `styles.css:104-110`, `:171-172`; `.xtrm-composer-box` `styles.css:749-765` (Desktop dark focus takes `control`, `styles.css:201`) |
+| Composer elevation (XTRM-1087) | no border and no ring in any palette, preset, theme or state; a slight drop shadow (`--x-composer-shadow`) sets the box above the canvas, and focus deepens it (`--x-composer-shadow-focus`) | same | `styles.css:107-110`, `:157-160`; `.xtrm-composer-box` `styles.css:749-765`. The console's own composer (`agent/Composer.tsx:279`) still carries a border; the viewer no longer mirrors it |
 | Composer box | `rounded-lg`; the input is 52px high at one line (24px line plus 14px padding above and below) | same | `components/Composer.tsx:154` (box), `:234` (`min-h-[calc(1lh+1.75rem)]`, `leading-6`) |
 | Composer input | transparent | transparent | `agent/Composer.tsx:296` (`bg-transparent`) |
 | Rendered code frame | `surface`; hairline in light only | `deep`; `border-muted` in both | `styles.css:302-303` (`.xtrm-prose pre`) |
@@ -43,9 +43,9 @@ Every `--x-*` colour token in the viewer already equals the console's, with one 
 | `--x-raised` | `#1e1e1e` | `#1e1e1e` | `styles.css:81` |
 | `--x-control` | `#262626` | `#262626` | `styles.css:82` |
 | `--x-composer-fill` | `var(--x-surface)` = `#151515` | `var(--x-raised)` = `#1e1e1e` | `styles.css:84`, `:151` |
-| `--x-composer-focus` | `var(--x-surface)` = `#151515` | `var(--x-raised)` = `#1e1e1e` | `styles.css:85`, `:152` |
-| `--x-composer-edge` | `transparent` | `transparent` (the raised fill is the step) | `styles.css:86`, `:160` |
-| `--x-composer-edge-focus` | `var(--x-border-strong)` = `rgb(255 255 255 / .18)` | `var(--x-border-strong)` | `styles.css:87` |
+| `--x-composer-focus` | `var(--x-raised)` = `#1e1e1e` (focus rises one plane) | `var(--x-raised)` = `#1e1e1e` (no plane left: the shadow deepens) | `styles.css:105`, `:172` |
+| `--x-composer-shadow` | `0 1px 2px rgb(0 0 0 / .4), 0 10px 24px -18px rgb(0 0 0 / .72)` | same | `styles.css:159` |
+| `--x-composer-shadow-focus` | `0 2px 6px rgb(0 0 0 / .5), 0 14px 32px -18px rgb(0 0 0 / .88)` | same | `styles.css:160` |
 | `--x-inset` | `var(--x-surface)` | `var(--x-control)` = `#262626` | viewer role |
 | `--x-code` | `var(--x-surface)` | `var(--x-deep)` = `#0d0d0d` | `styles.css:302` |
 | `--x-code-edge` | `transparent` | `var(--x-border-muted)` = `rgb(255 255 255 / .08)` | `styles.css:88`, `:303` |
@@ -60,9 +60,9 @@ Every `--x-*` colour token in the viewer already equals the console's, with one 
 | `--x-raised` | `#ffffff` | `#ffffff` | `styles.css:19` |
 | `--x-control` | `#efeff1` | `#efeff1` | `styles.css:20` |
 | `--x-composer-fill` | `var(--x-surface)` = `#ffffff` | `var(--x-raised)` = `#ffffff` | `styles.css:84`, `:151` |
-| `--x-composer-focus` | `var(--x-surface)` = `#ffffff` | `var(--x-raised)` = `#ffffff` | `styles.css:85`, `:152` |
-| `--x-composer-edge` | `transparent` | `var(--x-border-muted)` = `rgb(15 15 20 / .07)` (no fill step on white) | `styles.css:86`, `:153` |
-| `--x-composer-edge-focus` | `var(--x-border-strong)` = `rgb(15 15 20 / .2)` | `var(--x-border-strong)` | `styles.css:87` |
+| `--x-composer-focus` | `var(--x-raised)` = `#ffffff` (white is the ceiling: focus deepens the shadow) | `var(--x-raised)` = `#ffffff` (no fill step on white: the shadow deepens) | `styles.css:105`, `:172` |
+| `--x-composer-shadow` | `0 1px 2px rgb(15 15 20 / .05), 0 8px 20px -16px rgb(15 15 20 / .16)` | same | `styles.css:109` |
+| `--x-composer-shadow-focus` | `0 2px 4px rgb(15 15 20 / .07), 0 12px 28px -16px rgb(15 15 20 / .22)` | same | `styles.css:110` |
 | `--x-inset` | `var(--x-surface)` | `var(--x-control)` = `#efeff1` | viewer role |
 | `--x-code` | `var(--x-surface)` | `var(--x-deep)` = `#f4f4f5` | `styles.css:302` |
 | `--x-code-edge` | `var(--x-border-muted)` | `var(--x-border-muted)` = `rgb(15 15 20 / .07)` | `styles.css:26`, `:303` |
@@ -127,9 +127,8 @@ row). Both equal `ink` and `hover` in Threads and Console, so nothing changes th
 | `--x-ink-muted` | `#a0a0a8` | `#a0a0a8` | `#a1a1a1` (inside a selected row: `#c8c8c8`) |
 | `--x-border` | `rgb(255 255 255 / .12)` | same | `#383838` |
 | `--x-composer-fill` | surface `#151515` | raised `#1e1e1e` | surface `#333333` |
-| `--x-composer-focus` | surface `#151515` | raised `#1e1e1e` | control `#383838` |
-| `--x-composer-edge` | none | border-muted (light only) | none (as Threads) |
-| `--x-composer-edge-focus` | border-strong | border-strong | border-strong |
+| `--x-composer-focus` | raised `#1e1e1e` | raised `#1e1e1e` | control `#383838` |
+| `--x-composer-shadow` | dark pair | dark pair | dark pair (no border, no ring) |
 | `--x-inset` | surface | control `#262626` | surface `#333333` (at 40 / 70%) |
 | `--x-code` / `--x-code-edge` | surface / none | deep / border-muted | deep `#1f1f1f` / border `#383838` |
 | `--x-danger` | `#f07171` | `#f07171` | `#f58f8f` (inferred, see below) |

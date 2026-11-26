@@ -1,7 +1,9 @@
-// Composer screenshots (XTRM-1054, XTRM-1056): the empty box, a typed draft, the To menu and a Claude target.
+// Composer screenshots (XTRM-1054, XTRM-1056, XTRM-1087): the empty box at rest and focused, a typed
+// draft, the To menu, a Claude target, and a nearly full context ring.
 //
 // Runs the app in-process with a mocked API on its own port (stopped at the end) and writes PNGs to
-// docs/design/shots/XTRM-1056/. Not a gate: composer-check.mjs asserts the geometry.
+// docs/design/shots/XTRM-1087/ (override with SHOTS_OUT). Not a gate: composer-check.mjs asserts the
+// geometry, the absence of border and ring, and the context ring's fraction.
 import { mkdir } from "node:fs/promises"
 
 import { chromium } from "playwright"
@@ -10,21 +12,22 @@ import { createServer } from "vite"
 const PORT = 5298
 const SESSION = "xx"
 const T0 = Date.now() - 60 * 60_000
-const out = "docs/design/shots/XTRM-1056"
+const out = process.env.SHOTS_OUT || "docs/design/shots/XTRM-1087"
 
-function agent(index, name, provider, model, thinkingLevel) {
+function agent(index, name, provider, model, thinkingLevel, context = null) {
   return {
     id: `%${index}`, paneId: `%${index}`, panePid: index, piPid: index, provider,
     tmuxSession: SESSION, windowIndex: 0, windowId: "@0", windowName: "w0", paneIndex: index,
     name, title: "", cwd: `/home/u/${name}`,
     sessionFile: `/tmp/${name}.jsonl`, sessionId: `s${index}`, sessionName: name,
     model, thinkingLevel, role: "worker", modifiedAt: Date.now(),
-    lastWriteAt: Date.now(), eventCount: 0, status: "idle", statusNote: null, statusDetail: null,
+    lastWriteAt: Date.now(), eventCount: 0, status: "idle", statusNote: null, statusDetail: null, context,
   }
 }
 
-const PI = agent(1, "agent-pi", "pi", "anthropic/claude-sonnet-4-5", "high")
-const CLAUDE = agent(2, "agent-claude", "claude", "claude-opus-4-5", null)
+// 46% of a 200k window, so the ring shows a readable arc; the Claude target reports no usage at all.
+const PI = agent(1, "agent-pi", "pi", "anthropic/claude-sonnet-4-5", "high", { used: 92_000, window: 200_000 })
+const CLAUDE = agent(2, "agent-claude", "claude", "claude-opus-4-5", null, null)
 const agents = [PI, CLAUDE]
 const events = [
   { id: "%1:0", agentId: "%1", agentName: PI.name, seq: 0, at: T0, kind: "user", role: "user", summary: "hi", onBranch: true, text: "hi" },
@@ -66,6 +69,9 @@ try {
     }
 
     await shot("empty")
+    await input.click()
+    await page.waitForTimeout(250)
+    await shot("empty-focused")
     await input.fill("Draft one line")
     await page.waitForTimeout(150)
     await shot("typed")
