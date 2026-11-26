@@ -96,7 +96,13 @@ export function unseenTimelineItems(
   atBottom: boolean,
 ): number {
   if (atBottom) return 0
-  return items.filter((item) => item.at >= leftAt && !seen.has(item.id)).length
+  return items.filter(
+    (item) =>
+      item.at >= leftAt &&
+      !seen.has(item.id) &&
+      item.kind !== "user" &&
+      item.kind !== "optimistic",
+  ).length
 }
 
 /** Rows after the divider, excluding the operator's own. */

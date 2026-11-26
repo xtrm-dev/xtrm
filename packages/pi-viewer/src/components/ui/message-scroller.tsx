@@ -22,6 +22,8 @@ interface ScrollerContextValue {
   sync: () => void
   handleScroll: () => void
   scrollToEnd: (options?: ScrollOptions) => void
+  /** A send overrides the follow policy and any pending restore until the reader scrolls. */
+  requestSendScroll: () => void
 }
 
 const ScrollerContext = React.createContext<ScrollerContextValue | null>(null)
@@ -50,11 +52,6 @@ function MessageScrollerProvider({
   children: React.ReactNode
   /** Names the thread; its scroll position is remembered per key. */
   threadKey?: string
-  autoScroll?: boolean
-  defaultScrollPosition?: "start" | "end" | "last-anchor"
-  scrollEdgeThreshold?: number
-  scrollMargin?: number
-  scrollPreviousItemPeek?: number
 }) {
   const viewportRef = React.useRef<HTMLDivElement | null>(null)
   const contentRef = React.useRef<HTMLDivElement | null>(null)
@@ -76,6 +73,8 @@ function MessageScrollerProvider({
   const restoreRef = React.useRef<{ id: string; top: number } | null>(null)
   const restoreDeadlineRef = React.useRef(0)
   const restoreFrameRef = React.useRef(0)
+  // Set by a send; survives the optimistic-to-echo swap and is cleared only by a reader gesture.
+  const sendIntentRef = React.useRef(false)
   const threadKeyRef = React.useRef(threadKey)
   threadKeyRef.current = threadKey
 
@@ -178,6 +177,11 @@ function MessageScrollerProvider({
     [setBottom, stopGlide],
   )
 
+  const requestSendScroll = React.useCallback(() => {
+    sendIntentRef.current = true
+    scrollToEnd()
+  }, [scrollToEnd])
+
   const sync = React.useCallback(() => {
     const viewport = viewportRef.current
     if (!viewport) return
@@ -197,6 +201,25 @@ function MessageScrollerProvider({
         return
       }
       setReady(true)
+      return
+    }
+
+    if (sendIntentRef.current) {
+      // A send wins over a remembered position or an anchor: the new row must be visible.
+      restoreRef.current = null
+      delete viewport.dataset.restoring
+      if (restoreFrameRef.current) cancelAnimationFrame(restoreFrameRef.current)
+      restoreFrameRef.current = 0
+      anchorRef.current = null
+      atBottomRef.current = true
+      setBottom(true)
+      setReady(true)
+      const target = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      if (Math.abs(viewport.scrollTop - target) > 1) {
+        stopGlide()
+        suppressRef.current = target
+        viewport.scrollTop = target
+      }
       return
     }
 
@@ -292,6 +315,13 @@ function MessageScrollerProvider({
     const viewport = viewportRef.current
     if (!viewport) return
     if (glidingRef.current) return
+    if (sendIntentRef.current) {
+      // The send owns the viewport until a reader gesture clears the intent. Growth and the
+      // optimistic-to-echo swap both land here; the pill must not appear meanwhile.
+      setBottom(true)
+      anchorRef.current = null
+      return
+    }
 
     if (suppressRef.current !== null) {
       if (Math.abs(viewport.scrollTop - suppressRef.current) < 1) {
@@ -367,7 +397,8 @@ function MessageScrollerProvider({
     const viewport = viewportRef.current
     if (!viewport) return
     const cancel = () => {
-      // A reader gesture ends a pending restore: their position wins over the remembered one.
+      // A reader gesture ends a pending restore and any send intent: their position wins.
+      sendIntentRef.current = false
       restoreRef.current = null
       delete viewport.dataset.restoring
       if (restoreFrameRef.current) cancelAnimationFrame(restoreFrameRef.current)
@@ -404,8 +435,21 @@ function MessageScrollerProvider({
       sync,
       handleScroll,
       scrollToEnd,
+      requestSendScroll,
     }),
-    [atBottom, ready, newCount, setWorking, reportNew, registerViewport, registerContent, sync, handleScroll, scrollToEnd],
+    [
+      atBottom,
+      ready,
+      newCount,
+      setWorking,
+      reportNew,
+      registerViewport,
+      registerContent,
+      sync,
+      handleScroll,
+      scrollToEnd,
+      requestSendScroll,
+    ],
   )
 
   return <ScrollerContext.Provider value={value}>{children}</ScrollerContext.Provider>
@@ -458,15 +502,13 @@ function MessageScrollerContent({ className, ...props }: React.ComponentProps<"d
 
 function MessageScrollerItem({
   messageId,
-  scrollAnchor = false,
   className,
   ...props
-}: React.ComponentProps<"div"> & { messageId?: string; scrollAnchor?: boolean }) {
+}: React.ComponentProps<"div"> & { messageId?: string }) {
   return (
     <div
       data-slot="message-scroller-item"
       data-message-id={messageId}
-      data-scroll-anchor={scrollAnchor ? "true" : "false"}
       className={cn("min-w-0 shrink-0", className)}
       {...props}
     />
@@ -511,6 +553,18 @@ function MessageScrollerButton({
   )
 }
 
+function MessageScrollerApi({
+  onReady,
+}: {
+  onReady: (api: { requestSendScroll: () => void; scrollToEnd: (options?: ScrollOptions) => void }) => void
+}) {
+  const { requestSendScroll, scrollToEnd } = useScrollerContext()
+  React.useEffect(() => {
+    onReady({ requestSendScroll, scrollToEnd })
+  }, [onReady, requestSendScroll, scrollToEnd])
+  return null
+}
+
 function useMessageScroller() {
   const { scrollToEnd, setWorking, reportNew, atBottom, ready } = useScrollerContext()
   return {
@@ -531,5 +585,6 @@ export {
   MessageScrollerContent,
   MessageScrollerItem,
   MessageScrollerButton,
+  MessageScrollerApi,
   useMessageScroller,
 }
