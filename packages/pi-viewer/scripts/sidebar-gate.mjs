@@ -41,9 +41,9 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       return { groupHs: uniq(groups), paneHs: uniq(leaves), railLines: document.querySelectorAll('[data-testid=sidebar] [role=tree] .border-l').length, nGroups: groups.length, n: rows.length, hs: [...new Set(r.map((x) => Math.round(x.height * 10) / 10))], contiguous: r.every((x, i) => i === 0 || Math.abs(x.top - r[i - 1].bottom) < 0.6), levels: [...new Set(rows.map((e) => e.getAttribute("aria-level")))].sort(), windowsRows: rows.filter((e) => e.getAttribute("aria-level") === "2" && e.hasAttribute("aria-expanded")).length, panes: rows.filter((e) => !e.hasAttribute("aria-expanded")).length, groupCounts: rows.filter((e) => e.hasAttribute("aria-expanded")).every((e) => /\d+ agents/.test(e.getAttribute("aria-label"))), total: r.length ? Math.round(r.at(-1).bottom - r[0].top) : 0, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth }
     })
     check(tag + " session and window rows are one 28px line", g.groupHs.length === 1 && g.groupHs[0] === 28, JSON.stringify(g.groupHs))
-    check(tag + " pane rows are two lines, 46px (name, then role, runtime, repo)", g.paneHs.length === 1 && g.paneHs[0] === 46, JSON.stringify(g.paneHs))
+    check(tag + " pane rows are two lines, 48px (name, then role, runtime, repo)", g.paneHs.length === 1 && g.paneHs[0] === 48, JSON.stringify(g.paneHs))
     check(tag + " rows are contiguous and draw no rail lines", g.contiguous && g.railLines === 0, "rails " + g.railLines)
-    check(tag + " tree height " + g.total + "px for " + g.panes + " agents", g.total <= g.nGroups * 28 + g.panes * 46 + 1)
+    check(tag + " tree height " + g.total + "px for " + g.panes + " agents", g.total <= g.nGroups * 28 + g.panes * 48 + 1)
     check(tag + " group rows carry counts", g.groupCounts)
     // XTRM-1048: the dot carries the state. Line 2 names role, repo and runtime only; every pane row's
     // dot is labelled and titled with the state word, the row's aria-label carries the same word, and

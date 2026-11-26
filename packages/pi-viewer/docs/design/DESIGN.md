@@ -124,7 +124,7 @@ the token tables for all five palettes (`docs/design/palette-console.md:35-199`)
 
 Type, glyph and row values follow console-ui-system.md: the four-step type ladder (§3.3), the glyph
 ladder with the rule "a glyph never exceeds its row's text" (§3.4), and the three densities (§4.2).
-Rows in the viewer are `text-sm` (13px) with the second line at `text-2xs`
+Rows in the viewer are `text-sm` (13px) with the second line at `text-xs` (11.52px)
 (`src/components/sidebar/SessionTree.tsx:88`).
 
 ### 3.2 Rows and the 24px transcript exception
@@ -132,7 +132,7 @@ Rows in the viewer are `text-sm` (13px) with the second line at `text-2xs`
 | surface | height | source |
 |---|---|---|
 | sidebar session and window rows | 28px | `README.md:29-31`; console `sidebar` density, console-ui-system.md §4.2 |
-| sidebar pane row | two lines, 46px (`2.875rem`: two line heights plus `py-1.5`) | `src/components/sidebar/geometry.ts:33-40`; `README.md:32` |
+| sidebar pane row | two lines, 48px (`3rem`: two line heights plus `py-1.5`) | `src/components/sidebar/geometry.ts:33-40`; `README.md:32` |
 | presence agent rows | 32px, 44px on a narrow screen | console-ui-system.md §4.2.1; `src/components/presence/PresenceLine.tsx:283` |
 | thread tool-call, grouped tool-call and turn-fold lines | 24px (`min-h-6`) | console-ui-system.md §4.2.1; `src/components/ActivityDisclosure.tsx:74`, `:161`, `:240` |
 
