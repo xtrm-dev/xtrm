@@ -79,7 +79,9 @@ export function Composer({
     if (!node) return
     const next = findMention(node.value, node.selectionStart ?? node.value.length)
     setMention(next)
-    setIndex(0)
+    // Keep the highlighted agent while the same @-query is open: syncMention also runs on keyup, so an
+    // unconditional reset sent every ArrowUp/ArrowDown back to the first row (operator, 2026-11-26).
+    if (!next || !mention || next.start !== mention.start || next.query !== mention.query) setIndex(0)
     if (next && agents.length) setMenu("mention")
     else if (menu === "mention") setMenu("none")
   }

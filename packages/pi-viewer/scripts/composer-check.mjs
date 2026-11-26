@@ -224,6 +224,23 @@ try {
       assert.equal(claude.effort, null, `${label}: a target without an effort in the transcript shows the model alone`)
       await pick(PI.name)
 
+      // 7. The @-menu keeps the arrow-key highlight: keyup re-reads the mention and must not reset it
+      // to the first row (operator, 2026-11-26).
+      const input = page.locator("[data-composer-input]")
+      await input.fill("")
+      await input.pressSequentially("@")
+      const active = () =>
+        page.evaluate(() => [...document.querySelectorAll("[data-composer-menu] button")].findIndex((row) => row.classList.contains("bg-pressed")))
+      assert.equal(await active(), 0, `${label}: @ opens the menu on the first agent`)
+      await input.press("ArrowDown")
+      assert.equal(await active(), 1, `${label}: ArrowDown moves to the second agent and stays there`)
+      await input.press("ArrowUp")
+      assert.equal(await active(), 0, `${label}: ArrowUp moves back to the first agent`)
+      await input.press("ArrowUp")
+      assert.equal(await active(), agents.length - 1, `${label}: ArrowUp on the first agent wraps to the last`)
+      await input.press("Escape")
+      await input.fill("")
+
       assert.deepEqual(errors, [], `${label}: no console error`)
       shots.push(`${label}: box ${empty.box}px, prompt ${pi.promptSize}, send ${pi.sendW}x${pi.sendH} glyph ${pi.glyph}, send centre ${pi.sendCentre} vs line ${pi.lineCentre}, under-row right ${pi.underRight} vs send right ${Math.round((pi.boxRight - pi.sendRightInset) * 10) / 10}, fill ${rest.fill} on ${rest.canvas}, rest hairline ${restAlpha}, focus ring ${shadowAlpha(focused.shadow)}`)
       await context.close()
