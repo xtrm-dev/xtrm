@@ -3,7 +3,8 @@
 // Runs the app in-process with a mocked API (its own port, stopped at the end) and, for 1440 and 390
 // wide, dark and light (the theme is set through localStorage, which is what the viewer reads),
 // asserts the Claude-Desktop-shaped composer:
-// - an empty composer reserves ONE text row: 52px high at 15/24, and still grows with content;
+// - an empty composer reserves ONE text row: 56px high at 16/24, and still grows with content up to a cap,
+//   after which the text scrolls inside its column, clear of the send button and the box's bottom inset;
 // - the To selector sits in a row BELOW the box, outside it, right-aligned;
 // - the box carries no visible border at rest: a fill one step from the canvas, and no hairline in
 //   Threads; focus alone draws the ring (>= 0.15 alpha, inset);
@@ -93,6 +94,9 @@ const read = (page) =>
       // The textarea owns the box padding, so the first text line starts paddingTop below its top.
       lineCentre: Math.round((inputRect.top + parseFloat(getComputedStyle(input).paddingTop) + parseFloat(getComputedStyle(input).lineHeight) / 2 - boxRect.top) * 10) / 10,
       sendBottomGap: Math.round((boxRect.bottom - sendRect.bottom) * 10) / 10,
+      inputBottomGap: Math.round((boxRect.bottom - inputRect.bottom) * 10) / 10,
+      inputToSend: Math.round((sendRect.left - inputRect.right) * 10) / 10,
+      inputScrolls: input.scrollHeight > input.clientHeight + 1,
       underRight: groupRect ? Math.round(groupRect.right * 10) / 10 : null,
       fill: style.backgroundColor,
       canvas: canvas ? getComputedStyle(canvas).backgroundColor : null,
@@ -143,18 +147,29 @@ try {
 
       // 1. One empty row, and the box still grows with content.
       const empty = await read(page)
-      // XTRM-1056: one text row, 52px high (15/24 text, py-3.5).
-      assert.ok(Math.abs(empty.box - 52) <= 1, `${label}: the empty box is 52px high (${empty.box}px)`)
+      // Operator, 2026-11-26: one text row, 56px high: 16/24 text in a 4px-padded column, 12px row inset.
+      assert.ok(Math.abs(empty.box - 56) <= 1, `${label}: the empty box is 56px high (${empty.box}px)`)
       assert.equal(empty.line, 24, `${label}: the prompt line is 24px high (line ${empty.line}px)`)
-      assert.equal(empty.promptSize, "15px", `${label}: the prompt text is 15px (${empty.promptSize})`)
+      assert.equal(empty.promptSize, "16px", `${label}: the prompt text is 16px (${empty.promptSize})`)
+      assert.ok(Math.abs(empty.sendBottomGap - 12) <= 1, `${label}: one line: send sits 12px above the box's bottom (gap ${empty.sendBottomGap}px)`)
       assert.equal(empty.underInsideBox, false, `${label}: the under-row sits outside the box`)
       assert.ok(empty.underTop >= empty.boxBottom, `${label}: the under-row is below the box (${empty.underTop} < ${empty.boxBottom})`)
       await page.locator("[data-composer-input]").fill("one\ntwo\nthree")
       await page.waitForTimeout(150)
       const grown = await read(page)
       assert.ok(grown.box > empty.box + empty.line, `${label}: the box grows with content (${empty.box} -> ${grown.box})`)
-      // Anchored to the last line when it grows: the same 10px gap below the button in both states.
-      assert.ok(Math.abs(grown.sendBottomGap - 10) <= 1, `${label}: send stays anchored to the last line as the box grows (gap ${grown.sendBottomGap}px)`)
+      // Anchored to the last line when it grows: the same 12px gap below the button in both states.
+      assert.ok(Math.abs(grown.sendBottomGap - 12) <= 1, `${label}: send stays anchored to the last line as the box grows (gap ${grown.sendBottomGap}px)`)
+      // Past the height cap the text scrolls inside its own column: it never reaches the box's bottom inset or
+      // runs under the send button (operator, 2026-11-26).
+      await page.locator("[data-composer-input]").fill(Array.from({ length: 30 }, (_, i) => `line ${i + 1} with enough words to read as a real message`).join("\n"))
+      await page.waitForTimeout(150)
+      const full = await read(page)
+      assert.equal(full.inputScrolls, true, `${label}: a long message scrolls inside the text column`)
+      assert.ok(full.inputBottomGap >= 11.5, `${label}: the text column ends at the 12px bottom inset (gap ${full.inputBottomGap}px)`)
+      assert.ok(full.inputToSend >= 7.5, `${label}: the text column ends 8px before the send button (${full.inputToSend}px)`)
+      assert.ok(Math.abs(full.sendBottomGap - 12) <= 1, `${label}: send keeps its 12px gap at the height cap (gap ${full.sendBottomGap}px)`)
+      assert.ok(full.box <= 13 * 16 + 24 + 1, `${label}: the box stops growing at the cap (${full.box}px)`)
       await page.locator("[data-composer-input]").fill("")
       await page.waitForTimeout(150)
 
@@ -180,9 +195,8 @@ try {
       assert.equal(focused.focused, true, `${label}: the input takes focus`)
       assert.ok(shadowAlpha(focused.shadow) >= 0.15, `${label}: focus draws its ring (alpha ${shadowAlpha(focused.shadow)})`)
 
-      // 4. The inner controls row: attach slot empty on the left, send on the right, both inside the box.
-      assert.equal(focused.controlsInsideBox, true, `${label}: the controls row sits inside the box`)
-      assert.equal(focused.attachEmpty, true, `${label}: the attach slot is present and empty`)
+      // 4. Send sits in the text row, inside the box.
+      assert.equal(focused.controlsInsideBox, true, `${label}: the controls sit inside the box`)
       assert.equal(focused.sendInsideBox, true, `${label}: send sits inside the box's bottom-right`)
 
       // 4b. Send geometry (XTRM-1056): a 32px hit area around a 16px glyph, centred on the text line,

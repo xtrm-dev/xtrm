@@ -153,14 +153,14 @@ export function Composer({
 
         <div
           className={cn(
-            "xtrm-composer-box relative rounded-lg",
+            "xtrm-composer-box relative flex flex-col rounded-lg",
             disabled && "opacity-60",
           )}
         >
           {replyTo ? (
             <div
               data-reply-bar=""
-              className="flex items-center gap-2 px-3.5 pt-2.5 text-2xs text-ink-muted"
+              className="flex items-center gap-2 px-3 pt-2.5 text-2xs text-ink-muted"
             >
               <span
                 aria-hidden="true"
@@ -185,6 +185,13 @@ export function Composer({
             </div>
           ) : null}
 
+          {/* One row, sized from the text (operator, 2026-11-26, after Claude Desktop): 16/24 prompt text, a
+              32px send button (twice the text size) around a 16px glyph (the text size), and one 12px inset on
+              every side of the row. The send button is a flex item, not an overlay, bottom-aligned with the
+              text column: in the one-line state it is centred on the line (12px above, below and right of it),
+              and as the text grows it stays on the last line. The text column scrolls inside its own box, so
+              text never runs under the button or into the box's border. */}
+          <div data-composer-row="" className="flex items-end gap-2 p-3">
           <textarea
             ref={textareaRef}
             data-composer-input=""
@@ -233,33 +240,24 @@ export function Composer({
                 void submit()
               }
             }}
-            className="scrollbar-thin block max-h-52 min-h-[calc(1lh+1.75rem)] w-full resize-none bg-transparent px-3.5 py-3.5 pr-[3.5rem] text-[0.9375rem] leading-6 text-ink placeholder:text-ink-muted focus:outline-none"
+            className="scrollbar-thin block max-h-52 min-h-[calc(1lh+0.5rem)] min-w-0 flex-1 resize-none bg-transparent px-0 py-1 text-[1rem] leading-6 text-ink placeholder:text-ink-muted focus:outline-none"
           />
 
-          {/* The box's inner bottom row, as in Claude Desktop (XTRM-1054, XTRM-1056): an empty slot on
-              the left for a control the viewer does not have yet (attach), send on the right. It
-              overlays the box instead of taking a row. The send button is 32px around a 16px glyph and
-              sits 10px above the box's bottom edge, which centres it on the last text line (padding
-              14px + half of the 24px line above the bottom padding) in the one-line state and keeps it
-              anchored to the last line as the box grows. Its right inset is the text's left inset. */}
-          <div
-            data-composer-controls=""
-            className="pointer-events-none absolute inset-x-3.5 bottom-2.5 flex items-end justify-between"
-          >
-            <span data-composer-attach-slot="" aria-hidden="true" className="size-8" />
-            <button
-              type="button"
-              onClick={() => void submit()}
-              disabled={!text.trim() || !target || sending}
-              aria-label="Send"
-              className="pointer-events-auto flex size-8 items-center justify-center rounded-md bg-github text-github-ink transition-opacity hover:bg-github-hover disabled:opacity-30"
-            >
-              {sending ? (
-                <LoaderCircleIcon className="size-4 animate-spin" />
-              ) : (
-                <SendIcon className="size-4" />
-              )}
-            </button>
+            <div data-composer-controls="" className="flex shrink-0">
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={!text.trim() || !target || sending}
+                aria-label="Send"
+                className="flex size-8 items-center justify-center rounded-md bg-github text-github-ink transition-opacity hover:bg-github-hover disabled:opacity-30"
+              >
+                {sending ? (
+                  <LoaderCircleIcon className="size-4 animate-spin" />
+                ) : (
+                  <SendIcon className="size-4" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -267,8 +265,8 @@ export function Composer({
             one line, the target, its model and its bare effort, muted at the 13px step against the
             14px prompt, 12px apart, no chips and no borders. */}
         {/* The row's right edge meets the send button's right edge, not the box's outer edge
-            (XTRM-1056): the group ends at the same 14px inset the box uses for its text and send. */}
-        <div data-composer-under-row="" className="mt-1.5 flex min-w-0 items-center gap-3 pl-1 pr-3.5">
+            (XTRM-1056): the group ends at the same 12px inset the box uses for its text and send. */}
+        <div data-composer-under-row="" className="mt-1.5 flex min-w-0 items-center gap-3 pl-1 pr-3">
           <span className="hidden min-w-0 truncate text-2xs text-ink-muted sm:block">
             @ to mention · Shift+Enter for a new line
           </span>
