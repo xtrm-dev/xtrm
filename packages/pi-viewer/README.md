@@ -170,6 +170,10 @@ queued operator row; `remove` plus a `queued_command` attachment of mode `prompt
 at the attachment time; `dequeue` plus a normal user record shows only the normal turn. A queued row carries
 the `Queued` delivery mark, and its key does not change on delivery, so the bubble is never remounted.
 
+Pi keeps steering and follow-up prompts in memory until it delivers them. Its transcript has no queue
+record, so a prompt typed into a busy pi pane appears only on delivery, as a normal operator message.
+The composer's optimistic row covers sends made from the viewer.
+
 ## Roles
 
 The launcher records a role in the pane option `@agent_role`. The viewer reads it
