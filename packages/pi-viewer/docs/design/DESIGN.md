@@ -106,13 +106,21 @@ Tailwind v4 through `@theme` (`src/styles.css:157-183`), so no component holds a
 sidebar plane is `#181818` in Threads (`src/styles.css:97`) and `#232323` in Console
 (`src/styles.css:153`); the light sidebar is `#f4f4f5` in both (`src/styles.css:17`).
 
-Two palettes, **Threads** (default) and **Console**, are themes of the same components: the header's
-Colours control sets `data-palette` on `<html>`, the choice persists in `localStorage`
-(`pi-viewer-palette`), and a switch rewrites variables only — no component fork, no reload, no scroll
-change (`docs/design/palette-console.md:3-6`; console overrides at `src/styles.css:143-155`). The
-difference is which plane each region wears, not which colours exist: every `--x-*` text, border, accent
-and danger token is identical in both palettes (`docs/design/palette-console.md:66-67`). The region
-assignment table is `docs/design/palette-console.md:21-33`.
+Five palettes are themes of the same components: **Threads** (default), **Threads · soft text**,
+**Console**, **Console · soft text** and **Desktop** (`src/lib/palette.ts:15-17`; the operator kept all
+five on 2026-11-26, §6). The header's Colours control sets `data-palette` on `<html>`, the choice
+persists in `localStorage` (`pi-viewer-palette`), and a switch rewrites variables only — no component
+fork, no reload, no scroll change (`docs/design/palette-console.md:1-6`; console overrides at
+`src/styles.css:145-161`). A soft-text version keeps its base's `data-palette` and adds
+`data-text="soft"`, a text-only layer, so no surface value is written twice
+(`src/lib/palette.ts:24-30`, `src/styles.css:188-205`).
+
+The difference is which plane each region wears, not which colours exist: every `--x-*` text, border,
+accent and danger token is identical in Threads and Console (`docs/design/palette-console.md:69-70`);
+Desktop replaces the planes and the text roles with the operator's Claude Desktop values
+(`src/styles.css:163-187`), and a soft-text version takes Desktop's text colours over its base's
+surfaces (`src/styles.css:188-205`). The region assignment (`docs/design/palette-console.md:22-33`) and
+the token tables for all five palettes (`docs/design/palette-console.md:35-199`) record every value.
 
 Type, glyph and row values follow console-ui-system.md: the four-step type ladder (§3.3), the glyph
 ladder with the rule "a glyph never exceeds its row's text" (§3.4), and the three densities (§4.2).
@@ -298,6 +306,7 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-25 | Push only, no PR | XTRM-1024 seq13 |
 | 2026-11-25 | One explicit state model replaces incremental heuristics, proven by a real-transcript replay harness | XTRM-1024 seq12; XTRM-1043; docs/design/working-presence.md §8 |
 | 2026-11-25 | The pane row's line 2 carries no state word; the dot carries the state, as in the thread | XTRM-1048; src/lib/status-dot.ts:44 |
+| 2026-11-26 | All five palettes stay — Threads, Threads soft text, Console, Console soft text, Desktop — as the base for theming in the app and later the console; the default remains Threads | XTRM-1024 seq17; src/lib/palette.ts:15-17 |
 
 ## 7. Open questions
 
@@ -309,8 +318,9 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
    "no state is proven to need attention", which XTRM-1043 (attention) and XTRM-1048 (no state word)
    changed; `README.md:44` gives the indent step as 0.75rem, while `src/components/sidebar/geometry.ts:13`
    has `INDENT_REM = 0.5`. The README needs its own revision; it is out of this issue's scope.
-3. **Which palette stays.** The operator has not decided between Threads and Console; until then both are
-   maintained (`docs/design/palette-console.md:6`).
+3. **Which palette stays — resolved 2026-11-26.** All five stay and become the base for theming in the
+   app; the default remains Threads (§6, XTRM-1024 seq17). The Colours switch moves into a settings page
+   when one exists; until then it stays in the header (`XTRM-1024` seq17).
 4. **Presence panel shortcut.** No global shortcut opens the presence panel; the proposal is none in v1
    (`docs/design/working-presence.md:310`).
 5. **Agents outside the scope.** The presence line counts only the scope; the proposal, not yet ruled, is
