@@ -25,6 +25,7 @@ export function isEchoOf(
     event.kind === "user" &&
     event.agentId === message.paneId &&
     normalizePrompt(event.text ?? "") === normalizePrompt(message.text) &&
-    event.at >= message.at - 30_000
+    event.at >= message.at - 30_000 &&
+    event.at <= message.at + 60_000
   )
 }
