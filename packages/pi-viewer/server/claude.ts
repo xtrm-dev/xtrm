@@ -617,6 +617,22 @@ function consumeQueued(state: ClaudeState, text: string): void {
   if (pending) state.queue = state.queue.filter((item) => item !== pending)
 }
 
+/** A prompt delivered as a plain user record retires its queued bubble, whichever queue slot the dequeue took. */
+function dropQueuedCopy(state: ClaudeState, text: string): void {
+  const wanted = queuedText(text)
+  if (!wanted) return
+  const pending = state.queue.find((item) => item.entry && item.entry._queued === true && item.content && queuedText(item.content) === wanted)
+  const entry =
+    pending?.entry ??
+    state.entries.find((item) => item._queued === true && isRecord(item.message) && typeof item.message.content === "string" && queuedText(item.message.content) === wanted)
+  if (pending) state.queue = state.queue.filter((item) => item !== pending)
+  if (!entry) return
+  entry._queued = false
+  entry._hidden = true
+  const index = state.entries.indexOf(entry)
+  if (index >= 0) state.versions[index] += 1
+}
+
 function deliverQueued(state: ClaudeState, record: Raw, text: string, sidechain: boolean): void {
   const pending = findQueued(state, text)
   if (pending) {
@@ -702,6 +718,7 @@ function ingestUserText(state: ClaudeState, record: Raw, text: string, sidechain
     return
   }
   const slash = slashCommand(text)
+  if (!slash) dropQueuedCopy(state, text)
   const message = { type: "message", ...base, message: { role: "user", content: slash ?? text } }
   // A command right after the local-command caveat runs in Claude Code, not in the model.
   const local = slash !== null && !sidechain && afterCaveat(state)
@@ -827,7 +844,10 @@ function ingest(state: ClaudeState, record: Raw): void {
         return
       }
       if (operation === "dequeue") {
-        const pending = state.queue.shift()
+        // Skip slots already removed: a removed peer envelope that never comes back as a prompt
+        // would otherwise absorb every later dequeue and leave the operator's prompt queued (XTRM-1096).
+        const at = state.queue.findIndex((item) => !item.removed)
+        const pending = at >= 0 ? state.queue.splice(at, 1)[0] : state.queue.shift()
         if (pending?.entry) {
           pending.entry._queued = false
           pending.entry._hidden = true
@@ -837,7 +857,12 @@ function ingest(state: ClaudeState, record: Raw): void {
         return
       }
       if (operation === "remove") {
-        const pending = state.queue[0] ?? { operator: true }
+        const wanted = content ? queuedText(content) : ""
+        const pending =
+          (wanted ? state.queue.find((item) => item.content && queuedText(item.content) === wanted) : undefined) ??
+          (wanted ? state.queue.find((item) => !item.content && !item.removed) : undefined) ??
+          state.queue[0] ??
+          { operator: true }
         if (state.queue[0] !== pending) state.queue.unshift(pending)
         pending.removed = true
         if (!pending.content && content) pending.content = content

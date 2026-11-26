@@ -140,6 +140,47 @@ test("dequeue plus a normal user record shows the turn once, not the queued row"
   assert.equal(users[0].queued, undefined)
 })
 
+/** A peer envelope that was enqueued empty and removed, but never came back as a prompt attachment. */
+const staleSlot = [
+  { type: "queue-operation", operation: "enqueue", timestamp: AT, sessionId: "11111111-2222-3333-4444-555555555555" },
+  {
+    type: "queue-operation",
+    operation: "remove",
+    timestamp: AT,
+    sessionId: "11111111-2222-3333-4444-555555555555",
+    content: '<cross-session-message>\n{"activationId":"act:1"}\n</cross-session-message>',
+  },
+]
+
+test("a stale removed slot does not absorb a later dequeue (XTRM-1096)", () => {
+  const file = fileOf("stale-dequeue")
+  dropClaudeCache(file)
+  write(file, [
+    ...staleSlot,
+    enqueue,
+    { type: "queue-operation", operation: "dequeue", timestamp: LATER, sessionId: "11111111-2222-3333-4444-555555555555" },
+    {
+      type: "user",
+      uuid: "user-2",
+      timestamp: LATER,
+      sessionId: "11111111-2222-3333-4444-555555555555",
+      message: { role: "user", content: TEXT },
+    },
+  ])
+  const users = eventsOf(file).filter((event) => event.kind === "user" && event.text === TEXT)
+  assert.equal(users.length, 1)
+  assert.equal(users[0].queued, undefined)
+})
+
+test("a stale removed slot does not absorb a later remove (XTRM-1096)", () => {
+  const file = fileOf("stale-remove")
+  dropClaudeCache(file)
+  write(file, [...staleSlot, enqueue, remove, attachment])
+  const users = eventsOf(file).filter((event) => event.kind === "user" && event.text === TEXT)
+  assert.equal(users.length, 1)
+  assert.equal(users[0].queued, undefined)
+})
+
 test("a queued prompt does not change an open tool turn", () => {
   const file = fileOf("status")
   dropClaudeCache(file)
