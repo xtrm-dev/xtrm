@@ -3,8 +3,8 @@
 The header has a Colours control (palette glyph, 16px): **Colours: Threads | Threads · soft text | Console | Console · soft text | Desktop**. Default Threads,
 persisted in `localStorage` under `pi-viewer-palette`, applied as `data-palette` on `<html>` (set before
 first paint by `index.html`). Switching rewrites CSS variables only; no component forks, no reload, no scroll change.
-The operator decides which palette stays; this document records what each one is. Console and Threads are
-described first, Desktop (XTRM-1051) and the soft-text versions (XTRM-1053) in their own sections below.
+Operator ruling (XTRM-1024 seq 17): all five palettes stay as the base for theming, and Threads is the default.
+This document records what each one is. Console and Threads are described first, Desktop (XTRM-1051) and the soft-text versions (XTRM-1053) in their own sections below.
 
 ## Source of the console values
 
@@ -25,8 +25,9 @@ Every `--x-*` colour token in the viewer already equals the console's, with one 
 |---|---|---|---|
 | Page canvas, thread, presence line, composer margin, header bar | `deep` | `surface` | `shell/AppShell.tsx:82` (`bg-surface`); the top bar has no fill, `shell/AppShell.tsx:25` |
 | Sidebar plane | `sidebar` | `sidebar` | `shell/AppShell.tsx:93` (`bg-sidebar`) |
-| Composer fill | `surface`, `raised` on focus | `surface`, unchanged on focus | `agent/Composer.tsx:279` |
-| Composer edge | none | `border`, `border-strong` on focus | `agent/Composer.tsx:279` (`border-border`, `focus-within:border-border-strong`) |
+| Composer fill | `--x-composer-fill` = `surface`, one step up from the canvas; the fill does not jump on focus | `--x-composer-fill` = `raised` (the canvas is `surface` here, so the box steps up); same on focus | `styles.css:84-85`, `:151-152`; `.xtrm-composer-box` `styles.css:706-716` (Desktop dark focus takes `control`, `styles.css:181`) |
+| Composer edge | no border at rest; a 1px inset focus ring in `border-strong` | no border at rest in dark; a `border-muted` hairline in Console light only (no fill step on white); the same focus ring | `styles.css:86-87`, `:153`, `:160`. The console's own composer (`agent/Composer.tsx:279`: border, `border-strong` on focus) is no longer mirrored |
+| Composer box | `rounded-lg`; the input is 52px high at one line (24px line plus 14px padding above and below) | same | `components/Composer.tsx:154` (box), `:234` (`min-h-[calc(1lh+1.75rem)]`, `leading-6`) |
 | Composer input | transparent | transparent | `agent/Composer.tsx:296` (`bg-transparent`) |
 | Rendered code frame | `surface`; hairline in light only | `deep`; `border-muted` in both | `styles.css:302-303` (`.xtrm-prose pre`) |
 | Quiet panels in the thread (activity detail, intercom card) | `surface` at 40 / 70% | `control` at 40 / 70% | no console counterpart; chosen so the panel stays visible when canvas = surface |
