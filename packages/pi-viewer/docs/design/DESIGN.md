@@ -21,7 +21,8 @@ the composer (`README.md:140-141`). It binds to `127.0.0.1` and has no authentic
 
 In scope: the reading experience of one operator watching several agents, and answering them.
 
-Out of scope, by decision: starting, stopping, steering or approving an agent. Rows for an interrupt and
+Out of scope, by decision: starting, steering or approving an agent. Stopping is in scope since
+2026-11-26: Escape to the agent's own pane, from the composer, while it works (XTRM-1088). Rows for an interrupt and
 a pending approval are designed but not built, because nothing may change agent state (XTRM-1024 seq3,
 §11).
 
@@ -300,6 +301,7 @@ The spacing scale is the 8px system the operator supplied as a density guide
 | composer box, empty | `56px`: `12px` + a `32px` textarea (line `24px` + `8px`) + `12px` | `src/components/Composer.tsx:254` |
 | composer send button | `32px` box, `16px` glyph, `12px` above the box's bottom edge, centred on the text line | `src/components/Composer.tsx:262-270` |
 | composer under-row | `6px` below the box, `12px` between items, right edge at the send button's right edge | `src/components/Composer.tsx:267-269` |
+| composer stop control | `32px` square beside send, muted `bg-control` fill, drawn only while the target works; Esc in an empty box is the same action | `src/components/Composer.tsx:293-307` |
 | sidebar row padding | `8px` horizontally on the tree, `6px` vertically on a pane row | `src/components/sidebar/geometry.ts` |
 | thread content padding | `3rem` on a wide screen (`sm:px-12`) | `src/styles.css:757-771` |
 | chat lane | `46rem` default, `72rem` wide, custom from `36rem`, Full | `src/lib/chat-width.ts:12-18` |
@@ -811,6 +813,7 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-26 | Composer: one-line 56px box, no border, target row with model and effort under it on the right | XTRM-1054, XTRM-1056, XTRM-1067 |
 | 2026-11-26 | Composer: no border and no ring in any palette or state; a drop shadow, and a context-usage ring beside the model | XTRM-1087 |
 | 2026-11-26 | The composer centres the painted ink band, not the line box: 0.75px more padding below than above | XTRM-1087 |
+| 2026-11-26 | Stopping is allowed: Escape to the agent's own pane, from a Stop control while it works and from Esc in an empty box; approve and deny stay show-only | XTRM-1088 |
 | 2026-11-26 | Folds sit inside the bubble or card with one wording; the fade masks the text itself | XTRM-1055 |
 | 2026-11-26 | Reviewer roles run as specialists | XTRM-1024 seq14 |
 | 2026-11-26 | Sidebar line 2 is text-xs in ink-muted, matching the line above | XTRM-1057 |
@@ -836,8 +839,9 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
    (`docs/design/working-presence.md`).
 4. **Agents outside the scope.** The presence line counts only the scope; the proposal is to keep it that
    way and let the sidebar show the rest (`docs/design/working-presence.md`).
-5. **Interrupt and approve.** Rows for an interrupt and a pending approval are designed but not built,
-   because nothing may change agent state (XTRM-1024 seq3). Building them needs a new ruling.
+5. **Interrupt and approve.** Approval is designed but not built, because nothing may change agent
+   state (XTRM-1024 seq3). The interrupt half was ruled on 2026-11-26: stopping by Escape is allowed,
+   and the composer sends it while the target works (XTRM-1088).
 6. **Inferred Desktop tokens.** Desktop inherits `border-muted`, `border-subtle`, `border-strong`,
    `ink-faint`, `hover`, `pressed` and `accent` from the dark base, and the operator supplied no light
    values at all, so Desktop in light is Threads light. Both are recorded as inferred in

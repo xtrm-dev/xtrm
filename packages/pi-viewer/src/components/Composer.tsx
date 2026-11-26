@@ -1,4 +1,4 @@
-import { ChevronDownIcon, LoaderCircleIcon, SendIcon, XIcon } from "lucide-react"
+import { ChevronDownIcon, LoaderCircleIcon, SendIcon, SquareIcon, XIcon } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { StatusDot, statusWord } from "@/components/StatusDot"
@@ -28,6 +28,7 @@ export function Composer({
   target,
   onTargetChange,
   onSend,
+  onStop,
   disabled,
   replyTo = null,
   onClearReply,
@@ -36,6 +37,8 @@ export function Composer({
   target: ViewerAgent | null
   onTargetChange: (agent: ViewerAgent) => void
   onSend: (agent: ViewerAgent, text: string) => Promise<void>
+  /** Stop the target's running turn: one Escape to its own pane (XTRM-1088). Absent means no control. */
+  onStop?: (agent: ViewerAgent) => Promise<void>
   disabled?: boolean
   /** The agent a Reply click aimed the composer at: shows the "Replying to" bar (XTRM-1045). */
   replyTo?: ViewerAgent | null
@@ -43,6 +46,7 @@ export function Composer({
 }) {
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
+  const [stopping, setStopping] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<"none" | "to" | "mention">("none")
   const [mention, setMention] = useState<Mention | null>(null)
@@ -55,6 +59,9 @@ export function Composer({
   const rootRef = useRef<HTMLDivElement>(null)
   // The under-row carries the two fields the presence detail shows, and omits a missing one.
   const meta = composerMeta(target)
+  // Stop is offered only while the target is actually working, the same signal the presence line reads:
+  // sending Escape to an idle pane would type into a prompt nobody asked to interrupt (XTRM-1088).
+  const working = Boolean(target && target.status === "working" && onStop)
 
   const matches = useMemo(() => {
     if (!mention) return []
@@ -129,6 +136,21 @@ export function Composer({
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
       setSending(false)
+    }
+  }
+
+  // One Escape per press, to the target's own pane, and only while it is working. The server checks the
+  // pane against a fresh discovery, so a stale target cannot reach a pane that has been reused.
+  async function stop() {
+    if (!target || !onStop || stopping) return
+    setStopping(true)
+    setError(null)
+    try {
+      await onStop(target)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setStopping(false)
     }
   }
 
@@ -248,6 +270,13 @@ export function Composer({
                 onClearReply?.()
                 return
               }
+              // Esc in an empty box stops the running turn: the same request the Stop button sends
+              // (XTRM-1088). A box with text in it keeps Esc free for the menus and the reply bar.
+              if (event.key === "Escape" && !text.trim() && working) {
+                event.preventDefault()
+                void stop()
+                return
+              }
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault()
                 void submit()
@@ -256,7 +285,24 @@ export function Composer({
             className="scrollbar-thin block max-h-52 min-h-[calc(1lh+0.5rem)] min-w-0 flex-1 resize-none bg-transparent px-0 pt-[3.25px] pb-[4.75px] text-[1rem] leading-6 text-ink placeholder:text-ink-muted focus:outline-none"
           />
 
-            <div data-composer-controls="" className="flex shrink-0">
+            <div data-composer-controls="" className="flex shrink-0 items-center gap-2">
+              {working ? (
+                <button
+                  type="button"
+                  data-composer-stop=""
+                  onClick={() => void stop()}
+                  disabled={stopping}
+                  aria-label={`Stop ${target?.name ?? "agent"}`}
+                  title="Stop (Esc)"
+                  className="flex size-8 items-center justify-center rounded-md bg-control text-ink transition-opacity hover:bg-pressed disabled:opacity-30"
+                >
+                  {stopping ? (
+                    <LoaderCircleIcon className="size-4 animate-spin" />
+                  ) : (
+                    <SquareIcon className="size-3.5 fill-current" />
+                  )}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void submit()}
