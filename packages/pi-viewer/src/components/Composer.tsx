@@ -149,32 +149,6 @@ export function Composer({
           </div>
         ) : null}
 
-        {menu === "to" ? (
-          <div
-            data-composer-menu=""
-            className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-72 overflow-y-auto rounded-lg bg-raised p-1 shadow-float">
-            <div className="px-2 py-1 text-2xs text-ink-muted">Send to agent</div>
-            {agents.map((agent) => (
-              <button
-                key={agent.id}
-                type="button"
-                onClick={() => {
-                  onTargetChange(agent)
-                  setMenu("none")
-                }}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover",
-                  agent.id === target?.id && "bg-pressed",
-                )}
-              >
-                <StatusDot status={agent.status} />
-                <span className="min-w-0 flex-1 truncate text-xs text-ink">{agent.name}</span>
-                <span className="text-2xs text-ink-muted">{statusWord(agent.status)}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-
         <div
           className={cn(
             "xtrm-composer-box relative rounded-lg",
@@ -297,7 +271,37 @@ export function Composer({
             @ to mention · Shift+Enter for a new line
           </span>
 
-          <div data-composer-target-meta="" className="ml-auto flex min-w-0 items-center gap-3">
+          <div data-composer-target-meta="" className="relative ml-auto flex min-w-0 items-center gap-3">
+            {/* The agent menu opens upward from the selector it belongs to (operator, 2026-11-26): it is
+                anchored to this right-aligned group, so its right edge meets the selector group's right
+                edge (the send button's right edge), it overlays the box above as Claude Desktop's model
+                menu does, and it sizes to its rows between 14rem and 20rem, never wider than the screen. */}
+            {menu === "to" ? (
+              <div
+                data-composer-menu=""
+                className="absolute right-0 bottom-full z-20 mb-2 max-h-72 w-max min-w-56 max-w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-lg bg-raised p-1 shadow-float"
+              >
+                <div className="px-2.5 pt-1.5 pb-1 text-xs text-ink-muted">Send to agent</div>
+                {agents.map((agent) => (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    onClick={() => {
+                      onTargetChange(agent)
+                      setMenu("none")
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-hover",
+                      agent.id === target?.id && "bg-pressed",
+                    )}
+                  >
+                    <StatusDot status={agent.status} />
+                    <span className="min-w-0 flex-1 truncate text-sm text-ink">{agent.name}</span>
+                    <span className="shrink-0 text-xs text-ink-muted">{statusWord(agent.status)}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <button
               type="button"
               disabled={!agents.length}
