@@ -264,6 +264,7 @@ npm run typecheck
 npm run build
 npm run test:anchor
 npm run test:follow
+npm run test:flicker   # send → echo must reuse one bubble
 npm run measure:load http://127.0.0.1:5199/   # cold-load numbers, see Run
 ```
 
@@ -271,8 +272,10 @@ npm run measure:load http://127.0.0.1:5199/   # cold-load numbers, see Run
 ties), intercom pairing, and the incremental/earlier page merge. `npm run test:anchor` starts an isolated Vite
 instance on port 5198 with a deterministic fixture and drives headless Chromium
 to prove that a poll growing or appending content above the viewport does not
-move the reader's anchor, and that the bottom stays pinned. It needs the
-Playwright Chromium download (`npx playwright install chromium`).
+move the reader's anchor, and that the bottom stays pinned. `npm run test:flicker`
+sends into a mocked thread and fails if the optimistic bubble is removed and
+re-added when the transcript echo arrives. Both need the Playwright Chromium
+download (`npx playwright install chromium`).
 
 Live API checks:
 

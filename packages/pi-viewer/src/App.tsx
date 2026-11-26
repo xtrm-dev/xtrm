@@ -322,17 +322,6 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
-    if (!branch) return
-    setOptimistic((previous) => {
-      const next = previous.filter((message) => {
-        if (message.status === "error") return true
-        return !branch.events.some((event) => isEchoOf(event, message))
-      })
-      return next.length === previous.length ? previous : next
-    })
-  }, [branch])
-
   // A thread payload belongs to one session. Right after a cross-session select the previous
   // payload is still in state; it is used only while it names the session being read.
   const freshAgents = useMemo(() => {
@@ -372,9 +361,31 @@ export default function App() {
     return optimistic.filter((message) => ids.has(message.paneId))
   }, [optimistic, agents])
 
+  // An optimistic prompt and its transcript echo are one row. Replacing the optimistic message
+  // during render (not in an effect afterwards) avoids a frame with two bubbles, and the echo
+  // keeps the optimistic key so React updates the row instead of unmounting it.
+  const echoView = useMemo(() => {
+    const keys = new Map<string, string>()
+    const matched = new Set<string>()
+    const visible: OptimisticMessage[] = []
+    for (const message of scopeOptimistic) {
+      const echo = scopeEvents.find((event) => !matched.has(event.id) && isEchoOf(event, message))
+      if (echo) {
+        matched.add(echo.id)
+        keys.set(echo.id, `optimistic:${message.id}`)
+      } else {
+        visible.push(message)
+      }
+    }
+    return { visible, keys }
+  }, [scopeEvents, scopeOptimistic])
+
   // One timeline for the thread, its presence line and the delivery rows. ChannelView must not
   // rebuild it during an unchanged poll.
-  const timeline = useMemo(() => channelTimeline(scopeEvents, scopeOptimistic), [scopeEvents, scopeOptimistic])
+  const timeline = useMemo(
+    () => channelTimeline(scopeEvents, echoView.visible, echoView.keys),
+    [scopeEvents, echoView],
+  )
 
   // The composer addresses one agent of the scope: the one picked, else the pane itself or the
   // most recently active agent of the window or session.

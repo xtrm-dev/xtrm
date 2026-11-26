@@ -664,6 +664,7 @@ export function channelTurns(events: ViewerEvent[]): Turn[] {
 export function channelTimeline(
   events: ViewerEvent[],
   optimistic: OptimisticMessage[] = [],
+  echoKeys: ReadonlyMap<string, string> = new Map(),
 ): ChannelItem[] {
   const items: ChannelItem[] = []
   for (const turn of groupTurns(events)) {
@@ -671,7 +672,8 @@ export function channelTimeline(
     for (const user of turn.users) {
       items.push({
         kind: "user",
-        id: `user:${user.id}`,
+        // An echoed prompt keeps the optimistic row's key, so React never unmounts the bubble.
+        id: echoKeys.get(user.id) ?? `user:${user.id}`,
         // A prompt without a timestamp keeps its position inside its own turn.
         at: user.at > 0 ? user.at : anchor,
         agentId: user.agentId,
