@@ -51,6 +51,22 @@ export const SIDEBAR_DOT: Record<AgentStatus, string> = {
   unknown: "border border-ink-muted/75 bg-transparent",
 }
 
+/**
+ * Whether the sidebar draws the dot at all. An idle agent draws nothing: the absence of the dot is the
+ * state (operator 2026-11-26, XTRM-1058), and `waiting` reads as idle, so it draws nothing either. The
+ * row leaves the slot empty, so nothing shifts when the state changes, and the row's aria-label keeps
+ * the word (`Idle`, `Waiting`) for the screen reader.
+ */
+export const SIDEBAR_DOT_SHOWN: Record<AgentStatus, boolean> = {
+  working: true,
+  attention: true,
+  quiet: true,
+  error: true,
+  unknown: true,
+  idle: false,
+  waiting: false,
+}
+
 /** The same words, capitalised for a label or tooltip; "failed" reads better than "error". */
 const SIDEBAR_WORD: Record<AgentStatus, string> = {
   working: "Working",

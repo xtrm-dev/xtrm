@@ -48,6 +48,8 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     // XTRM-1048: the dot carries the state. Line 2 names role, repo and runtime only; every pane row's
     // dot is labelled and titled with the state word, the row's aria-label carries the same word, and
     // every dot holds 3:1 against the sidebar it sits on (the non-text minimum).
+    // XTRM-1058: an idle or waiting agent draws no dot at all; the row keeps the dot's 14px slot empty
+    // so nothing shifts, and its label still says the state.
     const dots = await p.evaluate(() => {
       // Colours are read through a canvas: the used value of a Tailwind v4 token can be oklch(), and the
       // canvas resolves any CSS colour to sRGB bytes, which is what a screenshot would show.
@@ -60,6 +62,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       return [...document.querySelectorAll('[role=treeitem][aria-level="3"]')].map((row) => {
         const line2 = (row.querySelector('[data-testid=pane-row-line2]')?.textContent || '').replace(/\s+/g, ' ').trim()
         const dot = row.querySelector('[data-testid=sidebar-dot]')
+        const slot = row.querySelector('[data-testid=sidebar-dot-slot]')
         const mark = dot?.firstElementChild
         const cs = mark ? getComputedStyle(mark) : null
         const fill = cs?.backgroundColor || 'rgb(0, 0, 0)'
@@ -76,13 +79,26 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
           contrast: cs ? ratio(colour, plane) : 0,
           anim: cs?.animationName || 'none',
           known: words.some((w) => (dot?.getAttribute('aria-label') || '') === w || (dot?.getAttribute('aria-label') || '').startsWith(w + ' ')),
+          hasDot: !!dot,
+          hasSlot: !!slot,
+          slotBox: slot ? [slot.getBoundingClientRect().width, slot.getBoundingClientRect().height].map((v) => Math.round(v)) : null,
+          rowH: Math.round(row.getBoundingClientRect().height * 10) / 10,
         }
       })
     })
     check(tag + " pane row line 2 names the role, the runtime and the repo, with no separator and no state", dots.length > 0 && dots.every((d) => d.line2.length > 0 && !d.wordAtEnd && !d.hasSeparator), JSON.stringify(dots.slice(0, 2).map((d) => d.line2)))
-    check(tag + " every pane row's dot is labelled and titled with its state", dots.length > 0 && dots.every((d) => d.label && d.known && d.title === d.label), JSON.stringify(dots.slice(0, 2)))
-    check(tag + " the row's aria-label carries the dot's state", dots.length > 0 && dots.every((d) => d.rowLabel.endsWith(', ' + d.label)), JSON.stringify(dots.slice(0, 2).map((d) => d.rowLabel)))
-    check(tag + " every dot holds 3:1 against the sidebar", dots.length > 0 && dots.every((d) => d.contrast >= 3), Math.min(...dots.map((d) => d.contrast)).toFixed(2))
+    const withDot = dots.filter((d) => d.hasDot), withoutDot = dots.filter((d) => !d.hasDot)
+    check(tag + " every pane row's dot is labelled and titled with its state", withDot.length > 0 && withDot.every((d) => d.label && d.known && d.title === d.label), JSON.stringify(withDot.slice(0, 2)))
+    check(tag + " the row's aria-label carries the dot's state", withDot.length > 0 && withDot.every((d) => d.rowLabel.endsWith(', ' + d.label)), JSON.stringify(withDot.slice(0, 2).map((d) => d.rowLabel)))
+    check(tag + " every dot holds 3:1 against the sidebar", withDot.length > 0 && withDot.every((d) => d.contrast >= 3), Math.min(...withDot.map((d) => d.contrast)).toFixed(2))
+    // XTRM-1058: idle and waiting bring no dot, and only those two; the slot stays so nothing shifts.
+    // The rule is read off the row label, not off the missing dot, so an idle row that wrongly drew a
+    // dot still fails, and the count in the detail says whether this tree held an idle agent at all.
+    const idleLike = dots.filter((d) => /, (Idle|Waiting)$/.test(d.rowLabel))
+    check(tag + " every idle or waiting row draws no dot", idleLike.every((d) => !d.hasDot), idleLike.length + " idle rows " + JSON.stringify(idleLike.map((d) => d.rowLabel)))
+    check(tag + " a row without a dot keeps the dot's 14px slot empty", withoutDot.every((d) => d.hasSlot && d.slotBox[0] === 14 && d.slotBox[1] === 14), JSON.stringify(withoutDot.slice(0, 2).map((d) => d.slotBox)))
+    check(tag + " an idle row still names its state in the aria-label", idleLike.every((d) => d.label === '' || /Idle|Waiting/.test(d.label)), JSON.stringify(idleLike.slice(0, 2).map((d) => d.rowLabel)))
+    check(tag + " rows keep one height with and without a dot", new Set(dots.map((d) => d.rowH)).size === 1, JSON.stringify([...new Set(dots.map((d) => d.rowH))]))
     check(tag + " one-pane windows add no row (window rows have 2+ agents)", await p.evaluate(() => [...document.querySelectorAll('[role=treeitem][aria-level="2"][aria-expanded]')].every((e) => Number(/(\d+) agents/.exec(e.getAttribute("aria-label"))[1]) >= 2)))
     check(tag + " no overflow", !g.overflow)
     await p.screenshot({ path: SHOTS + "/g4-" + tag + ".png" })

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { test } from "node:test"
 
-import { SIDEBAR_DOT, STATUS_DOT, STATUS_WORD, sidebarDotLabel } from "../src/lib/status-dot.ts"
+import { SIDEBAR_DOT, SIDEBAR_DOT_SHOWN, STATUS_DOT, STATUS_WORD, sidebarDotLabel } from "../src/lib/status-dot.ts"
 import type { AgentStatus } from "../src/shared/types.ts"
 
 const STATUSES: AgentStatus[] = ["working", "attention", "quiet", "waiting", "error", "idle", "unknown"]
@@ -114,6 +114,17 @@ test("the sidebar dot: one class and one label per state", () => {
     unknown: "border border-ink-muted/75 bg-transparent",
   })
   assert.deepEqual(Object.keys(SIDEBAR_DOT).sort(), [...STATUSES].sort())
+  // XTRM-1058: the sidebar draws no dot for idle, and waiting reads as idle.
+  assert.deepEqual(SIDEBAR_DOT_SHOWN, {
+    working: true,
+    attention: true,
+    quiet: true,
+    waiting: false,
+    error: true,
+    idle: false,
+    unknown: true,
+  })
+  assert.deepEqual(Object.keys(SIDEBAR_DOT_SHOWN).sort(), [...STATUSES].sort())
   assert.equal(sidebarDotLabel("working"), "Working")
   assert.equal(sidebarDotLabel("attention"), "Needs you")
   assert.equal(sidebarDotLabel("waiting"), "Waiting")
