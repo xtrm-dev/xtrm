@@ -66,7 +66,8 @@ function RepositorySelector() {
           className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
         />
       </div>
-      <div className="thin-scrollbar max-h-80 overflow-y-auto p-1" role="listbox" aria-label="Repositories">
+      {/* The popover's own capped surface is the single scroller, so the list never nests one. */}
+      <div className="p-1" role="listbox" aria-label="Repositories">
         {repos.isPending && <div className="px-2 py-2 text-sm text-ink-faint">Loading repositories…</div>}
         {repos.isError && <div className="px-2 py-2 text-sm text-danger">{String(repos.error.message)}</div>}
         {ordered.map((r) => (

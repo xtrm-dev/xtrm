@@ -223,32 +223,58 @@ test.describe("expanding popover", () => {
     }
   });
 
-  test("a viewport resize keeps the header on the trigger and the panel on screen", async ({ page }) => {
+  test("a viewport resize keeps the header on the trigger and re-caps the panel", async ({ page }) => {
     await page.goto("/rep/xtrm-dev/xtrm/work/issues");
     await page.locator(REPO).waitFor();
     await page.locator(REPO).click();
     await expect(page.locator('[data-expand-popover][data-side="bottom"]')).toBeVisible();
 
-    for (const size of [{ width: 1100, height: 760 }, { width: 1600, height: 900 }, { width: 900, height: 420 }]) {
-      await page.setViewportSize(size);
-      await page.waitForTimeout(250);
-      const measured = await page.evaluate(() => {
+    const measure = () =>
+      page.evaluate(() => {
         const popup = document.querySelector("[data-expand-popover]")!;
         const header = popup.querySelector("[data-expand-popover-header]")!.getBoundingClientRect();
-        const trigger = document.querySelector('[data-testid="context-sidebar"] button[aria-label^="Repository:"]')!.getBoundingClientRect();
+        const trigger = document
+          .querySelector('[data-testid="context-sidebar"] button[aria-label^="Repository:"]')!
+          .getBoundingClientRect();
         const surface = popup.querySelector("[data-expand-popover-surface]")!.getBoundingClientRect();
+        const scroll = popup.querySelector("[data-expand-popover-scroll]")!;
         return {
           header: { x: header.x, y: header.y, width: header.width, height: header.height },
           trigger: { x: trigger.x, y: trigger.y, width: trigger.width, height: trigger.height },
           surface: { top: surface.top, bottom: surface.bottom, width: surface.width },
-          viewport: { height: window.innerHeight, width: window.innerWidth },
+          viewport: { height: window.innerHeight },
+          scrollable: scroll.scrollHeight > scroll.clientHeight + 1,
         };
       });
+
+    for (const size of [{ width: 1100, height: 760 }, { width: 1600, height: 900 }]) {
+      await page.setViewportSize(size);
+      await page.waitForTimeout(250);
+      const measured = await measure();
       expectSameRect(measured.header, measured.trigger);
       expect(Math.abs(measured.surface.width - measured.header.width)).toBeLessThanOrEqual(1);
       expect(measured.surface.top).toBeGreaterThanOrEqual(0);
       expect(measured.surface.bottom).toBeLessThanOrEqual(measured.viewport.height);
+      // The panel fits, so the cap is not doing anything: nothing scrolls inside it.
+      expect(measured.scrollable).toBe(false);
     }
+
+    // 200px is below the panel's own content height, so the cap has to bite: the panel stays on
+    // screen and its content becomes reachable through the panel's scroll container.
+    await page.setViewportSize({ width: 1440, height: 200 });
+    await page.waitForTimeout(250);
+    const clipped = await measure();
+    expectSameRect(clipped.header, clipped.trigger);
+    expect(clipped.surface.top).toBeGreaterThanOrEqual(0);
+    expect(clipped.surface.bottom).toBeLessThanOrEqual(clipped.viewport.height);
+    expect(clipped.scrollable).toBe(true);
+
+    // Growing the window again releases the cap.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(250);
+    const released = await measure();
+    expectSameRect(released.header, released.trigger);
+    expect(released.scrollable).toBe(false);
   });
 
   test("dragging the sidebar edge closes the panel instead of leaving stale geometry", async ({ page }) => {

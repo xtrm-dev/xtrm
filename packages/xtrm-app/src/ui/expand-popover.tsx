@@ -119,11 +119,10 @@ export function ExpandPopover({
         <div
           data-expand-popover-scroll=""
           style={cap === null ? undefined : { maxHeight: `${cap}px` }}
-          className={cx(
-            // Children keep their height instead of compressing: the panel scrolls, it never squashes rows.
-            "max-h-[var(--available-height,calc(100vh_-_1rem))] overflow-y-auto overscroll-contain [&>*]:shrink-0",
-            bodyClassName,
-          )}
+          // One scroller for the whole panel: the inline cap from the layout effect above is the only
+          // height limit, the repo's scrollbar treatment sits beside the overflow, and children keep
+          // their height instead of compressing, so the panel scrolls rather than squashing rows.
+          className={cx("thin-scrollbar overflow-y-auto overscroll-contain [&>*]:shrink-0", bodyClassName)}
         >
           {children}
         </div>
