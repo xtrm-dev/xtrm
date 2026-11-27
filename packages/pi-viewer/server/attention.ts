@@ -105,21 +105,30 @@ const PI_ASK = /^\s*Allow execution\?\s*$/
 /** Matched on the lines after the question joined by a space: Pi wraps the key hint in a narrow pane. */
 const PI_KEYS = /y\/enter:\s+allow/
 const PI_TITLE = /^\s*Dangerous Command Detected\s*$/
+const PI_HINT_START = /^\s*↑\/↓ or j\/k:/
 
 /** Pi permission gate (@aliou/pi-guardrails): a red-bordered block ending in `Allow execution?`. */
 function piPrompt(lines: string[]): PanePrompt | null {
   const from = Math.max(0, lines.length - PROMPT_WINDOW)
   for (let index = lines.length - 1; index >= from; index -= 1) {
     if (!PI_ASK.test(lines[index])) continue
-    const hint = lines
-      .slice(index + 1, index + 6)
+    // The key hint is the first text under the question and the dialog's closing rule follows it.
+    // Requiring both, and the opening rule above the title, keeps prose that quotes the dialog out.
+    const after = lines.slice(index + 1, index + 7)
+    const first = after.findIndex((line) => line.trim())
+    if (first < 0 || !PI_HINT_START.test(after[first])) return null
+    const close = after.findIndex((line, at) => at > first && BORDER.test(line))
+    if (close < 0) return null
+    const hint = after
+      .slice(first, close)
       .map((line) => line.trim())
       .join(" ")
     if (!PI_KEYS.test(hint)) return null
-    // The command viewport is bounded, but its rows and the reason line wrap in a narrow pane.
+    // The command viewport is 12 rows (pi-guardrails COMMAND_VIEWPORT_LINES), so the title sits
+    // well inside the prompt window even when the reason and the rows wrap in a narrow pane.
     let start = index
-    while (start > 0 && index - start < 40 && !PI_TITLE.test(lines[start])) start -= 1
-    if (!PI_TITLE.test(lines[start])) return null
+    while (start > 0 && index - start < PROMPT_WINDOW && !PI_TITLE.test(lines[start])) start -= 1
+    if (!PI_TITLE.test(lines[start]) || start === 0 || !BORDER.test(lines[start - 1])) return null
     return { tool: "Bash", text: capText(lines.slice(start, index + 1)) }
   }
   return null

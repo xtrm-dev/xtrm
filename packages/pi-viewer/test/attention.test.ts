@@ -289,6 +289,30 @@ test("Pi permission gate in a narrow pane: the key hint wraps at any word", () =
   }
 })
 
+test("Pi permission gate: prose that quotes the dialog with a wrapped hint is not a prompt", () => {
+  const quoted = [
+    "The worker was stuck on this dialog:",
+    "",
+    " Dangerous Command Detected",
+    " This command contains recursive force delete:",
+    "  1 rm -rf /tmp/x",
+    " Allow execution?",
+    "",
+    " ↑/↓ or j/k: scroll • y/enter:",
+    " allow • a: session • n/esc: deny",
+    "",
+    "I approved it after reading the command.",
+  ].join("\n")
+  assert.equal(detectPermissionPrompt(quoted, "pi"), null)
+})
+
+test("Pi permission gate: a title that scrolled above the prompt window is not used", () => {
+  const rule = "─".repeat(54)
+  const filler = Array.from({ length: 34 }, (_, index) => `  ${index + 1} echo line ${index}`)
+  const screen = [rule, " Dangerous Command Detected", ...filler, rule, " Allow execution?", "", " ↑/↓ or j/k: scroll • y/enter: allow", rule].join("\n")
+  assert.equal(detectPermissionPrompt(screen, "pi"), null)
+})
+
 test("no prompt: idle panes, prose that quotes the question, the bypass-permissions footer", () => {
   assert.equal(detectPermissionPrompt(pane("claude-idle.txt"), "claude"), null)
   assert.equal(detectPermissionPrompt(pane("pi-idle.txt"), "pi"), null)
