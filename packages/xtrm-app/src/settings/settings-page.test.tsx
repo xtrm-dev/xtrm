@@ -145,6 +145,13 @@ describe("/settings routes", () => {
     }
   });
 
+  it("shows no row reset while the sidebar already holds the model's default", async () => {
+    localStorage.setItem("xtrm.console.layout.v1", JSON.stringify({ sidebarOpen: DEFAULT_APP_SETTINGS["layout.sidebarOpen"], sidebarWidth: 264 }));
+    await mount("/settings/layout");
+    expect(within(rowOf("layout.sidebarOpen")!).queryByRole("button", { name: "Reset Sidebar open" })).toBeNull();
+    expect(within(page()).queryByRole("button", { name: "Reset Layout" })).toBeNull();
+  });
+
   it("marks host values unknown and says so when the agent host does not answer", async () => {
     const failing = { ...fixtureAdapters.agentHost, status: () => Promise.reject(new Error("bridge down")) };
     await mount("/settings/connections", { agentHost: failing });
