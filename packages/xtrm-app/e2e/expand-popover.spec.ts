@@ -292,6 +292,48 @@ test.describe("expanding popover", () => {
     await expect(page.locator("[data-expand-popover]")).toHaveCount(0);
   });
 
+  test("a long repository list has one scroller, and the wheel over a row moves it", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 600 });
+    // The fixture grows its repository list to order, so the list alone exceeds the panel's cap.
+    await page.goto("/rep/xtrm-dev/xtrm/work/issues?fixtureRepos=45");
+    await page.locator(REPO).waitFor();
+    await page.locator(REPO).click();
+    await expect(page.locator("[data-expand-popover]")).toBeVisible();
+    await expect(page.locator('[data-expand-popover] [role="option"]')).toHaveCount(45);
+    await page.waitForTimeout(300);
+
+    const scrollers = await page.evaluate(() => {
+      const popup = document.querySelector("[data-expand-popover]")!;
+      const scrollable = Array.from(popup.querySelectorAll("*")).filter((node) => {
+        const style = getComputedStyle(node);
+        return /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1;
+      });
+      const surface = popup.querySelector("[data-expand-popover-surface]")!.getBoundingClientRect();
+      return {
+        count: scrollable.length,
+        tagged: scrollable.filter((node) => node.hasAttribute("data-expand-popover-scroll")).length,
+        bottom: surface.bottom,
+        height: window.innerHeight,
+      };
+    });
+    // One scroll region and it is the panel's own: a nested list scroller would read as stuck.
+    expect(scrollers.count).toBe(1);
+    expect(scrollers.tagged).toBe(1);
+    expect(scrollers.bottom).toBeLessThanOrEqual(scrollers.height);
+
+    const row = page.locator('[data-expand-popover] [role="option"]').nth(3);
+    const box = (await row.boundingBox())!;
+    const before = await page.evaluate(() => document.querySelector("[data-expand-popover-scroll]")!.scrollTop);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 400);
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(() => document.querySelector("[data-expand-popover-scroll]")!.scrollTop);
+    expect(after).toBeGreaterThan(before);
+
+    // The wheel moved the list under the pointer, not just the panel.
+    expect(await page.evaluate(() => document.querySelectorAll('[data-expand-popover] [role="option"]').length)).toBe(45);
+  });
+
   test("a short viewport keeps both panels on screen and scrolls their content", async ({ page }) => {
     for (const [height, selector, testid] of [
       [220, DROPUP, "board-transport"],
