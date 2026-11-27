@@ -23,6 +23,35 @@ export const lifecycleOptions: SelectOption<Lifecycle>[] = LIFECYCLES.map((l) =>
 
 export const PRIORITIES = ["Highest", "High", "Medium", "Low", "Lowest"] as const;
 
+const SCRUTINY_TONE: Record<string, string> = {
+  LOW: "bg-pressed text-ink-muted",
+  MEDIUM: "bg-pressed text-ink-muted",
+  HIGH: "bg-accent-soft text-accent-ink",
+  CRITICAL: "bg-danger/12 text-danger",
+};
+
+/**
+ * Priority and scrutiny as one object at the row's right edge (2026-11-27 ruling): the priority bars
+ * and the scrutiny word share a pill, so the row gains one indicator, not two. The fill follows
+ * scrutiny on the existing tint tokens: Low and Medium stay neutral, High takes the accent tint,
+ * Critical the danger tint. The tooltip carries both values in words.
+ */
+export function PriorityScrutinyPill({ priority, scrutiny }: { priority: number | null; scrutiny: string | null }) {
+  if (priority === null && !scrutiny) return null;
+  const word = scrutiny ? scrutiny[0] + scrutiny.slice(1).toLowerCase() : null;
+  const title = `${priority !== null ? `P${priority} · ${PRIORITIES[priority] ?? ""}` : "Priority not set"} · ${word ? `${word} scrutiny` : "Scrutiny not set"}`;
+  return (
+    <span
+      title={title}
+      data-stat="priority"
+      className={cx("inline-flex h-5 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs", SCRUTINY_TONE[scrutiny ?? ""] ?? SCRUTINY_TONE.LOW)}
+    >
+      <PriorityGlyph priority={priority} />
+      {word && <span>{word}</span>}
+    </span>
+  );
+}
+
 export function PriorityGlyph({ priority }: { priority: number | null }) {
   if (priority === null) return <span className="inline-block w-4 text-center text-xs text-ink-faint">—</span>;
   // Three bars; filled count = urgency. Ink only: Substrate stores 0 as the default, so red would misreport.

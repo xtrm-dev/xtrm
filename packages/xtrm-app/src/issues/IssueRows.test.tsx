@@ -51,10 +51,11 @@ describe("Issues list rows", () => {
     expect(key!.compareDocumentPosition(chip!) & FOLLOWING).toBeTruthy();
     expect(chip!.compareDocumentPosition(title!) & FOLLOWING).toBeTruthy();
 
-    // The key is a dim address that pays for its own width: no fill, no fixed key column.
+    // The key is the shared bordered pill: mono, muted ink, no fill, no fixed key column.
     const keyTokens = key!.firstElementChild!.className.split(/\s+/);
     expect(keyTokens).toContain("font-mono");
     expect(keyTokens).toContain("text-ink-muted");
+    expect(keyTokens).toContain("border");
     expect(keyTokens.some((t) => t.startsWith("bg-"))).toBe(false);
     expect(key!.style.width).toBe("");
 
@@ -113,9 +114,12 @@ describe("Issues list rows", () => {
     // XTRM-303 is the fixture's deepest row: locator XTRM-300.1.2.1 under MMD-shaped data.
     const deep = document.querySelector('button[aria-label="Copy XTRM-303"]')!.closest('[role="button"]') as HTMLElement;
     const keyCell = deep.querySelector("[data-key-cell]") as HTMLElement;
-    expect(keyCell.textContent).toBe("XTRM-300.1.2.1");
-    // The tooltip keeps the full address, so the alias is never lost from the row.
-    expect(keyCell.firstElementChild!.getAttribute("title")).toBe("XTRM-300.1.2.1 / XTRM-303");
+    // The shared key pill carries both identifiers (2026-11-27 ruling): locator | short ref.
+    const pill = keyCell.querySelector("[data-issue-key]") as HTMLElement;
+    expect(pill.dataset.locator).toBe("XTRM-300.1.2.1");
+    expect(pill.dataset.issueKey).toBe("XTRM-303");
+    expect(keyCell.textContent).toBe("XTRM-300.1.2.1XTRM-303");
+    expect(pill.getAttribute("title")).toBe("XTRM-300.1.2.1 / XTRM-303");
     // The copy action still names the unique ref, which is the address a worker pastes.
     expect(within(deep).getByRole("button", { name: "Copy XTRM-303" })).toBeTruthy();
   });

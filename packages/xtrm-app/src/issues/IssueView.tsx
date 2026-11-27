@@ -57,11 +57,11 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
     <div className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-1.5">
         <IssueBreadcrumb issue={issue} nav={nav} />
-        {/* The status sits beside the title (2026-11-27 ruling): the same chip the list row shows, one
-            size up, so the drawer and the board can never name a different state. */}
+        {/* The status leads the title, as the PR view's state does (2026-11-27 ruling): the same chip the
+            list row shows, one size up, so the drawer and the board can never name a different state. */}
         <div className="flex min-w-0 items-baseline gap-2" data-testid="issue-title-row">
-          <InlineTitle value={issue.title} canEdit={canWrite} onSave={actions.setTitle} className={cx("min-w-0 flex-1", variant === "page" ? "text-xl leading-snug font-semibold" : "text-base leading-snug font-semibold")} />
           <IssueStatusBadge issue={issue} size="sm" />
+          <InlineTitle value={issue.title} canEdit={canWrite} onSave={actions.setTitle} className={cx("min-w-0 flex-1", variant === "page" ? "text-xl leading-snug font-semibold" : "text-base leading-snug font-semibold")} />
         </div>
         <IssueGaps issue={issue} />
       </div>
