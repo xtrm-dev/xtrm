@@ -15,7 +15,8 @@ import {
 } from "./layout.ts";
 
 export const DEFAULT_REPO = { owner: "xtrm-dev", name: "xtrm" };
-const REPO_KEY = "xtrm.console.repo.v1";
+/** The device's last repository selection; the router reads it too, so it is declared here only. */
+export const REPO_KEY = "xtrm.console.repo.v1";
 const THEME_KEY = "xtrm.console.theme.v1";
 
 export type Theme = "light" | "dark";
