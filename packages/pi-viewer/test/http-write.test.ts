@@ -258,6 +258,32 @@ test("the loopback Hosts are accepted, with and without a port", async () => {
   }
 })
 
+test("a Host that hides its real name behind userinfo is refused", async () => {
+  for (const host of ["evil.example@127.0.0.1", "evil.example@127.0.0.1:5199", "localhost@127.0.0.1"]) {
+    const read = await call({ url: "/api/sessions", method: "GET", headers: { host } })
+    assert.equal(read.status, 403, `${host} must be refused (${JSON.stringify(read.body)})`)
+    assert.match(String(read.body.error), /host refused/)
+  }
+  const write = await call({ url: "/api/stop", body: { paneId: PANE }, headers: { ...SAME_ORIGIN, host: "evil.example@127.0.0.1:5199" } })
+  assert.equal(write.status, 403, JSON.stringify(write.body))
+  assert.deepEqual(calls(), [], "a userinfo Host never reaches tmux")
+})
+
+test("an unparsable request target answers the generic 500 body and logs the detail", async () => {
+  const logged: string[] = []
+  const original = console.error
+  console.error = (...args: unknown[]) => logged.push(args.map(String).join(" "))
+  try {
+    const answer = await call({ url: "http://[unparsable", method: "GET" })
+    assert.equal(answer.status, 500, JSON.stringify(answer.body))
+    assert.deepEqual(answer.body, { error: "internal error" })
+  } finally {
+    console.error = original
+  }
+  assert.equal(logged.length, 1, `one log line for the rejection, got ${logged.length}`)
+  assert.match(logged[0], /^\[pi-viewer\] api error /)
+})
+
 test("a refused write is logged once, with its reason", async () => {
   const logged: string[] = []
   const original = console.warn

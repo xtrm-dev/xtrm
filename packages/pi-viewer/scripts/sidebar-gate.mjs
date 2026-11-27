@@ -4,15 +4,20 @@
 //   PI_VIEWER_URL=http://127.0.0.1:5199/ node scripts/sidebar-gate.mjs [screenshot-dir]
 //
 // Environment:
-//   PI_VIEWER_URL      viewer to check (default http://127.0.0.1:5199/, the shared dev server)
+//   PI_VIEWER_URL      viewer to check (required; the gate refuses to guess, because the shared :5199
+//                      dev server is a live session this gate must not click)
 //   PLAYWRIGHT_MODULE  path or name of the playwright package (default "playwright")
 //   CHROMIUM_PATH      browser executable; unset lets playwright use its own download
 // Needs a tmux session with at least one multi-pane window, such as xx. Exit 0 = all checks pass.
 import { createRequire } from "node:module"
 import { mkdirSync } from "node:fs"
 const require = createRequire(import.meta.url)
+const BASE = process.env.PI_VIEWER_URL
+if (!BASE) {
+  console.error("sidebar-gate: set PI_VIEWER_URL to the viewer under test, e.g. PI_VIEWER_URL=http://127.0.0.1:5199/ node scripts/sidebar-gate.mjs")
+  process.exit(2)
+}
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright")
-const BASE = process.env.PI_VIEWER_URL || "http://127.0.0.1:5199/"
 const SHOTS = process.argv[2] || "sidebar-gate-shots"
 mkdirSync(SHOTS, { recursive: true })
 const res = []; const check = (n, ok, d = "") => res.push({ n, ok, d })

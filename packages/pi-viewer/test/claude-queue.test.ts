@@ -268,3 +268,19 @@ test("a prompt recorded as pasted content shows its text once and matches the co
   const { visible } = matchEchoes(eventsOf(file), [sent])
   assert.equal(visible.length, 0)
 })
+
+test("an empty pasted wrapper adds no user row (XTRM-1116)", () => {
+  const file = fileOf("pasted-empty")
+  dropClaudeCache(file)
+  write(file, [
+    {
+      type: "user",
+      uuid: "user-e",
+      timestamp: LATER,
+      sessionId: "11111111-2222-3333-4444-555555555555",
+      origin: { kind: "human" },
+      message: { role: "user", content: '<pasted_content id="e"></pasted_content id="e">' },
+    },
+  ])
+  assert.equal(eventsOf(file).filter((event) => event.kind === "user").length, 0)
+})

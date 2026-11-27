@@ -578,11 +578,26 @@ function slashCommand(text: string): string | null {
  * Claude Code records a prompt that arrived as a paste (a long composer send typed by tmux reads as one)
  * wrapped in `<pasted_content id="…">…</pasted_content id="…">`. The operator wrote the inner text, so the
  * row shows it and the composer's optimistic row can match it (XTRM-1114).
+ *
+ * Only a message that OPENS with a wrapper is a paste. Prose that quotes a complete wrapper keeps its
+ * markup: unwrapping that would drop the words the operator typed and break the echo match (XTRM-1116).
  */
-const PASTED = /<pasted_content\b[^>]*>\n?([\s\S]*?)\n?<\/pasted_content\b[^>]*>/g
+const PASTED_OPENS = /^\s*<pasted_content\b/
+/** A wrapper with no wrapper inside, so innermost-first unwrapping collapses nesting without a dangling tag. */
+const PASTED_INNERMOST = /<pasted_content\b[^>]*>((?:(?!<\/?pasted_content\b)[\s\S])*?)<\/pasted_content\b[^>]*>/g
+
 export function unwrapPasted(text: string): string {
-  if (!text.includes("<pasted_content")) return text
-  return text.replace(PASTED, "$1").trim()
+  if (!PASTED_OPENS.test(text)) return text
+  let current = text
+  // Repeat until stable: one pass unwraps the innermost wrapper of a nested paste, the next its parent.
+  for (let pass = 0; pass < 32; pass += 1) {
+    const next = current.replace(PASTED_INNERMOST, "$1")
+    if (next === current) break
+    current = next
+  }
+  // A wrapper that never closes is left as it came: showing the raw markup is the pre-change behaviour.
+  if (current.includes("<pasted_content")) return text
+  return current.trim()
 }
 
 function queuedText(value: string): string {
@@ -670,6 +685,9 @@ function deliverQueued(state: ClaudeState, record: Raw, text: string, sidechain:
 
 function ingestUserText(state: ClaudeState, record: Raw, raw: string, sidechain: boolean, suffix: string): void {
   const text = unwrapPasted(raw)
+  // An empty wrapper unwraps to nothing. The caller gates on the RAW text, so without this guard the
+  // record became a blank user row (XTRM-1116, PR #512 review).
+  if (!text.trim()) return
   const uuid = asString(record.uuid)
   const id = uuid ? `${uuid}${suffix}` : undefined
   const origin = isRecord(record.origin) ? asString(record.origin.kind) : undefined

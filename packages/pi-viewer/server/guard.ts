@@ -11,7 +11,11 @@ import type { IncomingHttpHeaders } from "node:http"
 /** The hostnames a viewer page may legitimately be served from: this machine, on any port. */
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "::1", "0.0.0.0"])
 
-/** The hostnames a request may address. Narrower than LOOPBACK: a request never names a wildcard. */
+/**
+ * The hostnames a request may address. Narrower than LOOPBACK on purpose: `0.0.0.0` is a bind address,
+ * never a host a viewer page is reached as, and a URL hostname spells IPv6 loopback `[::1]`, never the
+ * bare `::1` that LOOPBACK also carries. A request never names a wildcard.
+ */
 const HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"])
 
 export type WriteVerdict = { ok: true } | { ok: false; reason: string }
@@ -82,6 +86,10 @@ export function isJsonContentType(value: string): boolean {
 export function hostVerdict(headers: IncomingHttpHeaders): WriteVerdict {
   const host = header(headers, "host")
   if (!host) return { ok: false, reason: "request has no host header" }
+  // `new URL("http://evil.example@127.0.0.1")` parses to hostname `127.0.0.1`, so userinfo would let a
+  // foreign Host pass the allowlist. A legitimate Host never carries credentials (RFC 9110 §7.2), so
+  // refuse the header rather than trust the parse. Not reachable from a browser, which cannot set Host.
+  if (host.includes("@")) return { ok: false, reason: `host refused (${host})` }
   let hostname: string
   try {
     hostname = new URL(`http://${host}`).hostname.toLowerCase()
