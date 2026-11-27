@@ -27,8 +27,6 @@ export type StatusTone = "accent" | "active" | "danger" | "neutral" | "muted";
 export type IssueStatusId = "open" | "in_progress" | "ready" | "blocked" | "deferred" | "done" | "cancelled" | "archived";
 
 /** Filter-only aggregate: every settled lifecycle state, which is what `--status closed|terminal` means. */
-export type IssueStatusFilter = IssueStatusId | "closed";
-
 export const ISSUE_STATUSES: ReadonlyArray<{ id: IssueStatusId; label: string }> = [
   { id: "open", label: "Open" },
   { id: "in_progress", label: "In progress" },
@@ -38,12 +36,6 @@ export const ISSUE_STATUSES: ReadonlyArray<{ id: IssueStatusId; label: string }>
   { id: "done", label: "Done" },
   { id: "cancelled", label: "Cancelled" },
   { id: "archived", label: "Archived" },
-];
-
-/** Every status filter, including the `closed` aggregate, in the order Substrate lists them. */
-export const ISSUE_STATUS_FILTERS: ReadonlyArray<{ value: IssueStatusFilter; label: string }> = [
-  ...ISSUE_STATUSES.map((s) => ({ value: s.id as IssueStatusFilter, label: s.label })),
-  { value: "closed", label: "Closed" },
 ];
 
 /**
@@ -57,19 +49,6 @@ export function issueStatusId(i: IssueSummary): IssueStatusId {
   if (i.blockedBy.length > 0 || i.readiness === "blocked") return "blocked";
   if (i.dispatchable === true || i.readiness === "ready") return "ready";
   return "open";
-}
-
-/**
- * `sb issue list --status` semantics. `open` is the stored lifecycle (so a claimed or ready issue is
- * still open), `closed`/`terminal` is every settled state, and anything else matches the derived status,
- * the lifecycle or the readiness.
- */
-export function matchesIssueStatus(i: IssueSummary, requested: string | null): boolean {
-  if (requested === null || requested === "" || requested === "all") return true;
-  const wanted = requested.trim().toLowerCase();
-  if (wanted === "closed" || wanted === "terminal") return TERMINAL.has(i.lifecycle);
-  if (wanted === "open") return i.lifecycle === "open";
-  return issueStatusId(i) === wanted || i.lifecycle === wanted || i.readiness === wanted;
 }
 
 /**
@@ -212,20 +191,3 @@ export const primaryKey = (i: IssueSummary) => i.locator || i.ref;
 /** Both names, for the key cell's tooltip: a narrow list truncates the inline key, not its address. */
 export const keyNames = (i: IssueSummary) => (primaryKey(i) !== i.ref ? `${primaryKey(i)} / ${i.ref}` : primaryKey(i));
 
-/**
- * How many numeric columns the list can afford at its measured width. The summary always wins the
- * width argument: below `wide` the two rollups go, below `medium` the two timestamps follow, and the
- * shipped `minWidth` keeps the rest scrolling sideways instead of squeezing the title to nothing.
- */
-export type ListDensity = "wide" | "medium" | "compact";
-
-export const listDensity = (width: number): ListDensity => (width >= 62 * 16 ? "wide" : width >= 48 * 16 ? "medium" : "compact");
-
-const DROPPED: Record<ListDensity, ReadonlySet<SortKey>> = {
-  wide: new Set(),
-  medium: new Set<SortKey>(["events", "pointers"]),
-  compact: new Set<SortKey>(["events", "pointers", "created", "updated"]),
-};
-
-/** The column keys the list hides at this width, so header and rows stay in step. */
-export const hiddenColumns = (density: ListDensity) => DROPPED[density];

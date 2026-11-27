@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IssueSummary } from "../adapters/index.tsx";
-import { ISSUE_STATUS_FILTERS, buildTree, hiddenColumns, issueStatus, issueStatusId, keyNames, listDensity, matchesIssueStatus, matchesIssueStatusSet, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
+import { ISSUE_STATUSES, buildTree, issueStatus, issueStatusId, keyNames, matchesIssueStatusSet, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
 
 const issue = (ref: string, over: Partial<IssueSummary> = {}): IssueSummary => ({
   id: ref, ref, locator: ref, title: ref, kind: "task", lifecycle: "open", revision: 1, priority: 2, scrutiny: null,
@@ -67,15 +67,6 @@ describe("issue table", () => {
     expect(label({ readiness: "draft", contractComplete: true, attestation: "rejected" })).toBe("Rejected");
   });
 
-  it("drops the low-value numeric columns as the list narrows, header and rows together (XTRM-911)", () => {
-    expect(listDensity(1098)).toBe("wide");
-    expect([...hiddenColumns("wide")]).toEqual([]);
-    expect(listDensity(62 * 16 - 1)).toBe("medium");
-    expect([...hiddenColumns("medium")]).toEqual(["events", "pointers"]);
-    expect(listDensity(48 * 16 - 1)).toBe("compact");
-    expect([...hiddenColumns("compact")]).toEqual(["events", "pointers", "created", "updated"]);
-  });
-
   it("names the address and the tooltip that keeps both names (XTRM-926)", () => {
     const imported = issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234" });
     expect(primaryKey(imported)).toBe("XTRM-300.12");
@@ -99,23 +90,6 @@ describe("the status vocabulary sb owns", () => {
     expect(id({ lifecycle: "archived", readiness: "terminal" })).toBe("archived");
   });
 
-  it("filters with sb issue list --status semantics: open is the stored lifecycle, closed is every settled state", () => {
-    const claimedOpen = issue("X-1", { readiness: "claimed" });
-    expect(matchesIssueStatus(claimedOpen, null)).toBe(true);
-    expect(matchesIssueStatus(claimedOpen, "all")).toBe(true);
-    expect(matchesIssueStatus(claimedOpen, "open")).toBe(true);
-    expect(matchesIssueStatus(claimedOpen, "in_progress")).toBe(true);
-    expect(matchesIssueStatus(claimedOpen, "ready")).toBe(false);
-    for (const lifecycle of ["done", "cancelled", "archived"]) {
-      const settled = issue("X-1", { lifecycle, readiness: "terminal" });
-      expect(matchesIssueStatus(settled, "closed")).toBe(true);
-      expect(matchesIssueStatus(settled, "terminal")).toBe(true);
-      expect(matchesIssueStatus(settled, lifecycle)).toBe(true);
-      expect(matchesIssueStatus(settled, "open")).toBe(false);
-    }
-    expect(matchesIssueStatus(issue("X-1", { readiness: "blocked" }), "blocked")).toBe(true);
-  });
-
   it("matches the multi-select set on the derived status only, so members cannot overlap", () => {
     const claimed = issue("X-1", { readiness: "claimed" });
     const ready = issue("X-2", { readiness: "ready", dispatchable: true });
@@ -130,10 +104,8 @@ describe("the status vocabulary sb owns", () => {
     expect(matchesIssueStatusSet(claimed, new Set())).toBe(false);
   });
 
-  it("offers the full filter list, labelled, never a bare id", () => {
-    expect(ISSUE_STATUS_FILTERS.map((s) => s.label)).toEqual([
-      "Open", "In progress", "Ready", "Blocked", "Deferred", "Done", "Cancelled", "Archived", "Closed",
-    ]);
-    expect(ISSUE_STATUS_FILTERS.map((s) => s.value)).toContain("in_progress");
+  it("offers the eight disjoint statuses as the filter list, labelled, never a bare id", () => {
+    expect(ISSUE_STATUSES.map((s) => s.label)).toEqual(["Open", "In progress", "Ready", "Blocked", "Deferred", "Done", "Cancelled", "Archived"]);
+    expect(ISSUE_STATUSES.map((s) => s.id)).toContain("in_progress");
   });
 });

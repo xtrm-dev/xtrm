@@ -68,8 +68,9 @@
   --x-chip-success: #157f4d;
   --x-chip-danger: #c0392b;
   --x-chip-neutral: #6b6b76;
-  /* One row height for the sidebar and every list (2026-11-24). 36px holds a 14px label and a
-     14px glyph; the two-line row is 52px, which holds that label plus a 12px meta line. */
+  /* One row height for every list (2026-11-24): 32px holds a 14px label and a 14px glyph. Sidebar
+     rows sit at 28px, the Work/Agent switch height. The two-line row is 48px: that label plus a
+     12px meta line. */
   --x-row: 2rem;
   --x-row-tall: 3rem;
   /* Panel elevation without a hairline: the inspector carries no border (no-borders policy), so the

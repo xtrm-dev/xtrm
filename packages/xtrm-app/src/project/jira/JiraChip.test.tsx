@@ -15,13 +15,14 @@ describe("JiraChip", () => {
   // through the status text and the tooltip.
   it("draws no status dot", () => {
     const { container } = render(<JiraChip issue={issue} />);
-    expect(container.querySelector("[data-status]")).toBeNull();
+    // StatusDot renders a filled 8px round dot (span.size-2.rounded-full); the chip must not.
+    expect(container.querySelector("span.size-2.rounded-full")).toBeNull();
     expect(container.querySelector("[data-jira-key]")?.getAttribute("title")).toContain("In Progress");
   });
 
   it("still shows the status word when asked", () => {
     const { container } = render(<JiraChip issue={issue} showStatusText />);
     expect(container.textContent).toContain("In Progress");
-    expect(container.querySelector("[data-status]")).toBeNull();
+    expect(container.querySelector("span.size-2.rounded-full")).toBeNull();
   });
 });

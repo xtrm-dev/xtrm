@@ -13,8 +13,8 @@ export type ActivitySource = "substrate" | "github" | "jira";
 
 /**
  * Sources that exist today. Jira stays absent from the filter row until it is
- * connected. `git` stays in the union but is retired: no loader produces it
- * since the push ruling, and the activity surface still maps its chip.
+ * connected. The local git source was removed by the push ruling (XTRM-1090):
+ * GitHub push events replace it.
  */
 export const LIVE_ACTIVITY_SOURCES: readonly ActivitySource[] = ["substrate", "github"];
 

@@ -69,3 +69,14 @@ test("the expanded row body sits one 1.25rem step in from its row", async ({ pag
     }
   }
 });
+
+// XTRM-1090 review: the feed row passes `h-row` into a `Row` that also sets `h-full`. The class string
+// proves nothing about which one wins, so the rendered height is measured.
+test("an Activity row is one 32px line, the list row height", async ({ page }) => {
+  await page.goto("/rep/xtrm-dev/xtrm/code/activity");
+  const feed = page.getByRole("list", { name: /activity feed/i });
+  await expect(feed).toBeVisible();
+  const row = feed.getByTestId("activity-row").first();
+  const box = (await row.boundingBox())!;
+  expect(Math.round(box.height)).toBe(32);
+});

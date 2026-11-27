@@ -8,17 +8,22 @@ import { cx, relativeTime } from "../ui/primitives.tsx";
 import { SectionHeader } from "../ui/section.tsx";
 import { TERMINAL, IssueKey, PriorityGlyph, kindIcon } from "./meta.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
+import { issueStatusId } from "./issue-table.ts";
 
 /**
- * Board columns. Blocked and Ready are derived from dependencies and the dispatchable set,
- * so they are not drop targets: READY is an execution gate, not a status you drag into (PRD §8).
+ * Board columns. Each column is one derived status from `issueStatusId`, the same authority the list
+ * badge, the drawer and the Status filter use, so a card never sits in a column its chip contradicts
+ * (XTRM-1090 review). In progress, Blocked and Ready are derived from claims, blockers and the
+ * dispatchable set, so they are not drop targets: READY is an execution gate, not a status you drag
+ * into (PRD §8).
  */
 export const BOARD_COLUMNS: Array<{ id: string; label: string; match: (i: IssueSummary) => boolean; drop?: Lifecycle; hint?: string }> = [
-  { id: "blocked", label: "Blocked", match: (i) => i.lifecycle === "open" && i.blockedBy.length > 0, hint: "derived from blockers" },
-  { id: "ready", label: "Ready", match: (i) => i.lifecycle === "open" && !i.blockedBy.length && i.readiness === "ready", hint: "derived from contract readiness" },
-  { id: "todo", label: "To do", match: (i) => i.lifecycle === "open" && !i.blockedBy.length && i.readiness !== "ready", drop: "open" },
-  { id: "deferred", label: "Deferred", match: (i) => i.lifecycle === "deferred", drop: "deferred" },
-  { id: "done", label: "Done", match: (i) => TERMINAL.has(i.lifecycle), drop: "done" },
+  { id: "in_progress", label: "In progress", match: (i) => issueStatusId(i) === "in_progress", hint: "derived from an active claim" },
+  { id: "blocked", label: "Blocked", match: (i) => issueStatusId(i) === "blocked", hint: "derived from blockers" },
+  { id: "ready", label: "Ready", match: (i) => issueStatusId(i) === "ready", hint: "derived from contract readiness" },
+  { id: "todo", label: "To do", match: (i) => issueStatusId(i) === "open", drop: "open" },
+  { id: "deferred", label: "Deferred", match: (i) => issueStatusId(i) === "deferred", drop: "deferred" },
+  { id: "done", label: "Done", match: (i) => TERMINAL.has(issueStatusId(i)), drop: "done" },
 ];
 
 // ponytail: columns render at most this many cards (no per-column virtualization); the list view shows the rest.

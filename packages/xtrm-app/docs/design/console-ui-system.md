@@ -984,9 +984,11 @@ keyboard focus.
 `Badge variant="solid"` fills one tone and inks it pure white from a single `--x-chip-*` set shared by
 both themes: `#5b54ea` accent (5.38:1), `#b45309` attention (5.02:1), `#157f4d` success (5.03:1),
 `#c0392b` danger (5.44:1), `#6b6b76` neutral (5.26:1); each value also clears 3.36:1 against the dark
-surface `#151515`. Terminal issues take the success tone. The key is **not** a chip: `inline-flex
-font-mono text-xs text-ink-muted` with no fill and no radius, carrying the unique ref in its `title`.
-The status chip carries the colour; the key carries the address.
+surface `#151515`. Terminal issues take the success tone. The key is the shared `IssueKeyPill`
+(2026-11-27 ruling, superseding the bare key): a hairline-bordered mono pill with no fill,
+`locator | short ref`, carrying the full address in its `title`. The status chip carries the colour;
+the key carries the address. Gaps (Draft, Unattested, Stale, Open) are the quiet muted tint; only a
+state of work is solid (`IssueStatusBadge`, the one chip for the list and the drawer).
 
 ### 4. The chrome stays on the 6/8/10 ladder
 
@@ -1017,15 +1019,15 @@ contains a `0 0 0 1px` layer, and the strip is the one floating layer that does 
 `--x-shadow-float`. The repository picker keeps `shadow-float`. A test asserts the absence of the ring
 and that the open popup sits deeper than its trigger.
 
-### 8. Pull requests have an `All` view
+### 8. Pull requests show every state by default
 
-`PullView = "all" | "open" | "merged" | "closed"` with `All` first and counts beside each label
-(`visibleCounts.all`); `listPulls(repo, "all")` omits the `state` parameter, and the default sort is
-`updated`.
+The PR state filter is a multi-select over `open | merged | closed` (`ToolbarMultiFilter`), all
+selected by default (2026-11-26 ruling); `listPulls(repo, "all")` omits the `state` parameter, and the
+default sort is `updated`.
 
 ### 9. The Activity feed is one merged stream
 
-`ActivitySurface` renders the three live sources as ONE list (`mergeActivity` + `sortActivity`), newest
+`ActivitySurface` renders the two live sources (Substrate and GitHub, pushes included) as ONE list (`mergeActivity` + `sortActivity`), newest
 first, with `All` as the first tab and each source as a filter, exactly as the PR `All` view works. The row
 is the same 32px `ListRow` the issue and PR lists use, with the same 14px glyph — the feed is not a
 separate visual dialect.

@@ -102,11 +102,12 @@ export function useEvents(repo: string, follow = false) {
   });
 }
 
-export function usePulls(repo: string, state: PullListState = "open", follow = false) {
+export function usePulls(repo: string, state: PullListState = "open", follow = false, enabled = true) {
   const { github } = useAdapters();
   return useQuery({
     queryKey: ["github", "pulls", repo, state],
     queryFn: () => github.listPulls(repo, state),
+    enabled,
     staleTime: 30_000,
     refetchInterval: follow ? LIVE_MS : false,
   });

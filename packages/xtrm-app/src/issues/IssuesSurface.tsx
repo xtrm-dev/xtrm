@@ -20,8 +20,8 @@ import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
 
 // One status control, one vocabulary (2026-11-26 ruling): the Status filter and the row badge both read
-// `issueStatusId`/`matchesIssueStatus`, so Substrate's statuses — open, in progress, ready, blocked,
-// deferred, done, cancelled, archived, and the closed aggregate — are the only ones the console speaks.
+// `issueStatusId` (the filter through `matchesIssueStatusSet`), so Substrate's statuses — open, in progress, ready, blocked,
+// deferred, done, cancelled, archived — are the only ones the console speaks.
 
 /** The clipboard write is a write: it resolves `true` only when the text reached the clipboard. */
 /** The one-line row has no headers to click, so the Order by menu carries every key a header used to. */

@@ -1,8 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
- * The one-line issue row (2026-11-24 ruling): no column grid, no header, one 36px reading line per
- * issue — the same height as a sidebar row. The key is a tinted chip, the state a solid chip, and the
+ * The one-line issue row (2026-11-24 ruling): no column grid, no header, one 32px reading line per
+ * issue (sidebar rows are 28px, the Work/Agent switch height). The key is a tinted chip, the state a solid chip, and the
  * rollups sit at the right edge. jsdom cannot measure, so the pixel guard lives here; the structural
  * guard is `IssueRows.test.tsx`.
  */

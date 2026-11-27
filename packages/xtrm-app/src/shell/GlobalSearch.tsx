@@ -25,7 +25,8 @@ export function GlobalSearch() {
   const repoIssues = useIssues(project?.id);
   const allIssues = useIssuesForProjects(projects.data?.map((p) => p.id) ?? [], searching && workspace);
   // Pull requests are repository-scoped, like the repository scope of the palette.
-  const pulls = usePulls(repo.fullName, "all");
+  // Read only while the palette is open: the shell mounts this on every route (XTRM-1090 review).
+  const pulls = usePulls(repo.fullName, "all", false, palette.open);
 
   const groups = useMemo<CommandGroupData[]>(() => {
     if (commandMode) {

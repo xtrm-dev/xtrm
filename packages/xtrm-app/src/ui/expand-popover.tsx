@@ -22,7 +22,8 @@ import { cx } from "./primitives.tsx";
  * The header is painted over the trigger, so it must not eat the pointer: the popup box and the
  * header are `pointer-events-none` (only the panel surface is interactive). A second press on the
  * row that opened the panel therefore reaches the trigger and closes it, as it did before the
- * change, while the header stays out of the accessibility tree and out of the tab order.
+ * change. The header is `aria-hidden` (out of the accessibility tree) and `inert` (out of the tab
+ * order and unfocusable, even if a caller passes a row with a control).
  */
 export function ExpandPopover({
   side,
@@ -89,6 +90,9 @@ export function ExpandPopover({
   const header = (
     <div
       aria-hidden="true"
+      // `aria-hidden` removes the header from the accessibility tree only; `inert` also takes any
+      // control a caller passes in the header row out of the tab order and out of focus.
+      inert
       data-expand-popover-header=""
       // The same attribute Base UI puts on the trigger while open, so the trigger's
       // `data-[popup-open]:` classes paint the header identically.

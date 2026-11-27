@@ -95,10 +95,6 @@ export const KIND_ICON: Record<string, IconName> = {
 
 export const kindIcon = (kind: string): IconName => KIND_ICON[kind] ?? "issues";
 
-export function readinessLabel(state: string) {
-  return state.replace(/_/g, " ");
-}
-
 export function formatDate(ms: number | null) {
   if (ms === null) return "—";
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
