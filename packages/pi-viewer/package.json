@@ -22,6 +22,7 @@
     "test:rows": "node scripts/rows-check.mjs",
     "test:scope": "node scripts/scope-check.mjs",
     "test:composer": "node scripts/composer-check.mjs",
+    "test:scrollbars": "node scripts/scrollbar-check.mjs",
     "test:sidebar": "node scripts/sidebar-gate.mjs",
     "measure:load": "node scripts/load-check.mjs",
     "test:flicker": "node scripts/send-flicker-check.mjs",

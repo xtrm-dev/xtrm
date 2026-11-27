@@ -248,6 +248,12 @@
   ::selection {
     background: var(--color-accent-soft);
   }
+  /* One scrollbar everywhere (operator, 2026-11-27): the thin, dim one the chat scroller uses.
+     `no-scrollbar` still hides its own; a container that needs the browser default cannot exist. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
 }
 
 /* Rendered markdown and the rich editor share one prose style (Supernova-restrained). */

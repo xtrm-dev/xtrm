@@ -117,6 +117,7 @@ const read = (page) =>
     const box = document.querySelector(".xtrm-composer-box")
     const input = document.querySelector("[data-composer-input]")
     const under = document.querySelector("[data-composer-under-row]")
+    const hint = under?.querySelector("span")
     const group = document.querySelector("[data-composer-target-meta]")
     const model = document.querySelector("[data-composer-target-model]")
     const effort = document.querySelector("[data-composer-target-effort]")
@@ -169,6 +170,7 @@ const read = (page) =>
       inputToSend: Math.round((sendRect.left - inputRect.right) * 10) / 10,
       inputScrolls: input.scrollHeight > input.clientHeight + 1,
       underRight: groupRect ? Math.round(groupRect.right * 10) / 10 : null,
+      hintLeft: hint ? Math.round(hint.getBoundingClientRect().left * 10) / 10 : null,
       fill: style.backgroundColor,
       canvas: canvas ? getComputedStyle(canvas).backgroundColor : null,
       shadow: style.boxShadow,
@@ -188,6 +190,10 @@ const read = (page) =>
           (boxRect.bottom - (inputRect.top + parseFloat(getComputedStyle(input).paddingTop) + parseFloat(getComputedStyle(input).lineHeight))) * 10,
         ) / 10,
       sendTopGap: Math.round((sendRect.top - boxRect.top) * 10) / 10,
+      // The two controls' names (XTRM-1153, #523 review): the aria-label for the screen reader, the title
+      // for the pointer, matching the pattern the Stop control already used.
+      sendLabel: send?.getAttribute("aria-label") ?? null,
+      sendTitle: send?.getAttribute("title") ?? null,
       // The context ring beside the model name.
       ring: (() => {
         const node = document.querySelector("[data-context-ring]")
@@ -361,6 +367,8 @@ try {
       assert.equal(focused.sendW, 32, `${label}: the send hit area is 32px wide (${focused.sendW})`)
       assert.equal(focused.sendH, 32, `${label}: the send hit area is 32px high (${focused.sendH})`)
       assert.equal(focused.glyph, 16, `${label}: the send glyph is 16px (${focused.glyph})`)
+      assert.equal(focused.sendLabel, "Send", `${label}: the send button keeps its aria-label (${focused.sendLabel})`)
+      assert.equal(focused.sendTitle, "Send (Enter)", `${label}: the send button names its key in the title (${focused.sendTitle})`)
       assert.ok(Math.abs(focused.sendCentre - focused.lineCentre) <= 1, `${label}: send is centred on the text line (${focused.sendCentre} vs ${focused.lineCentre})`)
       assert.ok(Math.abs(focused.sendRightInset - focused.textLeftInset) <= 1, `${label}: send's right inset equals the text's left inset (${focused.sendRightInset} vs ${focused.textLeftInset})`)
 
@@ -383,6 +391,10 @@ try {
       assert.equal(pi.effortSize, "14px", `${label}: the effort reads at 14px`)
       // 6. The under-row's right edge meets the send button's right edge, not the box's outer edge.
       assert.ok(Math.abs(pi.underRight - (pi.boxRight - pi.sendRightInset)) <= 1, `${label}: the under-row ends at the send's right edge (${pi.underRight} vs ${Math.round((pi.boxRight - pi.sendRightInset) * 10) / 10})`)
+      // The hint sits on the row's left edge, so it takes the same 12px inset the box gives its text.
+      if (width >= 700) {
+        assert.ok(Math.abs(pi.hintLeft - (pi.boxLeft + 12)) <= 1, `${label}: the hint starts on the box's text inset (${pi.hintLeft} vs ${Math.round((pi.boxLeft + 12) * 10) / 10})`)
+      }
       // On a narrow viewport the row's own width nearly fills the lane, so the right edge is the test.
       if (width >= 700) {
         assert.ok(pi.groupLeft > pi.boxLeft + (pi.boxRight - pi.boxLeft) / 2, `${label}: the row starts in the right half (${pi.groupLeft})`)
