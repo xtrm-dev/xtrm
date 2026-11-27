@@ -10,6 +10,22 @@ const repos: Repo[] = [
   ["mercuryintelligence", "program"],
 ].map(([owner, name]) => ({ fullName: `${owner}/${name}`, displayName: name!, owner: owner!, name: name!, lastPolledAt: null }));
 
+/**
+ * Fixture-only knob for the browser tests: `?fixtureRepos=45` asks for a longer repository list than
+ * the seed above provides, so a test can push a list past a panel's height cap. The live adapter
+ * never imports this module, and without the parameter the seed is returned unchanged.
+ */
+const fixtureRepoList = (): Repo[] => {
+  if (typeof window === "undefined") return repos;
+  const requested = Number(new URLSearchParams(window.location.search).get("fixtureRepos") ?? 0);
+  if (!Number.isFinite(requested) || requested <= repos.length) return repos;
+  const extra = Array.from({ length: Math.floor(requested) - repos.length }, (_, i) => {
+    const name = `fixture-${String(i + 1).padStart(2, "0")}`;
+    return { fullName: `xtrm-dev/${name}`, displayName: name, owner: "xtrm-dev", name, lastPolledAt: null };
+  });
+  return [...repos, ...extra];
+};
+
 const now = Date.parse("2026-09-16T17:00:00Z");
 const ago = (m: number) => new Date(now - m * 60_000).toISOString();
 
@@ -315,7 +331,7 @@ const REPORTS = [
 export const fixtureGithub: GithubAdapter = {
   source: "fixture",
   async listRepos() {
-    return repos;
+    return fixtureRepoList();
   },
   async repoStats() {
     return repos.map((r, i) => ({ fullName: r.fullName, pushes: 12 - i * 2, prEvents24h: 5 - i, issueEvents24h: i, lastEventAt: ago(i * 90) }));

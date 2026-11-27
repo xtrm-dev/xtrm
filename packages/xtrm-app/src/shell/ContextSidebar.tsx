@@ -1,4 +1,3 @@
-import { Popover } from "../ui/popover.tsx";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
@@ -7,6 +6,7 @@ import { useAgentStore } from "../agent/workspace.tsx";
 import { AGENT_MODE, MODES, PROJECT_SECTIONS, REPO_SECTIONS, RESEARCH_SECTIONS, destinationHref, halfForPath, modeForPath, repoHref, type Half } from "../app/destinations.ts";
 import { isInvalidManifestRow } from "../adapters/research/types.ts";
 import { projectForRepo, useConnection, useIssues, useProjects, useRepoStats, useRepos, useResearchRuns } from "../app/queries.ts";
+import { ExpandPopover } from "../ui/expand-popover.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
 import { NavRailItem, SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
@@ -37,72 +37,73 @@ function RepositorySelector() {
   const lastEvent = (fullName: string) => stats.data?.find((s) => s.fullName === fullName)?.lastEventAt ?? null;
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger
-        aria-label={`Repository: ${repo.fullName}`}
-        className="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
-      >
-        <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Repository</span>
-        <span className="flex w-full min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-ink">{repo.name}</span>
-          <span className="truncate text-xs text-ink-faint">{repo.owner}</span>
-          <Icon name="chevronDown" size="xs" className="ml-auto shrink-0 text-ink-faint" />
-        </span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner side="bottom" align="start" sideOffset={4} className="z-50">
-          <Popover.Popup className="flex w-72 flex-col rounded-lg bg-raised shadow-float outline-none">
-            <div className="flex h-10 items-center gap-2 border-b border-border-muted px-3">
-              <Icon name="search" size="xs" className="text-ink-faint" />
-              <input
-                autoFocus
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Filter repositories"
-                aria-label="Filter repositories"
-                className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-              />
-            </div>
-            <div className="thin-scrollbar max-h-80 overflow-y-auto p-1" role="listbox" aria-label="Repositories">
-              {repos.isPending && <div className="px-2 py-2 text-sm text-ink-faint">Loading repositories…</div>}
-              {repos.isError && <div className="px-2 py-2 text-sm text-danger">{String(repos.error.message)}</div>}
-              {ordered.map((r) => (
-                <Row
-                  key={r.fullName}
-                  density="sidebar"
-                  role="option"
-                  aria-selected={r.fullName === repo.fullName}
-                  selected={r.fullName === repo.fullName}
-                  onActivate={() => {
-                    setOpen(false);
-                    setFilter("");
-                    go(repoHref(r, "/work/issues"));
-                  }}
-                >
-                  <span className="truncate text-ink-muted">
-                    <span className="text-ink-faint">{r.owner}/</span>
-                    <span className="text-ink">{r.name}</span>
-                  </span>
-                  <span className="ml-auto text-xs text-ink-faint tabular">{relativeTime(lastEvent(r.fullName))}</span>
-                </Row>
-              ))}
-            </div>
-            <div className="border-t border-border-muted p-1">
-              <Row
-                density="sidebar"
-                onActivate={() => {
-                  setOpen(false);
-                  go("/repositories");
-                }}
-              >
-                <Icon name="repositories" size="xs" className="text-ink-faint" />
-                <span className="text-ink-muted">All repositories</span>
-              </Row>
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
+    <ExpandPopover
+      side="bottom"
+      label={`Repository: ${repo.fullName}`}
+      open={open}
+      onOpenChange={setOpen}
+      triggerClassName="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
+      popupClassName="rounded-b-lg bg-raised shadow-float"
+      row={
+        <>
+          <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Repository</span>
+          <span className="flex w-full min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm font-medium text-ink">{repo.name}</span>
+            <span className="truncate text-xs text-ink-faint">{repo.owner}</span>
+            <Icon name="chevronDown" size="xs" className="ml-auto shrink-0 text-ink-faint" />
+          </span>
+        </>
+      }
+    >
+      <div className="flex h-10 items-center gap-2 border-b border-border-muted px-3">
+        <Icon name="search" size="xs" className="text-ink-faint" />
+        <input
+          autoFocus
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter repositories"
+          aria-label="Filter repositories"
+          className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+        />
+      </div>
+      {/* The popover's own capped surface is the single scroller, so the list never nests one. */}
+      <div className="p-1" role="listbox" aria-label="Repositories">
+        {repos.isPending && <div className="px-2 py-2 text-sm text-ink-faint">Loading repositories…</div>}
+        {repos.isError && <div className="px-2 py-2 text-sm text-danger">{String(repos.error.message)}</div>}
+        {ordered.map((r) => (
+          <Row
+            key={r.fullName}
+            density="sidebar"
+            role="option"
+            aria-selected={r.fullName === repo.fullName}
+            selected={r.fullName === repo.fullName}
+            onActivate={() => {
+              setOpen(false);
+              setFilter("");
+              go(repoHref(r, "/work/issues"));
+            }}
+          >
+            <span className="truncate text-ink-muted">
+              <span className="text-ink-faint">{r.owner}/</span>
+              <span className="text-ink">{r.name}</span>
+            </span>
+            <span className="ml-auto text-xs text-ink-faint tabular">{relativeTime(lastEvent(r.fullName))}</span>
+          </Row>
+        ))}
+      </div>
+      <div className="border-t border-border-muted p-1">
+        <Row
+          density="sidebar"
+          onActivate={() => {
+            setOpen(false);
+            go("/repositories");
+          }}
+        >
+          <Icon name="repositories" size="xs" className="text-ink-faint" />
+          <span className="text-ink-muted">All repositories</span>
+        </Row>
+      </div>
+    </ExpandPopover>
   );
 }
 
@@ -124,54 +125,61 @@ function SourceFooter() {
   const tone = conn == null ? "neutral" : conn.ok ? "done" : "danger";
   return (
     <div className="mt-auto px-2 pb-2">
-      <Popover.Root open={open} onOpenChange={setOpen}>
-        {/* Inset from the panel edges, one compact line: it is a status strip, not a header. */}
-        <Popover.Trigger
-          aria-label="Data sources"
-          className="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-xs text-strip-ink shadow-strip outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
-        >
-          <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
-          <span className="truncate">{live === items.length ? "All sources live" : `${live} of ${items.length} live`}</span>
-          {remote?.latencyMs != null && <span className="ml-auto shrink-0 tabular">{remote.latencyMs} ms</span>}
-          {/* It opens upward, so the resting chevron points up and flips down when the panel is open. */}
-          <Icon name={open ? "chevronDown" : "chevronUp"} size="xs" className={cx("shrink-0", remote?.latencyMs != null ? "ml-1" : "ml-auto")} />
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Positioner side="top" align="start" sideOffset={6} className="z-50">
-            <Popover.Popup className="flex w-[var(--anchor-width)] flex-col gap-0.5 rounded-md bg-strip p-1.5 text-sm text-strip-ink shadow-strip-open outline-none">
-              <div className="flex items-baseline gap-2 px-1.5 pt-0.5 pb-1">
-                <span className="text-xs text-strip-ink-faint">Data sources</span>
-                <span className="ml-auto text-xs tabular text-strip-ink-faint">
-                  {live}/{items.length} live
-                </span>
-              </div>
-              {conn && (
-                <div className="flex h-7 items-center gap-2 rounded-md px-1.5 text-strip-ink-strong" data-testid="board-connection" title={remote ? `${remote.host ?? "ssh"} · ${remote.latencyMs ?? "?"} ms` : undefined}>
-                  <StatusDot tone={tone} label={conn.ok ? "board reachable" : "board unreachable"} />
-                  <span className="truncate">Board</span>
-                  <span className={cx("ml-auto", conn.ok ? "text-strip-ink-faint" : "text-danger")}>
-                    {conn.ok ? (remote ? `server · ${remote.latencyMs ?? "–"} ms` : "local db") : "offline"}
-                  </span>
-                </div>
-              )}
-              {items.map(([label, source]) => (
-                <div key={label} className="flex h-7 items-center gap-2 rounded-md px-1.5 text-strip-ink-strong">
-                  <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
-                  <span className="truncate">{label}</span>
-                  <span className="ml-auto text-strip-ink-faint" data-testid="source-state">
-                    {source}
-                  </span>
-                </div>
-              ))}
-              <div className="mt-1 border-t border-strip-rule px-1.5 pt-1.5 pb-0.5 text-xs text-strip-ink-faint" data-testid="board-transport">
-                {state === "remote" ? "ssh" : state === "local" ? "local db" : state === "offline" ? "unreachable" : "unknown"}
-                {remote?.host ? ` · ${remote.host}` : ""}
-                {conn?.serverVersion ? ` · sb ${conn.serverVersion}` : ""}
-              </div>
-            </Popover.Popup>
-          </Popover.Positioner>
-        </Popover.Portal>
-      </Popover.Root>
+      {/* Inset from the panel edges, one compact line: it is a status strip, not a header. */}
+      <ExpandPopover
+        side="top"
+        label="Data sources"
+        open={open}
+        onOpenChange={setOpen}
+        triggerClassName="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-left text-xs text-strip-ink shadow-strip outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
+        popupClassName="rounded-t-md bg-strip text-sm text-strip-ink shadow-strip-open"
+        bodyClassName="flex flex-col gap-0.5 p-1.5"
+        row={({ open }) => (
+          <>
+            <StatusDot tone={live === items.length ? "done" : "muted"} label={`${live} of ${items.length} live`} />
+            <span className="truncate">{live === items.length ? "All sources live" : `${live} of ${items.length} live`}</span>
+            {remote?.latencyMs != null && <span className="ml-auto shrink-0 tabular">{remote.latencyMs} ms</span>}
+            {/* It opens upward, so the resting chevron points up and flips down when the panel is open. */}
+            <Icon name={open ? "chevronDown" : "chevronUp"} size="xs" className={cx("shrink-0", remote?.latencyMs != null ? "ml-1" : "ml-auto")} />
+          </>
+        )}
+      >
+        <div className="flex items-baseline gap-2 px-1.5 pt-0.5 pb-1">
+          <span className="text-xs text-strip-ink-faint">Data sources</span>
+          <span className="ml-auto text-xs tabular text-strip-ink-faint">
+            {live}/{items.length} live
+          </span>
+        </div>
+        {conn && (
+          <div
+            className="flex h-7 items-center gap-2 rounded-md px-1.5 text-strip-ink-strong outline-none focus-visible:bg-strip-open"
+            data-testid="board-connection"
+            data-popover-row=""
+            tabIndex={-1}
+            title={remote ? `${remote.host ?? "ssh"} · ${remote.latencyMs ?? "?"} ms` : undefined}
+          >
+            <StatusDot tone={tone} label={conn.ok ? "board reachable" : "board unreachable"} />
+            <span className="truncate">Board</span>
+            <span className={cx("ml-auto", conn.ok ? "text-strip-ink-faint" : "text-danger")}>
+              {conn.ok ? (remote ? `server · ${remote.latencyMs ?? "–"} ms` : "local db") : "offline"}
+            </span>
+          </div>
+        )}
+        {items.map(([label, source]) => (
+          <div key={label} className="flex h-7 items-center gap-2 rounded-md px-1.5 text-strip-ink-strong outline-none focus-visible:bg-strip-open" data-popover-row="" tabIndex={-1}>
+            <StatusDot tone={source === "live" ? "done" : "muted"} label={source} />
+            <span className="truncate">{label}</span>
+            <span className="ml-auto text-strip-ink-faint" data-testid="source-state">
+              {source}
+            </span>
+          </div>
+        ))}
+        <div className="mt-1 border-t border-strip-rule px-1.5 pt-1.5 pb-0.5 text-xs text-strip-ink-faint" data-testid="board-transport">
+          {state === "remote" ? "ssh" : state === "local" ? "local db" : state === "offline" ? "unreachable" : "unknown"}
+          {remote?.host ? ` · ${remote.host}` : ""}
+          {conn?.serverVersion ? ` · sb ${conn.serverVersion}` : ""}
+        </div>
+      </ExpandPopover>
     </div>
   );
 }

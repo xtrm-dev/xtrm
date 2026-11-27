@@ -429,3 +429,36 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/*
+ * XTRM-1099: the expanding popover. The popup box is exactly the trigger rect and the panel is a
+ * surface hanging off its outer edge, so the body grows out of the trigger row instead of the
+ * whole popover resizing. Height animates with grid-template-rows (not scaleY), opacity follows in
+ * the same 180 ms ease-out, and reduced motion removes both so the panel opens and closes
+ * instantly. Base UI marks the first and last frame with data-starting-style / data-ending-style.
+ */
+[data-expand-popover] {
+  transition: opacity 180ms ease-out;
+}
+[data-expand-popover][data-starting-style],
+[data-expand-popover][data-ending-style] {
+  opacity: 0;
+}
+[data-expand-popover-surface] {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 180ms ease-out;
+}
+[data-expand-popover][data-open] [data-expand-popover-surface] {
+  grid-template-rows: 1fr;
+}
+[data-expand-popover][data-starting-style] [data-expand-popover-surface],
+[data-expand-popover][data-ending-style] [data-expand-popover-surface] {
+  grid-template-rows: 0fr;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-expand-popover],
+  [data-expand-popover-surface] {
+    transition-duration: 0s;
+  }
+}
