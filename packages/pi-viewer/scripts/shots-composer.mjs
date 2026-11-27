@@ -1,5 +1,6 @@
-// Composer screenshots (XTRM-1054, XTRM-1056, XTRM-1087): the empty box at rest and focused, a typed
-// draft, the To menu, a Claude target, and a nearly full context ring.
+// Composer screenshots (XTRM-1054, XTRM-1056, XTRM-1087, XTRM-1149): the empty box at rest and focused,
+// a typed draft, the To menu, a Claude target, a nearly full context ring, and a working target (the bare
+// Stop glyph beside the bare Send glyph, no filled boxes).
 //
 // Runs the app in-process with a mocked API on its own port (stopped at the end) and writes PNGs to
 // docs/design/shots/XTRM-1087/ (override with SHOTS_OUT). Not a gate: composer-check.mjs asserts the
@@ -14,24 +15,30 @@ const SESSION = "xx"
 const T0 = Date.now() - 60 * 60_000
 const out = process.env.SHOTS_OUT || "docs/design/shots/XTRM-1087"
 
-function agent(index, name, provider, model, thinkingLevel, context = null) {
+function agent(index, name, provider, model, thinkingLevel, context = null, status = "idle") {
   return {
     id: `%${index}`, paneId: `%${index}`, panePid: index, piPid: index, provider,
     tmuxSession: SESSION, windowIndex: 0, windowId: "@0", windowName: "w0", paneIndex: index,
     name, title: "", cwd: `/home/u/${name}`,
     sessionFile: `/tmp/${name}.jsonl`, sessionId: `s${index}`, sessionName: name,
     model, thinkingLevel, role: "worker", modifiedAt: Date.now(),
-    lastWriteAt: Date.now(), eventCount: 0, status: "idle", statusNote: null, statusDetail: null, context,
+    lastWriteAt: Date.now(), eventCount: 0, status, statusNote: null, statusDetail: null, context,
   }
 }
 
 // 46% of a 200k window, so the ring shows a readable arc; the Claude target reports no usage at all.
 const PI = agent(1, "agent-pi", "pi", "anthropic/claude-sonnet-4-5", "high", { used: 92_000, window: 200_000 })
 const CLAUDE = agent(2, "agent-claude", "claude", "claude-opus-4-5", null, null)
-const agents = [PI, CLAUDE]
 const events = [
   { id: "%1:0", agentId: "%1", agentName: PI.name, seq: 0, at: T0, kind: "user", role: "user", summary: "hi", onBranch: true, text: "hi" },
   { id: "%1:1", agentId: "%1", agentName: PI.name, seq: 1, at: T0 + 5_000, kind: "assistant", role: "assistant", summary: "hello", onBranch: true, text: "hello", parts: [{ type: "text", text: "hello" }], stopReason: "stop" },
+]
+// The working pass captures the Stop control (XTRM-1149). The agent's status is fixed before the page
+// loads, because the session poll that refreshes a status runs every 10s. Every /api request except the
+// two read endpoints is refused here, so no stop or send can leave the page.
+const states = [
+  { state: "idle", agents: [PI, CLAUDE] },
+  { state: "working", agents: [{ ...PI, status: "working" }, CLAUDE] },
 ]
 
 await mkdir(out, { recursive: true })
@@ -44,6 +51,7 @@ const written = []
 try {
   for (const width of [1440, 390]) {
     for (const theme of ["dark", "light"]) {
+    for (const { state, agents } of states) {
     const context = await browser.newContext({ viewport: { width, height: width < 700 ? 844 : 900 } })
     // The viewer's theme comes from localStorage (index.html reads pi-viewer-theme), not from colorScheme.
     await context.addInitScript((value) => localStorage.setItem("pi-viewer-theme", value), theme)
@@ -68,6 +76,19 @@ try {
       written.push(path)
     }
 
+    if (state === "working") {
+      await page.locator("[data-composer-stop]").waitFor({ state: "visible" })
+      const lane = page.locator(".xtrm-lane", { has: input }).first()
+      await lane.screenshot({ path: `${out}/composer-working-${width}-${theme}.png` })
+      written.push(`${out}/composer-working-${width}-${theme}.png`)
+      await input.fill("checking the guardrails")
+      await page.waitForTimeout(200)
+      await lane.screenshot({ path: `${out}/composer-working-typed-${width}-${theme}.png` })
+      written.push(`${out}/composer-working-typed-${width}-${theme}.png`)
+      await context.close()
+      continue
+    }
+
     await shot("empty")
     await input.click()
     await page.waitForTimeout(250)
@@ -83,6 +104,7 @@ try {
     await page.waitForTimeout(200)
     await shot("claude-target")
     await context.close()
+    }
     }
   }
 } finally {

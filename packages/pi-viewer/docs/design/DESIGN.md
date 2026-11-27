@@ -164,9 +164,9 @@ Every token below is declared in `src/styles.css:34-116` (light) and `:118-163` 
 | `--x-border-subtle` | `rgb(15 15 20 / 0.04)` | `rgb(255 255 255 / 0.06)` | table grid only |
 | `--x-border` | `rgb(15 15 20 / 0.11)` | `rgb(255 255 255 / 0.12)` | control border |
 | `--x-border-strong` | `rgb(15 15 20 / 0.2)` | `rgb(255 255 255 / 0.18)` | focus ring, soft separator |
-| `--x-github` | `#24292f` | `#f0f6fc` | the send button's pair |
-| `--x-github-hover` | `#32383f` | `#ffffff` | send button hover |
-| `--x-github-ink` | `#ffffff` | `#24292f` | send glyph |
+| `--x-github` | `#24292f` | `#f0f6fc` | the send glyph, bare since XTRM-1149 |
+| `--x-github-hover` | `#32383f` | `#ffffff` | send glyph hover |
+| `--x-github-ink` | `#ffffff` | `#24292f` | ink on a filled github button; unused since XTRM-1149 |
 | `--x-accent` | `#4f46e5` | `#818cf8` | selection, focus, references, working dot |
 | `--x-accent-ink` | `#4338ca` | `#a5b4fc` | accent as text and links |
 | `--x-accent-soft` | `rgb(79 70 229 / 0.1)` | `rgb(129 140 248 / 0.12)` | accent tint, selection |
@@ -299,9 +299,9 @@ The spacing scale is the 8px system the operator supplied as a density guide
 | composer box padding | `12px` all round (`p-3`), right `56px` for the send button | `src/components/Composer.tsx:254` |
 | composer text padding | `3.25px` above the line, `4.75px` below (optical centring, XTRM-1087) | `src/components/Composer.tsx:261` |
 | composer box, empty | `56px`: `12px` + a `32px` textarea (line `24px` + `8px`) + `12px` | `src/components/Composer.tsx:254` |
-| composer send button | `32px` box, `16px` glyph, `12px` above the box's bottom edge, centred on the text line | `src/components/Composer.tsx:262-270` |
+| composer send button | `32px` hit area, `16px` bare glyph in the github tone (no fill, no box), `12px` above the box's bottom edge, centred on the text line | `src/components/Composer.tsx:308-319` |
 | composer under-row | `6px` below the box, `12px` between items, right edge at the send button's right edge | `src/components/Composer.tsx:267-269` |
-| composer stop control | `32px` square beside send, muted `bg-control` fill, drawn only while the target works; Esc in an empty box is the same action | `src/components/Composer.tsx:293-307` |
+| composer stop control | `32px` hit area beside send, a bare `14px` outline square in ink (no fill, no box), drawn only while the target works; Esc in an empty box is the same action | `src/components/Composer.tsx:290-306` |
 | sidebar row padding | `8px` horizontally on the tree, `6px` vertically on a pane row | `src/components/sidebar/geometry.ts` |
 | thread content padding | `3rem` on a wide screen (`sm:px-12`) | `src/styles.css:757-771` |
 | chat lane | `46rem` default, `72rem` wide, custom from `36rem`, Full | `src/lib/chat-width.ts:12-18` |
@@ -564,11 +564,17 @@ cut-outs against any palette's canvas (`docs/design/palette-console.md`).
 Purpose: send one operator message to one agent, and answer a specific agent without retyping.
 
 Geometry: a 56px one-line box that grows to `max-h-52` (`208px`), no border and no ring in any palette or
-state, a fill one step above the canvas, a slight drop shadow, `16px/24px` prompt, a 32px send button
-overlaying the box's bottom right, and an empty attach slot on the left for a control that does not exist
-yet (`src/components/Composer.tsx:237-262`). The box carries `--x-composer-fill`, `--x-composer-focus`,
+state, a fill one step above the canvas, a slight drop shadow, `16px/24px` prompt, a 32px bare send glyph
+at the box's bottom right, and an empty attach slot on the left for a control that does not exist yet
+(`src/components/Composer.tsx:225-319`). The box carries `--x-composer-fill`, `--x-composer-focus`,
 `--x-composer-shadow` and `--x-composer-shadow-focus` (`.xtrm-composer-box`, `src/styles.css:749-765`), so
 a palette decides the step, the elevation and the focus signal without touching the component.
+
+The two controls are bare glyphs (XTRM-1149). Send is a `16px` `SendIcon` in `text-github`, whose hover
+steps to `text-github-hover`; Stop is a `14px` outline `SquareIcon` in `text-ink`, whose hover shifts
+opacity. Neither draws a background box, both keep a `32px` hit area, their `aria-label` and `title`, and
+a `focus-visible` accent ring; a disabled control fades to `opacity-30`, and the working spinner replaces
+the glyph unchanged.
 
 The box centres the painted band, not the line box. Inside a 24px line box a font's descender ink is
 shallower than its cap height, so an evenly padded line draws its ascenders and descenders slightly low
@@ -596,8 +602,8 @@ The agent menu opens upward from the target it belongs to, anchored to the right
 so it meets the send button's right edge, sizing to its rows between `14rem` and `20rem` and never wider
 than the screen (`:270-300`). The status word sits on each row's right.
 
-Other states: empty with a placeholder and the mouse hint (`@ to mention · Shift+Enter for a new line`,
-`text-2xs`, hidden below `sm`); draft; addressed; sending (the send glyph becomes a spinner); error
+Other states: empty with a placeholder and the mouse hint (`@ to mention`, `text-2xs`, hidden below
+`sm`); draft; addressed; sending (the send glyph becomes a spinner); error
 (`text-2xs` in `danger` under the box); gone (the target pane left — the composer disables and the reply
 bar drops, `src/lib/reply.ts:14-27`).
 
@@ -825,6 +831,7 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-26 | Bundle split and a lazy events view; latin fonts only; `motion-panels` replaced by an in-repo split | XTRM-1067 |
 | 2026-11-26 | A send pins the thread to the end until the reader scrolls | XTRM-1064 |
 | 2026-11-26 | Scope is applied server-side, discovery leaves the request path, frames are cached | XTRM-1066 |
+| 2026-11-27 | Composer send and stop are bare glyphs: an outline square in ink and the send in the github tone, no filled boxes, hover by tone or opacity; the hint reads only `@ to mention` | XTRM-1149 |
 
 ## 11. Open questions
 
