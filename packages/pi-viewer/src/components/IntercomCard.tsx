@@ -7,19 +7,28 @@ import { clock, monogram } from "@/lib/format"
 import type { ViewerEvent } from "@/shared/types"
 import { cn } from "@/lib/utils"
 
-/** Three rendered lines at the .xtrm-prose line-height. */
-const COLLAPSED_HEIGHT = 3 * 25.6
+/** Collapsed to this many rendered lines, measured from the prose line height so it follows the theme. */
+const COLLAPSED_LINES = 3
+/** Fallback before the first measure: 14px text at line height 1.4. */
+const FALLBACK_LINE = 19.6
 
 function IntercomBody({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false)
   const [canExpand, setCanExpand] = useState(false)
+  const [collapsedHeight, setCollapsedHeight] = useState(COLLAPSED_LINES * FALLBACK_LINE)
   const bodyRef = useRef<HTMLDivElement>(null)
   const bodyId = useId()
 
   useLayoutEffect(() => {
     const element = bodyRef.current
     if (!element) return
-    const measure = () => setCanExpand(element.scrollHeight > COLLAPSED_HEIGHT + 2)
+    const measure = () => {
+      const prose = element.querySelector<HTMLElement>(".xtrm-prose") ?? element
+      const line = Number.parseFloat(getComputedStyle(prose).lineHeight) || FALLBACK_LINE
+      const height = COLLAPSED_LINES * line
+      setCollapsedHeight(height)
+      setCanExpand(element.scrollHeight > height + 2)
+    }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(element)
@@ -31,7 +40,7 @@ function IntercomBody({ text }: { text: string }) {
       <div
         id={bodyId}
         className={cn("relative overflow-hidden", !expanded && canExpand && "xtrm-fold-fade")}
-        style={!expanded ? { maxHeight: COLLAPSED_HEIGHT } : undefined}
+        style={!expanded ? { maxHeight: collapsedHeight } : undefined}
         data-slot="intercom-body"
       >
         <div ref={bodyRef}>

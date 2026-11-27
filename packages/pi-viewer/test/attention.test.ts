@@ -257,6 +257,74 @@ test("Pi permission gate: Bash with the command, the reason and the question", (
   )
 })
 
+test("Pi permission gate in a narrow pane: the key hint wraps at any word", () => {
+  const rule = "─".repeat(54)
+  const screen = (hint: string[]) =>
+    [
+      " Running bash…",
+      "",
+      rule,
+      " Dangerous Command Detected",
+      "",
+      " This command contains recursive force delete:",
+      rule,
+      "  1 cd /tmp && rm -rf xtpl-m3 && mkdir xtpl-m3 &&",
+      "  1 node -e '",
+      "  2 const {spawnSync} =",
+      rule,
+      " Allow execution?",
+      "",
+      ...hint,
+      rule,
+    ].join("\n")
+  for (const hint of [
+    [" ↑/↓ or j/k: scroll • y/enter: allow • a: session •", " n/esc: deny • s: decline & stop"],
+    [" ↑/↓ or j/k: scroll • y/enter:", " allow • a: session • n/esc: deny • s: decline &", " stop"],
+    [" ↑/↓ or j/k:", " scroll • y/enter:", " allow • a:", " session"],
+  ]) {
+    const prompt = detectPermissionPrompt(screen(hint), "pi")
+    assert.ok(prompt, hint.join("|"))
+    assert.match(prompt.text, /^Dangerous Command Detected\n/)
+    assert.match(prompt.text, /Allow execution\?$/)
+  }
+})
+
+test("Pi permission gate: prose that quotes the dialog with a wrapped hint is not a prompt", () => {
+  const quoted = [
+    "The worker was stuck on this dialog:",
+    "",
+    " Dangerous Command Detected",
+    " This command contains recursive force delete:",
+    "  1 rm -rf /tmp/x",
+    " Allow execution?",
+    "",
+    " ↑/↓ or j/k: scroll • y/enter:",
+    " allow • a: session • n/esc: deny",
+    "",
+    "I approved it after reading the command.",
+  ].join("\n")
+  assert.equal(detectPermissionPrompt(quoted, "pi"), null)
+})
+
+test("Pi permission gate: a title that scrolled above the prompt window is not used", () => {
+  const rule = "─".repeat(54)
+  const filler = Array.from({ length: 34 }, (_, index) => `  ${index + 1} echo line ${index}`)
+  const screen = [rule, " Dangerous Command Detected", ...filler, rule, " Allow execution?", "", " ↑/↓ or j/k: scroll • y/enter: allow", rule].join("\n")
+  assert.equal(detectPermissionPrompt(screen, "pi"), null)
+})
+
+test("Pi permission gate: a dialog clipped at the top or bottom of the captured screen is still a prompt", () => {
+  const rule = "─".repeat(54)
+  const body = [" Dangerous Command Detected", "", " This command contains recursive force delete:", rule, "  1 rm -rf /tmp/x", rule, " Allow execution?", ""]
+  const clippedTop = [...body, " ↑/↓ or j/k: scroll • y/enter: allow • a: session", rule].join("\n")
+  const clippedBottom = ["output", rule, ...body, " ↑/↓ or j/k: scroll • y/enter:", " allow • a: session"].join("\n")
+  for (const screen of [clippedTop, clippedBottom]) {
+    const prompt = detectPermissionPrompt(screen, "pi")
+    assert.ok(prompt)
+    assert.match(prompt.text, /Allow execution\?$/)
+  }
+})
+
 test("no prompt: idle panes, prose that quotes the question, the bypass-permissions footer", () => {
   assert.equal(detectPermissionPrompt(pane("claude-idle.txt"), "claude"), null)
   assert.equal(detectPermissionPrompt(pane("pi-idle.txt"), "pi"), null)
