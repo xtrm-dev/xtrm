@@ -92,17 +92,20 @@ function PullRow({ pull, fullName, selected, onOpen }: { pull: PullRequestSummar
             </span>
           )}
           <Badge tone={CHECK_TONE[pull.checks ?? "unknown"]} size="xs" title={checkLabel(pull.checks)} data-testid="pull-checks">
-            {pull.checks === "none" ? "no checks" : checkShortLabel(pull.checks)}
+            {checkShortLabel(pull.checks)}
           </Badge>
-          <Badge
-            tone={REVIEW_TONE[pull.review ?? "unknown"]}
-            size="xs"
-            className="hidden xl:inline-flex"
-            title={pull.reviewCount ? `${reviewLabel(pull.review)} · ${pull.reviewCount} reviews` : `Review state: ${reviewLabel(pull.review)}`}
-            data-testid="pull-review"
-          >
-            {reviewLabel(pull.review)}
-          </Badge>
+          {/* The wrapper sheds the pill below xl: a Badge emits its own inline-flex, which would win over
+              a `hidden` class on the Badge itself. */}
+          <span className="hidden xl:inline-flex">
+            <Badge
+              tone={REVIEW_TONE[pull.review ?? "unknown"]}
+              size="xs"
+              title={pull.reviewCount ? `${reviewLabel(pull.review)} · ${pull.reviewCount} reviews` : `Review state: ${reviewLabel(pull.review)}`}
+              data-testid="pull-review"
+            >
+              {reviewLabel(pull.review)}
+            </Badge>
+          </span>
           <span
             className="inline-flex items-center gap-1 tabular"
             title={pull.comments === null ? "Conversation comment count unknown" : `${pull.comments} conversation comments · review comments excluded`}

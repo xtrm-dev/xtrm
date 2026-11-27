@@ -118,6 +118,9 @@ describe("Pull requests surface", () => {
     const review = within(countedRow).getByTestId("pull-review");
     expect(review.textContent).toBe("approved");
     expect(review.className).toContain("text-success-ink");
+    // The review pill sheds below xl through its wrapper: a `hidden` on the Badge loses to its inline-flex.
+    expect(review.parentElement!.className).toBe("hidden xl:inline-flex");
+    expect(review.className).not.toContain("hidden");
     expect(within(countedRow).getByTitle(/3 conversation comments/)).toBeTruthy();
     expect(within(countedRow).getByTitle("24 added, 7 removed")).toBeTruthy();
     expect(within(countedRow).getByTitle("approved \u00b7 2 reviews")).toBeTruthy();

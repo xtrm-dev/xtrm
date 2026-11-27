@@ -129,6 +129,9 @@ a chart) is a **card title** — `text-base font-medium text-ink` via `DetailTit
    them is coloured and the other is plain. The status chip keeps its tone; the `PrKey` then renders
    with `quiet` (`text-ink-muted`; the state stays in the glyph, tooltip and `aria-label`). In a row
    with no status chip (the PR list) the `PrKey` is the coloured element.
+   *Superseded for the PR list row on 2026-11-27 (operator, XTRM-1136):* the row carries the glyph +
+   word state chip, the diff in success/danger ink, and tint pills for checks and review state. Those
+   pills name states (rule 2), and the key is plain.
 2. **Chips only for state, never for metadata.** Counts, branches, refs, roles, layers, categories,
    sources, bindings and sync labels are plain text, or mono for keys and paths. A chip names a
    state: an issue status, a PR state, a dispatch verdict, a finding.
@@ -140,8 +143,9 @@ a chart) is a **card title** — `text-base font-medium text-ink` via `DetailTit
 5. **A surface may not add a pill row.** A set of more than one tag-like value becomes a count plus a
    popover (`LinkedRefs`), never a second line of chips.
 
-Enforcement: rules 1 and 3 are asserted per surface (`src/github/pulls.test.tsx` "the key is the one
-coloured element in the list", "the header control is a ghost, not a filled pill");
+Enforcement: rules 1 and 3 are asserted per surface (`src/github/pulls.test.tsx`: the PR row's
+coloured diff and state pills after the XTRM-1136 supersession, "the header control is a ghost, not
+a filled pill");
 `src/issues/PullRequestsBlock.test.tsx` asserts the quiet key; `src/project/jira/JiraSurface.test.tsx`
 asserts the key is ink, not a second accent link. Rules 2, 4 and 5 are **review only**.
 

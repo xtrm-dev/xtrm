@@ -151,7 +151,7 @@ export function checkTone(state: CheckState | null): Tone {
 /** Compact checks cell text: unknown stays a word, a missing aggregate stays an em dash (XTRM-857). */
 export function checkShortLabel(state: CheckState | null): string {
   if (state === null) return "unknown";
-  if (state === "none") return "—";
+  if (state === "none") return "no checks";
   return checkLabel(state).replace("checks ", "");
 }
 
