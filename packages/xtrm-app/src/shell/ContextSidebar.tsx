@@ -45,7 +45,11 @@ function RepositorySelector() {
       open={open}
       onOpenChange={setOpen}
       triggerClassName="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
-      popupClassName="rounded-lg bg-raised shadow-float"
+      // No ring (XTRM-1136): the strip drop-up's ringless shadow, so the open picker carries no border.
+      popupClassName="rounded-lg bg-raised shadow-strip-open"
+      // A short picker (XTRM-1136): the search row plus about ten of the most recently active
+      // repositories; the rest scroll in the panel's one scroller.
+      maxHeight={384}
       row={
         <>
           <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Repository</span>

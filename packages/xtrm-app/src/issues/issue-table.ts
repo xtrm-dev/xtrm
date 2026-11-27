@@ -1,4 +1,5 @@
 import type { IssueSummary } from "../adapters/index.tsx";
+import type { IconName } from "../ui/icon.tsx";
 import { TERMINAL, lifecycleLabel } from "./meta.tsx";
 
 export type SortKey = "key" | "title" | "priority" | "children" | "events" | "pointers" | "pr" | "created" | "updated";
@@ -70,26 +71,33 @@ export function matchesIssueStatusSet(i: IssueSummary, statuses: ReadonlySet<str
  * plain Open. They render as the dim tint (2026-11-27 ruling); only a state of work earns a fill,
  * the same rule the Activity feed applies to its chips.
  */
-export type IssueStatus = { label: string; tone: StatusTone; hint: string; quiet?: boolean };
+/** `icon` is the status glyph the pill leads with: the shape names the status without colour. */
+export type IssueStatus = { label: string; tone: StatusTone; hint: string; icon: IconName; quiet?: boolean };
+
+const CLOSED_ICON: Record<"done" | "cancelled" | "archived", IconName> = {
+  done: "statusDone",
+  cancelled: "statusCancelled",
+  archived: "statusArchived",
+};
 
 export function issueStatus(i: IssueSummary): IssueStatus {
   const status = issueStatusId(i);
   if (status === "done" || status === "cancelled" || status === "archived") {
-    return { label: lifecycleLabel(i.lifecycle), tone: "muted", hint: "Closed" };
+    return { label: lifecycleLabel(i.lifecycle), tone: "muted", hint: "Closed", icon: CLOSED_ICON[status] };
   }
-  if (status === "deferred") return { label: "Deferred", tone: "muted", hint: "Deferred" };
-  if (status === "in_progress") return { label: "In progress", tone: "active", hint: "Claimed by a worker" };
-  if (status === "blocked") return { label: "Blocked", tone: "danger", hint: `Blocked by ${i.blockedBy.join(", ") || "an open issue"}` };
+  if (status === "deferred") return { label: "Deferred", tone: "muted", hint: "Deferred", icon: "statusDeferred" };
+  if (status === "in_progress") return { label: "In progress", tone: "active", hint: "Claimed by a worker", icon: "statusProgress" };
+  if (status === "blocked") return { label: "Blocked", tone: "danger", hint: `Blocked by ${i.blockedBy.join(", ") || "an open issue"}`, icon: "statusBlocked" };
   if (status === "ready") {
     return i.dispatchable === false
-      ? { label: "Attested", tone: "neutral", hint: "Attested, but the scrutiny policy denies dispatch" }
-      : { label: "Ready", tone: "accent", hint: "Attested and dispatchable" };
+      ? { label: "Attested", tone: "neutral", hint: "Attested, but the scrutiny policy denies dispatch", icon: "statusReady" }
+      : { label: "Ready", tone: "accent", hint: "Attested and dispatchable", icon: "statusReady" };
   }
-  if (i.contractComplete === false) return { label: "Draft", tone: "muted", hint: "The work contract is incomplete", quiet: true };
-  if (i.attestation === "rejected") return { label: "Rejected", tone: "danger", hint: "Attestation rejected this revision" };
-  if (i.attestation === "stale") return { label: "Stale", tone: "neutral", hint: "Attested on an older revision", quiet: true };
-  if (i.attestation === "none") return { label: "Unattested", tone: "neutral", hint: "The contract is complete but not attested", quiet: true };
-  return { label: "Open", tone: "neutral", hint: "Open, not ready for dispatch", quiet: true };
+  if (i.contractComplete === false) return { label: "Draft", tone: "muted", hint: "The work contract is incomplete", icon: "statusDraft", quiet: true };
+  if (i.attestation === "rejected") return { label: "Rejected", tone: "danger", hint: "Attestation rejected this revision", icon: "statusRejected" };
+  if (i.attestation === "stale") return { label: "Stale", tone: "neutral", hint: "Attested on an older revision", icon: "statusOpen", quiet: true };
+  if (i.attestation === "none") return { label: "Unattested", tone: "neutral", hint: "The contract is complete but not attested", icon: "statusOpen", quiet: true };
+  return { label: "Open", tone: "neutral", hint: "Open, not ready for dispatch", icon: "statusOpen", quiet: true };
 }
 
 export interface Rollup {

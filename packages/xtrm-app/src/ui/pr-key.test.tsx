@@ -56,11 +56,11 @@ describe("PrKey", () => {
 });
 
 describe("PrStateChip", () => {
-  it("renders the state word in its tone, word only like the issue status pill", () => {
+  it("renders the state word in its tone, with the glyph", () => {
     render(<PrStateChip state="open" />);
     const badge = screen.getByText("Open").closest("[data-slot='badge']") as HTMLElement;
     expect(badge.className).toContain("bg-chip-success");
-    expect(badge.querySelector("svg")).toBeNull();
+    expect(badge.querySelector("svg")).not.toBeNull();
   });
 
   it("names the assumption where there is room for it", () => {

@@ -314,8 +314,11 @@ test.describe("expanding popover", () => {
         tagged: scrollable.filter((node) => node.hasAttribute("data-expand-popover-scroll")).length,
         bottom: surface.bottom,
         height: window.innerHeight,
+        panel: surface.height,
       };
     });
+    // The picker stays short (XTRM-1136): its panel is capped at 384px even with room to spare.
+    expect(scrollers.panel).toBeLessThanOrEqual(385);
     // One scroll region and it is the panel's own: a nested list scroller would read as stuck.
     expect(scrollers.count).toBe(1);
     expect(scrollers.tagged).toBe(1);

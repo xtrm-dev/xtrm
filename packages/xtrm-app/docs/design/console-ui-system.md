@@ -650,8 +650,9 @@ Four states plus `unknown` — `draft` is a flag on an open PR, resolved once by
 - `PrKey({ number, state, draft?, repo?, glyph = true, quiet?, className? })` — mono `text-xs`, glyph
   at `micro`/`text`, `title` + `aria-label` naming the state. `quiet` mutes the ink for a row that
   already has a coloured status (§2.3 rule 1).
-- `PrStateChip({ state, draft?, stateSource?, showSource?, size? })` — the word chip on the state's
-  solid fill, word only like the issue status pill (XTRM-1136; the glyph stays on `PrKey`). Call
+- `PrStateChip({ state, draft?, stateSource?, showSource?, size? })` — the glyph + word chip on the
+  state's solid fill. Every status pill in the console has this shape (XTRM-1136): `IssueStatusBadge`
+  leads with a circle-family glyph from `issueStatus().icon`. Call
   sites: the PR list row, the PR inspector header, and (as the `PrStateBadge` alias) a linked PR row
   in the issue page's PR block, where `showSource` adds the `assumed` chip. The PR list row's rollups
   are the bold diff (`text-success-ink` additions, `text-danger` deletions) and tint pills for checks
@@ -1026,14 +1027,16 @@ than `--x-control`). This supersedes the ghost resting state of XTRM-939.
 
 `shadow-strip` (trigger) and `shadow-strip-open` (drop-up) are the XTRM-765 stacks as tokens; neither
 contains a `0 0 0 1px` layer, and the strip is the one floating layer that does not use
-`--x-shadow-float`. The repository picker keeps `shadow-float`. A test asserts the absence of the ring
+`--x-shadow-float`. The repository picker shares the strip's ringless open shadow (XTRM-1136). A test asserts the absence of the ring
 and that the open popup sits deeper than its trigger.
 
 Both expanding popovers (`ExpandPopover`) open as one surface: a shell spans the trigger row and the
 panel and carries the background, radius and shadow, and the header copy paints no fill of its own,
-so the panel grows out of the button with no seam at its edge (XTRM-1136). The repository picker's
-shell is `rounded-lg bg-raised shadow-float`; the strip's drop-up is `rounded-md bg-strip-open
-shadow-strip-open`, the strip's own open colour.
+so the panel grows out of the button with no seam at its edge (XTRM-1136). Neither carries a ring:
+the repository picker's shell is `rounded-lg bg-raised shadow-strip-open`, and the strip's drop-up
+is `rounded-md bg-strip-open shadow-strip-open`, the strip's own open colour. The picker's panel is
+capped at 384px (`maxHeight`), so it stays a short list of the most recently active repositories
+and still has one scroller.
 
 ### 8. Pull requests show every state by default
 

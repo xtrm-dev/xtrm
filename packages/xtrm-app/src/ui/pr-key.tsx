@@ -110,9 +110,8 @@ export interface PrStateChipProps {
 }
 
 /**
- * The state chip: the word on the state's solid fill, the same shape as the issue status pill
- * (XTRM-1136). It carries no glyph: the word names the state without colour, and the PR key keeps
- * the glyph where a key travels on its own.
+ * The state chip: glyph plus word. Only the inspector header carries it (§4.5, Restraint rule 3);
+ * everywhere else the key alone names the state.
  */
 export function PrStateChip({ state, draft, stateSource, showSource = false, size = "sm", className }: PrStateChipProps) {
   const meta = prStateMeta(state, draft);
@@ -121,6 +120,7 @@ export function PrStateChip({ state, draft, stateSource, showSource = false, siz
   return (
     <span className={cx("inline-flex shrink-0 items-center gap-1", className)}>
       <Badge variant="solid" tone={meta.chipTone} size={size} title={title}>
+        <Icon name={meta.icon} size="micro" className="shrink-0" />
         {meta.word}
       </Badge>
       {showSource && assumed && (

@@ -37,6 +37,7 @@ export function ExpandPopover({
   triggerClassName,
   popupClassName,
   bodyClassName,
+  maxHeight,
   children,
 }: {
   side: "top" | "bottom";
@@ -56,6 +57,11 @@ export function ExpandPopover({
   popupClassName?: string;
   /** Classes for the content box under the header (padding, gaps). */
   bodyClassName?: string;
+  /**
+   * The panel's own height cap in px. The panel scrolls at the smaller of this and the room beside the
+   * trigger, so a long list stays a short panel with one scroller (XTRM-1136).
+   */
+  maxHeight?: number;
   children: ReactNode;
 }) {
   const content = typeof row === "function" ? row({ open }) : row;
@@ -79,7 +85,8 @@ export function ExpandPopover({
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
       const room = side === "top" ? rect.top : window.innerHeight - rect.bottom;
-      setCap(Math.max(0, Math.floor(room - 8)));
+      const roomCap = Math.max(0, Math.floor(room - 8));
+      setCap(maxHeight === undefined ? roomCap : Math.min(roomCap, maxHeight));
     };
     measure();
     window.addEventListener("resize", measure);
@@ -88,7 +95,7 @@ export function ExpandPopover({
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
-  }, [open, side]);
+  }, [open, side, maxHeight]);
 
   const header = (
     <div
