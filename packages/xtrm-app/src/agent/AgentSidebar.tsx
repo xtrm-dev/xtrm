@@ -1,7 +1,7 @@
 import { NewSessionButton } from "./NewSession.tsx";
-import { useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSessionSummary } from "../adapters/index.tsx";
 import { useGo } from "../shell/ContextSidebar.tsx";
 import { useShell } from "../shell/context.tsx";
@@ -193,6 +193,21 @@ export function AgentSidebar() {
   const [scope, setScopeState] = useState<SessionScope>(readScope);
   const [filter, setFilter] = useState("");
   const [hostOpen, setHostOpen] = useState(false);
+  // `?host=1` (the System & settings menu's "Change host target…") opens the host panel once, then leaves the URL.
+  const navigate = useNavigate();
+  const hostRequested = useRouterState({ select: (s) => String((s.location.search as Record<string, unknown>).host ?? "") === "1" });
+  useEffect(() => {
+    if (!hostRequested) return;
+    setHostOpen(true);
+    void navigate({
+      to: ".",
+      replace: true,
+      search: (prev: Record<string, unknown>) => {
+        const { host: _host, ...rest } = prev;
+        return rest;
+      },
+    } as never);
+  }, [hostRequested]); // eslint-disable-line react-hooks/exhaustive-deps
   const setScope = (next: SessionScope) => {
     setScopeState(next);
     try {

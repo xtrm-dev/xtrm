@@ -258,16 +258,18 @@ describe("migration from today's storage keys", () => {
     expect(NOT_SETTINGS.map((n) => n.key)).toEqual(expect.arrayContaining(["xtrm-viewer:last-seen:", "pi-viewer-design-theme"]));
   });
 
-  it("lets the new document win over legacy keys and writes only the new key", () => {
+  it("lets the new document win over legacy keys and writes only the patched keys to the new key", () => {
     const local = memory({ "xtrm.console.theme.v1": "light", "xtrm.console.repo.v1": "acme/w" });
     const session = memory({ "xtrm.agent.scope.v1": "all" });
-    const written = writeDeviceSettings("console", { local, session }, { "appearance.theme": "dark", "connections.sshTarget": "host-only" } as Partial<AppSettings>);
-    expect(written).toEqual({ "appearance.theme": "dark", "layout.lastRepository": "acme/w", "layout.agentScope": "all" });
+    const written = writeDeviceSettings("console", { local }, { "appearance.theme": "dark", "connections.sshTarget": "host-only" } as Partial<AppSettings>);
+    expect(written).toEqual({ "appearance.theme": "dark" });
     expect(local.dump()["xtrm.console.theme.v1"]).toBe("light");
     expect(JSON.parse(local.dump()[DEVICE_SETTINGS_KEY.console]!)).toEqual(written);
-    // A later read with the legacy store gone still has the promoted session value.
-    expect(readDeviceSettings("console", { local })["layout.agentScope"]).toBe("all");
-    expect(readDeviceSettings("console", { local })["appearance.theme"]).toBe("dark");
+    // Keys nobody wrote yet still read through from their legacy keys.
+    expect(readDeviceSettings("console", { local, session })).toEqual({ "appearance.theme": "dark", "layout.lastRepository": "acme/w", "layout.agentScope": "all" });
+    // A second write keeps the first.
+    writeDeviceSettings("console", { local }, { "layout.agentScope": "all" });
+    expect(readDeviceSettings("console", { local })).toEqual({ "appearance.theme": "dark", "layout.lastRepository": "acme/w", "layout.agentScope": "all" });
   });
 
   it("returns null when storage refuses the write", () => {
