@@ -3,6 +3,7 @@
 Status: proposal for operator selection. Not implemented.
 Companion mock: [`../mocks/sidebar-restyle-proposals.html`](../mocks/sidebar-restyle-proposals.html) (open in a browser; light/dark toggle in the page header).
 Scope owner: Console v2 shell. Authority remains the PRD, `console-v2-shell-architecture.md`, and the active Substrate issue.
+Settings entry: the settings programme owns any Settings destination and the width controls (XTRM-1098; the research report is `docs/design/settings-research.md` on branch xt/settings-research, commit 2c429c04, not yet on main); the sidebar width bounds stay in the one table at `src/shell/layout.ts:33`.
 
 ## 1. Goal
 
@@ -22,11 +23,11 @@ Scope owner: Console v2 shell. Authority remains the PRD, `console-v2-shell-arch
 | Row label | 13 px, weight 500 (`font-medium`) | `src/ui/sidebar.tsx:61` |
 | Section header | `h-7`, 11.5 px, weight 500, faint; chevron appears on hover/focus only | `src/ui/sidebar.tsx:14-17` |
 | Nested indent | `paddingLeft: 1.75rem` (28 px) | `src/ui/sidebar.tsx:57` |
-| Groups | `Work` / `Code` / `System`; modes nested under `Work` | `src/app/destinations.ts:77-99` |
-| Modes | Work, Agents, Program, Research, Observability | `src/app/destinations.ts:18-24` |
+| Groups | `Workspace` / `GitHub` / `System`, in that order | `src/app/destinations.ts:105-135` |
+| Modes | Work, Agents, Research, Observability; the Agent half is separate and not numbered | `src/app/destinations.ts:21-33` |
 | Keyboard | `Mod+1..5` indexes `MODES[n - 1]` | `src/shell/AppShell.tsx:46-62` |
 | Palette hints | group label from `REPO_SECTIONS` | `src/shell/GlobalSearch.tsx:42,78` |
-| Sidebar width | `264` default (min 220, max 360) | `src/shell/layout.ts:33` |
+| Sidebar width | `264` default (min 220, max 360); the single table for both the sidebar and the inspector bounds | `src/shell/layout.ts:33-34` |
 | Palette | sidebar `#f4f4f5` light / `#1e1e1e` dark; ink `#18181b`/`#ececef`; faint `#94949c`/`#6a6a72`; accent `#4f46e5`/`#818cf8` | `src/styles.css:17-70` |
 
 ## 3. Target information architecture

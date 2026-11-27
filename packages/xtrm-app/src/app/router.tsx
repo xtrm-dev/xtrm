@@ -6,7 +6,7 @@ import { AgentIndexSurface, AgentSessionSurface } from "../agent/AgentSurface.ts
 import { IssuePage } from "../issues/IssuePage.tsx";
 import { IssuesSurface } from "../issues/IssuesSurface.tsx";
 import { AppShell } from "../shell/AppShell.tsx";
-import { DEFAULT_REPO } from "../shell/context.tsx";
+import { DEFAULT_REPO, REPO_KEY } from "../shell/context.tsx";
 import { validateDrawerSearch } from "../shell/layout.ts";
 import { ActivitySurface } from "../surfaces/ActivitySurface.tsx";
 import { ContentSurface } from "../github/ContentSurface.tsx";
@@ -37,13 +37,11 @@ const PROJECT_SEARCH: Partial<Record<string, (search: Record<string, unknown>) =
   workers: (search) => ({ ...validateDrawerSearch(search), ...validateWorkersSearch(search) }),
 };
 
-const REPO_STORAGE_KEY = "xtrm.console.repo.v1";
-
 /** The last selected repository (the shell's context rule), or null when none is selected yet. */
 function selectedRepo(): { owner: string; name: string } | null {
   let stored: string | null = null;
   try {
-    stored = localStorage.getItem(REPO_STORAGE_KEY);
+    stored = localStorage.getItem(REPO_KEY);
   } catch {
     // storage unavailable
   }

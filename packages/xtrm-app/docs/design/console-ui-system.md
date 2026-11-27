@@ -706,6 +706,13 @@ divergence recorded in §15, not a rule.
 Enforcement: `e2e/layout.spec.ts` (the 6px inspector inset at three viewport sizes and the 32px table
 header), `src/ui/dialog.test.tsx` (`h-12` header for both dialog tones). The rest is **review only**.
 
+Widths are not chrome heights, but they have the same single-owner rule. `src/shell/layout.ts:33-34`
+is the one table for the horizontal bounds: `SIDEBAR = { default: 264, min: 220, max: 360 }` and
+`INSPECTOR`. Do not restate those numbers in a component, a test fixture or a second module; import
+the table. Settings is a programme, not a shipped surface: its direction and its width controls are
+decided in the settings research report (XTRM-1098, `docs/design/settings-research.md` on branch
+`xt/settings-research` until it lands), and no Settings destination exists in this tree yet.
+
 ## 13. Drawer frame, header and sections
 
 - `Drawer({ variant, header, label })` (`src/ui/drawer.tsx`): an `<aside aria-label>` at
