@@ -123,6 +123,14 @@ describe("settings schema", () => {
     expect(formatSettingValue("project.jiraSite", null)).toBe("Derived (no override)");
   });
 
+  it("names the chosen hosts when the connection mode lists them", () => {
+    // labels.ts chose branch: a display edit that drops it leaves "This host only" here.
+    expect(formatSettingValue("connections.connectTo", { mode: "chosen", chosen: ["box", "laptop"] })).toBe("Chosen: box, laptop");
+    expect(formatSettingValue("connections.connectTo", { mode: "chosen", chosen: [] })).toBe("Chosen: none");
+    expect(formatSettingValue("connections.connectTo", { mode: "all", chosen: ["box"] })).toBe("All known hosts");
+    expect(formatSettingValue("connections.connectTo", { mode: "this", chosen: [] })).toBe("This host only");
+  });
+
   it("labels every section once, in navigation order", () => {
     expect(SECTION_ORDER).toEqual(Object.keys(SETTINGS_SECTIONS));
     for (const id of SECTION_ORDER) expect(SETTINGS_SECTIONS[id].id).toBe(id);
