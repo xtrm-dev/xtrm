@@ -257,6 +257,38 @@ test("Pi permission gate: Bash with the command, the reason and the question", (
   )
 })
 
+test("Pi permission gate in a narrow pane: the key hint wraps at any word", () => {
+  const rule = "─".repeat(54)
+  const screen = (hint: string[]) =>
+    [
+      " Running bash…",
+      "",
+      rule,
+      " Dangerous Command Detected",
+      "",
+      " This command contains recursive force delete:",
+      rule,
+      "  1 cd /tmp && rm -rf xtpl-m3 && mkdir xtpl-m3 &&",
+      "  1 node -e '",
+      "  2 const {spawnSync} =",
+      rule,
+      " Allow execution?",
+      "",
+      ...hint,
+      rule,
+    ].join("\n")
+  for (const hint of [
+    [" ↑/↓ or j/k: scroll • y/enter: allow • a: session •", " n/esc: deny • s: decline & stop"],
+    [" ↑/↓ or j/k: scroll • y/enter:", " allow • a: session • n/esc: deny • s: decline &", " stop"],
+    [" ↑/↓ or j/k:", " scroll • y/enter:", " allow • a:", " session"],
+  ]) {
+    const prompt = detectPermissionPrompt(screen(hint), "pi")
+    assert.ok(prompt, hint.join("|"))
+    assert.match(prompt.text, /^Dangerous Command Detected\n/)
+    assert.match(prompt.text, /Allow execution\?$/)
+  }
+})
+
 test("no prompt: idle panes, prose that quotes the question, the bypass-permissions footer", () => {
   assert.equal(detectPermissionPrompt(pane("claude-idle.txt"), "claude"), null)
   assert.equal(detectPermissionPrompt(pane("pi-idle.txt"), "pi"), null)

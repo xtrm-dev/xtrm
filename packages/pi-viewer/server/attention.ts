@@ -102,7 +102,8 @@ function claudePrompt(lines: string[]): PanePrompt | null {
 }
 
 const PI_ASK = /^\s*Allow execution\?\s*$/
-const PI_KEYS = /y\/enter: allow/
+/** Matched on the lines after the question joined by a space: Pi wraps the key hint in a narrow pane. */
+const PI_KEYS = /y\/enter:\s+allow/
 const PI_TITLE = /^\s*Dangerous Command Detected\s*$/
 
 /** Pi permission gate (@aliou/pi-guardrails): a red-bordered block ending in `Allow execution?`. */
@@ -110,9 +111,14 @@ function piPrompt(lines: string[]): PanePrompt | null {
   const from = Math.max(0, lines.length - PROMPT_WINDOW)
   for (let index = lines.length - 1; index >= from; index -= 1) {
     if (!PI_ASK.test(lines[index])) continue
-    if (!lines.slice(index + 1, index + 4).some((line) => PI_KEYS.test(line))) return null
+    const hint = lines
+      .slice(index + 1, index + 6)
+      .map((line) => line.trim())
+      .join(" ")
+    if (!PI_KEYS.test(hint)) return null
+    // The command viewport is bounded, but its rows and the reason line wrap in a narrow pane.
     let start = index
-    while (start > 0 && index - start < 24 && !PI_TITLE.test(lines[start])) start -= 1
+    while (start > 0 && index - start < 40 && !PI_TITLE.test(lines[start])) start -= 1
     if (!PI_TITLE.test(lines[start])) return null
     return { tool: "Bash", text: capText(lines.slice(start, index + 1)) }
   }
