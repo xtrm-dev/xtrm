@@ -23,6 +23,28 @@ export function useGo() {
 /** How many recently active repositories the picker lists before the operator types a filter. */
 export const RECENT_REPOS = 8;
 
+/**
+ * The picker's rows, most recently active first. A filter searches every repository. Unfiltered, the
+ * list is the RECENT_REPOS most recent (XTRM-1136), and the current repository is appended when it is
+ * not among them, so the selected row is never hidden.
+ */
+export function pickerRepos<R extends { fullName: string }>(
+  repos: readonly R[],
+  stats: ReadonlyArray<{ fullName: string; lastEventAt?: string | null }>,
+  filter: string,
+  current: string,
+): R[] {
+  const last = new Map(stats.map((s) => [s.fullName, s.lastEventAt ?? ""]));
+  const q = filter.trim().toLowerCase();
+  const sorted = repos
+    .filter((r) => !q || r.fullName.toLowerCase().includes(q))
+    .sort((a, b) => (last.get(b.fullName) ?? "").localeCompare(last.get(a.fullName) ?? "") || a.fullName.localeCompare(b.fullName));
+  if (q) return sorted;
+  const recent = sorted.slice(0, RECENT_REPOS);
+  const selected = sorted.find((r) => r.fullName === current);
+  return selected && !recent.includes(selected) ? [...recent, selected] : recent;
+}
+
 function RepositorySelector() {
   const { repo } = useShell();
   const go = useGo();
@@ -31,16 +53,10 @@ function RepositorySelector() {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
 
-  const ordered = useMemo(() => {
-    const last = new Map(stats.data?.map((s) => [s.fullName, s.lastEventAt ?? ""]));
-    const q = filter.trim().toLowerCase();
-    return (repos.data ?? [])
-      .filter((r) => !q || r.fullName.toLowerCase().includes(q))
-      .sort((a, b) => (last.get(b.fullName) ?? "").localeCompare(last.get(a.fullName) ?? "") || a.fullName.localeCompare(b.fullName))
-      // Unfiltered, the picker lists only the most recently active repositories (XTRM-1136); the
-      // filter searches all of them, and "All repositories" opens the full list.
-      .slice(0, q ? undefined : RECENT_REPOS);
-  }, [repos.data, stats.data, filter]);
+  const ordered = useMemo(
+    () => pickerRepos(repos.data ?? [], stats.data ?? [], filter, repo.fullName),
+    [repos.data, stats.data, filter, repo.fullName],
+  );
 
   const lastEvent = (fullName: string) => stats.data?.find((s) => s.fullName === fullName)?.lastEventAt ?? null;
 
