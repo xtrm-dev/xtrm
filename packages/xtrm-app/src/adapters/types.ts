@@ -628,19 +628,8 @@ export interface SubstrateAdapter {
   createIssue(projectId: string, input: IssueCreate): Promise<string>;
 }
 
-/**
- * The git source of the Activity feed (XTRM-757): the LOCAL log of the
- * repository on disk, read by the bridge. GitHub never supplies commits, so
- * this is the only producer of a commit row.
- */
-export interface GitActivityAdapter {
-  readonly source: DataSource;
-  commits(repo: string, limit?: number): Promise<Array<{ sha: string; author: string; subject: string; at: number }>>;
-}
-
 export interface Adapters {
   agent: AgentAdapter;
-  gitActivity: GitActivityAdapter;
   agentHost: AgentHostConnectionAdapter;
   github: GithubAdapter;
   githubAuth: GithubAuthAdapter;
