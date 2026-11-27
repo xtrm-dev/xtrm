@@ -67,6 +67,29 @@ const agentCache = new Map<string, AgentEntry>()
 const sessionCache = new Map<string, SessionCache>()
 let revisionSeq = 0
 
+/**
+ * Read one agent's transcript, or say so and carry nothing (XTRM-1109, PR #512 review). A file that was
+ * deleted, rotated or locked between discovery and this read used to throw out of the route and turn
+ * every viewer request into a 500; now that agent's turn contributes no new events and the rest of the
+ * thread still renders. The next poll picks the file up again if it comes back.
+ */
+function readTranscript<T extends { events: unknown[] }>(
+  file: string,
+  parse: (path: string) => T,
+  agent: ViewerAgent,
+): T {
+  try {
+    return parse(file)
+  } catch (error) {
+    console.warn(
+      `[pi-viewer] transcript unreadable, thread left as it was: ${agent.name} ${file}`,
+      error instanceof Error ? error.message : error,
+    )
+    // An empty transcript is the honest degrade: no new events, no throw, no 500 for the reader.
+    return { events: [] } as unknown as T
+  }
+}
+
 function agentKey(agent: ViewerAgent): string {
   return [
     agent.id,
@@ -94,7 +117,7 @@ function updateAgent(agent: ViewerAgent): { entry: AgentEntry; changed: Set<stri
 
   if (agent.sessionFile) {
     if (agent.provider === "claude") {
-      const parsed = parseClaudeFile(agent.sessionFile)
+      const parsed = readTranscript(agent.sessionFile, parseClaudeFile, agent)
       const entryVersions = parsed.entryVersions ?? []
       parsed.events.forEach((raw, index) => {
         const version = entryVersions[index] ?? 0
@@ -112,7 +135,7 @@ function updateAgent(agent: ViewerAgent): { entry: AgentEntry; changed: Set<stri
         }
       })
     } else {
-      const parsed = parseSessionFile(agent.sessionFile)
+      const parsed = readTranscript(agent.sessionFile, parseSessionFile, agent)
       parsed.events.forEach((raw, index) => {
         versions.push(0)
         const id = rawId(raw)
@@ -402,6 +425,32 @@ export function cachedThread(
   result.agents = session.agents
   result.capturedAt = Date.now()
   return result
+}
+
+/**
+ * Drop everything the current discovery no longer contains (XTRM-1109, PR #512 review, Low).
+ *
+ * Both caches are keyed by a live thing: an agent id that exists while its pane exists, a session name
+ * that exists while its tmux session does. Without this they only grew: every pane that ever appeared
+ * kept its parsed events for the life of the process, which on a long-running server is every agent the
+ * operator has opened and closed all day. Pruning on each discovery keeps the cache proportional to what
+ * is actually on screen.
+ */
+export function pruneCaches(agentIds: Set<string>, sessionNames: Set<string>): number {
+  let dropped = 0
+  for (const id of agentCache.keys()) {
+    if (!agentIds.has(id)) {
+      agentCache.delete(id)
+      dropped += 1
+    }
+  }
+  for (const name of sessionCache.keys()) {
+    if (!sessionNames.has(name)) {
+      sessionCache.delete(name)
+      dropped += 1
+    }
+  }
+  return dropped
 }
 
 /** Test/ops hook: forget a cached session so the next request rebuilds. */

@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process"
+import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
 import { gzip } from "node:zlib"
 import { promisify } from "node:util"
@@ -16,13 +16,15 @@ import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
 import { discoverAsync, type Discovery } from "./discover.ts"
 import { applyIntercomResults, intercomPairKey } from "./intercom.ts"
 import { normalizeEvent, parseSessionFile } from "./session.ts"
+import { stripControls, writeVerdict } from "./guard.ts"
 import { stopPlan } from "./stop.ts"
-import { cachedThread } from "./thread-cache.ts"
+import { cachedThread, pruneCaches } from "./thread-cache.ts"
 
 const MAX_TEXT = 20_000
 const MAX_BODY = 64 * 1024
 
 const gzipAsync = promisify(gzip)
+const execFileAsync = promisify(execFile)
 
 /** Responses under this size are sent as they are; gzip would cost more than it saves. */
 const GZIP_MIN = 1024
@@ -42,6 +44,15 @@ function sendBody(res: ServerResponse, status: number, payload: string, gz: Buff
     return
   }
   res.end(payload)
+}
+
+/**
+ * Refuse a write that did not come from this machine's own viewer (XTRM-1109). 403, never 400: the
+ * caller learns that writing is not permitted, not that its body was malformed.
+ */
+function requireWrite(req: IncomingMessage): void {
+  const verdict = writeVerdict(req.headers)
+  if (!verdict.ok) throw new ApiError(403, verdict.reason)
 }
 
 async function sendJson(req: IncomingMessage, res: ServerResponse, status: number, body: unknown): Promise<void> {
@@ -308,7 +319,19 @@ export function refreshDiscovery(): Promise<Discovery> {
     .then((found) => {
       snapshot = found
       snapshotAt = Date.now()
+      // Keep both caches proportional to what is actually running (XTRM-1109, PR #512 review, Low).
+      pruneCaches(
+        new Set(found.sessions.flatMap((session) => session.agents.map((agent) => agent.id))),
+        new Set(found.sessions.map((session) => session.name)),
+      )
       return found
+    })
+    .catch((error: unknown) => {
+      // Discovery itself failing (tmux gone, /proc empty) keeps the last good picture: a viewer that
+      // shows the previous snapshot is better than one that answers 500 until tmux returns (XTRM-1109).
+      if (!snapshot) throw error
+      console.warn("[pi-viewer] discovery failed, keeping the last snapshot", error instanceof Error ? error.message : error)
+      return snapshot
     })
     .finally(() => {
       refreshing = null
@@ -334,6 +357,22 @@ async function currentDiscovery(): Promise<Discovery> {
   // The timer keeps the snapshot a few seconds old at most; after an idle stop it may be older.
   if (!snapshot || Date.now() - snapshotAt > DISCOVERY_STALE_MS) return refreshDiscovery()
   return snapshot
+}
+
+/**
+ * Test hook: answer the write routes from this discovery instead of a fresh refresh. The write routes
+ * check a live picture on purpose, so an HTTP test cannot seed the timer snapshot and still see them
+ * succeed; this seam keeps that check in production while letting a test hold the pane list
+ * (XTRM-1109). Only code inside this process can set it.
+ */
+let writeDiscoveryOverride: (() => Promise<Discovery>) | null = null
+
+export function overrideWriteDiscovery(source: (() => Promise<Discovery>) | null): void {
+  writeDiscoveryOverride = source
+}
+
+function writeDiscovery(): Promise<Discovery> {
+  return writeDiscoveryOverride ? writeDiscoveryOverride() : refreshDiscovery()
 }
 
 /** Test hook: serve this discovery as the snapshot, with no tmux. */
@@ -384,7 +423,18 @@ const DETAIL_CACHE_MAX = 6
 export function detailOf(agent: ViewerAgent, seq: number): ViewerEvent {
   if (!agent.sessionFile) throw new ApiError(404, "agent has no session file")
   const reader = readerFor(agent)
-  const parsed = reader.parse(agent.sessionFile)
+  let parsed: ReturnType<typeof reader.parse>
+  try {
+    parsed = reader.parse(agent.sessionFile)
+  } catch (error) {
+    // The file went away or turned unreadable under us: answer for this one event instead of failing
+    // the whole route (XTRM-1109, PR #512 review).
+    console.warn(
+      `[pi-viewer] transcript unreadable for event detail: ${agent.sessionFile}`,
+      error instanceof Error ? error.message : error,
+    )
+    throw new ApiError(404, "transcript is not readable right now")
+  }
   if (!parsed.events[seq]) throw new ApiError(404, `event ${seq} not found`)
 
   const key = detailKey(agent)
@@ -525,6 +575,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
   }
 
   if (url.pathname === "/api/send" && method === "POST") {
+    requireWrite(req)
     const raw = await readBody(req)
     let body: unknown
     try {
@@ -539,17 +590,20 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
     if (!/^%\d+$/.test(paneId)) throw new ApiError(400, "invalid pane id")
     if (!text) throw new ApiError(400, "empty message")
     // A send checks the pane against a fresh discovery, not the snapshot.
-    const target = (await refreshDiscovery()).sessions.some((session) =>
+    const target = (await writeDiscovery()).sessions.some((session) =>
       session.agents.some((agent) => agent.paneId === paneId),
     )
     if (!target) throw new ApiError(404, "pane is not a pi or claude agent in an open tmux session")
     if (text.length > MAX_TEXT) throw new ApiError(400, "message too long")
 
-    // One line per send: a literal newline would submit the prompt early.
-    const flat = text.replace(/\r?\n+/g, " ")
+    // One line per send: a literal newline would submit the prompt early. Control characters would be
+    // interpreted by the pane as keys, so they are removed before anything reaches tmux (XTRM-1109).
+    const flat = stripControls(text).replace(/\r?\n+/g, " ")
+    if (!flat.trim()) throw new ApiError(400, "empty message")
     try {
-      execFileSync("tmux", ["send-keys", "-t", paneId, "-l", "--", flat], { timeout: 5_000 })
-      execFileSync("tmux", ["send-keys", "-t", paneId, "Enter"], { timeout: 5_000 })
+      // Async, so a slow or wedged tmux cannot block the event loop that serves every other reader.
+      await execFileAsync("tmux", ["send-keys", "-t", paneId, "-l", "--", flat], { timeout: 5_000 })
+      await execFileAsync("tmux", ["send-keys", "-t", paneId, "Enter"], { timeout: 5_000 })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       throw new ApiError(502, `tmux send-keys failed: ${message}`)
@@ -562,6 +616,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
   // checked against a fresh discovery, exactly like a send, so a stale snapshot cannot address a pane
   // that has since been reused by another program.
   if (url.pathname === "/api/stop" && method === "POST") {
+    requireWrite(req)
     const raw = await readBody(req)
     let body: unknown
     try {
@@ -572,12 +627,12 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
     if (typeof body !== "object" || body === null) throw new ApiError(400, "invalid body")
     const record = body as Record<string, unknown>
     const plan = stopPlan(
-      (await refreshDiscovery()).sessions.flatMap((session) => session.agents),
+      (await writeDiscovery()).sessions.flatMap((session) => session.agents),
       typeof record.paneId === "string" ? record.paneId : "",
     )
     if (!plan.ok) throw new ApiError(plan.code, plan.reason)
     try {
-      execFileSync("tmux", plan.argv, { timeout: 5_000 })
+      await execFileAsync("tmux", plan.argv, { timeout: 5_000 })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       throw new ApiError(502, `tmux stop failed: ${message}`)

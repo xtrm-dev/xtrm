@@ -265,6 +265,26 @@ UI primitives follow the shadcn AI Elements chat patterns (`Message`,
 `MessageScroller`, `Bubble`, `Collapsible`) and use the `--x-*` console tokens
 from `packages/xtrm-app/src/styles.css`.
 
+## Writes are same-origin only
+
+Two routes change something: `POST /api/send` types into a pane and `POST /api/stop` interrupts one.
+Both are a security boundary, so `server/guard.ts` refuses anything that did not come from this
+machine's own viewer, with a `403`:
+
+- the body must be `Content-Type: application/json`, which a form, a link, an image or a
+  `mode: "no-cors"` fetch cannot send;
+- `Sec-Fetch-Site`, when the browser sends it, must be `same-origin` or `none`;
+- `Origin`, when present, must name a loopback host.
+
+The loopback bind, Vite's host check and CORS do not stop a *simple* cross-origin write, which is why
+the routes check the request itself (XTRM-1109). Control characters are stripped from sent text before
+it reaches `tmux send-keys`, so a message cannot smuggle keystrokes. On top of that, a transcript that
+vanishes or turns unreadable degrades to that one agent instead of failing every route, and both
+thread caches are pruned against each discovery so they track what is running.
+
+CI: `.github/workflows/pi-viewer.yml` runs `npm ci`, `npm run typecheck`, `npm test` and
+`npm run build` for changes under this package.
+
 ## Checks
 
 ```bash

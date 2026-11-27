@@ -386,7 +386,18 @@ function resolvePaneAgent(
   }
   if (!chosen) return null
 
-  const parsed = chosen.file ? parseSessionFile(chosen.file) : null
+  // A transcript can vanish or turn unreadable between the stat that found it and this read. One
+  // agent's file is not the whole discovery: the pane is reported as unknown and the others serve
+  // (XTRM-1109, PR #512 review).
+  let parsed: ReturnType<typeof parseSessionFile> | null = null
+  if (chosen.file) {
+    try {
+      parsed = parseSessionFile(chosen.file)
+    } catch (error) {
+      console.warn(`[pi-viewer] transcript unreadable, agent left unknown: ${chosen.file}`, error instanceof Error ? error.message : error)
+      parsed = null
+    }
+  }
   const state: AgentState = parsed ? statusOf(parsed) : { status: "unknown", note: "no session file" }
   const name = uniqueName(
     parsed?.sessionName || wanted || basename(chosen.cwd) || pane.windowName || pane.paneId,
