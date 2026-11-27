@@ -1,4 +1,4 @@
-import { Check, CheckCheck, ChevronDown, ChevronUp, CircleX, Copy, Folder, Layers, LoaderCircle, Reply, MousePointer2, Moon, MoveHorizontal, PanelLeft, Sun, type LucideIcon } from "lucide-react"
+import { Check, CheckCheck, ChevronDown, ChevronUp, CircleX, Copy, Folder, Layers, LoaderCircle, Monitor, Reply, MousePointer2, Moon, MoveHorizontal, PanelLeft, Server, Sun, type LucideIcon } from "lucide-react"
 
 /**
  * The console's icon component, copied from packages/xtrm-app/src/ui/icon.tsx (XTRM-1044).
@@ -16,6 +16,9 @@ const registry = {
   copy: Copy,
   /** The console registers lucide Folder too (xtrm-app src/ui/icon.tsx). */
   folder: Folder,
+  /** The sidebar's host glyph (XTRM-1155): this machine, and another host. */
+  monitor: Monitor,
+  server: Server,
   reply: Reply,
   chevronUp: ChevronUp,
   moon: Moon,

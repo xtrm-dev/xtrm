@@ -105,6 +105,32 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     check(tag + " an idle row still names its state in the aria-label", idleLike.every((d) => d.label === '' || /Idle|Waiting/.test(d.label)), JSON.stringify(idleLike.slice(0, 2).map((d) => d.rowLabel)))
     check(tag + " rows keep one height with and without a dot", new Set(dots.map((d) => d.rowH)).size === 1, JSON.stringify([...new Set(dots.map((d) => d.rowH))]))
     check(tag + " one-pane windows add no row (window rows have 2+ agents)", await p.evaluate(() => [...document.querySelectorAll('[role=treeitem][aria-level="2"][aria-expanded]')].every((e) => Number(/(\d+) agents/.exec(e.getAttribute("aria-label"))[1]) >= 2)))
+    // XTRM-1155: the host glyph. A row that speaks for a whole window (a window row, or the stand-in
+    // row of a single-pane window) draws exactly one glyph; a pane row draws none inside a uniform
+    // window, or its own when the window mixes hosts. The glyph takes the ink of the name beside it, so
+    // an icon cannot read as a different kind of row, and the row's aria-label names the host.
+    const hosts = await p.evaluate(() => [...document.querySelectorAll("[role=treeitem]")].map((row) => {
+      const glyph = row.querySelector("[data-testid=host-glyph]")
+      const name = glyph?.nextElementSibling ?? null
+      const box = glyph ? glyph.getBoundingClientRect() : null
+      const ink = (el) => (el ? getComputedStyle(el).color : "")
+      return {
+        level: row.getAttribute("aria-level"),
+        glyphs: row.querySelectorAll("[data-testid=host-glyph]").length,
+        host: glyph?.getAttribute("data-host") ?? null,
+        ink: box ? ink(glyph) : "",
+        nameInk: box ? ink(name) : "",
+        box: box ? [Math.round(box.width), Math.round(box.height)] : null,
+        label: row.getAttribute("aria-label") || "",
+      }
+    }))
+    const spokesmen = hosts.filter((r) => r.level === "2"), panes = hosts.filter((r) => r.level === "3"), marked = hosts.filter((r) => r.glyphs > 0)
+    check(tag + " every row that speaks for a window draws one host glyph", spokesmen.length > 0 && spokesmen.every((r) => r.glyphs === 1), JSON.stringify(spokesmen.slice(0, 3)))
+    check(tag + " a pane row draws no shared glyph, only its own in a mixed window", panes.every((r) => r.glyphs <= 1), JSON.stringify(panes.slice(0, 3)))
+    check(tag + " every host glyph is the monitor or the server, never anything else", marked.every((r) => r.host === "local" || r.host === "remote"), JSON.stringify(marked.slice(0, 3).map((r) => r.host)))
+    check(tag + " a host glyph takes the ink of the name beside it", marked.every((r) => r.ink !== "" && r.ink === r.nameInk), JSON.stringify(marked.slice(0, 3).map((r) => r.ink + " vs " + r.nameInk)))
+    check(tag + " a host glyph fits inside the name's line", marked.every((r) => r.box[0] <= 16 && r.box[1] <= 16), JSON.stringify(marked.slice(0, 3).map((r) => r.box)))
+    check(tag + " every row with a host glyph names the host", marked.every((r) => /, (this machine|host \S+)$/.test(r.label)), JSON.stringify(marked.slice(0, 3).map((r) => r.label)))
     check(tag + " no overflow", !g.overflow)
     await p.screenshot({ path: SHOTS + "/g4-" + tag + ".png" })
     // scopes

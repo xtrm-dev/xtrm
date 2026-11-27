@@ -30,6 +30,12 @@ export interface ViewerAgent {
   cwd: string
   /** The repository the agent works in (the main checkout's name, so a worktree reports its repo); the cwd basename outside git. */
   repo?: string
+  /**
+   * The host that runs the agent (XTRM-1139 stage 1). Absent means the machine that serves this
+   * viewer: discovery does not report a host yet, so every agent reads as local today. The sidebar
+   * glyph reads this field through src/lib/host-glyph.ts.
+   */
+  host?: string | null
   sessionFile: string | null
   sessionId: string | null
   sessionName: string | null

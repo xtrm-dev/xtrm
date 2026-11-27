@@ -447,6 +447,16 @@ a folder glyph before it (XTRM-1024 seq14).
 The tree is keyboard operable with roving focus: one `treeitem` per row, Arrow keys move, and the row's
 accessible name ends with the dot's state word.
 
+**Host glyph.** Every row that speaks for a window carries one glyph before the name: the lucide `monitor`
+when every agent in that window runs on the machine that serves the viewer, the lucide `server` when it runs
+on another host (XTRM-1155, for XTRM-1139). A single-pane window has no row of its own, so its stand-in pane
+row carries the glyph. A window that mixes hosts draws no window glyph: each pane row then carries its own,
+in front of the agent name. The glyph takes the ink of the name beside it and never exceeds that line; it is
+decorative, and the row's accessible name ends with the host in words (`this machine`, `host <id>`). The rule
+is one function over `ViewerAgent.host` (`src/lib/host-glyph.ts`): an absent host is this machine, so every
+row draws the monitor until XTRM-1139 stage 1 reports hosts. The glyph sits in the leading text run, so moving
+it to the row's right edge, beside the status dot, is a single call-site change.
+
 ### 6.2 Shell frame, switcher and header controls
 
 Purpose: the console frame around the viewer, and the controls that change how the thread is read.
@@ -837,6 +847,7 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-26 | Scope is applied server-side, discovery leaves the request path, frames are cached | XTRM-1066 |
 | 2026-11-27 | Composer send and stop are bare glyphs: an outline square in ink and a return arrow in the github tone, no filled boxes, hover by tone or opacity; the hint reads only `@ to mention` | XTRM-1149 |
 | 2026-11-27 | One scrollbar: every scroll container in both packages takes the chat's thin dim bar (`* { scrollbar-width: thin; scrollbar-color: var(--color-border-strong) transparent }` in the base layer), so no container falls back to the browser default; the composer's `@ to mention` moves onto the box's 12px text inset; the send button names its key (`Send (Enter)`) | XTRM-1153 |
+| 2026-11-27 | The sidebar marks the host: a `monitor` glyph on a window whose agents all run on this machine, a `server` glyph when they run on another host, in the name's ink and in front of the name; a mixed window defers the glyph to its pane rows; an absent host reads as this machine | XTRM-1155, for XTRM-1139 |
 
 ## 11. Open questions
 
