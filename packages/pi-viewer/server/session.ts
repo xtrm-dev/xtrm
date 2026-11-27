@@ -196,7 +196,6 @@ export function mergeFile(file: string): FileCache {
   return cache
 }
 
-/** Forget every cached read of `file`; the next read parses it from the start (replay harness). */
 /** Consecutive prunes a file has been absent from, so one failed listing cannot drop a live cache. */
 const fileMisses = new Map<string, number>()
 
@@ -236,6 +235,7 @@ export function cachedFiles(): string[] {
   return [...new Set([...fileCache.keys(), ...parsedCache.keys(), ...nameCache.keys()])]
 }
 
+/** Forget every cached read of `file`; the next read parses it from the start (replay harness). */
 export function dropFileCache(file: string): void {
   fileCache.delete(file)
   parsedCache.delete(file)

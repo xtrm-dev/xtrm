@@ -23,6 +23,9 @@ import { flattenMessage, hostVerdict, writeVerdict } from "./guard.ts"
 const MAX_TEXT = 20_000
 const MAX_BODY = 64 * 1024
 
+/** The only message a 500 body carries; the detail stays in the server log (XTRM-1116, PR #512 review). */
+export const INTERNAL_ERROR = "internal error"
+
 const gzipAsync = promisify(gzip)
 const execFileAsync = promisify(execFile)
 
@@ -656,9 +659,13 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
 }
 
 export async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-  const url = new URL(req.url ?? "/", "http://localhost")
-  if (!url.pathname.startsWith("/api/")) return false
+  let pathname = "?"
   try {
+    // Inside the try: a malformed request target used to throw past this catch, and the transport
+    // answered 500 with the raw message (XTRM-1116, PR #512 review).
+    const url = new URL(req.url ?? "/", "http://localhost")
+    pathname = url.pathname
+    if (!url.pathname.startsWith("/api/")) return false
     // Reads too: a rebinding page could otherwise page through transcripts (XTRM-1109 round 2).
     const host = hostVerdict(req.headers)
     if (!host.ok) {
@@ -673,8 +680,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       return true
     }
     // The detail stays in the server log; the client gets a fixed message, never a stack or a path.
-    console.error("[pi-viewer] api error", url.pathname, error)
-    await sendJson(req, res, 500, { error: "internal error" })
+    console.error("[pi-viewer] api error", pathname, error)
+    await sendJson(req, res, 500, { error: INTERNAL_ERROR })
     return true
   }
 }
