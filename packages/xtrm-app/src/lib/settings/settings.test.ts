@@ -36,7 +36,24 @@ function memory(entries: Record<string, string> = {}) {
   };
 }
 
+/** Independent of DEFAULT_APP_SETTINGS: deleting a key from every map at once must still fail. */
+const EXPECTED_KEYS = [
+  "appearance.theme", "appearance.palette", "appearance.chatWidth", "appearance.density", "appearance.fontScale",
+  "appearance.motion", "appearance.codeWordWrap",
+  "layout.sidebarOpen", "layout.sidebarWidth", "layout.inspectorWidth", "layout.foldedGroups", "layout.lastRepository",
+  "layout.agentScope", "layout.agentNames", "layout.view",
+  "connections.hostMode", "connections.sshTarget", "connections.remoteCommand", "connections.directUrl",
+  "connections.deviceName", "connections.peers", "connections.connectTo", "connections.endpoint", "connections.substrateRemote",
+  "project.pmProject", "project.jiraSite", "project.jiraProject", "project.boardSite", "project.boardStateDir",
+  "project.credentialFile",
+  "advanced.adapters", "advanced.logLevel",
+];
+
 describe("settings schema", () => {
+  it("has exactly the expected keys", () => {
+    expect([...SETTING_KEYS].sort()).toEqual([...EXPECTED_KEYS].sort());
+  });
+
   it("gives every key a default, a scope, a validator and a known section", () => {
     const keys = new Set(SETTING_KEYS);
     expect(new Set(Object.keys(SETTINGS_SCOPE))).toEqual(keys);
@@ -124,6 +141,17 @@ describe("provenance resolver", () => {
     expect(resolved["project.jiraSite"]).toEqual({ value: "project.atlassian.net", source: "project" });
     expect(resolved["connections.substrateRemote"]).toEqual({ value: "box:7000", source: "host" });
     expect(resolved["project.pmProject"]).toEqual({ value: null, source: "default" });
+  });
+
+  it("treats a null project override as no override, so the host value and source stay", () => {
+    const host = { "project.boardSite": "board.example", "connections.substrateRemote": "box:7000" };
+    const resolved = resolveSettings({ host, project: { "project.boardSite": null, "connections.substrateRemote": null } });
+    expect(resolved["project.boardSite"]).toEqual({ value: "board.example", source: "host" });
+    expect(resolved["connections.substrateRemote"]).toEqual({ value: "box:7000", source: "host" });
+    // A complete document from parseSettings({}) carries nulls for every project key; used as the project layer it overrides nothing.
+    const fromDocument = resolveSettings({ host, project: parseSettings({}) });
+    expect(fromDocument["project.boardSite"]).toEqual({ value: "board.example", source: "host" });
+    expect(fromDocument["project.jiraSite"]).toEqual({ value: null, source: "default" });
   });
 
   it("lets an invalid higher-layer value fall through to the layer below", () => {

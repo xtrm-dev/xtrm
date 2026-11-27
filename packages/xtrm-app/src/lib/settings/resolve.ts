@@ -31,7 +31,9 @@ export function resolveSetting<K extends SettingKey>(key: K, layers: SettingsLay
   let resolved: Resolved<AppSettings[K]> = { value: DEFAULT_APP_SETTINGS[key], source: "default" };
   for (const layer of LAYERS_FOR_SCOPE[SETTINGS_SCOPE[key]]) {
     const value = parseSetting(key, asRecord(layers[layer])[key]);
-    if (value !== undefined) resolved = { value, source: layer };
+    // A project layer holds explicit overrides only: null there means "no override", so the host value stays.
+    if (value === undefined || (value === null && layer === "project")) continue;
+    resolved = { value, source: layer };
   }
   return resolved;
 }
