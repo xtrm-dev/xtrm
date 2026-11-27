@@ -23,6 +23,7 @@ The Claude SessionStart/PreToolUse/PostToolUse hooks are wired by the CLI into
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -308,6 +309,49 @@ def _list_worktrees(project_root: Path) -> list[Path]:
     return roots
 
 
+_SH_SHEBANG_NAMES = {"sh", "dash", "ash"}
+_BASHISM_REDIRECT = re.compile(r"(?<!&)&>>?")
+
+
+def _hook_interpreter(text: str) -> str:
+    """Interpreter named by the shebang (``env`` resolved); bash when absent."""
+    first = text.split("\n", 1)[0]
+    if not first.startswith("#!"):
+        return "bash"
+    parts = first[2:].split()
+    if parts and Path(parts[0]).name == "env":
+        parts = [a for a in parts[1:] if not a.startswith("-")]
+    return Path(parts[0]).name if parts else "bash"
+
+
+def _check_hook_syntax(path: Path, label: str, problems: list[str]) -> None:
+    """Parse a hook with the interpreter its shebang names (gating).
+
+    ``bash -n`` accepts bashisms such as ``&>`` that dash reads as ``cmd &``
+    plus a bare redirect, so an sh-shebang hook is parsed by dash/sh and
+    scanned for ``&>``/``&>>`` instead.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        problems.append(f"{label} unreadable: {exc}")
+        return
+    interp = _hook_interpreter(text)
+    is_sh = interp in _SH_SHEBANG_NAMES
+    if is_sh:
+        interp = shutil.which("dash") and "dash" or "sh"
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if not line.lstrip().startswith("#") and _BASHISM_REDIRECT.search(line):
+                problems.append(f"{label} uses bashism &> in an sh hook (line {lineno})")
+    try:
+        r = subprocess.run([interp, "-n", str(path)], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError) as exc:
+        problems.append(f"{label} {interp} -n could not run: {exc}")
+        return
+    if r.returncode != 0:
+        problems.append(f"{label} {interp} -n failed: {r.stderr.strip()[:200]}")
+
+
 def _check_drift_source(project_root: Path, hook_name: str, problems: list[str]) -> None:
     """Self-check one ``.githooks/<hook>`` drift source (gating)."""
     body_name = _DRIFT_HOOK_BODIES[hook_name]
@@ -328,10 +372,7 @@ def _check_drift_source(project_root: Path, hook_name: str, problems: list[str])
         problems.append(f".githooks/{hook_name} missing renamed sweep body ref ({body_name})")
     if "git rev-parse --show-toplevel" not in src_text:
         problems.append(f".githooks/{hook_name} missing relative runtime resolution")
-    r = subprocess.run(["bash", "-n", str(src)],
-                       capture_output=True, text=True, timeout=5)
-    if r.returncode != 0:
-        problems.append(f".githooks/{hook_name} bash -n failed: {r.stderr.strip()[:200]}")
+    _check_hook_syntax(src, f".githooks/{hook_name}", problems)
 
 
 def _resolves_to_self(active_hooks_dir: Path, hook_name: str, target: Path) -> bool:
@@ -380,10 +421,7 @@ def _check_drift_chain(
             )
         if LEGACY_UMBRELLA in text:
             problems.append(f"active {hook_name} still references service-skills")
-        r = subprocess.run(["bash", "-n", str(target)],
-                           capture_output=True, text=True, timeout=5)
-        if r.returncode != 0:
-            problems.append(f"active {hook_name} bash -n failed: {r.stderr.strip()[:200]}")
+        _check_hook_syntax(target, f"active {hook_name}", problems)
         return
     if same:
         # Same file fires but carries no sweep body: a chain here would
@@ -395,10 +433,7 @@ def _check_drift_chain(
             )
         else:
             problems.append(f"active {hook_name} has no sweep body to fire ({target})")
-        r = subprocess.run(["bash", "-n", str(target)],
-                           capture_output=True, text=True, timeout=5)
-        if r.returncode != 0:
-            problems.append(f"active {hook_name} bash -n failed: {r.stderr.strip()[:200]}")
+        _check_hook_syntax(target, f"active {hook_name}", problems)
         return
     if MARKER_CHAIN not in text:
         problems.append(f"active {hook_name} missing chain marker ({target})")
@@ -422,10 +457,7 @@ def _check_drift_chain(
             f"active {hook_name} is self-recursive: chain dispatches to "
             f"itself with no sweep body in {target}"
         )
-    r = subprocess.run(["bash", "-n", str(target)],
-                       capture_output=True, text=True, timeout=5)
-    if r.returncode != 0:
-        problems.append(f"active {hook_name} bash -n failed: {r.stderr.strip()[:200]}")
+    _check_hook_syntax(target, f"active {hook_name}", problems)
 
 
 def _check_drift_body(project_root: Path, hook_name: str, problems: list[str], details: list[str]) -> None:
@@ -508,7 +540,7 @@ def _write_githooks_sources(worktree_root: Path) -> None:
         # argv+stdin ("$@" chains them); bodies never read a baked path.
         return (
             f"\n{marker}\n"
-            "if command -v python3 &>/dev/null; then\n"
+            "if command -v python3 >/dev/null 2>&1; then\n"
             '    root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
             f'    if [ -n "$root" ] && [ -f "$root/{rel}" ]; then\n'
             f'        python3 "$root/{rel}"{extra_args} || true\n'

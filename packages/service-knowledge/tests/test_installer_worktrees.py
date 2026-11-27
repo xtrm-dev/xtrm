@@ -251,7 +251,7 @@ def _sweep_snippet(installer, hook_name="post-merge"):
     body = installer._DRIFT_HOOK_BODIES[hook_name]
     return (
         "\n" + installer.MARKER_DRIFT_SWEEP + "\n"
-        "if command -v python3 &>/dev/null; then\n"
+        "if command -v python3 >/dev/null 2>&1; then\n"
         '    root="$(git rev-parse --show-toplevel 2>/dev/null)"\n'
         '    if [ -n "$root" ] && [ -f "$root/.xtrm/skills/default/service-knowledge/install/git-hooks/' + body + '" ]; then\n'
         '        python3 "$root/.xtrm/skills/default/service-knowledge/install/git-hooks/' + body + '" "$@" || true\n'
@@ -407,3 +407,83 @@ def test_two_runs_byte_identical_on_variant_b(
         assert _bash_n_ok(linked / ".githooks" / "post-merge")
     finally:
         _git(["worktree", "remove", "--force", str(linked)], consumer_repo)
+
+
+# --- sh-shebang portability (DARTHFEEDOR-1361) -------------------------------
+
+import shutil
+
+needs_dash = pytest.mark.skipif(shutil.which("dash") is None, reason="dash not installed")
+
+
+def _generated_sh_hook(installer, repo: Path, hook_name: str = "post-merge") -> Path:
+    """The installer-written drift hook, re-shebanged to sh (the consumer layout that broke)."""
+    assert installer.install_git_hooks(repo) is True
+    hook = repo / ".githooks" / hook_name
+    lines = hook.read_text(encoding="utf-8").split("\n")
+    lines[0] = "#!/usr/bin/env sh"
+    hook.write_text("\n".join(lines), encoding="utf-8")
+    return hook
+
+
+@needs_dash
+def test_sh_hook_guard_takes_false_branch_under_dash(
+    installer, consumer_repo: Path, isolated_git_config, tmp_path: Path
+) -> None:
+    """`command -v <missing>` guard must be false under dash (`&>` made it always true)."""
+    hook = _generated_sh_hook(installer, consumer_repo)
+    ran = tmp_path / "ran"
+    out = []
+    for line in hook.read_text(encoding="utf-8").split("\n"):
+        if "command -v python3" in line:
+            line = line.replace("command -v python3", "command -v definitely-missing-xyz")
+        elif line.strip().startswith("if [ -n"):
+            line = "    if true; then"  # neutralise the inner file test; only the guard is under test
+        elif line.strip().startswith("python3 "):
+            line = f"        touch {ran}"
+        out.append(line)
+    hook.write_text("\n".join(out), encoding="utf-8")
+    subprocess.run(["dash", str(hook)], cwd=consumer_repo, check=True, capture_output=True, timeout=10)
+    assert not ran.exists(), "guard took the true branch for a missing command"
+
+
+def test_generated_hooks_have_no_bashism_redirect(
+    installer, consumer_repo: Path, isolated_git_config
+) -> None:
+    assert installer.install_git_hooks(consumer_repo) is True
+    for name in ALL_HOOKS:
+        assert "&>" not in (consumer_repo / ".githooks" / name).read_text(encoding="utf-8")
+
+
+def test_self_check_rejects_bashism_in_sh_hook(installer, tmp_path: Path) -> None:
+    hook = tmp_path / "post-merge"
+    hook.write_text("#!/usr/bin/env sh\nif command -v python3 &>/dev/null; then :; fi\n", encoding="utf-8")
+    problems: list[str] = []
+    installer._check_hook_syntax(hook, "post-merge", problems)
+    assert any("&>" in p for p in problems), problems
+
+
+def test_self_check_accepts_posix_sh_and_bash_hooks(installer, tmp_path: Path) -> None:
+    sh_hook = tmp_path / "post-merge"
+    sh_hook.write_text("#!/usr/bin/env sh\nif command -v python3 >/dev/null 2>&1; then :; fi\n", encoding="utf-8")
+    bash_hook = tmp_path / "pre-push"
+    bash_hook.write_text("#!/usr/bin/env bash\nif command -v python3 &>/dev/null; then :; fi\n", encoding="utf-8")
+    problems: list[str] = []
+    installer._check_hook_syntax(sh_hook, "post-merge", problems)
+    installer._check_hook_syntax(bash_hook, "pre-push", problems)
+    assert problems == []
+
+
+def test_self_check_uses_shebang_interpreter(installer, tmp_path: Path) -> None:
+    # `arr=(a b)` parses under bash, not under dash: the shebang decides which verdict applies.
+    body = "arr=(a b)\n"
+    sh_hook, bash_hook = tmp_path / "a", tmp_path / "b"
+    sh_hook.write_text("#!/bin/sh\n" + body, encoding="utf-8")
+    bash_hook.write_text("#!/bin/bash\n" + body, encoding="utf-8")
+    sh_problems: list[str] = []
+    bash_problems: list[str] = []
+    installer._check_hook_syntax(sh_hook, "a", sh_problems)
+    installer._check_hook_syntax(bash_hook, "b", bash_problems)
+    assert bash_problems == []
+    if shutil.which("dash"):
+        assert sh_problems
