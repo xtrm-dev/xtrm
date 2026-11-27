@@ -1,19 +1,19 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fixtureAdapters } from "../adapters/index.tsx";
 import { createFixtureSubstrate } from "../adapters/substrate/fixture.ts";
 import { createAppRouter } from "../app/router.tsx";
-import { DEVICE_SETTINGS_KEY, SECTION_ORDER, SETTING_KEYS, SETTING_LABELS, SETTINGS_SECTIONS, sectionOf, settingAnchor } from "../lib/settings/index.ts";
+import { DEFAULT_APP_SETTINGS, DEVICE_SETTINGS_KEY, SECTION_ORDER, SETTING_KEYS, SETTING_LABELS, SETTINGS_SECTIONS, sectionOf, settingAnchor } from "../lib/settings/index.ts";
 import { WHERE_TO_CHANGE } from "./model.ts";
 
 // XTRM-1103: the /settings route tree.
 
-async function mount(url: string) {
+async function mount(url: string, overrides: Partial<typeof fixtureAdapters> = {}) {
   const history = createMemoryHistory({ initialEntries: [url] });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const router = createAppRouter({ adapters: { ...fixtureAdapters, substrate: createFixtureSubstrate() }, history, queryClient });
+  const router = createAppRouter({ adapters: { ...fixtureAdapters, substrate: createFixtureSubstrate(), ...overrides }, history, queryClient });
   render(<RouterProvider router={router} />);
   await screen.findByRole("region", { name: "Settings" });
   return router;
@@ -126,9 +126,46 @@ describe("/settings routes", () => {
     expect(within(page()).getByRole("link", { name: "Integration page" }).getAttribute("href")).toBe("/rep/xtrm-dev/xtrm/project/settings");
   });
 
-  it("marks the row a deep link points at", async () => {
-    await mount("/settings/connections#connections-sshTarget");
-    expect(rowOf("connections.sshTarget")).not.toBeNull();
-    expect(rowOf("connections.sshTarget")!.getAttribute("role")).toBe("group");
+  it("scrolls the row a deep link points at into view", async () => {
+    const scrolled: string[] = [];
+    const spy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this.id);
+    });
+    try {
+      await mount("/settings/connections#connections-sshTarget");
+      await waitFor(() => expect(scrolled).toContain("connections-sshTarget"));
+      expect(rowOf("connections.sshTarget")!.id).toBe("connections-sshTarget");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("marks host values unknown and says so when the agent host does not answer", async () => {
+    const failing = { ...fixtureAdapters.agentHost, status: () => Promise.reject(new Error("bridge down")) };
+    await mount("/settings/connections", { agentHost: failing });
+    const alert = await within(page()).findByRole("alert", { name: "Agent host unavailable" });
+    expect(alert.textContent).toContain("bridge down");
+    const target = rowOf("connections.sshTarget")!;
+    expect(within(target).getByTestId("setting-value").textContent).toBe("Unknown");
+    expect(within(target).getByTestId("setting-source").textContent).toBe("Unknown: the host did not answer");
+    // Device-scoped rows on the same page keep their own values.
+    expect(within(rowOf("connections.peers")!).getByTestId("setting-value").textContent).toBe("None");
+  });
+
+  it("resets the theme and the sidebar to the model's defaults", async () => {
+    localStorage.setItem("xtrm.console.layout.v1", JSON.stringify({ sidebarOpen: false, sidebarWidth: 264 }));
+    await mount("/settings/layout");
+    const open = rowOf("layout.sidebarOpen")!;
+    expect(within(open).getByTestId("setting-value").textContent).toBe("Off");
+    fireEvent.click(within(open).getByRole("button", { name: "Reset Sidebar open" }));
+    await waitFor(() => expect(within(open).getByTestId("setting-value").textContent).toBe(DEFAULT_APP_SETTINGS["layout.sidebarOpen"] ? "On" : "Off"));
+    expect(within(open).queryByRole("button", { name: "Reset Sidebar open" })).toBeNull();
+
+    fireEvent.click(within(page()).getByRole("link", { name: "Appearance" }));
+    await waitFor(() => expect(rowOf("appearance.theme")).not.toBeNull());
+    const theme = rowOf("appearance.theme")!;
+    fireEvent.click(within(theme).getByRole("radio", { name: "Light" }));
+    fireEvent.click(within(theme).getByRole("button", { name: "Reset Theme" }));
+    expect(JSON.parse(localStorage.getItem(DEVICE_SETTINGS_KEY.console)!)["appearance.theme"]).toBe(DEFAULT_APP_SETTINGS["appearance.theme"]);
   });
 });

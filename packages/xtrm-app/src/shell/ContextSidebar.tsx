@@ -10,6 +10,7 @@ import { ExpandPopover } from "../ui/expand-popover.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
 import { NavRailItem, SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
+import { sectionHref } from "../settings/SettingsPage.tsx";
 import { ThemeChoice } from "../settings/ThemeChoice.tsx";
 import { useShell } from "./context.tsx";
 import { modShortcut } from "./layout.ts";
@@ -215,10 +216,10 @@ function SourceFooter() {
             testId="goto-appearance"
             label="Appearance"
             value={themePreference === "system" ? `System · ${theme === "dark" ? "Dark" : "Light"}` : themePreference === "dark" ? "Dark" : "Light"}
-            onActivate={() => goTo("/settings/appearance")}
+            onActivate={() => goTo(sectionHref("appearance"))}
           />
-          <GoToRow testId="goto-connections" label="Connections" value={transport} onActivate={() => goTo("/settings/connections")} />
-          <GoToRow testId="goto-project" label="Project integration" value={repo.fullName} onActivate={() => goTo("/settings/project")} />
+          <GoToRow testId="goto-connections" label="Connections" value={transport} onActivate={() => goTo(sectionHref("connections"))} />
+          <GoToRow testId="goto-project" label="Project integration" value={repo.fullName} onActivate={() => goTo(sectionHref("project"))} />
           <GoToRow testId="goto-settings" label="All settings" value={modShortcut(",")} onActivate={() => goTo("/settings")} />
           <GoToRow testId="change-host" label="Change host target…" onActivate={() => goTo("/agent", { host: 1 })} />
         </nav>

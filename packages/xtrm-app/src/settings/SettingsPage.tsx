@@ -40,12 +40,12 @@ function Row({ row }: { row: SettingRow }) {
           {row.label}
         </span>
         <span className="text-2xs text-ink-faint" data-testid="setting-source">
-          {SOURCE_TEXT[row.source]}
+          {row.unknown ? "Unknown: the host did not answer" : SOURCE_TEXT[row.source]}
         </span>
         <span className="ml-auto flex items-center gap-2">
           {!control && (
             <span className="truncate text-sm text-ink-muted" data-testid="setting-value">
-              {row.value}
+              {row.unknown ? "Unknown" : row.value}
             </span>
           )}
           {control?.()}
@@ -105,6 +105,16 @@ function GeneralBody() {
   );
 }
 
+/** The agent host's status read failed: its values are unknown, not defaults. */
+function HostError({ message }: { message: string | null }) {
+  if (message === null) return null;
+  return (
+    <div role="alert" aria-label="Agent host unavailable" className="mb-2 rounded-md border border-border-muted px-3 py-2 text-sm text-danger">
+      The agent host did not answer ({message}). Its values are unknown.
+    </div>
+  );
+}
+
 function SectionBody({ id, rows }: { id: SettingsSection; rows: SettingRow[] }) {
   const navigate = useNavigate();
   const { repo } = useShell();
@@ -142,8 +152,9 @@ function SectionBody({ id, rows }: { id: SettingsSection; rows: SettingRow[] }) 
 export function SettingsPage({ section }: { section: SettingsSection }) {
   const navigate = useNavigate();
   const hash = useRouterState({ select: (s) => s.location.hash });
-  const all = useSettingRows();
+  const { rows: all, hostError } = useSettingRows();
   const rows = all[section];
+  const hasHostRows = rows.some((r) => r.unknown);
   const meta = SETTINGS_SECTIONS[section];
   const resettable = rows.filter((r) => r.resettable && r.reset);
 
@@ -200,6 +211,7 @@ export function SettingsPage({ section }: { section: SettingsSection }) {
                 </span>
               )}
             </header>
+            <HostError message={hasHostRows ? hostError : null} />
             <SectionBody id={section} rows={rows} />
           </div>
         </div>

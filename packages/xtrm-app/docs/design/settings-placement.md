@@ -17,10 +17,10 @@ Surfaces:
 | Palette: presets or mix (`appearance.palette`) | device | none (console palettes arrive in XTRM-1105) | appearance | presets and mix |
 | Chat width (`appearance.chatWidth`) | device | none | appearance | presets and slider |
 | Density, font scale, motion, code wrap | device | none | appearance | none |
-| Sidebar open and width, inspector width | device | none | layout: reset only. Direct control stays Mod+B and drag. | none |
-| Folded groups (`layout.foldedGroups`) | device | none | layout: reset | none. The tree folds them in place. |
+| Sidebar open and width, inspector width | device | none | layout: value and reset. Direct control stays Mod+B and drag. | none |
+| Folded groups (`layout.foldedGroups`) | device | none | layout: value; the reset arrives with the layout page (XTRM-1105) | none. The tree folds them in place. |
 | Last repository (`layout.lastRepository`) | device | none. The repository selector expands from its trigger. | none | none. Scope comes from the URL. |
-| Agent scope, thread view | device | none | layout | inline toggle |
+| Agent scope, thread view | device | none | layout: value, with where to change it | inline toggle |
 | Agent names (`layout.agentNames`) | device | none | none. Renaming happens inline. | none |
 | SSH target, remote command, direct URL, device name | host | status block, and a "Change host target…" row that opens the agent host panel | connections (editor) | none |
 | Peers, connect-to (`connections.peers`, `connections.connectTo`) | device | Connections row with the current transport | connections (editor) | host picker and per-host status, with a link to connections |

@@ -84,7 +84,8 @@ export function formatSettingValue<K extends SettingKey>(key: K, value: AppSetti
       return count((v as unknown[]).length, "host", "hosts");
     case "connections.connectTo": {
       const c = v as AppSettings["connections.connectTo"];
-      return c.mode === "this" ? "This host only" : c.mode === "all" ? "All known hosts" : `Chosen: ${c.chosen.join(", ") || "none"}`;
+      if (c.mode === "chosen") return `Chosen: ${c.chosen.join(", ") || "none"}`;
+      return c.mode === "all" ? "All known hosts" : "This host only";
     }
     case "connections.endpoint": {
       const e = v as AppSettings["connections.endpoint"];
