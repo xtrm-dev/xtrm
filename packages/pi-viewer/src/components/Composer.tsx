@@ -1,4 +1,4 @@
-import { ChevronDownIcon, LoaderCircleIcon, SendIcon, SquareIcon, XIcon } from "lucide-react"
+import { ChevronDownIcon, CornerDownLeftIcon, LoaderCircleIcon, SquareIcon, XIcon } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { StatusDot, statusWord } from "@/components/StatusDot"
@@ -294,12 +294,12 @@ export function Composer({
                   disabled={stopping}
                   aria-label={`Stop ${target?.name ?? "agent"}`}
                   title="Stop (Esc)"
-                  className="flex size-8 items-center justify-center rounded-md bg-control text-ink transition-opacity hover:bg-pressed disabled:opacity-30"
+                  className="flex size-8 items-center justify-center rounded-md text-ink transition-opacity outline-none hover:opacity-60 focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30"
                 >
                   {stopping ? (
                     <LoaderCircleIcon className="size-4 animate-spin" />
                   ) : (
-                    <SquareIcon className="size-3.5 fill-current" />
+                    <SquareIcon className="size-3.5" />
                   )}
                 </button>
               ) : null}
@@ -308,12 +308,12 @@ export function Composer({
                 onClick={() => void submit()}
                 disabled={!text.trim() || !target || sending}
                 aria-label="Send"
-                className="flex size-8 items-center justify-center rounded-md bg-github text-github-ink transition-opacity hover:bg-github-hover disabled:opacity-30"
+                className="flex size-8 items-center justify-center rounded-md text-github transition-[color,opacity] outline-none hover:text-github-hover focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30"
               >
                 {sending ? (
                   <LoaderCircleIcon className="size-4 animate-spin" />
                 ) : (
-                  <SendIcon className="size-4" />
+                  <CornerDownLeftIcon className="size-4" />
                 )}
               </button>
             </div>
@@ -327,7 +327,7 @@ export function Composer({
             (XTRM-1056): the group ends at the same 12px inset the box uses for its text and send. */}
         <div data-composer-under-row="" className="mt-1.5 flex min-w-0 items-center gap-3 pl-1 pr-3">
           <span className="hidden min-w-0 truncate text-2xs text-ink-muted sm:block">
-            @ to mention · Shift+Enter for a new line
+            @ to mention
           </span>
 
           <div data-composer-target-meta="" className="relative ml-auto flex min-w-0 items-center gap-3">
