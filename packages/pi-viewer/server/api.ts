@@ -662,7 +662,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     // Reads too: a rebinding page could otherwise page through transcripts (XTRM-1109 round 2).
     const host = hostVerdict(req.headers)
     if (!host.ok) {
-      if ((req.method ?? "GET") !== "GET") console.warn(`[pi-viewer] write refused: ${host.reason}`)
+      const kind = (req.method ?? "GET") === "GET" ? "read" : "write"
+      console.warn(`[pi-viewer] ${kind} refused: ${host.reason}`)
       throw new ApiError(403, host.reason)
     }
     return await route(req, res)
@@ -671,8 +672,9 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       await sendJson(req, res, error.status, { error: error.message })
       return true
     }
-    const message = error instanceof Error ? error.message : String(error)
-    await sendJson(req, res, 500, { error: message })
+    // The detail stays in the server log; the client gets a fixed message, never a stack or a path.
+    console.error("[pi-viewer] api error", url.pathname, error)
+    await sendJson(req, res, 500, { error: "internal error" })
     return true
   }
 }

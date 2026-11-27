@@ -217,22 +217,22 @@ footer.doc {
 
 <p>This document records what the viewer is and how it is built. Every behavioural claim cites a file and line, or a Substrate journal entry. Line numbers refer to the tree that carries this document. Where a value lives in CSS, the citation is <code>src/styles.css</code>; where it lives in a component, the citation is that component. Nothing here is a proposal: proposals and unresolved gaps are in §11.</p>
 
-<p>The design language is the console's. <code>packages/xtrm-app/docs/design/console-ui-system.md</code> is the authority for the language; this document is the authority for the viewer's use of it.</p>
+<p>The design language is the console&#39;s. <code>packages/xtrm-app/docs/design/console-ui-system.md</code> is the authority for the language; this document is the authority for the viewer&#39;s use of it.</p>
 
 <h2 id="1-purpose-and-scope">1. Purpose and scope</h2>
 
-<p>The viewer is a local web application that renders the work of one tmux session as a channel. One tmux session is one channel; the agents are the <code>pi</code> and Claude Code panes inside it. The server reads the agents' transcripts from disk, never attaches to a pane and never owns an agent process (<code>README.md:6</code>). The only write it can perform is <code>tmux send-keys</code> for a message the operator sends from the composer (<code>README.md:140-141</code>). It binds to <code>127.0.0.1</code> and has no authentication (<code>README.md:53</code>).</p>
+<p>The viewer is a local web application that renders the work of one tmux session as a channel. One tmux session is one channel; the agents are the <code>pi</code> and Claude Code panes inside it. The server reads the agents&#39; transcripts from disk, never attaches to a pane and never owns an agent process (<code>README.md:6</code>). The only write it can perform is <code>tmux send-keys</code> for a message the operator sends from the composer (<code>README.md:140-141</code>). It binds to <code>127.0.0.1</code> and has no authentication (<code>README.md:53</code>).</p>
 
 <p>In scope: the reading experience of one operator watching several agents, and answering them.</p>
 
-<p>Out of scope, by decision: starting, stopping, steering or approving an agent. Rows for an interrupt and a pending approval are designed but not built, because nothing may change agent state (XTRM-1024 seq3, §11).</p>
+<p>Out of scope, by decision: starting, steering or approving an agent. Stopping is in scope since 2026-11-26: Escape to the agent&#39;s own pane, from the composer, while it works (XTRM-1088). Rows for an interrupt and a pending approval are designed but not built, because nothing may change agent state (XTRM-1024 seq3, §11).</p>
 
 <p>The document covers the browser client, the shape of the server it depends on, the design system it wears, and the evidence behind each. Sibling documents go deeper in one area each: <code>docs/design/working-presence.md</code> (turn state model), <code>docs/design/palette-console.md</code> (region and contrast audit), <code>docs/design/t3code-chat-audit.md</code> (the restyle audit), <code>docs/design/console-shell-spike.md</code> (the shell), <code>docs/design/spacing-reference.md</code> (a density guide, not a source of truth).</p>
 
 <h2 id="2-principles">2. Principles</h2>
 
 <ol>
-<li><strong>Restraint.</strong> No new colour and no new tint outside the console's token set. Every surface either</li>
+<li><strong>Restraint.</strong> No new colour and no new tint outside the console&#39;s token set. Every surface either</li>
 </ol>
 
 <p>   wears an existing token or explains its scoped departure here (console-ui-system.md §2.3).</p>
@@ -250,10 +250,10 @@ footer.doc {
 <p>   an outcome. A prompt is <code>Sent</code> when the keys reached the pane, <code>Seen</code> when the record exists,    <code>Replied</code> only when a later turn settled (<code>src/lib/delivery.ts:13-49</code>).</p>
 
 <ol>
-<li><strong>The reader's place is not disturbed.</strong> No layout animation, no row that changes height when it</li>
+<li><strong>The reader&#39;s place is not disturbed.</strong> No layout animation, no row that changes height when it</li>
 </ol>
 
-<p>   enters the viewport, no scroll that fights the reader's own gesture    (<code>src/styles.css:579-581</code>, <code>src/lib/stick.ts:8</code>).</p>
+<p>   enters the viewport, no scroll that fights the reader&#39;s own gesture    (<code>src/styles.css:579-581</code>, <code>src/lib/stick.ts:8</code>).</p>
 
 <ol>
 <li><strong>Motion carries meaning or it does not happen.</strong> Opacity and a translate of at most 4px, nothing</li>
@@ -265,7 +265,7 @@ footer.doc {
 <li><strong>A word can leave the screen, never the accessibility tree.</strong> The sidebar dropped the state word in</li>
 </ol>
 
-<p>   favour of the dot; the word stayed as the dot's <code>aria-label</code>, its tooltip and part of the row's label    (XTRM-1048; <code>src/lib/status-dot.ts:71-90</code>).</p>
+<p>   favour of the dot; the word stayed as the dot&#39;s <code>aria-label</code>, its tooltip and part of the row&#39;s label    (XTRM-1048; <code>src/lib/status-dot.ts:71-90</code>).</p>
 
 <ol>
 <li><strong>Every value is a token.</strong> No component holds a raw colour; the <code>@theme</code> block is the only bridge</li>
@@ -287,7 +287,7 @@ footer.doc {
 
 <div class="scroll"><table><thead><tr><th>module</th><th>responsibility</th></tr></thead><tbody>
 <tr><td><code>server/api.ts</code></td><td>HTTP routes and payload shaping: <code>/api/health</code>, <code>/api/sessions</code>, <code>/api/thread</code>, <code>/api/event</code>, <code>/api/send</code>; the only writer is <code>/api/send</code>, which runs <code>tmux send-keys -l</code> then <code>Enter</code>. Also the scope parameters, the encoded-frame cache and the discovery snapshot (XTRM-1066).</td></tr>
-<tr><td><code>server/discover.ts</code></td><td><code>tmux list-panes -a</code> → each pane's process descendants → the <code>pi</code> or <code>claude</code> process → its cwd, repository and session file. <code>discoverAsync</code> runs on a timer off the request path; <code>discover</code> stays synchronous for callers that cannot await (XTRM-1066).</td></tr>
+<tr><td><code>server/discover.ts</code></td><td><code>tmux list-panes -a</code> → each pane&#39;s process descendants → the <code>pi</code> or <code>claude</code> process → its cwd, repository and session file. <code>discoverAsync</code> runs on a timer off the request path; <code>discover</code> stays synchronous for callers that cannot await (XTRM-1066).</td></tr>
 <tr><td><code>server/session.ts</code></td><td>incremental JSONL parsing and event normalisation; the one effect classifier <code>entryEffect</code> (<code>:625</code>); the status derivation <code>statusOf</code> (<code>:701</code>) with the 15-minute quiet window (<code>QUIET_MS</code> <code>:574</code>) and the write clock <code>lastWriteAt</code> (<code>:691</code>).</td></tr>
 <tr><td><code>server/claude.ts</code></td><td>Claude Code transcript resolution, pane naming (<code>custom-title</code>, else <code>agent-name</code>, else the cwd basename plus short session id), and conversion of Claude records to the Pi event model (<code>normalizeClaudeEvent</code> <code>:810</code>).</td></tr>
 <tr><td><code>server/intercom.ts</code></td><td>agent-message normalisation for both envelopes, delivery pairing by tool call id, and the pair key that merges the two sides of one message.</td></tr>
@@ -400,7 +400,7 @@ footer.doc {
 
 <h3 id="34-incremental-polling-and-the-scope-aware-window">3.4 Incremental polling and the scope-aware window</h3>
 
-<p>The browser loads the newest 150 turns, then polls with <code>since=&lt;cursor&gt;&amp;revision=&lt;id&gt;</code>; a poll returns only new or changed events, <code>before=&lt;cursor&gt;</code> pages backwards, and the client never starts a poll while one is in flight (<code>README.md</code>, "Data model"). The thread poll backs off to 5 s above 800 ms and 10 s above 2 s of response time; discovery runs on the server.</p>
+<p>The browser loads the newest 150 turns, then polls with <code>since=&lt;cursor&gt;&amp;revision=&lt;id&gt;</code>; a poll returns only new or changed events, <code>before=&lt;cursor&gt;</code> pages backwards, and the client never starts a poll while one is in flight (<code>README.md</code>, &quot;Data model&quot;). The thread poll backs off to 5 s above 800 ms and 10 s above 2 s of response time; discovery runs on the server.</p>
 
 <p>Since XTRM-1066 the request carries the reading scope: <code>p=&lt;paneId&gt;</code> or <code>w=&lt;windowIndex&gt;</code> narrows the window server-side, a malformed scope is a 400, and the revision is tagged per scope, so a scope change is a fresh window rather than a client-side filter over a session-sized payload. Repeat polls at the same cursor are answered from a cached encoded frame keyed by (query, scope, agent-list hash, cursor, revision); a changed agent set returns a reset rather than merging across a broken cursor space (<code>server/thread-cache.ts</code>, <code>server/api.ts</code>; XTRM-1066 journal).</p>
 
@@ -412,7 +412,7 @@ footer.doc {
 
 <p>All colour is a CSS variable on <code>:root</code> (<code>src/styles.css:34-116</code> light, <code>:118-163</code> dark), exposed to Tailwind v4 through <code>@theme</code> so no component holds a raw colour (<code>:227-311</code>). A palette is a set of region assignments and, for Desktop, plane values; a theme is light or dark; a soft-text variant is a text-only layer on top of a base palette.</p>
 
-<p>Five palettes ship: <strong>Threads</strong> (default), <strong>Threads · soft text</strong>, <strong>Console</strong>, <strong>Console · soft text</strong> and <strong>Desktop</strong> (<code>src/lib/palette.ts:15-17</code>; operator ruling 2026-11-26, §10). The header's Colours control sets <code>data-palette</code> on <code>&lt;html&gt;</code> and the choice persists in <code>localStorage</code>; a theme sets <code>data-theme</code>; a soft-text palette keeps its base's <code>data-palette</code> and adds <code>data-text="soft"</code> (<code>src/lib/palette.ts</code>, <code>src/styles.css:210-225</code>). A switch rewrites variables only: no component fork, no reload, no scroll change.</p>
+<p>Five palettes ship: <strong>Threads</strong> (default), <strong>Threads · soft text</strong>, <strong>Console</strong>, <strong>Console · soft text</strong> and <strong>Desktop</strong> (<code>src/lib/palette.ts:15-17</code>; operator ruling 2026-11-26, §10). The header&#39;s Colours control sets <code>data-palette</code> on <code>&lt;html&gt;</code> and the choice persists in <code>localStorage</code>; a theme sets <code>data-theme</code>; a soft-text palette keeps its base&#39;s <code>data-palette</code> and adds <code>data-text=&quot;soft&quot;</code> (<code>src/lib/palette.ts</code>, <code>src/styles.css:210-225</code>). A switch rewrites variables only: no component fork, no reload, no scroll change.</p>
 
 <h4 id="411-threads-the-full-token-set">4.1.1 Threads — the full token set</h4>
 
@@ -434,7 +434,7 @@ footer.doc {
 <tr><td><code>--x-border-subtle</code></td><td><span class="swatch" style="background:rgb(15 15 20 / 0.04)" aria-hidden="true"></span><code>rgb(15 15 20 / 0.04)</code></td><td><span class="swatch" style="background:rgb(255 255 255 / 0.06)" aria-hidden="true"></span><code>rgb(255 255 255 / 0.06)</code></td><td>table grid only</td></tr>
 <tr><td><code>--x-border</code></td><td><span class="swatch" style="background:rgb(15 15 20 / 0.11)" aria-hidden="true"></span><code>rgb(15 15 20 / 0.11)</code></td><td><span class="swatch" style="background:rgb(255 255 255 / 0.12)" aria-hidden="true"></span><code>rgb(255 255 255 / 0.12)</code></td><td>control border</td></tr>
 <tr><td><code>--x-border-strong</code></td><td><span class="swatch" style="background:rgb(15 15 20 / 0.2)" aria-hidden="true"></span><code>rgb(15 15 20 / 0.2)</code></td><td><span class="swatch" style="background:rgb(255 255 255 / 0.18)" aria-hidden="true"></span><code>rgb(255 255 255 / 0.18)</code></td><td>focus ring, soft separator</td></tr>
-<tr><td><code>--x-github</code></td><td><span class="swatch" style="background:#24292f" aria-hidden="true"></span><code>#24292f</code></td><td><span class="swatch" style="background:#f0f6fc" aria-hidden="true"></span><code>#f0f6fc</code></td><td>the send button's pair</td></tr>
+<tr><td><code>--x-github</code></td><td><span class="swatch" style="background:#24292f" aria-hidden="true"></span><code>#24292f</code></td><td><span class="swatch" style="background:#f0f6fc" aria-hidden="true"></span><code>#f0f6fc</code></td><td>the send button&#39;s pair</td></tr>
 <tr><td><code>--x-github-hover</code></td><td><span class="swatch" style="background:#32383f" aria-hidden="true"></span><code>#32383f</code></td><td><span class="swatch" style="background:#ffffff" aria-hidden="true"></span><code>#ffffff</code></td><td>send button hover</td></tr>
 <tr><td><code>--x-github-ink</code></td><td><span class="swatch" style="background:#ffffff" aria-hidden="true"></span><code>#ffffff</code></td><td><span class="swatch" style="background:#24292f" aria-hidden="true"></span><code>#24292f</code></td><td>send glyph</td></tr>
 <tr><td><code>--x-accent</code></td><td><span class="swatch" style="background:#4f46e5" aria-hidden="true"></span><code>#4f46e5</code></td><td><span class="swatch" style="background:#818cf8" aria-hidden="true"></span><code>#818cf8</code></td><td>selection, focus, references, working dot</td></tr>
@@ -461,11 +461,11 @@ footer.doc {
 <tr><td><code>--x-rail-indent</code></td><td><code>calc(1rem - 1px)</code></td><td>same</td><td>nav rail geometry (<code>:79</code>)</td></tr>
 <tr><td><code>--x-rail-gutter</code></td><td><code>1.125rem</code></td><td>same</td><td>nav rail label inset (<code>:80</code>)</td></tr>
 <tr><td><code>--x-rail-marker</code></td><td><code>2px</code></td><td>same</td><td>active marker width (<code>:81</code>)</td></tr>
-<tr><td><code>--x-rail-pull</code></td><td><code>calc(var(--x-rail-indent) + 1px)</code></td><td>same</td><td>a child row's fill pull (<code>:85</code>)</td></tr>
+<tr><td><code>--x-rail-pull</code></td><td><code>calc(var(--x-rail-indent) + 1px)</code></td><td>same</td><td>a child row&#39;s fill pull (<code>:85</code>)</td></tr>
 <tr><td><code>--x-rail-text</code></td><td><code>calc(var(--x-rail-pull) + var(--x-rail-gutter))</code></td><td>same</td><td>aligned label column (<code>:86</code>)</td></tr>
 </tbody></table></div>
 
-<p>The rail tokens exist for the console's NavRail; the viewer keeps them so a shared token file stays identical. The viewer draws no rail.</p>
+<p>The rail tokens exist for the console&#39;s NavRail; the viewer keeps them so a shared token file stays identical. The viewer draws no rail.</p>
 
 <h4 id="412-region-roles-which-plane-each-region-wears">4.1.2 Region roles — which plane each region wears</h4>
 
@@ -474,20 +474,23 @@ footer.doc {
 <div class="scroll"><table><thead><tr><th>role</th><th>Threads</th><th>Console</th><th>Desktop</th></tr></thead><tbody>
 <tr><td><code>--x-canvas</code> (page, header, thread, presence line, composer margin)</td><td><code>--x-deep</code> #f4f4f5 / #0d0d0d</td><td><code>--x-surface</code> #ffffff / #151515</td><td><code>--x-deep</code> #1f1f1f</td></tr>
 <tr><td><code>--x-composer-fill</code></td><td><code>--x-surface</code> #ffffff / #151515</td><td><code>--x-raised</code> #ffffff / #1e1e1e</td><td><code>--x-surface</code> #333333</td></tr>
-<tr><td><code>--x-composer-focus</code></td><td>the same fill</td><td>the same fill</td><td><code>--x-control</code> #383838</td></tr>
-<tr><td><code>--x-composer-edge</code></td><td><code>transparent</code></td><td><code>--x-border-muted</code> (light only) / <code>transparent</code></td><td><code>transparent</code></td></tr>
-<tr><td><code>--x-composer-edge-focus</code></td><td><code>--x-border-strong</code></td><td><code>--x-border-strong</code></td><td><code>--x-border-strong</code> (inferred)</td></tr>
-<tr><td><code>--x-inset</code> (activity detail, intercom card)</td><td><code>--x-surface</code></td><td><code>--x-control</code></td><td><code>--x-surface</code></td></tr>
-<tr><td><code>--x-code</code> / <code>--x-code-edge</code></td><td><code>--x-surface</code> / <code>--x-border-muted</code> (light), <code>transparent</code> (dark)</td><td><code>--x-deep</code> / <code>--x-border-muted</code></td><td><code>--x-deep</code> / <code>--x-border</code></td></tr>
+<tr><td><code>--x-composer-focus</code></td><td><code>--x-raised</code> (focus rises a plane; in light, white is the ceiling and the shadow deepens)</td><td><code>--x-raised</code> (the fill cannot step: the shadow deepens)</td><td><code>--x-control</code> #383838</td></tr>
+<tr><td><code>--x-composer-shadow</code></td><td>a light two-part shadow</td><td>the same two-part shape at dark alpha</td><td>the dark pair</td></tr>
+<tr><td><code>--x-composer-shadow-focus</code></td><td>the same shape, deeper</td><td>the same shape, deeper</td><td>the same shape, deeper</td></tr>
+</tbody></table></div>
+
+<p>The composer carries no border and no ring in any palette, preset, theme or state (XTRM-1087): the fill step and the drop shadow are its only separation, and focus either rises a plane or deepens the shadow.</p>
+
+<div class="scroll"><table><thead><tr><th><code>--x-inset</code> (activity detail, intercom card)</th><th><code>--x-surface</code></th><th><code>--x-control</code></th><th><code>--x-surface</code></th></tr></thead><tbody>
 <tr><td><code>--x-read</code> (thread prose, operator bubble)</td><td><code>--x-ink</code></td><td><code>--x-ink</code></td><td><span class="swatch" style="background:#c8c8c8" aria-hidden="true"></span><code>#c8c8c8</code></td></tr>
 <tr><td><code>--x-selected</code> (selected list row)</td><td><code>--x-hover</code></td><td><code>--x-hover</code></td><td><span class="swatch" style="background:#454545" aria-hidden="true"></span><code>#454545</code></td></tr>
 </tbody></table></div>
 
 <h4 id="413-console-differences-from-threads">4.1.3 Console — differences from Threads</h4>
 
-<p>The console palette changes assignments and the dark sidebar only; every other token already equals the console's (<code>src/styles.css:169-181</code>). Light: canvas becomes the surface <code>#ffffff</code>, the composer steps up to <code>#ffffff</code> with a barely visible hairline (<code>--x-border-muted</code>), inset panels become <code>--x-control</code> <code>#efeff1</code>, and the code frame becomes the deep plane <code>#f4f4f5</code>. Dark: sidebar <code>#232323</code>, canvas <code>#151515</code>, composer <code>#1e1e1e</code> with no hairline, inset <code>#262626</code>, code <code>#0d0d0d</code>.</p>
+<p>The console palette changes assignments and the dark sidebar only; every other token already equals the console&#39;s (<code>src/styles.css:169-181</code>). Light: canvas becomes the surface <code>#ffffff</code>, the composer steps up to <code>#ffffff</code> with a barely visible hairline (<code>--x-border-muted</code>), inset panels become <code>--x-control</code> <code>#efeff1</code>, and the code frame becomes the deep plane <code>#f4f4f5</code>. Dark: sidebar <code>#232323</code>, canvas <code>#151515</code>, composer <code>#1e1e1e</code> with no hairline, inset <code>#262626</code>, code <code>#0d0d0d</code>.</p>
 
-<h4 id="414-desktop-the-operators-claude-desktop-values">4.1.4 Desktop — the operator's Claude Desktop values</h4>
+<h4 id="414-desktop-the-operators-claude-desktop-values">4.1.4 Desktop — the operator&#39;s Claude Desktop values</h4>
 
 <p>Desktop is dark-only and replaces planes and text roles; region assignments stay the Threads ones (<code>src/styles.css:183-208</code>). In the light theme no block matches, so Desktop in light is the Threads light set.</p>
 
@@ -509,20 +512,20 @@ footer.doc {
 
 <h4 id="415-soft-text-one-text-only-layer">4.1.5 Soft text — one text-only layer</h4>
 
-<p>A soft-text palette keeps its base's surfaces, borders and accents and overrides four text variables only (<code>src/styles.css:210-225</code>; <code>test/palette.test.ts</code> holds the block to that list). Dark only.</p>
+<p>A soft-text palette keeps its base&#39;s surfaces, borders and accents and overrides four text variables only (<code>src/styles.css:210-225</code>; <code>test/palette.test.ts</code> holds the block to that list). Dark only.</p>
 
 <div class="scroll"><table><thead><tr><th>token</th><th>value</th><th>role</th></tr></thead><tbody>
 <tr><td><code>--x-ink</code></td><td><span class="swatch" style="background:#e4e4e4" aria-hidden="true"></span><code>#e4e4e4</code></td><td>names, titles, selected rows</td></tr>
 <tr><td><code>--x-read</code></td><td><span class="swatch" style="background:#c8c8c8" aria-hidden="true"></span><code>#c8c8c8</code></td><td>thread prose, operator bubble</td></tr>
 <tr><td><code>--x-ink-muted</code></td><td><span class="swatch" style="background:#a1a1a1" aria-hidden="true"></span><code>#a1a1a1</code></td><td>meta, time, unselected labels, resting icons</td></tr>
-<tr><td><code>--x-ink-muted-selected</code></td><td><span class="swatch" style="background:#c8c8c8" aria-hidden="true"></span><code>#c8c8c8</code></td><td>muted text inside Desktop's <code>#454545</code> row</td></tr>
+<tr><td><code>--x-ink-muted-selected</code></td><td><span class="swatch" style="background:#c8c8c8" aria-hidden="true"></span><code>#c8c8c8</code></td><td>muted text inside Desktop&#39;s <code>#454545</code> row</td></tr>
 </tbody></table></div>
 
-<p><code>#a1a1a1</code> is one step above the operator's original <code>#a0a0a0</code> so muted text reaches 4.5:1 on the <code>#383838</code> input fill (operator ruling 2026-11-26, XTRM-1053).</p>
+<p><code>#a1a1a1</code> is one step above the operator&#39;s original <code>#a0a0a0</code> so muted text reaches 4.5:1 on the <code>#383838</code> input fill (operator ruling 2026-11-26, XTRM-1053).</p>
 
 <h3 id="42-type-scale">4.2 Type scale</h3>
 
-<p>Four steps plus one sub-step, all in <code>rem</code> so they follow the operator's root size (<code>src/styles.css:302-310</code>). The console's ladder is console-ui-system.md §3.3; the viewer instantiated it at these values.</p>
+<p>Four steps plus one sub-step, all in <code>rem</code> so they follow the operator&#39;s root size (<code>src/styles.css:302-310</code>). The console&#39;s ladder is console-ui-system.md §3.3; the viewer instantiated it at these values.</p>
 
 <div class="scroll"><table><thead><tr><th>class</th><th>size</th><th>line height</th><th>px at a 16px root</th><th>use in the viewer</th></tr></thead><tbody>
 <tr><td><code>text-2xs</code></td><td><code>0.625rem</code></td><td><code>0.875rem</code></td><td>10 / 14</td><td>timeline <code>now</code> marker, mouse hints, sidebar monograms, intercom floor text</td></tr>
@@ -532,54 +535,56 @@ footer.doc {
 <tr><td>prose</td><td><code>0.875rem</code> / <code>1.625</code></td><td>—</td><td>14 / 22.75</td><td><code>xtrm-prose</code> body, operator bubble, intercom body (<code>:344-352</code>)</td></tr>
 </tbody></table></div>
 
-<p>The composer's prompt is the one step above <code>text-base</code>: <code>0.9375rem</code> / <code>1.5rem</code> (15 / 24), set on the textarea (<code>src/components/Composer.tsx:237</code>). The under-row is one step down at <code>text-base</code> (14px), so the prompt reads as the subject and the target as its caption.</p>
+<p>The composer&#39;s prompt is the one step above <code>text-base</code>: <code>0.9375rem</code> / <code>1.5rem</code> (15 / 24), set on the textarea (<code>src/components/Composer.tsx:237</code>). The under-row is one step down at <code>text-base</code> (14px), so the prompt reads as the subject and the target as its caption.</p>
 
 <p>Headings inside rendered markdown: <code>1.25rem</code>, <code>1.125rem</code>, <code>1rem</code>, <code>0.875rem</code> with weight 600 (<code>src/styles.css:367-388</code>). Code: <code>0.85em</code> inline, <code>0.75rem</code>/<code>1.15rem</code> in a frame (<code>:418-437</code>).</p>
 
 <h3 id="43-spacing-and-radii">4.3 Spacing and radii</h3>
 
-<p>The spacing scale is the 8px system the operator supplied as a density guide (<code>docs/design/spacing-reference.md</code>): 4, 8, 12, 16, 20, 24, 32, 40, 48; the values in use are 4, 8, 12, 16, 24 and 32. Tailwind's own scale provides them; no spacing token is declared.</p>
+<p>The spacing scale is the 8px system the operator supplied as a density guide (<code>docs/design/spacing-reference.md</code>): 4, 8, 12, 16, 20, 24, 32, 40, 48; the values in use are 4, 8, 12, 16, 24 and 32. Tailwind&#39;s own scale provides them; no spacing token is declared.</p>
 
 <div class="scroll"><table><thead><tr><th>element</th><th>value</th><th>source</th></tr></thead><tbody>
-<tr><td>composer box padding</td><td><code>14px</code> horizontal, <code>14px</code> vertical (<code>px-3.5 py-3.5</code>), right <code>56px</code> for the send button</td><td><code>src/components/Composer.tsx:237</code></td></tr>
-<tr><td>composer box, empty</td><td><code>52px</code>: line <code>24px</code> + <code>1.75rem</code> of padding</td><td><code>src/components/Composer.tsx:237</code></td></tr>
-<tr><td>composer send button</td><td><code>32px</code> box, <code>16px</code> glyph, <code>10px</code> above the box's bottom edge</td><td><code>src/components/Composer.tsx:245-262</code></td></tr>
-<tr><td>composer under-row</td><td><code>6px</code> below the box, <code>12px</code> between items, right edge at the send button's right edge</td><td><code>src/components/Composer.tsx:267-269</code></td></tr>
+<tr><td>composer box padding</td><td><code>12px</code> all round (<code>p-3</code>), right <code>56px</code> for the send button</td><td><code>src/components/Composer.tsx:254</code></td></tr>
+<tr><td>composer text padding</td><td><code>3.25px</code> above the line, <code>4.75px</code> below (optical centring, XTRM-1087)</td><td><code>src/components/Composer.tsx:261</code></td></tr>
+<tr><td>composer box, empty</td><td><code>56px</code>: <code>12px</code> + a <code>32px</code> textarea (line <code>24px</code> + <code>8px</code>) + <code>12px</code></td><td><code>src/components/Composer.tsx:254</code></td></tr>
+<tr><td>composer send button</td><td><code>32px</code> box, <code>16px</code> glyph, <code>12px</code> above the box&#39;s bottom edge, centred on the text line</td><td><code>src/components/Composer.tsx:262-270</code></td></tr>
+<tr><td>composer under-row</td><td><code>6px</code> below the box, <code>12px</code> between items, right edge at the send button&#39;s right edge</td><td><code>src/components/Composer.tsx:267-269</code></td></tr>
+<tr><td>composer stop control</td><td><code>32px</code> square beside send, muted <code>bg-control</code> fill, drawn only while the target works; Esc in an empty box is the same action</td><td><code>src/components/Composer.tsx:293-307</code></td></tr>
 <tr><td>sidebar row padding</td><td><code>8px</code> horizontally on the tree, <code>6px</code> vertically on a pane row</td><td><code>src/components/sidebar/geometry.ts</code></td></tr>
 <tr><td>thread content padding</td><td><code>3rem</code> on a wide screen (<code>sm:px-12</code>)</td><td><code>src/styles.css:757-771</code></td></tr>
 <tr><td>chat lane</td><td><code>46rem</code> default, <code>72rem</code> wide, custom from <code>36rem</code>, Full</td><td><code>src/lib/chat-width.ts:12-18</code></td></tr>
 </tbody></table></div>
 
-<p>Radii come from three tokens (<code>src/styles.css:267-269</code>): <code>--radius-sm</code> 6px, <code>--radius-md</code> 8px, <code>--radius-lg</code> 10px. In use: sidebar rows and menu items 8px; the operator bubble, the composer box, the popover panels and the shell's diagram card 10px; chips, buttons and code chips 6px. The operator ruled the bubble and composer radius at 10px against t3code's 16px (XTRM-1024 seq2).</p>
+<p>Radii come from three tokens (<code>src/styles.css:267-269</code>): <code>--radius-sm</code> 6px, <code>--radius-md</code> 8px, <code>--radius-lg</code> 10px. In use: sidebar rows and menu items 8px; the operator bubble, the composer box, the popover panels and the shell&#39;s diagram card 10px; chips, buttons and code chips 6px. The operator ruled the bubble and composer radius at 10px against t3code&#39;s 16px (XTRM-1024 seq2).</p>
 
 <h3 id="44-icon-ladder">4.4 Icon ladder</h3>
 
-<p>The registry, the sizes and the stroke rule are the console's (<code>src/shell/icon.tsx:14-64</code>). A glyph never exceeds its row's text (console-ui-system.md §3.4).</p>
+<p>The registry, the sizes and the stroke rule are the console&#39;s (<code>src/shell/icon.tsx:14-64</code>). A glyph never exceeds its row&#39;s text (console-ui-system.md §3.4).</p>
 
 <div class="scroll"><table><thead><tr><th>step</th><th>class</th><th>px</th><th>use</th></tr></thead><tbody>
 <tr><td><code>micro</code></td><td><code>size-[0.75rem]</code></td><td>12</td><td>inline marks inside a label</td></tr>
 <tr><td><code>text</code></td><td><code>size-[0.8125rem]</code></td><td>13</td><td>hover actions, delivery marks</td></tr>
 <tr><td><code>xs</code></td><td><code>size-[0.875rem]</code></td><td>14</td><td>row chevrons, fold chevron</td></tr>
-<tr><td><code>sm</code></td><td><code>size-4</code></td><td>16</td><td>inline chrome, the composer's send glyph</td></tr>
+<tr><td><code>sm</code></td><td><code>size-4</code></td><td>16</td><td>inline chrome, the composer&#39;s send glyph</td></tr>
 <tr><td><code>nav</code></td><td><code>size-4</code></td><td>16</td><td>nav-level chrome</td></tr>
 <tr><td><code>md</code></td><td><code>size-[1.125rem]</code></td><td>18</td><td>panel headers</td></tr>
 <tr><td><code>lg</code></td><td><code>size-5</code></td><td>20</td><td>empty states</td></tr>
 </tbody></table></div>
 
-<p>Stroke width is 2 at <code>micro</code> and <code>text</code>, 2.25 above, against lucide's default 2 (<code>src/shell/icon.tsx:66-67</code>). The registry carries only the names the viewer uses; a missing name is a type error, not a runtime fallback.</p>
+<p>Stroke width is 2 at <code>micro</code> and <code>text</code>, 2.25 above, against lucide&#39;s default 2 (<code>src/shell/icon.tsx:66-67</code>). The registry carries only the names the viewer uses; a missing name is a type error, not a runtime fallback.</p>
 
 <h3 id="45-motion">4.5 Motion</h3>
 
 <p>Every animation, its reason, and its reduced-motion branch. All of it is in <code>src/styles.css:583-617</code> and <code>:738-748</code>; the rules are console-ui-system.md §18.</p>
 
 <div class="scroll"><table><thead><tr><th>name</th><th>timing</th><th>carries</th><th>reduced motion</th></tr></thead><tbody>
-<tr><td><code>viewer-pulse</code></td><td><code>1.6s ease-in-out infinite</code>, opacity 0.35→1, scale 0.85→1</td><td>a working agent's dot</td><td>no animation, opacity 1</td></tr>
-<tr><td><code>viewer-fade</code></td><td><code>1.8s ease-in-out infinite</code>, opacity 0.45→1</td><td>a dot that needs the operator; a fold row's <code>Working</code> word</td><td>no animation, opacity 1</td></tr>
+<tr><td><code>viewer-pulse</code></td><td><code>1.6s ease-in-out infinite</code>, opacity 0.35→1, scale 0.85→1</td><td>a working agent&#39;s dot</td><td>no animation, opacity 1</td></tr>
+<tr><td><code>viewer-fade</code></td><td><code>1.8s ease-in-out infinite</code>, opacity 0.45→1</td><td>a dot that needs the operator; a fold row&#39;s <code>Working</code> word</td><td>no animation, opacity 1</td></tr>
 <tr><td><code>presence-in</code></td><td><code>150ms ease-out</code>, opacity 0→1</td><td>a presence row that starts</td><td>none</td></tr>
 <tr><td><code>xtrm-shimmer</code></td><td><code>2.2s steps(30) infinite</code></td><td>a stepped sweep over muted text while a step runs; pauses off-screen via <code>data-paused</code></td><td>none</td></tr>
 <tr><td><code>xtrm-fade-in</code></td><td><code>600ms ease-out both</code></td><td>a block that arrives after first paint; never replays on reopen</td><td>none</td></tr>
 <tr><td><code>.xtrm-meta</code></td><td><code>200ms ease-out</code> opacity</td><td>hover reveal of row metadata</td><td>no transition</td></tr>
-<tr><td>composer box</td><td><code>150ms</code> background and inset ring</td><td>focus state</td><td>none needed (not motion)</td></tr>
+<tr><td>composer box</td><td><code>150ms</code> background and drop shadow</td><td>focus state</td><td>none needed (not motion)</td></tr>
 <tr><td>shell resize</td><td><code>250ms cubic-bezier(0.32, 0.72, 0, 1)</code></td><td>the sidebar plane and its collapse, never during a drag</td><td>none needed (a user gesture)</td></tr>
 <tr><td>fold fade</td><td>static mask, 4rem eased stops</td><td>the cut of a folded message</td><td>none needed (not motion)</td></tr>
 </tbody></table></div>
@@ -593,7 +598,7 @@ footer.doc {
 <div class="scroll"><table><thead><tr><th>state</th><th>thread and presence (<code>STATUS_DOT</code> <code>:13</code>)</th><th>sidebar (<code>SIDEBAR_DOT</code> <code>:44</code>)</th><th>word (<code>:24</code>, <code>:71</code>)</th></tr></thead><tbody>
 <tr><td>working</td><td><code>bg-accent viewer-pulse</code></td><td><code>bg-accent viewer-pulse</code></td><td>Working</td></tr>
 <tr><td>attention</td><td><code>bg-accent</code></td><td><code>bg-accent viewer-fade</code></td><td>Needs you</td></tr>
-<tr><td>quiet</td><td><code>bg-ink-faint</code></td><td><code>bg-ink-muted</code></td><td>Quiet, plus the age from the server's note</td></tr>
+<tr><td>quiet</td><td><code>bg-ink-faint</code></td><td><code>bg-ink-muted</code></td><td>Quiet, plus the age from the server&#39;s note</td></tr>
 <tr><td>waiting</td><td><code>bg-success</code></td><td><code>bg-ink-muted/75</code>, no dot drawn</td><td>Waiting</td></tr>
 <tr><td>idle</td><td><code>bg-ink-faint/50</code></td><td>no dot drawn</td><td>Idle</td></tr>
 <tr><td>error</td><td><code>bg-danger</code></td><td><code>bg-danger</code></td><td>Failed</td></tr>
@@ -602,7 +607,7 @@ footer.doc {
 
 <p>Two differences between the surfaces are deliberate. The sidebar plane is small and every dot must keep the 3:1 non-text minimum against it, which <code>ink-faint</code> misses at 2.74:1 in light and 2.93:1 in the console dark plane, so the sidebar uses <code>ink-muted</code> (<code>npm run test:contrast</code>, <code>scripts/contrast-check.mjs</code>). And the sidebar draws nothing for <code>idle</code> and <code>waiting</code>: the absence of the dot is the state (operator ruling 2026-11-26, XTRM-1058). The row keeps an empty 14px slot so nothing shifts when the state changes, and its <code>aria-label</code> still carries the word (<code>SIDEBAR_DOT_SHOWN</code> <code>:60</code>, <code>src/components/sidebar/SidebarDot.tsx</code>).</p>
 
-<p>The dot's label is <code>Working</code>, <code>Needs you</code>, <code>Quiet 16m</code>, <code>Waiting</code>, <code>Failed</code>, <code>Idle</code> or <code>Unknown</code> (<code>sidebarDotLabel</code>, <code>:85-90</code>). <code>Quiet</code> takes its age from the server's note, so the tooltip answers "for how long" without opening the presence panel.</p>
+<p>The dot&#39;s label is <code>Working</code>, <code>Needs you</code>, <code>Quiet 16m</code>, <code>Waiting</code>, <code>Failed</code>, <code>Idle</code> or <code>Unknown</code> (<code>sidebarDotLabel</code>, <code>:85-90</code>). <code>Quiet</code> takes its age from the server&#39;s note, so the tooltip answers &quot;for how long&quot; without opening the presence panel.</p>
 
 <h2 id="5-layout">5. Layout</h2>
 
@@ -611,7 +616,7 @@ footer.doc {
 <div class="scroll"><table><thead><tr><th>part</th><th>value</th><th>source</th></tr></thead><tbody>
 <tr><td>header</td><td><code>44px</code> (<code>h-11</code>), <code>12px</code> padding, <code>16px</code> from <code>sm</code></td><td><code>src/components/ViewerHeader.tsx:177</code></td></tr>
 <tr><td>sidebar plane</td><td>default <code>264px</code>, limits <code>220</code>–<code>360</code>, persisted as <code>sidebarWidth</code> in <code>xtrm.console.layout.v1</code></td><td><code>src/shell/layout.ts:12-15</code></td></tr>
-<tr><td>resize handle</td><td><code>8px</code> hit area, absolutely positioned on the panel's edge and centred, so content starts at the panel's width</td><td><code>src/shell/resizable.tsx:157-160</code></td></tr>
+<tr><td>resize handle</td><td><code>8px</code> hit area, absolutely positioned on the panel&#39;s edge and centred, so content starts at the panel&#39;s width</td><td><code>src/shell/resizable.tsx:157-160</code></td></tr>
 <tr><td>resize keyboard</td><td>ArrowLeft/Right move <code>16px</code>; Home and End go to the limits; the handle is a focusable <code>separator</code> with <code>aria-valuemin/now/max</code></td><td><code>src/shell/resizable.tsx:21</code>, <code>:110-160</code></td></tr>
 <tr><td>collapse</td><td>the plane animates to <code>0</code> width, focus moves to the reopen button, <code>Ctrl/Cmd+B</code> toggles</td><td><code>src/shell/ConsoleShell.tsx</code>, <code>src/shell/layout.ts:20-93</code></td></tr>
 <tr><td>narrow screen</td><td>below <code>768px</code> the sidebar is an overlay that starts closed, is never persisted, and closes with the same key</td><td><code>src/shell/layout.ts:74-93</code></td></tr>
@@ -636,7 +641,7 @@ footer.doc {
 
 <h3 id="54-narrow-screens">5.4 Narrow screens</h3>
 
-<p>At <code>390px</code>: the sidebar is an overlay, the chat lane is the full column, the composer's mouse hint is hidden (<code>sm:block</code>) while the target, model and effort stay on the under-row, presence rows grow to <code>44px</code>, the operator bubble is capped at <code>80%</code> of the lane, and every table in rendered markdown scrolls inside its own box. The sidebar gate and the rows gate run at <code>1440</code> and <code>390</code> in both themes (<code>scripts/sidebar-gate.mjs</code>, <code>scripts/rows-check.mjs</code>).</p>
+<p>At <code>390px</code>: the sidebar is an overlay, the chat lane is the full column, the composer&#39;s mouse hint is hidden (<code>sm:block</code>) while the target, model and effort stay on the under-row, presence rows grow to <code>44px</code>, the operator bubble is capped at <code>80%</code> of the lane, and every table in rendered markdown scrolls inside its own box. The sidebar gate and the rows gate run at <code>1440</code> and <code>390</code> in both themes (<code>scripts/sidebar-gate.mjs</code>, <code>scripts/rows-check.mjs</code>).</p>
 
 <h2 id="6-components">6. Components</h2>
 
@@ -648,9 +653,9 @@ footer.doc {
 
 <p>States: expanded or collapsed plane; overlay on a narrow screen; selected scope; focused row; hovered row; and a per-agent status dot with the seven states of §4.6, <code>idle</code> and <code>waiting</code> drawing nothing.</p>
 
-<p>Rows: a session or window row is one 28px line — name, chevron, agent count; a window with one pane has no row of its own. A pane row is two lines: the agent name on line 1; the role, the runtime word and the folder-plus-repo on line 2, with the status dot at the right (<code>src/components/sidebar/SessionTree.tsx:88</code>). Line 2 is <code>text-xs</code> in <code>ink-muted</code> and carries no state word (XTRM-1048, XTRM-1057). Every role is bold; Lead and Manager also take the thread view's pill colours and every other role stays in the normal line ink (operator ruling, XTRM-1028; <code>src/components/sidebar/SessionTree.tsx:31</code>). The repository is shown, not the cwd (XTRM-1024 seq13), with a folder glyph before it (XTRM-1024 seq14).</p>
+<p>Rows: a session or window row is one 28px line — name, chevron, agent count; a window with one pane has no row of its own. A pane row is two lines: the agent name on line 1; the role, the runtime word and the folder-plus-repo on line 2, with the status dot at the right (<code>src/components/sidebar/SessionTree.tsx:88</code>). Line 2 is <code>text-xs</code> in <code>ink-muted</code> and carries no state word (XTRM-1048, XTRM-1057). Every role is bold; Lead and Manager also take the thread view&#39;s pill colours and every other role stays in the normal line ink (operator ruling, XTRM-1028; <code>src/components/sidebar/SessionTree.tsx:31</code>). The repository is shown, not the cwd (XTRM-1024 seq13), with a folder glyph before it (XTRM-1024 seq14).</p>
 
-<p>The tree is keyboard operable with roving focus: one <code>treeitem</code> per row, Arrow keys move, and the row's accessible name ends with the dot's state word.</p>
+<p>The tree is keyboard operable with roving focus: one <code>treeitem</code> per row, Arrow keys move, and the row&#39;s accessible name ends with the dot&#39;s state word.</p>
 
 <h3 id="62-shell-frame-switcher-and-header-controls">6.2 Shell frame, switcher and header controls</h3>
 
@@ -662,11 +667,11 @@ footer.doc {
 
 <h3 id="63-the-resize-split">6.3 The resize split</h3>
 
-<p>Purpose: one draggable pane boundary, with the console's geometry.</p>
+<p>Purpose: one draggable pane boundary, with the console&#39;s geometry.</p>
 
 <p><code>ResizableGroup</code> provides the width and the drag state; <code>ResizablePanel</code> writes the size during render; <code>FillPanel</code> takes the rest; <code>ResizeHandle</code> is the <code>8px</code> separator (<code>src/shell/resizable.tsx</code>). States: at rest; hovered (the handle shows its <code>accent</code> line on focus); dragging (no width transition); focused (keyboard operands); collapsed (the handle is hidden and focus moves to the reopen button).</p>
 
-<p>This component replaced <code>motion-panels</code> in XTRM-1067: the library cost a <code>151 kB</code> chunk, <code>51 kB</code> gzip, for a width, a clamp, a drag, two arrow keys and a collapse. The console's values are unchanged (<code>264</code> / <code>220</code>–<code>360</code> / <code>250ms</code> / <code>cubic-bezier(0.32, 0.72, 0, 1)</code>) and the sidebar gate checks the drag, both clamp edges, persistence, the keyboard path, the collapse and the reopen.</p>
+<p>This component replaced <code>motion-panels</code> in XTRM-1067: the library cost a <code>151 kB</code> chunk, <code>51 kB</code> gzip, for a width, a clamp, a drag, two arrow keys and a collapse. The console&#39;s values are unchanged (<code>264</code> / <code>220</code>–<code>360</code> / <code>250ms</code> / <code>cubic-bezier(0.32, 0.72, 0, 1)</code>) and the sidebar gate checks the drag, both clamp edges, persistence, the keyboard path, the collapse and the reopen.</p>
 
 <h3 id="64-thread-rows-the-operator-message">6.4 Thread rows: the operator message</h3>
 
@@ -676,7 +681,7 @@ footer.doc {
 
 <div class="scroll"><table><thead><tr><th>state</th><th>what shows</th><th>source</th></tr></thead><tbody>
 <tr><td>at rest</td><td>bubble, and one meta line: time <code>·</code> <code>to &lt;agent&gt;</code> <code>·</code> delivery mark, all visible</td><td><code>src/components/ChannelView.tsx:167-190</code></td></tr>
-<tr><td>hovered</td><td>the Copy action reveals at the row's right; the meta line does not move</td><td><code>.xtrm-meta</code>, <code>src/styles.css:674-689</code></td></tr>
+<tr><td>hovered</td><td>the Copy action reveals at the row&#39;s right; the meta line does not move</td><td><code>.xtrm-meta</code>, <code>src/styles.css:674-689</code></td></tr>
 <tr><td>sending</td><td>spinner in place of the mark, <code>animate-spin</code> with <code>motion-reduce:animate-none</code></td><td><code>src/components/ChannelView.tsx:56-70</code></td></tr>
 <tr><td>seen</td><td>double check in <code>ink-muted</code></td><td>same</td></tr>
 <tr><td>replied</td><td>double check in <code>accent-ink</code></td><td>same</td></tr>
@@ -694,20 +699,20 @@ footer.doc {
 <div class="scroll"><table><thead><tr><th>mark</th><th>icon</th><th>word</th><th>colour</th><th>when</th></tr></thead><tbody>
 <tr><td>Sending</td><td><code>loader</code> (spinning)</td><td>Sending</td><td><code>ink-muted</code></td><td>the send request is in flight; an optimistic row</td></tr>
 <tr><td>Sent</td><td><code>check</code></td><td>Sent</td><td><code>ink-muted</code></td><td><code>send-keys</code> returned; the transcript has no echo yet</td></tr>
-<tr><td>Seen</td><td><code>checkCheck</code></td><td>Seen</td><td><code>ink-muted</code></td><td>the prompt is in the agent's transcript</td></tr>
+<tr><td>Seen</td><td><code>checkCheck</code></td><td>Seen</td><td><code>ink-muted</code></td><td>the prompt is in the agent&#39;s transcript</td></tr>
 <tr><td>Replied</td><td><code>checkCheck</code></td><td>Replied</td><td><code>accent-ink</code></td><td>the same agent has since settled a turn</td></tr>
 <tr><td>Not sent</td><td><code>circleX</code></td><td>Not sent</td><td><code>danger</code></td><td>the keys did not reach the pane; the reason is shown as text</td></tr>
 </tbody></table></div>
 
-<p>Each mark is <code>role="img"</code> with the word as its accessible name and a sentence as its tooltip: for example "Sent: the keys reached the pane. The prompt has not appeared in the transcript yet." (<code>src/components/ChannelView.tsx:32-38</code>). A failure is the one case that also carries text, because the reason is what the operator needs to read.</p>
+<p>Each mark is <code>role=&quot;img&quot;</code> with the word as its accessible name and a sentence as its tooltip: for example &quot;Sent: the keys reached the pane. The prompt has not appeared in the transcript yet.&quot; (<code>src/components/ChannelView.tsx:32-38</code>). A failure is the one case that also carries text, because the reason is what the operator needs to read.</p>
 
 <h3 id="66-the-agent-turn-and-the-tool-fold">6.6 The agent turn and the tool fold</h3>
 
-<p>Purpose: one scannable line per event, and the machine's own work collapsed behind it.</p>
+<p>Purpose: one scannable line per event, and the machine&#39;s own work collapsed behind it.</p>
 
 <p>States: running (the fold row reads <code>Working</code> with the <code>viewer-fade</code> animation); settled (the fold row reads <code>Worked for 1m 12s</code>, or <code>N steps</code> when the turn has no usable duration, with a detail suffix); failed (<code>&lt;n&gt; failed</code> in <code>danger</code> with a dot); expanded (the activity rows); collapsed. <code>ActivityRow</code> is one tool call, <code>GroupRow</code> groups repeats as <code>label ×N</code>, and all three line kinds are <code>24px</code> (<code>src/lib/fold.ts:14-70</code>, <code>src/components/ActivityDisclosure.tsx:74</code>, <code>:161</code>, <code>:235</code>).</p>
 
-<p>A settled turn's detail opens inside the thread as <code>--x-inset</code> panels; the thread itself never navigates.</p>
+<p>A settled turn&#39;s detail opens inside the thread as <code>--x-inset</code> panels; the thread itself never navigates.</p>
 
 <h3 id="67-intercom-cards">6.7 Intercom cards</h3>
 
@@ -715,7 +720,7 @@ footer.doc {
 
 <p>States: collapsed to three rendered lines (<code>3 * 25.6px</code>) with the eased mask and <code>Show more</code>; expanded with <code>Show less</code>; failed (danger mark, the reason as text); reply requested (an accent dot and <code>reply requested</code>); and the ordinary accepted state.</p>
 
-<p>Layout: a 24px monogram, then <code>from → to</code>, a delivery mark and the time on the same line, then the body, then the optional footer (<code>src/components/IntercomCard.tsx:84-140</code>). The card shows <code>Sent</code> or <code>Received</code> as the mark's label.</p>
+<p>Layout: a 24px monogram, then <code>from → to</code>, a delivery mark and the time on the same line, then the body, then the optional footer (<code>src/components/IntercomCard.tsx:84-140</code>). The card shows <code>Sent</code> or <code>Received</code> as the mark&#39;s label.</p>
 
 <p>The message id and the runtime are transport detail, not reading content, so the footer no longer carries them (operator ruling 2026-11-26; <code>src/components/IntercomCard.tsx:82</code>). The peer is a resolved session name, never a socket path (<code>server/peers.ts</code>).</p>
 
@@ -725,17 +730,21 @@ footer.doc {
 
 <p>Purpose: what is running right now, above the composer, without a spinner in the thread (<code>docs/design/working-presence.md</code>).</p>
 
-<p>The collapsed line states <code>Working · N</code> with the agent monograms and their status dots (<code>src/components/presence/PresenceLine.tsx:254</code>), and expands into a listbox of agent rows (<code>:251</code>); the panel is the expanded form. States: empty (the line hides), one agent, several agents, attention (the dot flashes), quiet (static muted), narrow screen (44px rows). The line's text is derived by <code>presenceLine</code> and announced politely through <code>presenceAnnouncement</code> with <code>aria-live="polite"</code> (<code>src/components/presence/PresenceLine.tsx:407</code>). Monogram pills wear a 2px <code>ring-canvas</code>, so they read as cut-outs against any palette's canvas (<code>docs/design/palette-console.md</code>).</p>
+<p>The collapsed line states <code>Working · N</code> with the agent monograms and their status dots (<code>src/components/presence/PresenceLine.tsx:254</code>), and expands into a listbox of agent rows (<code>:251</code>); the panel is the expanded form. States: empty (the line hides), one agent, several agents, attention (the dot flashes), quiet (static muted), narrow screen (44px rows). The line&#39;s text is derived by <code>presenceLine</code> and announced politely through <code>presenceAnnouncement</code> with <code>aria-live=&quot;polite&quot;</code> (<code>src/components/presence/PresenceLine.tsx:407</code>). Monogram pills wear a 2px <code>ring-canvas</code>, so they read as cut-outs against any palette&#39;s canvas (<code>docs/design/palette-console.md</code>).</p>
 
 <h3 id="69-composer-target-row-and-menus">6.9 Composer, target row and menus</h3>
 
 <p>Purpose: send one operator message to one agent, and answer a specific agent without retyping.</p>
 
-<p>Geometry: a 52px one-line box that grows to <code>max-h-52</code> (<code>208px</code>), no visible border, a fill one step above the canvas, an inset focus ring, <code>15px/24px</code> prompt, a 32px send button overlaying the box's bottom right, and an empty attach slot on the left for a control that does not exist yet (<code>src/components/Composer.tsx:237-262</code>). The box carries <code>--x-composer-fill</code>, <code>--x-composer-edge</code> and <code>--x-composer-edge-focus</code> (<code>.xtrm-composer-box</code>, <code>src/styles.css:722-736</code>), so a palette decides the step and the focus signal without touching the component.</p>
+<p>Geometry: a 56px one-line box that grows to <code>max-h-52</code> (<code>208px</code>), no border and no ring in any palette or state, a fill one step above the canvas, a slight drop shadow, <code>16px/24px</code> prompt, a 32px send button overlaying the box&#39;s bottom right, and an empty attach slot on the left for a control that does not exist yet (<code>src/components/Composer.tsx:237-262</code>). The box carries <code>--x-composer-fill</code>, <code>--x-composer-focus</code>, <code>--x-composer-shadow</code> and <code>--x-composer-shadow-focus</code> (<code>.xtrm-composer-box</code>, <code>src/styles.css:749-765</code>), so a palette decides the step, the elevation and the focus signal without touching the component.</p>
 
-<p>The target row sits under the box, right-aligned, 12px apart: the target (status dot, name, chevron), its model, and its bare effort — for example <code>lead  claude-opus-4-8  high</code> (<code>:264-341</code>). The values come from the agent's <code>model</code> and <code>thinkingLevel</code> through <code>composerMeta</code> (<code>src/lib/composer-meta.ts</code>); a missing value is omitted, never invented. The row is 14px against the 15px prompt, muted, with no chips and no borders.</p>
+<p>The box centres the painted band, not the line box. Inside a 24px line box a font&#39;s descender ink is shallower than its cap height, so an evenly padded line draws its ascenders and descenders slightly low in the box; the operator sees that as text sitting under the middle. The textarea therefore carries <code>3.25px</code> above the line and <code>4.75px</code> below, and the measurement that binds is the rendered band: at a 2x device ratio the placeholder and a typed line both paint across <code>20.5–35px</code> of the 56px box, the send glyph across the same band, and every gap is within 0.25px of centre (<code>npm run test:composer</code> asserts this on pixels, not on rects).</p>
 
-<p>The agent menu opens upward from the target it belongs to, anchored to the right edge of the target group so it meets the send button's right edge, sizing to its rows between <code>14rem</code> and <code>20rem</code> and never wider than the screen (<code>:270-300</code>). The status word sits on each row's right.</p>
+<p>The target row sits under the box, right-aligned, 12px apart: the target (status dot, name, chevron), its model, and its bare effort — for example <code>lead  claude-opus-4-8  high</code> (<code>:264-341</code>). The values come from the agent&#39;s <code>model</code> and <code>thinkingLevel</code> through <code>composerMeta</code> (<code>src/lib/composer-meta.ts</code>); a missing value is omitted, never invented. The row is 14px against the 16px prompt, muted, with no chips and no borders.</p>
+
+<p>Beside the model name the composer draws the agent&#39;s context usage (XTRM-1087): a 14px ring whose arc is the fraction of the model&#39;s window the transcript fills, with the track at 22% of the tone colour. The tone steps from <code>ink-muted</code> under 75% to <code>ink</code> from 75% and <code>danger</code> from 90%, and the accessible name and tooltip carry the number, for example <code>46% of 200k tokens</code> (<code>src/components/ContextRing.tsx</code>). The fraction is the newest assistant message&#39;s input plus its cached prefix, read from either runtime&#39;s transcript, and the window comes from a model table in <code>src/lib/context-usage.ts</code>; a model the table does not know, or an agent with no usage, draws no ring rather than a guess.</p>
+
+<p>The agent menu opens upward from the target it belongs to, anchored to the right edge of the target group so it meets the send button&#39;s right edge, sizing to its rows between <code>14rem</code> and <code>20rem</code> and never wider than the screen (<code>:270-300</code>). The status word sits on each row&#39;s right.</p>
 
 <p>Other states: empty with a placeholder and the mouse hint (<code>@ to mention · Shift+Enter for a new line</code>, <code>text-2xs</code>, hidden below <code>sm</code>); draft; addressed; sending (the send glyph becomes a spinner); error (<code>text-2xs</code> in <code>danger</code> under the box); gone (the target pane left — the composer disables and the reply bar drops, <code>src/lib/reply.ts:14-27</code>).</p>
 
@@ -743,11 +752,11 @@ footer.doc {
 
 <h3 id="610-scroll-pill-new-since-divider-and-the-follow-policy">6.10 Scroll pill, new-since divider and the follow policy</h3>
 
-<p>Purpose: keep a reader's place, and show what arrived while they were away.</p>
+<p>Purpose: keep a reader&#39;s place, and show what arrived while they were away.</p>
 
-<p>The pill appears only when the reader is not at the end; it reads <code>Scroll to end</code>, adds <code>· N new</code>, and never steals the composer's focus (<code>src/components/ui/message-scroller.tsx:640-660</code>). The follow policy is one function (<code>src/lib/stick.ts:8</code>): smooth only while at the end and content is arriving, never for a reader who scrolled up, and the reader's own input ends it. A send is the one exception: it pins the viewport to the end even when the reader had scrolled up, and the intent survives the optimistic-to-echo swap and the reply; a wheel, touch, pointer or key gesture clears it so a deliberate scroll-up wins (XTRM-1064).</p>
+<p>The pill appears only when the reader is not at the end; it reads <code>Scroll to end</code>, adds <code>· N new</code>, and never steals the composer&#39;s focus (<code>src/components/ui/message-scroller.tsx:640-660</code>). The follow policy is one function (<code>src/lib/stick.ts:8</code>): smooth only while at the end and content is arriving, never for a reader who scrolled up, and the reader&#39;s own input ends it. A send is the one exception: it pins the viewport to the end even when the reader had scrolled up, and the intent survives the optimistic-to-echo swap and the reply; a wheel, touch, pointer or key gesture clears it so a deliberate scroll-up wins (XTRM-1064).</p>
 
-<p>The new-since divider is a single line, <code>New · N</code>, placed at the first item after the scope's last-read time. The baseline is frozen for the visit, so the divider does not walk away while the reader reads (<code>src/components/ChannelView.tsx</code>, <code>src/lib/readstate.ts:69-103</code>). Operator rows never count as unseen (<code>unseenTimelineItems</code>, <code>:92</code>).</p>
+<p>The new-since divider is a single line, <code>New · N</code>, placed at the first item after the scope&#39;s last-read time. The baseline is frozen for the visit, so the divider does not walk away while the reader reads (<code>src/components/ChannelView.tsx</code>, <code>src/lib/readstate.ts:69-103</code>). Operator rows never count as unseen (<code>unseenTimelineItems</code>, <code>:92</code>).</p>
 
 <h3 id="611-all-events-view">6.11 All-events view</h3>
 
@@ -761,17 +770,17 @@ footer.doc {
 
 <p><strong>Focus.</strong> One global <code>:focus-visible</code> rule draws a 2px accent ring with a 1px offset (<code>src/styles.css:333-336</code>). No component removes an outline without replacing it: the resize handle replaces it with an accent line on its own edge (<code>src/shell/resizable.tsx:160</code>), the composer with its inset ring. Collapsing the sidebar moves focus to the reopen button, so focus is never lost.</p>
 
-<p><strong>Labels.</strong> Every dot is <code>role="img"</code> with a state word, and carries a <code>title</code> (<code>src/components/sidebar/SidebarDot.tsx</code>, <code>src/components/presence/PresenceLine.tsx</code>). The sidebar row's accessible name ends with that word, so a screen reader hears <code>lead, Claude, pi-viewer, Quiet 16m</code> even though the row shows no word. Delivery marks carry their word and a sentence. Status is never conveyed by colour alone: the dot differs in shape, animation and label.</p>
+<p><strong>Labels.</strong> Every dot is <code>role=&quot;img&quot;</code> with a state word, and carries a <code>title</code> (<code>src/components/sidebar/SidebarDot.tsx</code>, <code>src/components/presence/PresenceLine.tsx</code>). The sidebar row&#39;s accessible name ends with that word, so a screen reader hears <code>lead, Claude, pi-viewer, Quiet 16m</code> even though the row shows no word. Delivery marks carry their word and a sentence. Status is never conveyed by colour alone: the dot differs in shape, animation and label.</p>
 
-<p><strong>Live regions.</strong> The presence line announces changes politely (<code>aria-live="polite"</code>) and never interrupts typing. Nothing else in the viewer is a live region: the thread changes under the reader without announcement, which is correct for a transcript and wrong for an alert.</p>
+<p><strong>Live regions.</strong> The presence line announces changes politely (<code>aria-live=&quot;polite&quot;</code>) and never interrupts typing. Nothing else in the viewer is a live region: the thread changes under the reader without announcement, which is correct for a transcript and wrong for an alert.</p>
 
-<p><strong>Contrast.</strong> Text meets 4.5:1 and every non-text mark meets 3:1 against the plane it sits on. Two gates hold this: <code>npm run test:contrast</code> measures the status dots in five palettes and both themes, and <code>npm run test:palette</code> measures the palette's text roles per palette and theme. Both fail the run rather than warning.</p>
+<p><strong>Contrast.</strong> Text meets 4.5:1 and every non-text mark meets 3:1 against the plane it sits on. Two gates hold this: <code>npm run test:contrast</code> measures the status dots in five palettes and both themes, and <code>npm run test:palette</code> measures the palette&#39;s text roles per palette and theme. Both fail the run rather than warning.</p>
 
 <p><strong>Reduced motion.</strong> Every animation has a branch (§4.5). Under <code>prefers-reduced-motion: reduce</code> the dots stay at full opacity, the shimmer and fades stop, the metadata transition is removed, and colour alone still distinguishes every state.</p>
 
-<p><strong>Pointer.</strong> A coarse pointer reveals row metadata at rest (<code>@media (pointer: coarse)</code>, <code>src/styles.css:685-689</code>), because hover does not exist there. The resize handle is <code>8px</code> wide with a <code>16px</code> keyboard step; the composer's send button is <code>32px</code>; no transcript row is a pointer target.</p>
+<p><strong>Pointer.</strong> A coarse pointer reveals row metadata at rest (<code>@media (pointer: coarse)</code>, <code>src/styles.css:685-689</code>), because hover does not exist there. The resize handle is <code>8px</code> wide with a <code>16px</code> keyboard step; the composer&#39;s send button is <code>32px</code>; no transcript row is a pointer target.</p>
 
-<p><strong>Motion and layout stability.</strong> No row changes height on entering the viewport — <code>content-visibility</code> is deliberately not used (<code>src/styles.css:579-581</code>). The scroller owns anchoring: rows are indexed once per mutation, offsets are cached, and a reader's position is restored by index rather than by pixel.</p>
+<p><strong>Motion and layout stability.</strong> No row changes height on entering the viewport — <code>content-visibility</code> is deliberately not used (<code>src/styles.css:579-581</code>). The scroller owns anchoring: rows are indexed once per mutation, offsets are cached, and a reader&#39;s position is restored by index rather than by pixel.</p>
 
 <h2 id="8-performance">8. Performance</h2>
 
@@ -800,7 +809,7 @@ footer.doc {
 <tr><td>preview (<code>npm run build &amp;&amp; npm run preview</code>)</td><td>10</td><td>669,909</td><td>2,060 ms</td></tr>
 </tbody></table></div>
 
-<p>The preview row's remaining bytes are dominated by the thread JSON: two <code>/api/thread</code> calls, <code>422 kB</code> in that run (<code>README.md:44</code>). That is server territory, not bundle weight. <code>npm run preview</code> is the whole production serve, because the <code>/api</code> middleware comes from the Vite plugin (<code>README.md:24-25</code>).</p>
+<p>The preview row&#39;s remaining bytes are dominated by the thread JSON: two <code>/api/thread</code> calls, <code>422 kB</code> in that run (<code>README.md:44</code>). That is server territory, not bundle weight. <code>npm run preview</code> is the whole production serve, because the <code>/api</code> middleware comes from the Vite plugin (<code>README.md:24-25</code>).</p>
 
 <h3 id="83-the-request-path-xtrm-1066">8.3 The request path (XTRM-1066)</h3>
 
@@ -820,9 +829,9 @@ footer.doc {
 
 <h3 id="84-render-cost-xtrm-1065">8.4 Render cost (XTRM-1065)</h3>
 
-<p>The thread no longer remounts on a scope change: the provider is not keyed by scope, and a thread-key effect restores the new thread's position. Rows are memoized, the timeline is built once per payload, and the presence line derives from the same timeline instead of building a second one. Measured on a re-baselined worktree: idle <code>TurnView</code> renders under live writes fell 75% (<code>1128</code> → <code>282</code> in a 4.5 s window), and 93% in a quiet window; a heavy scope switch stayed fetch-bound at <code>50–100 ms</code> with 106 row renders, i.e. no regression. The first measurement in that issue was discarded because its baseline had no rendered turns, and the corrected numbers replaced it (XTRM-1065 journal, seq 3).</p>
+<p>The thread no longer remounts on a scope change: the provider is not keyed by scope, and a thread-key effect restores the new thread&#39;s position. Rows are memoized, the timeline is built once per payload, and the presence line derives from the same timeline instead of building a second one. Measured on a re-baselined worktree: idle <code>TurnView</code> renders under live writes fell 75% (<code>1128</code> → <code>282</code> in a 4.5 s window), and 93% in a quiet window; a heavy scope switch stayed fetch-bound at <code>50–100 ms</code> with 106 row renders, i.e. no regression. The first measurement in that issue was discarded because its baseline had no rendered turns, and the corrected numbers replaced it (XTRM-1065 journal, seq 3).</p>
 
-<p>The operator bubble's fold is decided from a text estimate rather than a <code>getComputedStyle</code> + <code>scrollHeight</code> pair per mount, which removed one forced layout per operator message (<code>src/components/ChannelView.tsx:145-148</code>).</p>
+<p>The operator bubble&#39;s fold is decided from a text estimate rather than a <code>getComputedStyle</code> + <code>scrollHeight</code> pair per mount, which removed one forced layout per operator message (<code>src/components/ChannelView.tsx:145-148</code>).</p>
 
 <h3 id="85-gates">8.5 Gates</h3>
 
@@ -881,18 +890,18 @@ footer.doc {
 
 <h2 id="10-decisions-log">10. Decisions log</h2>
 
-<p>Operator rulings that shape the app, with the durable record. "seq" is a journal entry of that issue.</p>
+<p>Operator rulings that shape the app, with the durable record. &quot;seq&quot; is a journal entry of that issue.</p>
 
 <div class="scroll"><table><thead><tr><th>date</th><th>ruling</th><th>record</th></tr></thead><tbody>
-<tr><td>2026-11-18</td><td>Restraint: no new colour, no new tint; the console's six principles govern every component</td><td>console-ui-system.md §2.3, §2.1</td></tr>
+<tr><td>2026-11-18</td><td>Restraint: no new colour, no new tint; the console&#39;s six principles govern every component</td><td>console-ui-system.md §2.3, §2.1</td></tr>
 <tr><td>2026-11-23</td><td>The XTRM-853 design page is superseded by console-ui-system.md</td><td>console-ui-system.md §16</td></tr>
 <tr><td>2026-11-25</td><td>Working presence: build option B, the agent list above the composer</td><td>XTRM-1024 seq3</td></tr>
 <tr><td>2026-11-25</td><td>A read-only <code>tmux capture-pane</code> may detect permission prompts; nothing may send keys for them</td><td>XTRM-1024 seq3</td></tr>
 <tr><td>2026-11-25</td><td>Interrupt and approve/deny are shown, never clicked</td><td>XTRM-1024 seq3</td></tr>
-<tr><td>2026-11-25</td><td>Restyle = the t3code audit's top ten plus delivery state, new-since divider, quiet hint, failure roll-up; the contrast fix is ink-faint → ink-muted for text</td><td>XTRM-1024 seq3</td></tr>
-<tr><td>2026-11-25</td><td>The user bubble and the composer radius is 10px, not t3code's 16px</td><td>XTRM-1024 seq2</td></tr>
+<tr><td>2026-11-25</td><td>Restyle = the t3code audit&#39;s top ten plus delivery state, new-since divider, quiet hint, failure roll-up; the contrast fix is ink-faint → ink-muted for text</td><td>XTRM-1024 seq3</td></tr>
+<tr><td>2026-11-25</td><td>The user bubble and the composer radius is 10px, not t3code&#39;s 16px</td><td>XTRM-1024 seq2</td></tr>
 <tr><td>2026-11-25</td><td>24px tool rows are a documented transcript exception</td><td>XTRM-1024 seq2</td></tr>
-<tr><td>2026-11-25</td><td>The viewer sits in the console shell, built from console primitives, with the console's values</td><td>XTRM-1044</td></tr>
+<tr><td>2026-11-25</td><td>The viewer sits in the console shell, built from console primitives, with the console&#39;s values</td><td>XTRM-1044</td></tr>
 <tr><td>2026-11-25</td><td>Palettes stay as themes and switch at the top; the operator decides which stays</td><td>XTRM-1024 seq13</td></tr>
 <tr><td>2026-11-25</td><td>Presence pill border matches the background; message action rows never wrap</td><td>XTRM-1024 seq13</td></tr>
 <tr><td>2026-11-25</td><td>All roles remain; role text is bold for every role</td><td>XTRM-1024 seq13</td></tr>
@@ -902,15 +911,18 @@ footer.doc {
 <tr><td>2026-11-25</td><td>One explicit state model replaces incremental heuristics, proven by a real-transcript replay harness</td><td>XTRM-1024 seq12; XTRM-1043</td></tr>
 <tr><td>2026-11-25</td><td>Reply beside Copy aims the composer at that agent; no quoted text</td><td>XTRM-1045</td></tr>
 <tr><td>2026-11-25</td><td>Chat width: Comfortable 46rem, Wide 72rem, Full, custom from 36rem; one lane variable</td><td>XTRM-1042</td></tr>
-<tr><td>2026-11-25</td><td>The pane row's line 2 carries no state word; the dot carries the state, as in the thread</td><td>XTRM-1048</td></tr>
+<tr><td>2026-11-25</td><td>The pane row&#39;s line 2 carries no state word; the dot carries the state, as in the thread</td><td>XTRM-1048</td></tr>
 <tr><td>2026-11-26</td><td>All five palettes stay — Threads, Threads soft text, Console, Console soft text, Desktop; the default remains Threads</td><td>XTRM-1024 seq17</td></tr>
 <tr><td>2026-11-26</td><td>Desktop palette (dimmer reading text) and soft-text versions of Threads and Console; muted text rises to #a1a1a1 for 4.5:1</td><td>XTRM-1051, XTRM-1053</td></tr>
-<tr><td>2026-11-26</td><td>Composer: one-line 52px box, no border, target row with model and effort under it on the right</td><td>XTRM-1054, XTRM-1056</td></tr>
+<tr><td>2026-11-26</td><td>Composer: one-line 56px box, no border, target row with model and effort under it on the right</td><td>XTRM-1054, XTRM-1056, XTRM-1067</td></tr>
+<tr><td>2026-11-26</td><td>Composer: no border and no ring in any palette or state; a drop shadow, and a context-usage ring beside the model</td><td>XTRM-1087</td></tr>
+<tr><td>2026-11-26</td><td>The composer centres the painted ink band, not the line box: 0.75px more padding below than above</td><td>XTRM-1087</td></tr>
+<tr><td>2026-11-26</td><td>Stopping is allowed: Escape to the agent&#39;s own pane, from a Stop control while it works and from Esc in an empty box; approve and deny stay show-only</td><td>XTRM-1088</td></tr>
 <tr><td>2026-11-26</td><td>Folds sit inside the bubble or card with one wording; the fade masks the text itself</td><td>XTRM-1055</td></tr>
 <tr><td>2026-11-26</td><td>Reviewer roles run as specialists</td><td>XTRM-1024 seq14</td></tr>
 <tr><td>2026-11-26</td><td>Sidebar line 2 is text-xs in ink-muted, matching the line above</td><td>XTRM-1057</td></tr>
 <tr><td>2026-11-26</td><td>An idle or waiting agent draws no sidebar dot; the absence is the state</td><td>XTRM-1058</td></tr>
-<tr><td>2026-11-26</td><td>The operator's newest message carries a delivery mark, not a word; time, recipient and mark read as one line at rest</td><td>XTRM-1047</td></tr>
+<tr><td>2026-11-26</td><td>The operator&#39;s newest message carries a delivery mark, not a word; time, recipient and mark read as one line at rest</td><td>XTRM-1047</td></tr>
 <tr><td>2026-11-26</td><td>A long message folds inside its bubble or card, with the eased mask and the toggle inside it</td><td>XTRM-1055, XTRM-1047</td></tr>
 <tr><td>2026-11-26</td><td>The intercom card drops the message id and the runtime; they are transport detail</td><td>XTRM-1047</td></tr>
 <tr><td>2026-11-26</td><td>The agent menu opens upward from the target row, right-aligned to the send button</td><td>XTRM-1054</td></tr>
@@ -931,7 +943,7 @@ footer.doc {
 <li><strong>The README still describes older geometry.</strong> <code>README.md</code> gives the sidebar indent step as <code>0.75rem</code></li>
 </ol>
 
-<p>   while <code>src/components/sidebar/geometry.ts:11</code> has <code>INDENT_REM = 0.5</code>, and its checks list predates    <code>test:composer</code>, <code>test:scope</code> and <code>measure:load</code>. The README needs its revision; it is outside this    issue's scope.</p>
+<p>   while <code>src/components/sidebar/geometry.ts:11</code> has <code>INDENT_REM = 0.5</code>, and its checks list predates    <code>test:composer</code>, <code>test:scope</code> and <code>measure:load</code>. The README needs its revision; it is outside this    issue&#39;s scope.</p>
 
 <ol>
 <li><strong>The presence panel has no shortcut.</strong> No global key opens it; the proposal is none in v1</li>
@@ -946,10 +958,10 @@ footer.doc {
 <p>   way and let the sidebar show the rest (<code>docs/design/working-presence.md</code>).</p>
 
 <ol>
-<li><strong>Interrupt and approve.</strong> Rows for an interrupt and a pending approval are designed but not built,</li>
+<li><strong>Interrupt and approve.</strong> Approval is designed but not built, because nothing may change agent</li>
 </ol>
 
-<p>   because nothing may change agent state (XTRM-1024 seq3). Building them needs a new ruling.</p>
+<p>   state (XTRM-1024 seq3). The interrupt half was ruled on 2026-11-26: stopping by Escape is allowed,    and the composer sends it while the target works (XTRM-1088).</p>
 
 <ol>
 <li><strong>Inferred Desktop tokens.</strong> Desktop inherits <code>border-muted</code>, <code>border-subtle</code>, <code>border-strong</code>,</li>
@@ -961,7 +973,7 @@ footer.doc {
 <li><strong>Discovery runs every 2 s, not 10 s.</strong> The contract asked for at least 10 s; the snapshot is refreshed</li>
 </ol>
 
-<p>   every 2 s because the thread poll reads agents' <code>modifiedAt</code> and <code>eventCount</code> from it, and a 10 s    snapshot would delay new events by up to 10 s. The constant is <code>DISCOVERY_INTERVAL_MS</code> in    <code>server/api.ts</code> (XTRM-1066 journal, deviation).</p>
+<p>   every 2 s because the thread poll reads agents&#39; <code>modifiedAt</code> and <code>eventCount</code> from it, and a 10 s    snapshot would delay new events by up to 10 s. The constant is <code>DISCOVERY_INTERVAL_MS</code> in    <code>server/api.ts</code> (XTRM-1066 journal, deviation).</p>
 
 <ol>
 <li><strong>The idle thread poll still repeats the agent list.</strong> <code>ThreadPayload.agents</code> is sent on every poll</li>
@@ -970,7 +982,7 @@ footer.doc {
 <p>   (about 2.1 kB idle, more with 13 agents). A delta or a separate source would shrink it (XTRM-1066    journal, follow-up).</p>
 
 <ol>
-<li><strong>The composer's attach slot is empty.</strong> <code>[data-composer-attach-slot]</code> reserves 32px for a control the</li>
+<li><strong>The composer&#39;s attach slot is empty.</strong> <code>[data-composer-attach-slot]</code> reserves 32px for a control the</li>
 </ol>
 
 <p>   viewer does not have; it is a placeholder for a future attachment affordance (XTRM-1056).</p>
@@ -979,7 +991,7 @@ footer.doc {
 <li><strong>A second resizable panel would need its own offsets.</strong> The resize handle is positioned from the</li>
 </ol>
 
-<p>    panel's width, which is correct for the shell's single split; a second split would need per-panel     offsets (XTRM-1067).</p>
+<p>    panel&#39;s width, which is correct for the shell&#39;s single split; a second split would need per-panel     offsets (XTRM-1067).</p>
 
 <h2 id="12-glossary">12. Glossary</h2>
 
@@ -988,20 +1000,20 @@ footer.doc {
 <tr><td>channel</td><td>the thread view of one scope: operator messages, intercom cards and agent turns in order</td></tr>
 <tr><td>chunk</td><td>one JavaScript file the build emits; a route or view can be a lazy chunk</td></tr>
 <tr><td>delivery</td><td>what the operator can know about a sent prompt: queued, typed, seen, answered, failed</td></tr>
-<tr><td>density</td><td>one of the console's three row spacings; the viewer's sidebar uses <code>sidebar</code></td></tr>
-<tr><td>effect</td><td>the server's classification of one transcript record: open, step, reply, abort, fail, compact, none</td></tr>
-<tr><td>fold</td><td>the collapsed form of a long message, a card or a turn's activity, with a toggle inside the box</td></tr>
+<tr><td>density</td><td>one of the console&#39;s three row spacings; the viewer&#39;s sidebar uses <code>sidebar</code></td></tr>
+<tr><td>effect</td><td>the server&#39;s classification of one transcript record: open, step, reply, abort, fail, compact, none</td></tr>
+<tr><td>fold</td><td>the collapsed form of a long message, a card or a turn&#39;s activity, with a toggle inside the box</td></tr>
 <tr><td>frame</td><td>an encoded thread response, cached server-side per query, scope, cursor and revision</td></tr>
 <tr><td>lane</td><td>the aligned reading column that the thread, composer and presence line share</td></tr>
 <tr><td>monogram</td><td>the two-letter agent badge in the presence line and on an intercom card</td></tr>
 <tr><td>palette</td><td>a set of region assignments and plane values: Threads, Console, Desktop, each with a soft-text variant</td></tr>
 <tr><td>presence</td><td>the live list of agent turns and their states, shown above the composer</td></tr>
 <tr><td>region</td><td>a part of the page that wears a plane: canvas, sidebar, surface, raised, control, inset, code</td></tr>
-<tr><td>revision</td><td>a server tag for the current shape of a scope's event space; a change means reload the window</td></tr>
+<tr><td>revision</td><td>a server tag for the current shape of a scope&#39;s event space; a change means reload the window</td></tr>
 <tr><td>scope</td><td>what the reader is looking at: a session, a window, or one pane, from the URL</td></tr>
-<tr><td>settle</td><td>the moment a turn's final reply arrives; the timeline places the turn there</td></tr>
-<tr><td>soft text</td><td>a text-only palette layer (Desktop's text colours) applied over a base palette</td></tr>
-<tr><td>status dot</td><td>the one mark that carries an agent's state, with a label but no visible word in the sidebar</td></tr>
+<tr><td>settle</td><td>the moment a turn&#39;s final reply arrives; the timeline places the turn there</td></tr>
+<tr><td>soft text</td><td>a text-only palette layer (Desktop&#39;s text colours) applied over a base palette</td></tr>
+<tr><td>status dot</td><td>the one mark that carries an agent&#39;s state, with a label but no visible word in the sidebar</td></tr>
 <tr><td>strip</td><td>the persistent control strip at the foot of the console sidebar</td></tr>
 <tr><td>turn</td><td>one agent response cycle: opened by a record, moved by steps, settled, aborted or failed</td></tr>
 </tbody></table></div>
