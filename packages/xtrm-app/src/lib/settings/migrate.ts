@@ -119,14 +119,18 @@ export function readDeviceSettings(app: SettingsApp, stores: { local?: Reader | 
 
 /**
  * Write a device patch into the app's new document. Only device-scoped, valid keys are written; host and
- * project keys belong to the host document. Returns the stored device layer, or `null` when storage refused.
+ * project keys belong to the host document. Legacy values are not copied: a key moves into the document
+ * when its own owner first writes it, so a reader still on its legacy key never meets a stale copy.
+ * Returns the stored document, or `null` when storage refused.
  */
 export function writeDeviceSettings(
   app: SettingsApp,
-  stores: { local: Pick<Storage, "getItem" | "setItem">; session?: Reader | null },
+  stores: { local: Pick<Storage, "getItem" | "setItem"> },
   patch: Partial<AppSettings>,
 ): Partial<AppSettings> | null {
-  const next = { ...readDeviceSettings(app, stores), ...deviceOnly(parsePartialSettings(patch)) };
+  const raw = read(stores.local, DEVICE_SETTINGS_KEY[app]);
+  const doc = deviceOnly(parsePartialSettings(raw === null ? undefined : json(raw)));
+  const next = { ...doc, ...deviceOnly(parsePartialSettings(patch)) };
   try {
     stores.local.setItem(DEVICE_SETTINGS_KEY[app], JSON.stringify(next));
     return next;

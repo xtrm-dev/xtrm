@@ -13,13 +13,15 @@ import {
   type LayoutAction,
   type LayoutState,
 } from "./layout.ts";
+import { readDeviceSettings, writeDeviceSettings, type Theme as ThemePreference } from "../lib/settings/index.ts";
 
 export const DEFAULT_REPO = { owner: "xtrm-dev", name: "xtrm" };
 /** The device's last repository selection; the router reads it too, so it is declared here only. */
 export const REPO_KEY = "xtrm.console.repo.v1";
-const THEME_KEY = "xtrm.console.theme.v1";
 
+/** The resolved theme the page wears. */
 export type Theme = "light" | "dark";
+export type { ThemePreference };
 export type PaletteMode = "search" | "commands";
 export type SearchScope = "repository" | "workspace";
 
@@ -29,8 +31,14 @@ interface ShellContextValue {
   inspect: (ref: DrawerRef) => void;
   inspected: DrawerRef | null;
   repo: { owner: string; name: string; fullName: string };
+  /** Resolved: the preference, with "system" read from `prefers-color-scheme`. */
   theme: Theme;
+  /** The stored choice (System | Light | Dark), read and written through the shared settings model. */
+  themePreference: ThemePreference;
+  setThemePreference: (next: ThemePreference) => void;
   toggleTheme: () => void;
+  /** The sidebar's System & settings drop-up; Mod+, opens it. */
+  systemMenu: { open: boolean; setOpen: (open: boolean) => void };
   palette: { open: boolean; query: string; scope: SearchScope };
   openPalette: (mode: PaletteMode, query?: string) => void;
   setPalette: (next: Partial<ShellContextValue["palette"]>) => void;
@@ -62,11 +70,21 @@ function writeStored(key: string, value: string) {
   }
 }
 
-function initialTheme(): Theme {
-  const stored = readStored(THEME_KEY);
-  if (stored === "light" || stored === "dark") return stored;
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+const settingsStores = () => {
+  try {
+    return { local: localStorage, session: sessionStorage };
+  } catch {
+    return { local: null, session: null };
+  }
+};
+
+/** The stored theme preference: the console settings document, else the legacy `xtrm.console.theme.v1`. */
+function initialThemePreference(): ThemePreference {
+  return readDeviceSettings("console", settingsStores())["appearance.theme"] ?? "system";
 }
+
+const LIGHT_QUERY = "(prefers-color-scheme: light)";
+const systemTheme = (): Theme => (typeof window.matchMedia === "function" && window.matchMedia(LIGHT_QUERY).matches ? "light" : "dark");
 
 export function ShellProvider({ children }: { children: ReactNode }) {
   const location = useRouterState({ select: (s) => s.location });
@@ -103,11 +121,26 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     if (match) writeStored(REPO_KEY, `${match[1]}/${match[2]}`);
   }, [match?.[1], match?.[2]]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [themePreference, setThemePreferenceState] = useState<ThemePreference>(initialThemePreference);
+  const [system, setSystem] = useState<Theme>(systemTheme);
+  // "System" follows the OS live, not only at boot.
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(LIGHT_QUERY);
+    const onChange = () => setSystem(query.matches ? "light" : "dark");
+    query.addEventListener?.("change", onChange);
+    return () => query.removeEventListener?.("change", onChange);
+  }, []);
+  const theme: Theme = themePreference === "system" ? system : themePreference;
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    writeStored(THEME_KEY, theme);
   }, [theme]);
+  const setThemePreference = useCallback((next: ThemePreference) => {
+    setThemePreferenceState(next);
+    const { local } = settingsStores();
+    if (local) writeDeviceSettings("console", { local }, { "appearance.theme": next });
+  }, []);
+  const [systemMenuOpen, setSystemMenuOpen] = useState(false);
 
   const [palette, setPaletteState] = useState<ShellContextValue["palette"]>({ open: false, query: "", scope: "repository" });
   const setPalette = useCallback((next: Partial<ShellContextValue["palette"]>) => setPaletteState((p) => ({ ...p, ...next })), []);
@@ -132,6 +165,12 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       if (mod && key === "k") {
         e.preventDefault();
         openPalette(e.shiftKey ? "commands" : "search");
+      } else if (mod && e.key === "," && !e.shiftKey) {
+        // Mod+, is the platform's settings key; here it opens the System & settings drop-up.
+        e.preventDefault();
+        // The menu lives in the sidebar, so a collapsed sidebar opens first.
+        if (!layoutRef.current.sidebar.open) dispatch({ type: "sidebar/toggle" });
+        setSystemMenuOpen(true);
       } else if (mod && key === "b" && !e.shiftKey) {
         e.preventDefault();
         dispatch({ type: "sidebar/toggle" });
@@ -163,12 +202,15 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       inspected: currentRef(layout),
       repo: { owner, name, fullName: `${owner}/${name}` },
       theme,
-      toggleTheme: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
+      themePreference,
+      setThemePreference,
+      toggleTheme: () => setThemePreference(theme === "dark" ? "light" : "dark"),
+      systemMenu: { open: systemMenuOpen, setOpen: setSystemMenuOpen },
       palette,
       openPalette,
       setPalette,
     }),
-    [layout, owner, name, theme, palette, openPalette, setPalette, location.pathname],
+    [layout, owner, name, theme, themePreference, setThemePreference, systemMenuOpen, palette, openPalette, setPalette, location.pathname],
   );
 
   return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;
