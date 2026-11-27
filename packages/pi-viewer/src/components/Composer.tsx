@@ -308,6 +308,7 @@ export function Composer({
                 onClick={() => void submit()}
                 disabled={!text.trim() || !target || sending}
                 aria-label="Send"
+                title="Send (Enter)"
                 className="flex size-8 items-center justify-center rounded-md text-github transition-[color,opacity] outline-none hover:text-github-hover focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-30"
               >
                 {sending ? (
@@ -325,7 +326,7 @@ export function Composer({
             14px prompt, 12px apart, no chips and no borders. */}
         {/* The row's right edge meets the send button's right edge, not the box's outer edge
             (XTRM-1056): the group ends at the same 12px inset the box uses for its text and send. */}
-        <div data-composer-under-row="" className="mt-1.5 flex min-w-0 items-center gap-3 pl-1 pr-3">
+        <div data-composer-under-row="" className="mt-1.5 flex min-w-0 items-center gap-3 pr-3 pl-3">
           <span className="hidden min-w-0 truncate text-2xs text-ink-muted sm:block">
             @ to mention
           </span>

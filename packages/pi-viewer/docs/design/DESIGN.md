@@ -602,8 +602,12 @@ The agent menu opens upward from the target it belongs to, anchored to the right
 so it meets the send button's right edge, sizing to its rows between `14rem` and `20rem` and never wider
 than the screen (`:270-300`). The status word sits on each row's right.
 
+The two controls keep their names: `aria-label` for the screen reader and a `title` naming the key, `Send
+(Enter)` and `Stop (Esc)` (`:290-320`).
+
 Other states: empty with a placeholder and the mouse hint (`@ to mention`, `text-2xs`, hidden below
-`sm`); draft; addressed; sending (the send glyph becomes a spinner); error
+`sm`, starting on the box's own 12px text inset so it lines up with the prompt above and the effort text
+opposite, XTRM-1153); draft; addressed; sending (the send glyph becomes a spinner); error
 (`text-2xs` in `danger` under the box); gone (the target pane left — the composer disables and the reply
 bar drops, `src/lib/reply.ts:14-27`).
 
@@ -832,6 +836,7 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-26 | A send pins the thread to the end until the reader scrolls | XTRM-1064 |
 | 2026-11-26 | Scope is applied server-side, discovery leaves the request path, frames are cached | XTRM-1066 |
 | 2026-11-27 | Composer send and stop are bare glyphs: an outline square in ink and a return arrow in the github tone, no filled boxes, hover by tone or opacity; the hint reads only `@ to mention` | XTRM-1149 |
+| 2026-11-27 | One scrollbar: every scroll container in both packages takes the chat's thin dim bar (`* { scrollbar-width: thin; scrollbar-color: var(--color-border-strong) transparent }` in the base layer), so no container falls back to the browser default; the composer's `@ to mention` moves onto the box's 12px text inset; the send button names its key (`Send (Enter)`) | XTRM-1153 |
 
 ## 11. Open questions
 

@@ -1,10 +1,12 @@
-// Composer screenshots (XTRM-1054, XTRM-1056, XTRM-1087, XTRM-1149): the empty box at rest and focused,
-// a typed draft, the To menu, a Claude target, a nearly full context ring, and a working target (the bare
-// Stop glyph beside the bare Send glyph, no filled boxes).
+// Composer screenshots (XTRM-1054, XTRM-1056, XTRM-1087, XTRM-1149, XTRM-1153): the empty box at rest and
+// focused, a typed draft, the To menu, a Claude target, a nearly full context ring, and a working target
+// (the bare Stop glyph beside the bare Send glyph, no filled boxes).
 //
-// Runs the app in-process with a mocked API on its own port (stopped at the end) and writes PNGs to
-// docs/design/shots/XTRM-1087/ (override with SHOTS_OUT). Not a gate: composer-check.mjs asserts the
-// geometry, the absence of border and ring, and the context ring's fraction.
+// Runs the app in-process with a mocked API on its own port (stopped at the end) and writes PNGs to this
+// issue's folder, docs/design/shots/XTRM-1153/, so a plain `node scripts/shots-composer.mjs` reproduces the
+// committed set. `--widths=1440,390,1024` (or SHOTS_WIDTHS) narrows the widths and `SHOTS_OUT` moves the
+// folder. Not a gate: composer-check.mjs asserts the geometry, the absence of border and ring, and the
+// context ring's fraction.
 import { mkdir } from "node:fs/promises"
 
 import { chromium } from "playwright"
@@ -13,7 +15,14 @@ import { createServer } from "vite"
 const PORT = 5298
 const SESSION = "xx"
 const T0 = Date.now() - 60 * 60_000
-const out = process.env.SHOTS_OUT || "docs/design/shots/XTRM-1087"
+// A plain run must land where the committed PNGs live and cover the same widths (XTRM-1153, #523 review).
+const flag = process.argv.slice(2).find((arg) => arg.startsWith("--widths="))
+const widths = (flag ? flag.slice("--widths=".length) : process.env.SHOTS_WIDTHS || "1440,390")
+  .split(",")
+  .map((value) => Number(value.trim()))
+  .filter((value) => Number.isFinite(value) && value > 0)
+if (!widths.length) throw new Error("no width to shoot: pass --widths=1440,390")
+const out = process.env.SHOTS_OUT || "docs/design/shots/XTRM-1153"
 
 function agent(index, name, provider, model, thinkingLevel, context = null, status = "idle") {
   return {
@@ -49,7 +58,7 @@ const browser = await chromium.launch({ headless: true })
 const written = []
 
 try {
-  for (const width of [1440, 390]) {
+  for (const width of widths) {
     for (const theme of ["dark", "light"]) {
     for (const { state, agents } of states) {
     const context = await browser.newContext({ viewport: { width, height: width < 700 ? 844 : 900 } })

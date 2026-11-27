@@ -588,6 +588,12 @@
   [role="button"] {
     -webkit-tap-highlight-color: transparent;
   }
+  /* One scrollbar everywhere (operator, 2026-11-27): the thin, dim one the chat scroller uses.
+     `scrollbar-none` and `no-scrollbar` still hide their own. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
 }
 
 @layer components {
