@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 322" width="100%" role="img" aria-labelledby="diagram-title diagram-desc">
+  <title id="diagram-title">Data flow: tmux panes to the browser</title>
+  <desc id="diagram-desc">Three lanes. One: the tmux endpoint panes hold a pi process or a Claude Code process, their transcripts, the intercom messages and the pane list. Two: the server middleware discovers panes on a two-second timer, parses transcripts incrementally, cuts the scope window and caches encoded frames, and answers the API. Three: the browser polls one scope, then builds the tree, the turns and the components. One dashed path returns around the outside: the send endpoint writes into a pane with tmux send-keys, the only write.</desc>
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <rect x="20" y="24" width="930" height="74" rx="10" class="lane-bg"/>
+  <rect x="20" y="112" width="930" height="74" rx="10" class="lane-bg"/>
+  <rect x="20" y="200" width="930" height="74" rx="10" class="lane-bg"/>
+
+  <g class="label">
+    <text x="30" y="16" class="lane-label">01 · tmux endpoint panes</text>
+    <text x="30" y="104" class="lane-label">02 · server middleware</text>
+    <text x="30" y="192" class="lane-label">03 · browser</text>
+
+    <rect x="30" y="34" width="200" height="50" rx="8" class="node"/>
+    <text x="42" y="54" class="node-label">pi session</text>
+    <text x="42" y="72" class="note">jsonl, cwd, args</text>
+    <rect x="266" y="34" width="200" height="50" rx="8" class="node"/>
+    <text x="278" y="54" class="node-label">Claude session</text>
+    <text x="278" y="72" class="note">transcript, title</text>
+    <rect x="502" y="34" width="200" height="50" rx="8" class="node"/>
+    <text x="514" y="54" class="node-label">intercom messages</text>
+    <text x="514" y="72" class="note">two sides, one pair</text>
+    <rect x="738" y="34" width="202" height="50" rx="8" class="node"/>
+    <text x="750" y="54" class="node-label">tmux list-panes</text>
+    <text x="750" y="72" class="note">pane → cwd → repo</text>
+
+    <rect x="30" y="122" width="200" height="50" rx="8" class="node"/>
+    <text x="42" y="142" class="api">discover.ts</text>
+    <text x="42" y="160" class="note">2 s timer, async</text>
+    <rect x="266" y="122" width="200" height="50" rx="8" class="node"/>
+    <text x="278" y="142" class="api">session.ts</text>
+    <text x="278" y="160" class="note">incremental parse</text>
+    <rect x="502" y="122" width="200" height="50" rx="8" class="node"/>
+    <text x="514" y="142" class="api">thread-cache.ts</text>
+    <text x="514" y="160" class="note">scope + frame cache</text>
+    <rect x="738" y="122" width="202" height="50" rx="8" class="node"/>
+    <text x="750" y="142" class="api">api.ts</text>
+    <text x="750" y="160" class="note">/thread /event /send</text>
+
+    <rect x="30" y="210" width="200" height="50" rx="8" class="node"/>
+    <text x="42" y="230" class="node-label">App.tsx</text>
+    <text x="42" y="248" class="note">one poller per scope</text>
+    <rect x="266" y="210" width="200" height="50" rx="8" class="node"/>
+    <text x="278" y="230" class="node-label">lib/tree</text>
+    <text x="278" y="248" class="note">rows, selection</text>
+    <rect x="502" y="210" width="200" height="50" rx="8" class="node"/>
+    <text x="514" y="230" class="node-label">lib/thread</text>
+    <text x="514" y="248" class="note">turns, delivery</text>
+    <rect x="738" y="210" width="202" height="50" rx="8" class="node"/>
+    <text x="750" y="230" class="node-label">components</text>
+    <text x="750" y="248" class="note">sidebar, thread, chat</text>
+  </g>
+
+  <g fill="none">
+    <line x1="230" y1="59" x2="262" y2="59" class="edge"/>
+    <line x1="466" y1="59" x2="498" y2="59" class="edge"/>
+    <line x1="702" y1="59" x2="734" y2="59" class="edge"/>
+    <line x1="230" y1="147" x2="262" y2="147" class="edge"/>
+    <line x1="466" y1="147" x2="498" y2="147" class="edge"/>
+    <line x1="702" y1="147" x2="734" y2="147" class="edge"/>
+    <line x1="230" y1="235" x2="262" y2="235" class="edge"/>
+    <line x1="466" y1="235" x2="498" y2="235" class="edge"/>
+    <line x1="702" y1="235" x2="734" y2="235" class="edge"/>
+    <line x1="838" y1="112" x2="838" y2="90" class="edge"/>
+    <line x1="838" y1="200" x2="838" y2="180" class="edge"/>
+
+    <path d="M 940 147 L 966 147 L 966 292 L 10 292 L 10 66 L 26 66" class="write"/>
+    <text x="150" y="312" class="note">the only write: /api/send → tmux send-keys -l → Enter</text>
+  </g>
+</svg>

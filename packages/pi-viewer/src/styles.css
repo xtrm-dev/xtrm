@@ -1,0 +1,802 @@
+@import "tailwindcss";
+
+/*
+ * Two faces, latin only (XTRM-1067). The packages ship eight subsets each; the viewer reads English
+ * tmux and agent text, so the four latin-ext and cyrillic faces were 58 kB of build weight for
+ * nothing. Both packages are pinned at 5.3.0 (`@fontsource-variable/figtree`, `.geist-mono`), and the
+ * face names and weight ranges match the ones the packages declare, so a swap changes no layout.
+ */
+@font-face {
+  font-family: "Figtree Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 900;
+  src: url("@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "Geist Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * XTRM Console v2 tokens (PRD §27, shell architecture §15.1).
+ * Surface ladder: deep → sidebar → surface → raised → control.
+ * Depth comes from background shifts and hairlines; shadows only on floating layers.
+ * XTRM violet is an identity role: selection marker, focus, references, attention dots.
+ */
+
+:root {
+  color-scheme: light;
+  --x-deep: #f4f4f5;
+  --x-sidebar: #f4f4f5;
+  --x-surface: #ffffff;
+  --x-raised: #ffffff;
+  --x-control: #efeff1;
+  /* The selected segment of a segmented control (Work/Threads, Channel/All events). Light: the white surface. */
+  --x-segment: #ffffff;
+  --x-hover: rgb(15 15 20 / 0.045);
+  --x-pressed: rgb(15 15 20 / 0.08);
+  --x-ink: #18181b;
+  --x-ink-muted: #5f5f68;
+  --x-ink-faint: #94949c;
+  --x-border-muted: rgb(15 15 20 / 0.07);
+  /* Table grid only: present, but close to transparent so rows read as a list, not a box. */
+  --x-border-subtle: rgb(15 15 20 / 0.04);
+  --x-border: rgb(15 15 20 / 0.11);
+  --x-border-strong: rgb(15 15 20 / 0.2);
+  /* GitHub's own button pair: near-black in light, near-white in dark, as on github.com. */
+  --x-github: #24292f;
+  --x-github-hover: #32383f;
+  --x-github-ink: #ffffff;
+  --x-accent: #4f46e5;
+  --x-accent-ink: #4338ca;
+  --x-accent-soft: rgb(79 70 229 / 0.1);
+  --x-danger: #c42b2b;
+  --x-success: #1b7f46;
+  /* Solid role chips. White text must stay >= 4.5:1 on each fill in both themes. */
+  --x-role-manager: #2563eb;
+  --x-role-lead: #15803d;
+  --x-role-worker: #52525b;
+  /* The same two hues as text (the sidebar's Lead and Manager labels); dark lifts them for 10px type. */
+  --x-role-manager-ink: #2563eb;
+  --x-role-lead-ink: #15803d;
+  /* The badge ink: --x-success on its own 12% tint is 4.30:1 on white and 3.93:1 on the
+     canvas, below the 4.5:1 text minimum. Same hue, darker: 5.85:1 and 5.34:1 (§3.2). */
+  --x-success-ink: #146839;
+  /* One datum, one green: diff counts follow success (lead ruling on the UI-1 review). */
+  --x-diff-add: #1b7f46;
+  --x-diff-del: #c42b2b;
+  /* NavRail geometry (§4.1). Geometry only: the rail's hairline is --x-border-muted and its active
+     marker is --x-accent, so Restraint rule 4 (no new colour, no new tint) holds in both themes.
+     The two lengths are rem on purpose: the row padding, the nav icon and the child row height are
+     rem too, so the child label keeps the parent's x and scale at any root font size (XTRM-897). */
+  --x-rail-indent: calc(1rem - 1px); /* 15px at a 16px root: rail x = centre of the parent icon */
+  --x-rail-gutter: 1.125rem; /* 18px at a 16px root: child text inset so the label x matches the parent's */
+  --x-rail-marker: 2px; /* active marker width */
+  /* A child row's fill starts at the sidebar's own edge, not at the rail (XTRM-927): the row box is
+     pulled left by the rail x plus its hairline, and its text inset grows by the same length. Only the
+     fill widens to a top-level row's edges; the label column, the hairline and the marker do not move. */
+  --x-rail-pull: calc(var(--x-rail-indent) + 1px); /* 16px at a 16px root: rail x + the 1px hairline */
+  --x-rail-text: calc(var(--x-rail-pull) + var(--x-rail-gutter)); /* 34px: the aligned label column */
+  --x-shadow-float: 0 10px 30px -12px rgb(15 15 20 / 0.22), 0 0 0 1px rgb(15 15 20 / 0.06);
+  /* Panel elevation without a hairline: the inspector carries no border (no-borders policy), so the
+     ring inside --x-shadow-float would outline it in a colour that is not its background. */
+  --x-shadow-panel: 0 10px 30px -12px rgb(15 15 20 / 0.22);
+  /* Persistent control at the foot of the sidebar (§15.1): a raised chip in light, the operator's
+     near-black plane in dark. One token set, so the strip and its drop-up can never diverge. */
+  --x-strip: var(--x-raised);
+  --x-strip-open: var(--x-control);
+  --x-strip-ink: var(--x-ink-muted);
+  --x-strip-ink-strong: var(--x-ink);
+  --x-strip-ink-faint: var(--x-ink-faint);
+  --x-strip-rule: var(--x-border-muted);
+  --x-strip-chip: var(--x-pressed);
+  --x-strip-chip-ink: var(--x-ink-muted);
+  /* Region roles (XTRM-1046): which plane each region wears. These are the Threads assignment; the
+     console palette below swaps them on a root data-palette attribute. Sources: docs/design/palette-console.md. */
+  --x-canvas: var(--x-deep); /* page, header, thread, presence line, composer margin */
+  --x-composer-fill: var(--x-surface); /* the composer: one quiet step up from the canvas where the palette has one */
+  --x-composer-focus: var(--x-raised); /* focused fill rises one plane where the palette has one left (XTRM-1087) */
+  /* The composer's only separation, in every palette and state (XTRM-1087): it carries no border and
+     no ring, so a slight drop shadow sets it above the canvas. Focus deepens the shadow, which is the
+     one cue that works in a palette whose fill has no plane left to step to (console, threads light). */
+  /* One soft layer pulled in by a negative spread: depth without an edge (operator, 2026-11-26: the tight
+     0 1px 2px layer read as a hairline under the box). */
+  --x-composer-shadow: 0 6px 20px -10px rgb(15 15 20 / 0.12);
+  --x-composer-shadow-focus: 0 8px 24px -10px rgb(15 15 20 / 0.16);
+  --x-inset: var(--x-surface); /* quiet panels inside the thread: activity detail, intercom card */
+  --x-code: var(--x-surface); /* rendered code frame */
+  --x-code-edge: var(--x-border-muted);
+  /* Reading colour (XTRM-1051): thread prose and the operator's bubbles. Threads and Console read in
+     full ink; the Desktop palette reads one step dimmer (its secondary text). */
+  --x-read: var(--x-ink);
+  /* The selected row in a list (sidebar). Threads and Console keep the hover wash. */
+  --x-selected: var(--x-hover);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  /* Dark ladder: the rail sits at #232323 and the raised plane at #1e1e1e, so a control that has to
+     be readable against the rail (the sources strip at #1c1c1c) is seven steps below it, not two. */
+  --x-deep: #0d0d0d;
+  --x-sidebar: #181818; /* operator, 2026-11-25: a quiet step from the #0d0d0d viewport (the console's is #232323) */
+  --x-surface: #151515;
+  --x-raised: #1e1e1e;
+  --x-control: #262626;
+  /* Dark: lighter than the pressed track (#262626 or #303030 in the console palette) by at least 1.5:1; text-ink on it is 7:1. */
+  --x-segment: #4d4d4d;
+  --x-hover: rgb(255 255 255 / 0.03);
+  --x-pressed: rgb(255 255 255 / 0.06);
+  --x-ink: #ececef;
+  --x-ink-muted: #a0a0a8;
+  --x-ink-faint: #6a6a72;
+  --x-border-muted: rgb(255 255 255 / 0.08);
+  --x-border-subtle: rgb(255 255 255 / 0.06);
+  --x-border: rgb(255 255 255 / 0.12);
+  --x-border-strong: rgb(255 255 255 / 0.18);
+  --x-github: #f0f6fc;
+  --x-github-hover: #ffffff;
+  --x-github-ink: #24292f;
+  /* dark surfaces use the accessible light violet role for small text/markers */
+  --x-accent: #818cf8;
+  --x-accent-ink: #a5b4fc;
+  --x-accent-soft: rgb(129 140 248 / 0.12);
+  --x-danger: #f07171;
+  --x-success: #5ccb8a;
+  --x-success-ink: #5ccb8a;
+  --x-diff-add: #5ccb8a;
+  --x-diff-del: #f07171;
+  --x-role-manager-ink: #6b9bff;
+  --x-role-lead-ink: #5ccb8a;
+  --x-shadow-float: 0 18px 44px -12px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.08);
+  --x-shadow-panel: 0 18px 44px -12px rgb(0 0 0 / 0.72);
+  /* The composer's drop shadow in dark: the same two-part shape as light, at the alpha dark needs
+     before it reads at all (XTRM-1087). */
+  --x-composer-shadow: 0 6px 22px -10px rgb(0 0 0 / 0.38);
+  --x-composer-shadow-focus: 0 8px 26px -10px rgb(0 0 0 / 0.48);
+  --x-strip: #1c1c1c;
+  --x-strip-open: #262626;
+  --x-strip-ink: rgb(255 255 255 / 0.72);
+  --x-strip-ink-strong: #ffffff;
+  --x-strip-ink-faint: rgb(255 255 255 / 0.45);
+  --x-strip-rule: rgb(255 255 255 / 0.12);
+  --x-strip-chip: rgb(255 255 255 / 0.12);
+  --x-strip-chip-ink: rgb(255 255 255 / 0.78);
+  --x-code-edge: transparent; /* a dark code frame carries no hairline (audit 3.6) */
+}
+
+/* Console palette (XTRM-1046). The console's region assignments (packages/xtrm-app/src/shell/AppShell.tsx:82
+   canvas bg-surface, :93 sidebar bg-sidebar; src/agent/Composer.tsx:279 composer bg-surface with a border;
+   src/styles.css:302-303 code frame bg-deep with border-muted) and its tokens (src/styles.css:14-114).
+   Only the assignments and the dark sidebar differ from Threads; every other token already equals the console's. */
+:root[data-palette="console"] {
+  --x-canvas: var(--x-surface);
+  --x-composer-fill: var(--x-raised); /* the page canvas is the surface here, so the box steps up to raised */
+  --x-composer-focus: var(--x-raised); /* no plane left above raised: focus lifts the shadow instead */
+  --x-inset: var(--x-control);
+  --x-code: var(--x-deep);
+  --x-code-edge: var(--x-border-muted);
+}
+:root[data-palette="console"][data-theme="dark"] {
+  --x-sidebar: #232323; /* console src/styles.css:79 */
+}
+
+/* Desktop palette (XTRM-1051), dark only. The values are the operator's, extracted from Claude Desktop
+   (2026-11-25): base #1f1f1f, sidebar #242424, surface #333333, selected #454545, input #383838;
+   text primary #e4e4e4, secondary #c8c8c8, muted #8e8e8e (raised to #a1a1a1 by the operator ruling of 2026-11-26); border #383838; icons #c8c8c8 and #8e8e8e.
+   The point is a dimmer reading colour: prose reads in secondary, names and titles in primary, meta in
+   muted. There are no light values, so Desktop in the light theme is the Threads light set (no rule below
+   matches it). Region assignments stay the Threads ones; only the planes and the text roles change.
+   Not supplied, so unchanged and marked inferred in docs/design/palette-console.md: border-muted,
+   border-subtle, border-strong, ink-faint, hover, pressed, accent, danger. */
+:root[data-palette="desktop"][data-theme="dark"] {
+  --x-deep: #1f1f1f; /* base: canvas, header, thread */
+  --x-sidebar: #242424;
+  --x-surface: #333333; /* cards, composer, quiet panels, code frame */
+  --x-raised: #333333; /* popovers, presence panel */
+  --x-control: #383838; /* input */
+  --x-segment: #454545; /* selected segment */
+  --x-selected: #454545; /* selected row */
+  --x-border: #383838;
+  --x-danger: #f58f8f; /* inferred: #f07171 is 4.1:1 on the focused composer fill (#383838); this is 5.1:1 */
+  --x-composer-focus: var(--x-control); /* the focused composer takes the input fill */
+  --x-code: var(--x-deep); /* a well cut into the canvas, as in the Console palette */
+  --x-code-edge: var(--x-border);
+}
+/* Inside a selected row or segment (#454545) muted text reads in the secondary colour. */
+:root[data-palette="desktop"][data-theme="dark"] [aria-selected="true"] {
+  --x-ink-muted: var(--x-ink-muted-selected);
+}
+
+/* Soft text (XTRM-1053): Desktop's text colours, and nothing else, as one layer. Desktop wears it with its
+   own surfaces; a soft-text version is the root's base palette (data-palette threads or console) plus
+   data-text="soft", so every surface, border and accent of the base is untouched and no surface value is
+   written twice. Dark only: in the light theme nothing here matches and the base's light values apply.
+   Only text variables may live in this block (test/palette.test.ts holds it to that list).
+   Primary #e4e4e4: names, titles, selected rows. Reading #c8c8c8: thread prose, operator bubble. Muted
+   #a1a1a1 (operator ruling 2026-11-26: #a0a0a0, one step up so it is 4.5:1 on #383838): meta, time,
+   unselected labels, resting icons. The selected-row rule above belongs to Desktop's #454545 fill only; the
+   Threads and Console selected fills are the hover wash, where #a1a1a1 already passes. */
+:root[data-text="soft"][data-theme="dark"] {
+  --x-ink: #e4e4e4;
+  --x-read: #c8c8c8;
+  --x-ink-muted: #a1a1a1;
+  --x-ink-muted-selected: #c8c8c8; /* inside Desktop's selected row: #a1a1a1 is 3.7:1 on #454545 */
+}
+
+/* Sidebar plane (operator, 2026-11-26): the sidebar's fill and selected row follow data-sidebar, set
+   independently of the chat palette (data-palette). These blocks come after the palettes and match with the
+   same specificity, so they win for these two variables only. Dark only: in the light theme every palette's
+   sidebar is #f4f4f5 and the selected row is the hover wash, so nothing here applies. Values: Threads #181818
+   (the dark ladder above), Console #232323 (console src/styles.css:79), Desktop #242424 with the #454545
+   selected row (the Desktop block above). */
+:root[data-sidebar="threads"][data-theme="dark"] {
+  --x-sidebar: #181818;
+  --x-selected: var(--x-hover);
+}
+:root[data-sidebar="console"][data-theme="dark"] {
+  --x-sidebar: #232323;
+  --x-selected: var(--x-hover);
+}
+:root[data-sidebar="desktop"][data-theme="dark"] {
+  --x-sidebar: #242424;
+  --x-selected: #454545;
+}
+/* On the #454545 selected row muted text reads one step brighter, whatever the text tone: standard muted
+   (#a0a0a8) and soft muted (#a1a1a1) are both under 4.5:1 there; #c8c8c8 is 6.4:1. */
+:root[data-sidebar="desktop"][data-theme="dark"] [data-testid="sidebar"] [aria-selected="true"] {
+  --x-ink-muted: #c8c8c8;
+}
+
+@theme inline {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  --color-deep: var(--x-deep);
+  --color-canvas: var(--x-canvas);
+  --color-inset: var(--x-inset);
+  --color-sidebar: var(--x-sidebar);
+  --color-surface: var(--x-surface);
+  --color-raised: var(--x-raised);
+  --color-control: var(--x-control);
+  --color-segment: var(--x-segment);
+  --color-hover: var(--x-hover);
+  --color-pressed: var(--x-pressed);
+  --color-ink: var(--x-ink);
+  --color-read: var(--x-read);
+  --color-selected: var(--x-selected);
+  --color-ink-muted: var(--x-ink-muted);
+  --color-ink-faint: var(--x-ink-faint);
+  --color-border-muted: var(--x-border-muted);
+  --color-border-subtle: var(--x-border-subtle);
+  --color-border: var(--x-border);
+  --color-border-strong: var(--x-border-strong);
+  --color-github: var(--x-github);
+  --color-github-hover: var(--x-github-hover);
+  --color-github-ink: var(--x-github-ink);
+  --color-accent: var(--x-accent);
+  --color-accent-ink: var(--x-accent-ink);
+  --color-accent-soft: var(--x-accent-soft);
+  --color-danger: var(--x-danger);
+  --color-success: var(--x-success);
+  --color-role-manager: var(--x-role-manager);
+  --color-role-lead: var(--x-role-lead);
+  --color-role-worker: var(--x-role-worker);
+  --color-role-manager-ink: var(--x-role-manager-ink);
+  --color-role-lead-ink: var(--x-role-lead-ink);
+  --color-success-ink: var(--x-success-ink);
+  --color-diff-add: var(--x-diff-add);
+  --color-diff-del: var(--x-diff-del);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  --shadow-float: var(--x-shadow-float);
+  --shadow-panel: var(--x-shadow-panel);
+  --color-strip: var(--x-strip);
+  --color-strip-open: var(--x-strip-open);
+  --color-strip-ink: var(--x-strip-ink);
+  --color-strip-ink-strong: var(--x-strip-ink-strong);
+  --color-strip-ink-faint: var(--x-strip-ink-faint);
+  --color-strip-rule: var(--x-strip-rule);
+  --color-strip-chip: var(--x-strip-chip);
+  --color-strip-chip-ink: var(--x-strip-chip-ink);
+
+  /* shadcn alias layer (XT-215): names only, values stay --x-* authoritative. */
+  --color-background: var(--x-canvas);
+  --color-foreground: var(--x-ink);
+  --color-card: var(--x-surface);
+  --color-card-foreground: var(--x-ink);
+  --color-popover: var(--x-raised);
+  --color-popover-foreground: var(--x-ink);
+  --color-primary: var(--x-accent);
+  --color-primary-foreground: var(--x-accent-ink);
+  --color-secondary: var(--x-control);
+  --color-secondary-foreground: var(--x-ink);
+  --color-muted: var(--x-control);
+  --color-muted-foreground: var(--x-ink-muted);
+  --color-accent-foreground: var(--x-ink);
+  --color-destructive: var(--x-danger);
+  --color-destructive-foreground: var(--x-ink);
+  --color-border-input: var(--x-border);
+  --color-input: var(--x-control);
+  --color-ring: var(--x-accent);
+
+  /* One step below --text-xs, for the timeline's `now` marker; it was a 10px literal (XTRM-907). */
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 0.875rem;
+  --text-xs: 0.72rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border-muted);
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+    outline-offset: 1px;
+  }
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+}
+
+/* Rendered markdown and the rich editor share one prose style (Supernova-restrained). */
+@layer components {
+  .xtrm-prose {
+    /* Transcript prose owns its scale (console-ui-system §3.3): 0.875rem / 1.625, ink at 90%.
+       rem only, so it follows the operator's 12px root. Audit 7. */
+    color: color-mix(in oklab, var(--color-ink) 90%, transparent);
+    font-size: 0.875rem;
+    line-height: 1.625;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .xtrm-prose > :first-child {
+    margin-top: 0;
+  }
+  .xtrm-prose > :last-child {
+    margin-bottom: 0;
+  }
+  .xtrm-prose p,
+  .xtrm-prose ul,
+  .xtrm-prose ol,
+  .xtrm-prose pre,
+  .xtrm-prose blockquote,
+  .xtrm-prose table {
+    margin: 0 0 0.7rem;
+  }
+  .xtrm-prose h1,
+  .xtrm-prose h2,
+  .xtrm-prose h3,
+  .xtrm-prose h4 {
+    margin: 1.1rem 0 0.4rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--color-ink);
+  }
+  .xtrm-prose h1 {
+    font-size: 1.25rem;
+  }
+  .xtrm-prose h2 {
+    font-size: 1.125rem;
+  }
+  .xtrm-prose h3 {
+    font-size: 1rem;
+  }
+  .xtrm-prose h4 {
+    font-size: 0.875rem;
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose ul,
+  .xtrm-prose ol {
+    padding-left: 1.25rem;
+  }
+  .xtrm-prose ul {
+    list-style: disc;
+  }
+  .xtrm-prose ol {
+    list-style: decimal;
+  }
+  .xtrm-prose li {
+    margin: 0.15rem 0;
+  }
+  .xtrm-prose li::marker {
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .xtrm-prose a {
+    color: var(--color-accent-ink);
+    text-decoration: none;
+    text-underline-offset: 3px;
+  }
+  .xtrm-prose a:hover,
+  .xtrm-prose a:focus-visible {
+    text-decoration: underline dotted;
+  }
+  .xtrm-prose strong {
+    font-weight: 600;
+  }
+  .xtrm-prose code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: var(--color-control);
+  }
+  .xtrm-prose pre {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.15rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-md);
+    background: var(--color-deep);
+    /* A rendered `pre` carries no class, so it takes the thin-scrollbar treatment here rather than
+       from `.thin-scrollbar`: same width and colour, declared where this container can hold them. */
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  .xtrm-prose pre code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .xtrm-prose blockquote {
+    padding: 0 0 0 0.8rem;
+    border-left: 2px solid var(--color-border-strong);
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose hr {
+    margin: 1rem 0;
+    border: 0;
+  }
+  /* GitHub bodies carry their own HTML: pr-lens ships diagrams as <img> inside <details>, with a
+     second SVG for dark. The image scales to the panel because the SVG declares a large width. */
+  .xtrm-prose img {
+    max-width: 100%;
+    height: auto;
+    margin: 0.2rem 0;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+  }
+  .xtrm-prose details {
+    margin: 0 0 0.7rem;
+  }
+  .xtrm-prose details[open] > summary {
+    margin-bottom: 0.4rem;
+  }
+  .xtrm-prose summary {
+    cursor: pointer;
+    color: var(--color-ink-muted);
+  }
+  .xtrm-prose summary:hover {
+    color: var(--color-ink);
+  }
+  .xtrm-prose table {
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    /* The Markdown renderer wraps tables in a scrolling box, so the table itself
+       sizes to its content instead of wrapping every header word (XTRM-397). */
+    width: max-content;
+    max-width: none;
+  }
+  .xtrm-prose th {
+    white-space: nowrap;
+  }
+  .xtrm-prose th,
+  .xtrm-prose td {
+    border: 0;
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+  }
+  .xtrm-prose th:first-child,
+  .xtrm-prose td:first-child {
+    padding-left: 0;
+  }
+  /* Row rules only: no header fill, no zebra (audit 3.9). */
+  .xtrm-prose thead th {
+    font-weight: 500;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .xtrm-prose tbody tr + tr td {
+    border-top: 1px solid var(--color-border-muted);
+  }
+  .xtrm-prose input[type="checkbox"] {
+    margin-right: 0.35rem;
+    vertical-align: middle;
+  }
+  .xtrm-prose .ProseMirror {
+    outline: none;
+    min-height: 5rem;
+  }
+  .xtrm-prose .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--color-ink-muted);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+}
+
+/* ── Viewer additions ─────────────────────────────────────────────────────── */
+
+/* Copied from xtrm-app src/styles.css: the sidebar scroller and the tabular counts. */
+@layer utilities {
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scroll-fade-b {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+
+@layer base {
+  html {
+    background: var(--color-canvas);
+  }
+  body {
+    overflow: hidden;
+  }
+  button,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer components {
+  /* The trace list: one dot per step, separated by contrast rather than rules. */
+  .trace-rail {
+    position: relative;
+  }
+  .trace-dot {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.6875rem;
+    height: 1.25rem;
+    flex: none;
+    color: var(--color-ink-muted);
+    background: var(--color-canvas);
+  }
+  /* No content-visibility on transcript rows: an unrendered row changes height when it
+     enters the viewport, which moves the reader's anchor. The scroller owns anchoring. */
+}
+
+@keyframes viewer-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.viewer-pulse {
+  animation: viewer-pulse 1.6s ease-in-out infinite;
+}
+
+/* ── Working presence (XTRM-1035) ── */
+/* A presence row that starts fades in. Opacity only, 150ms, never height. The settled turn's
+   fade in the thread is the restyle's .xtrm-fade-in on fresh rows. */
+@keyframes presence-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.presence-in {
+  animation: presence-in 150ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .presence-in { animation: none; }
+}
+/* ── end Working presence ── */
+
+@keyframes viewer-fade {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.viewer-fade {
+  animation: viewer-fade 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer-pulse { animation: none; opacity: 1; }
+  .viewer-fade { animation: none; opacity: 1; }
+}
+
+/* Keep markdown tables from widening the thread column. */
+.xtrm-prose .md-table {
+  overflow-x: auto;
+  margin: 0 0 0.7rem;
+  scrollbar-width: thin;
+}
+.xtrm-prose .md-table > table {
+  margin: 0;
+}
+
+/* ── Chat restyle (XTRM-1034) ─────────────────────────────────────────────────
+   Values from docs/design/t3code-chat-audit.md, mapped to our tokens (audit 7).
+   Motion rules: every animation has a reduced-motion branch; nothing animates off-screen. */
+
+/* Stepped label shimmer: a band of full ink sweeps across muted text. Reused by presence.
+   Usage: <span class="xtrm-shimmer">Reading file.ts</span>; set data-paused="true" when off-screen
+   (the <Shimmer> component does that). Audit 1.5 and 4.4: 2.2s, steps(30). */
+@keyframes xtrm-shimmer {
+  from {
+    background-position: 150% 0, 0 0;
+  }
+  to {
+    background-position: -50% 0, 0 0;
+  }
+}
+.xtrm-shimmer {
+  color: var(--color-ink-muted);
+  background-image:
+    linear-gradient(100deg, transparent 38%, var(--color-ink) 50%, transparent 62%),
+    linear-gradient(var(--color-ink-muted), var(--color-ink-muted));
+  background-size: 250% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 150% 0, 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: xtrm-shimmer 2.2s steps(30) infinite;
+}
+.xtrm-shimmer[data-paused="true"] {
+  animation-play-state: paused;
+}
+
+/* Blocks that arrive after the first paint fade in; a reopened thread never replays it. */
+@keyframes xtrm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.xtrm-fade-in {
+  animation: xtrm-fade-in 600ms ease-out both;
+}
+
+/* Metadata is quiet until the row is hovered or focused; pinned rows stay visible. */
+.xtrm-meta {
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.group\/row:hover .xtrm-meta,
+.group\/row:focus-within .xtrm-meta,
+.xtrm-meta[data-pinned="true"],
+.xtrm-meta:focus-within {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .xtrm-meta {
+    opacity: 1;
+  }
+}
+
+/* The fade of a folded message (operator, 2026-11-26): the text itself fades out through an eased mask,
+   so no overlay colour has to match the bubble or card behind it, and the cut has no visible edge.
+   Eased stops over 4rem instead of one linear ramp. Shared by the operator bubble and the intercom card. */
+.xtrm-fold-fade {
+  --xtrm-fold-mask: linear-gradient(
+    to bottom,
+    #000 calc(100% - 4rem),
+    rgb(0 0 0 / 0.92) calc(100% - 3.25rem),
+    rgb(0 0 0 / 0.74) calc(100% - 2.5rem),
+    rgb(0 0 0 / 0.48) calc(100% - 1.75rem),
+    rgb(0 0 0 / 0.22) calc(100% - 1rem),
+    rgb(0 0 0 / 0.06) calc(100% - 0.4rem),
+    transparent
+  );
+  -webkit-mask-image: var(--xtrm-fold-mask);
+  mask-image: var(--xtrm-fold-mask);
+}
+
+/* Long operator message: clamp at 11rem (176px at a 16px root) and fade the cut. */
+.xtrm-bubble-fold {
+  max-height: 11rem;
+  overflow: hidden;
+}
+
+/* Code frame: Threads is a surface fill, a hairline in light only (audit 3.6); Console is the deep well
+   with a hairline in both (--x-code, --x-code-edge). */
+.xtrm-code {
+  background: var(--x-code);
+  border: 1px solid var(--x-code-edge);
+}
+
+/* Composer box (XTRM-1054, XTRM-1087). The box carries no border and no ring in any palette, preset,
+   theme or state: a fill one step up from the canvas separates it where the palette has a step, and a
+   slight drop shadow sets it above the canvas where it does not (console light and dark, threads
+   light). Focus lifts the fill one plane where a plane is left (threads dark, desktop) and deepens
+   the shadow everywhere, so the keyboard always sees the change and the box never grows an outline. */
+.xtrm-composer-box {
+  background: var(--x-composer-fill);
+  box-shadow: var(--x-composer-shadow);
+  transition:
+    background-color 150ms,
+    box-shadow 150ms;
+}
+.xtrm-composer-box:focus-within {
+  background: var(--x-composer-focus);
+  box-shadow: var(--x-composer-shadow-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xtrm-shimmer {
+    animation: none;
+  }
+  .xtrm-fade-in {
+    animation: none;
+  }
+  .xtrm-meta {
+    transition: none;
+  }
+}
+
+/* ── Chat lane (XTRM-1042) ─────────────────────────────────────────────────────
+   One variable drives the thread lane, the composer and the presence line, so they always
+   align. Set on the root from src/lib/chat-width.ts; 46rem is Comfortable, the default.
+   Below 640px the lane is the full column and the setting has no effect. */
+:root {
+  --chat-lane: 46rem;
+}
+/* .xtrm-lane: the composer and the presence line. Their parents hold the side padding, so the
+   box is the lane. .xtrm-lane-padded: the thread content, which carries its own 3rem side
+   padding (sm:px-12), so its box is the lane plus 6rem and the text column equals the lane. */
+.xtrm-lane,
+.xtrm-lane-padded {
+  max-width: none;
+}
+@media (min-width: 640px) {
+  .xtrm-lane {
+    max-width: var(--chat-lane);
+  }
+  .xtrm-lane-padded {
+    max-width: min(100%, calc(var(--chat-lane) + 6rem));
+  }
+}
