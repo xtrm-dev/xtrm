@@ -30,6 +30,7 @@ test("the list has no header row: the first row starts at the top of the scrolle
   const first = page.locator('[role="button"]').filter({ hasText: /XTRM-\d/ }).first();
   await expect(first).toBeVisible();
   const rowTop = (await first.boundingBox())!.y;
-  const toolbarBottom = (await page.getByRole("region", { name: "XTRM Issues" }).locator("header").first().boundingBox())!.y;
-  expect(rowTop).toBeGreaterThan(toolbarBottom);
+  // The toolbar is the region's first child; the first row starts right under it.
+  const toolbar = (await page.getByRole("region", { name: "XTRM Issues" }).locator(":scope > div").first().boundingBox())!;
+  expect(rowTop).toBeGreaterThanOrEqual(toolbar.y + toolbar.height - 1);
 });

@@ -66,10 +66,12 @@ test("every row is one 32px line, indented by its own depth, with no header", as
     const line = row.locator("div").first();
     expect(await line.evaluate((el) => getComputedStyle(el).paddingLeft), `${ref} indents by its own depth`).toBe(`${ROW_PAD_PX + depth * INDENT_PX}px`);
 
-    // The key is a dim address: the locator in mono, the unique ref in the tooltip, no fill.
+    // The key is the shared pill (2026-11-27 ruling): locator | short ref in mono, the full address in
+    // the tooltip, a hairline border and no fill.
     const key = row.locator("[data-key-cell]").first();
-    expect((await key.innerText()).trim()).toBe(locator);
-    const keyText = key.locator(":scope > span").first();
+    const keyText = key.locator("[data-issue-key]").first();
+    expect(await keyText.getAttribute("data-issue-key")).toBe(ref);
+    expect(await keyText.getAttribute("data-locator")).toBe(locator === ref ? null : locator);
     expect(await keyText.getAttribute("title")).toBe(locator === ref ? ref : `${locator} / ${ref}`);
     expect(await keyText.evaluate((el) => getComputedStyle(el).backgroundColor), "the key carries no fill").toBe("rgba(0, 0, 0, 0)");
     expect(await keyText.evaluate((el) => getComputedStyle(el).fontFamily), "the key is mono").toContain("mono");
@@ -92,38 +94,44 @@ test("the solid status chip carries white ink on a filled tone", async ({ page }
   expect(parseFloat(measured.radius), "the chip is a pill").toBeGreaterThanOrEqual(parseFloat(measured.height) / 2 - 0.5);
 });
 
-test("the sidebar row and the list row are the same height", async ({ page }) => {
+/** Sidebar destinations sit at the Work/Agent switch height (console-ui-system.md row-height table). */
+const SIDEBAR_ROW_PX = 28;
+
+test("list rows are 32px; sidebar rows match the Work/Agent switch at 28px", async ({ page }) => {
   await openIssues(page);
   const listRow = await box(rowFor(page, "XTRM-300"));
-  const navRow = await box(page.getByRole("button", { name: /^Work$/ }).first());
+  const navRow = await box(page.getByTestId("context-sidebar").locator('[role="button"]').filter({ has: page.locator("span", { hasText: /^Issues$/ }) }).first());
   const switcher = await box(page.getByTestId("half-switch"));
-  expect(Math.round(listRow.height)).toBe(ROW_PX);
-  expect(Math.round(switcher.height), "the Work/Agent switcher matches its rows").toBe(ROW_PX);
-  expect(Math.round(navRow.height), "a sidebar row matches the list row").toBe(ROW_PX);
+  expect(Math.round(listRow.height), "a list row is one 32px line").toBe(ROW_PX);
+  expect(Math.round(switcher.height), "the Work/Agent switch").toBe(SIDEBAR_ROW_PX);
+  expect(Math.round(navRow.height), "a sidebar row matches the switch above it").toBe(SIDEBAR_ROW_PX);
 });
 
 test("the title truncates; the rollups stay inside the row", async ({ page }) => {
   await openIssues(page);
   const row = rowFor(page, "XTRM-303");
   const rowBox = await box(row);
-  const title = await rect(row.locator("span.truncate").first());
+  const title = await rect(row.locator("[data-row-title]").first());
   expect(title.width, "the title keeps a readable width at 1440").toBeGreaterThan(180);
 
-  const cluster = row.locator("span.truncate").first().locator("..").locator(":scope > span").last();
+  const cluster = row.locator("[data-row-title]").first().locator("..").locator(":scope > span").last();
   const clusterBox = await box(cluster);
   expect(clusterBox.x + clusterBox.width, "the cluster ends inside the row").toBeLessThanOrEqual(rowBox.x + rowBox.width - 8);
   expect(title.right, "the title stops before the cluster").toBeLessThanOrEqual(clusterBox.x + 1);
 
-  // Nothing is dropped by width: the rollups are in the DOM and visible at 1440.
-  for (const stat of ["work", "activity", "external"]) {
+  // Nothing is dropped by width: the rollups are in the DOM at 1440. The children pill exists only
+  // on an issue with children, so it is checked on the chain's root.
+  for (const stat of ["priority", "activity", "external"]) {
     expect(await row.locator(`[data-stat="${stat}"]`).count(), `${stat} rollup renders`).toBe(1);
   }
+  expect(await rowFor(page, "XTRM-300").locator('[data-stat="work"]').count(), "the children rollup renders on a parent").toBe(1);
 });
 
 test("at 900px the two widest rollups hide and nothing leaves the DOM", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 900 });
   await openIssues(page);
-  const row = rowFor(page, "XTRM-394");
+  // XTRM-300 is the fixture's root with children, so all three rollups render on its row.
+  const row = rowFor(page, "XTRM-300");
   const visible = async (stat: string) => row.locator(`[data-stat="${stat}"]`).first().isVisible();
   expect(await row.locator('[data-stat="activity"]').count(), "the events rollup stays in the DOM").toBe(1);
   expect(await visible("activity"), "the events rollup hides on a narrow surface").toBe(false);

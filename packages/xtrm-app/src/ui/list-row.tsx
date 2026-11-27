@@ -68,7 +68,7 @@ export function ListRow({
         <span data-row-leading="" className="flex min-w-0 shrink-0 items-center gap-1.5">
           {leading}
         </span>
-        <span className={cx("min-w-0 flex-1 truncate text-ink", scale === "base" ? "text-base" : "text-sm", titleClassName)}>{title}</span>
+        <span data-row-title="" className={cx("min-w-0 flex-1 truncate text-ink", scale === "base" ? "text-base" : "text-sm", titleClassName)}>{title}</span>
         {trailing && <span className="flex shrink-0 items-center gap-3 text-xs text-ink-faint">{trailing}</span>}
       </div>
     </Row>
