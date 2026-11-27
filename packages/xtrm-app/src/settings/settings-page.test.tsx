@@ -126,18 +126,30 @@ describe("/settings routes", () => {
     expect(within(page()).getByRole("link", { name: "Integration page" }).getAttribute("href")).toBe("/rep/xtrm-dev/xtrm/project/settings");
   });
 
-  it("scrolls the row a deep link points at into view", async () => {
-    const scrolled: string[] = [];
-    const spy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
-      scrolled.push(this.id);
+  it("scrolls the row a deep link points at into view, with the page's own alignment", async () => {
+    // The router's own hash restoration also calls scrollIntoView, and it passes `true`
+    // (router-core scroll-restoration.js). Recording the argument separates the two, so this
+    // test observes SettingsPage's effect and not the router's.
+    const calls: { id: string; options: unknown }[] = [];
+    const spy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element, options?: boolean | ScrollIntoViewOptions) {
+      calls.push({ id: this.id, options });
     });
     try {
       await mount("/settings/connections#connections-sshTarget");
-      await waitFor(() => expect(scrolled).toContain("connections-sshTarget"));
+      const pageCall = () => calls.find((c) => c.id === "connections-sshTarget" && (c.options as ScrollIntoViewOptions | undefined)?.block === "start");
+      await waitFor(() => expect(pageCall()).toBeTruthy());
+      expect(pageCall()!.options).toEqual({ block: "start" });
       expect(rowOf("connections.sshTarget")!.id).toBe("connections-sshTarget");
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it("shows no row reset while the sidebar already holds the model's default", async () => {
+    localStorage.setItem("xtrm.console.layout.v1", JSON.stringify({ sidebarOpen: DEFAULT_APP_SETTINGS["layout.sidebarOpen"], sidebarWidth: 264 }));
+    await mount("/settings/layout");
+    expect(within(rowOf("layout.sidebarOpen")!).queryByRole("button", { name: "Reset Sidebar open" })).toBeNull();
+    expect(within(page()).queryByRole("button", { name: "Reset Layout" })).toBeNull();
   });
 
   it("marks host values unknown and says so when the agent host does not answer", async () => {
@@ -153,12 +165,15 @@ describe("/settings routes", () => {
   });
 
   it("resets the theme and the sidebar to the model's defaults", async () => {
-    localStorage.setItem("xtrm.console.layout.v1", JSON.stringify({ sidebarOpen: false, sidebarWidth: 264 }));
+    // Seeded off the default and read back against DEFAULT_APP_SETTINGS, so the row reset is pinned
+    // to the model's value rather than to a literal.
+    const defaultOpen = DEFAULT_APP_SETTINGS["layout.sidebarOpen"];
+    localStorage.setItem("xtrm.console.layout.v1", JSON.stringify({ sidebarOpen: !defaultOpen, sidebarWidth: 264 }));
     await mount("/settings/layout");
     const open = rowOf("layout.sidebarOpen")!;
-    expect(within(open).getByTestId("setting-value").textContent).toBe("Off");
+    expect(within(open).getByTestId("setting-value").textContent).toBe(defaultOpen ? "Off" : "On");
     fireEvent.click(within(open).getByRole("button", { name: "Reset Sidebar open" }));
-    await waitFor(() => expect(within(open).getByTestId("setting-value").textContent).toBe(DEFAULT_APP_SETTINGS["layout.sidebarOpen"] ? "On" : "Off"));
+    await waitFor(() => expect(within(open).getByTestId("setting-value").textContent).toBe(defaultOpen ? "On" : "Off"));
     expect(within(open).queryByRole("button", { name: "Reset Sidebar open" })).toBeNull();
 
     fireEvent.click(within(page()).getByRole("link", { name: "Appearance" }));
