@@ -28,8 +28,10 @@ describe("Console v2 shell", () => {
     expect(screen.queryByTestId("global-rail")).toBeNull();
     expect(screen.getByTestId("context-sidebar")).toBeTruthy();
     expect(screen.getByTestId("inspector-rail")).toBeTruthy();
-    // The list shows the hierarchical locator alone; the flat ref lives in the key cell's tooltip.
-    const key = await screen.findByText("XTRM-300.1");
+    // The list key is the shared pill (2026-11-27 ruling): locator | short ref, full address in its tooltip.
+    await screen.findByText("XTRM-300.1");
+    const key = document.querySelector('[data-key-cell] [data-issue-key="XTRM-301"]') as HTMLElement;
+    expect(key.dataset.locator).toBe("XTRM-300.1");
     expect(key.getAttribute("title")).toBe("XTRM-300.1 / XTRM-301");
   });
 

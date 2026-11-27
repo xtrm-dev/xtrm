@@ -13,7 +13,8 @@ import { useCanWrite } from "./actions.ts";
 import { IssueBoard } from "./IssueBoard.tsx";
 import { INDENT_REM, ISSUE_STATUSES, buildTree, defaultDesc, keyNames, matchesIssueStatusSet, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
 import { KeyChip, ListRow, StatPill } from "../ui/list-row.tsx";
-import { TERMINAL, PriorityGlyph, kindIcon } from "./meta.tsx";
+import { TERMINAL, PriorityScrutinyPill, kindIcon } from "./meta.tsx";
+import { IssueKeyPill } from "../ui/issue-key-pill.tsx";
 import { IssueStatusBadge } from "./IssueStatusBadge.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
@@ -242,19 +243,19 @@ function IssueRow({
                 e.stopPropagation();
                 onToggle();
               }}
-              className="-ml-1 flex size-5 shrink-0 items-center justify-center rounded-full text-ink-faint outline-none hover:bg-pressed hover:text-ink focus-visible:bg-pressed"
+              className="-ml-2 -mr-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-ink-faint outline-none hover:bg-pressed hover:text-ink focus-visible:bg-pressed"
             >
               <Icon name="chevronDown" size="text" className={cx("transition-transform", collapsed && "-rotate-90")} />
             </button>
           ) : (
-            <span className="-ml-1 w-5 shrink-0" />
+            <span className="-ml-2 -mr-0.5 w-5 shrink-0" />
           )}
           <span title={issue.kind} className="flex shrink-0">
             <Icon name={kindIcon(issue.kind)} size="text" className="text-ink-faint" />
           </span>
-          <PriorityGlyph priority={issue.priority} />
+          {/* The key is the shared pill (2026-11-27 ruling, reversing the bare key): locator | short ref. */}
           <span data-key-cell="" className="flex min-w-0">
-            <KeyChip title={keyNames(issue)}>{issue.locator || issue.ref}</KeyChip>
+            <IssueKeyPill locator={issue.locator} humanRef={issue.ref} title={keyNames(issue)} className="shrink-0" />
           </span>
           {/* One chip for the list and the drawer: label, tone and fill live in IssueStatusBadge. */}
           <IssueStatusBadge issue={issue} size="xs" />
@@ -274,6 +275,7 @@ function IssueRow({
       }
       trailing={
         <>
+          <PriorityScrutinyPill priority={issue.priority} scrutiny={issue.scrutiny} />
           {issue.childCount > 0 && (
             <StatPill icon="work" tone="accent" value={`${issue.childrenDone}/${issue.childCount}`} title={`${issue.childrenDone} of ${issue.childCount} children done`} />
           )}
