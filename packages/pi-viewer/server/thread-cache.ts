@@ -436,21 +436,44 @@ export function cachedThread(
  * operator has opened and closed all day. Pruning on each discovery keeps the cache proportional to what
  * is actually on screen.
  */
+/** Consecutive discoveries a key has been absent from, so one transient empty listing cannot drop it. */
+const misses = new Map<string, number>()
+
+function absent(key: string, drop: () => void): boolean {
+  const seen = (misses.get(key) ?? 0) + 1
+  if (seen < 2) {
+    misses.set(key, seen)
+    return false
+  }
+  misses.delete(key)
+  drop()
+  return true
+}
+
 export function pruneCaches(agentIds: Set<string>, sessionNames: Set<string>): number {
   let dropped = 0
   for (const id of agentCache.keys()) {
-    if (!agentIds.has(id)) {
-      agentCache.delete(id)
-      dropped += 1
+    if (agentIds.has(id)) {
+      misses.delete(`a:${id}`)
+      continue
     }
+    if (absent(`a:${id}`, () => agentCache.delete(id))) dropped += 1
   }
   for (const name of sessionCache.keys()) {
-    if (!sessionNames.has(name)) {
-      sessionCache.delete(name)
-      dropped += 1
+    if (sessionNames.has(name)) {
+      misses.delete(`s:${name}`)
+      continue
     }
+    // Two strikes: a pane that is momentarily missing from a listing must not reset the session's
+    // revision, which would make the client re-page a thread and lose its scroll position.
+    if (absent(`s:${name}`, () => sessionCache.delete(name))) dropped += 1
   }
   return dropped
+}
+
+/** Test hook: what the caches currently hold, so a prune test can assert membership, not a count. */
+export function cachedKeys(): { agents: string[]; sessions: string[] } {
+  return { agents: [...agentCache.keys()], sessions: [...sessionCache.keys()] }
 }
 
 /** Test/ops hook: forget a cached session so the next request rebuilds. */

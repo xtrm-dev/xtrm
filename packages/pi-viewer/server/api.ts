@@ -15,10 +15,10 @@ import type {
 import { normalizeClaudeEvent, parseClaudeFile } from "./claude.ts"
 import { discoverAsync, type Discovery } from "./discover.ts"
 import { applyIntercomResults, intercomPairKey } from "./intercom.ts"
-import { normalizeEvent, parseSessionFile } from "./session.ts"
-import { stripControls, writeVerdict } from "./guard.ts"
+import { normalizeEvent, parseSessionFile, pruneFileCaches } from "./session.ts"
 import { stopPlan } from "./stop.ts"
 import { cachedThread, pruneCaches } from "./thread-cache.ts"
+import { flattenMessage, hostVerdict, writeVerdict } from "./guard.ts"
 
 const MAX_TEXT = 20_000
 const MAX_BODY = 64 * 1024
@@ -52,7 +52,11 @@ function sendBody(res: ServerResponse, status: number, payload: string, gz: Buff
  */
 function requireWrite(req: IncomingMessage): void {
   const verdict = writeVerdict(req.headers)
-  if (!verdict.ok) throw new ApiError(403, verdict.reason)
+  if (!verdict.ok) {
+    // One line, with the reason, so an operator can tell a hostile page from a broken client.
+    console.warn(`[pi-viewer] write refused: ${verdict.reason}`)
+    throw new ApiError(403, verdict.reason)
+  }
 }
 
 async function sendJson(req: IncomingMessage, res: ServerResponse, status: number, body: unknown): Promise<void> {
@@ -323,6 +327,13 @@ export function refreshDiscovery(): Promise<Discovery> {
       pruneCaches(
         new Set(found.sessions.flatMap((session) => session.agents.map((agent) => agent.id))),
         new Set(found.sessions.map((session) => session.name)),
+      )
+      pruneFileCaches(
+        new Set(
+          found.sessions.flatMap((session) =>
+            session.agents.map((agent) => agent.sessionFile).filter((file): file is string => Boolean(file)),
+          ),
+        ),
       )
       return found
     })
@@ -598,7 +609,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<boolean
 
     // One line per send: a literal newline would submit the prompt early. Control characters would be
     // interpreted by the pane as keys, so they are removed before anything reaches tmux (XTRM-1109).
-    const flat = stripControls(text).replace(/\r?\n+/g, " ")
+    const flat = flattenMessage(text)
     if (!flat.trim()) throw new ApiError(400, "empty message")
     try {
       // Async, so a slow or wedged tmux cannot block the event loop that serves every other reader.
@@ -648,6 +659,12 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
   const url = new URL(req.url ?? "/", "http://localhost")
   if (!url.pathname.startsWith("/api/")) return false
   try {
+    // Reads too: a rebinding page could otherwise page through transcripts (XTRM-1109 round 2).
+    const host = hostVerdict(req.headers)
+    if (!host.ok) {
+      if ((req.method ?? "GET") !== "GET") console.warn(`[pi-viewer] write refused: ${host.reason}`)
+      throw new ApiError(403, host.reason)
+    }
     return await route(req, res)
   } catch (error) {
     if (error instanceof ApiError) {

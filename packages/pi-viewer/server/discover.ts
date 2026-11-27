@@ -398,7 +398,10 @@ function resolvePaneAgent(
       parsed = null
     }
   }
-  const state: AgentState = parsed ? statusOf(parsed) : { status: "unknown", note: "no session file" }
+  // An unreadable file is not a missing one (XTRM-1109 round 2): the operator needs the difference.
+  const state: AgentState = parsed
+    ? statusOf(parsed)
+    : { status: "unknown", note: chosen.file ? "session file unreadable" : "no session file" }
   const name = uniqueName(
     parsed?.sessionName || wanted || basename(chosen.cwd) || pane.windowName || pane.paneId,
     pane,

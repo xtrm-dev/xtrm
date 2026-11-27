@@ -197,6 +197,45 @@ export function mergeFile(file: string): FileCache {
 }
 
 /** Forget every cached read of `file`; the next read parses it from the start (replay harness). */
+/** Consecutive prunes a file has been absent from, so one failed listing cannot drop a live cache. */
+const fileMisses = new Map<string, number>()
+
+/**
+ * Drop the per-file caches for transcripts that are gone (XTRM-1109 round 2, leaf finding).
+ *
+ * The three caches are keyed by path and, before this, only grew: a long-running server kept every
+ * transcript it had ever parsed, and a Piper agent that rotates its session file left the old one
+ * behind for the life of the process. Two consecutive absences are required for the same reason the
+ * thread caches use two: a listing that momentarily comes back empty must not throw away a live entry.
+ */
+export function pruneFileCaches(live: Set<string>): number {
+  // One decision per FILE, not per cache: a path lives in up to three maps, and counting each map
+  // separately would reach the two-strike limit inside a single call.
+  const files = new Set([...fileCache.keys(), ...parsedCache.keys(), ...nameCache.keys()])
+  let dropped = 0
+  for (const file of files) {
+    if (live.has(file)) {
+      fileMisses.delete(file)
+      continue
+    }
+    const seen = (fileMisses.get(file) ?? 0) + 1
+    if (seen < 2) {
+      fileMisses.set(file, seen)
+      continue
+    }
+    fileMisses.delete(file)
+    if (fileCache.delete(file)) dropped += 1
+    if (parsedCache.delete(file)) dropped += 1
+    if (nameCache.delete(file)) dropped += 1
+  }
+  return dropped
+}
+
+/** Test hook: the paths the three per-file caches currently hold. */
+export function cachedFiles(): string[] {
+  return [...new Set([...fileCache.keys(), ...parsedCache.keys(), ...nameCache.keys()])]
+}
+
 export function dropFileCache(file: string): void {
   fileCache.delete(file)
   parsedCache.delete(file)

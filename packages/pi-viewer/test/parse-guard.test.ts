@@ -10,7 +10,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { invalidateThread, cachedThread, pruneCaches } from "../server/thread-cache.ts"
+import { cachedKeys, cachedThread, invalidateThread, pruneCaches } from "../server/thread-cache.ts"
+import { cachedFiles, parseSessionFile, pruneFileCaches } from "../server/session.ts"
 import type { ViewerAgent } from "../src/shared/types.ts"
 
 const dir = mkdtempSync(join(tmpdir(), "pi-viewer-parse-"))
@@ -82,8 +83,52 @@ test("pruneCaches drops the agents and sessions that are gone and keeps the live
   invalidateThread("live")
   cachedThread(session("live", [agent({ id: "%7", paneId: "%7" })]), { limit: 10, scope: "all" })
   cachedThread(session("dead", [agent({ id: "%8", paneId: "%8" })]), { limit: 10, scope: "all" })
+  // Two strikes: one discovery without a pane does not drop it (XTRM-1109 round 2).
+  pruneCaches(new Set(["%7"]), new Set(["live"]))
   const dropped = pruneCaches(new Set(["%7"]), new Set(["live"]))
   assert.ok(dropped >= 1, `at least the dead session is dropped (dropped ${dropped})`)
+  assert.ok(!cachedKeys().sessions.includes("dead"), "the gone session is no longer cached")
+  assert.ok(cachedKeys().sessions.includes("live"), "the live session survives")
   // The live entry survives: a second call is served from the cache without throwing.
   assert.doesNotThrow(() => cachedThread(session("live", [agent({ id: "%7", paneId: "%7" })]), { limit: 10, scope: "all" }))
+})
+
+test("a session cache survives one transient absence and is dropped on the second", () => {
+  invalidateThread("twice")
+  cachedThread(session("twice", [agent({ id: "%21", paneId: "%21" })]), { limit: 10, scope: "all" })
+  assert.ok(cachedKeys().sessions.includes("twice"), "cached before the prune")
+  // First discovery without the pane: kept, so a listing that momentarily lost it cannot reset the
+  // revision the client pages with.
+  pruneCaches(new Set(), new Set())
+  assert.ok(cachedKeys().sessions.includes("twice"), "a single absence keeps the session")
+  assert.ok(cachedKeys().agents.includes("%21"), "a single absence keeps the agent")
+  pruneCaches(new Set(), new Set())
+  assert.ok(!cachedKeys().sessions.includes("twice"), "the second absence drops the session")
+  assert.ok(!cachedKeys().agents.includes("%21"), "the second absence drops the agent")
+})
+
+test("a cache key that comes back between absences starts counting again", () => {
+  invalidateThread("flaps")
+  cachedThread(session("flaps", [agent({ id: "%22", paneId: "%22" })]), { limit: 10, scope: "all" })
+  pruneCaches(new Set(), new Set())
+  pruneCaches(new Set(["%22"]), new Set(["flaps"]))
+  pruneCaches(new Set(), new Set())
+  assert.ok(cachedKeys().sessions.includes("flaps"), "the strike count restarted when the key returned")
+  assert.ok(cachedKeys().agents.includes("%22"))
+})
+
+test("the per-file caches prune on the same two-absence rule", () => {
+  const live = join(dir, "prune-live.jsonl")
+  const gone = join(dir, "prune-gone.jsonl")
+  const line = `${JSON.stringify({ type: "message", id: "p1", timestamp: "2026-11-26T00:00:00.000Z", message: { role: "user", content: "hi" } })}\n`
+  writeFileSync(live, line)
+  writeFileSync(gone, line)
+  parseSessionFile(live)
+  parseSessionFile(gone)
+  assert.ok(cachedFiles().includes(gone), "the parsed path is cached")
+  pruneFileCaches(new Set([live]))
+  assert.ok(cachedFiles().includes(gone), "one absence keeps the file cache")
+  pruneFileCaches(new Set([live]))
+  assert.ok(!cachedFiles().includes(gone), "two absences drop the file cache")
+  assert.ok(cachedFiles().includes(live), "a live path always survives")
 })

@@ -80,15 +80,16 @@ interface Answer {
 /** One request through handleApi, with a minimal Node stream standing in for the socket. */
 async function call(options: {
   url: string
+  method?: string
   body?: unknown
   headers?: Record<string, string>
   rawBody?: string
 }): Promise<Answer> {
   const payload = options.rawBody ?? JSON.stringify(options.body ?? {})
   const req = Readable.from([Buffer.from(payload)]) as unknown as IncomingMessage
-  req.method = "POST"
+  req.method = options.method ?? "POST"
   req.url = options.url
-  req.headers = { "content-type": "application/json", ...options.headers }
+  req.headers = { host: "127.0.0.1:5199", "content-type": "application/json", ...options.headers }
   let status = 0
   let text = ""
   const res = {
@@ -200,5 +201,116 @@ test("an unknown pane is a 404 and a malformed pane id a 400, both without tmux"
 test("a text-empty send after stripping is refused", async () => {
   const answer = await call({ url: "/api/send", body: { paneId: PANE, text: "\u0000\u0007" }, headers: SAME_ORIGIN })
   assert.equal(answer.status, 400)
+  assert.deepEqual(calls(), [])
+})
+
+test("Sec-Fetch-Site cross-site with JSON and no Origin is refused", async () => {
+  const answer = await call({
+    url: "/api/send",
+    body: { paneId: PANE, text: "hi" },
+    headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" },
+  })
+  assert.equal(answer.status, 403, JSON.stringify(answer.body))
+  assert.match(String(answer.body.error), /sec-fetch-site/)
+  assert.deepEqual(calls(), [])
+})
+
+test("a null Origin is refused", async () => {
+  const answer = await call({
+    url: "/api/stop",
+    body: { paneId: PANE },
+    headers: { origin: "null", "content-type": "application/json" },
+  })
+  assert.equal(answer.status, 403, JSON.stringify(answer.body))
+  assert.match(String(answer.body.error), /origin/)
+  assert.deepEqual(calls(), [])
+})
+
+test("the content type is matched exactly, parameters allowed", async () => {
+  const stray = await call({
+    url: "/api/stop",
+    body: { paneId: PANE },
+    headers: { ...SAME_ORIGIN, "content-type": "application/jsonx" },
+  })
+  assert.equal(stray.status, 403, `application/jsonx must not pass (${JSON.stringify(stray.body)})`)
+  const withCharset = await call({
+    url: "/api/stop",
+    body: { paneId: PANE },
+    headers: { ...SAME_ORIGIN, "content-type": "application/json; charset=utf-8" },
+  })
+  assert.equal(withCharset.status, 200, JSON.stringify(withCharset.body))
+})
+
+test("a rebound Host is refused on a write and on a read", async () => {
+  const write = await call({ url: "/api/stop", body: { paneId: PANE }, headers: { ...SAME_ORIGIN, host: "evil.example:5199" } })
+  assert.equal(write.status, 403, JSON.stringify(write.body))
+  assert.match(String(write.body.error), /host refused/)
+  assert.deepEqual(calls(), [], "a rebound write never reaches tmux")
+  const read = await call({ url: "/api/sessions", method: "GET", headers: { host: "evil.example:5199" } })
+  assert.equal(read.status, 403, "a rebound page must not be able to read transcripts")
+  assert.match(String(read.body.error), /host refused/)
+})
+
+test("the loopback Hosts are accepted, with and without a port", async () => {
+  for (const host of ["127.0.0.1", "127.0.0.1:5199", "localhost:5199", "[::1]:5199"]) {
+    const answer = await call({ url: "/api/sessions", method: "GET", headers: { host } })
+    assert.equal(answer.status, 200, `host ${host} must be served (${JSON.stringify(answer.body)})`)
+  }
+})
+
+test("a refused write is logged once, with its reason", async () => {
+  const logged: string[] = []
+  const original = console.warn
+  console.warn = (...args: unknown[]) => logged.push(args.join(" "))
+  try {
+    await call({ url: "/api/send", body: { paneId: PANE, text: "x" }, headers: CROSS_SITE })
+  } finally {
+    console.warn = original
+  }
+  assert.equal(logged.length, 1, `one warn per refusal, got ${logged.length}`)
+  assert.match(logged[0], /^\[pi-viewer\] write refused: /)
+})
+
+test("every line-break form collapses to one space before tmux", async () => {
+  const cases: [string, string][] = [
+    ["a\rb", "a b"],
+    ["a\r\nb", "a b"],
+    ["a\nb", "a b"],
+    ["a\r\r\nb\n\nc", "a b c"],
+    // The route trims the edges before it flattens the middle, so a leading CR simply goes.
+    ["\rhello", "hello"],
+  ]
+  for (const [input, expected] of cases) {
+    writeFileSync(logFile, "")
+    const answer = await call({ url: "/api/send", body: { paneId: PANE, text: input }, headers: SAME_ORIGIN })
+    assert.equal(answer.status, 200, `${JSON.stringify(input)}: ${JSON.stringify(answer.body)}`)
+    assert.equal(calls()[0]?.[5], expected, `${JSON.stringify(input)} reaches tmux as ${JSON.stringify(expected)}`)
+    assert.equal(calls().length, 2, "a send is one literal line plus Enter")
+  }
+})
+
+test("every C0 control and DEL is stripped, tab kept", async () => {
+  let input = ""
+  let expected = ""
+  for (let code = 0; code <= 0x1f; code += 1) {
+    if (code === 0x0a || code === 0x0d) continue
+    if (code === 0x09) {
+      input += "\t"
+      expected += "\t"
+      continue
+    }
+    input += String.fromCharCode(code)
+  }
+  input += "\u007f"
+  input += "ok"
+  expected += "ok"
+  const answer = await call({ url: "/api/send", body: { paneId: PANE, text: input }, headers: SAME_ORIGIN })
+  assert.equal(answer.status, 200, JSON.stringify(answer.body))
+  assert.equal(calls()[0]?.[5], expected)
+})
+
+test("a message that is only breaks and controls is refused as empty", async () => {
+  const answer = await call({ url: "/api/send", body: { paneId: PANE, text: "\r\n\u0007\r" }, headers: SAME_ORIGIN })
+  assert.equal(answer.status, 400, JSON.stringify(answer.body))
   assert.deepEqual(calls(), [])
 })

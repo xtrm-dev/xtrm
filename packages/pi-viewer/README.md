@@ -276,9 +276,16 @@ machine's own viewer, with a `403`:
 - `Sec-Fetch-Site`, when the browser sends it, must be `same-origin` or `none`;
 - `Origin`, when present, must name a loopback host.
 
+Every `/api` route — reads included — also requires `Host` to be `127.0.0.1`, `localhost` or `[::1]`,
+with an optional port. A page on another domain can be rebound to 127.0.0.1 after it loads, so its
+requests then look same-origin; they still carry `Host: that-domain`, which this check refuses, so a
+rebound page cannot read transcripts either (XTRM-1109 round 2).
+
 The loopback bind, Vite's host check and CORS do not stop a *simple* cross-origin write, which is why
 the routes check the request itself (XTRM-1109). Control characters are stripped from sent text before
-it reaches `tmux send-keys`, so a message cannot smuggle keystrokes. On top of that, a transcript that
+it reaches `tmux send-keys`, and every line-break form — `CR`, `LF`, `CRLF`, runs of them — collapses to
+one space, because a lone `CR` handed to `send-keys -l` submits the prompt early. A refused write logs
+one `console.warn` with its reason. On top of that, a transcript that
 vanishes or turns unreadable degrades to that one agent instead of failing every route, and both
 thread caches are pruned against each discovery so they track what is running.
 
