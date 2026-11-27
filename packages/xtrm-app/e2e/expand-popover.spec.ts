@@ -179,6 +179,8 @@ test.describe("expanding popover", () => {
 
   test("Esc, an outside click and the arrow keys work, and focus returns to the trigger", async ({ page }) => {
     await page.goto("/rep/xtrm-dev/xtrm/work/issues");
+    // A click before hydration is a silent no-op, so wait for the shell to mount first.
+    await page.locator(DROPUP).waitFor();
 
     await page.locator(DROPUP).click();
     await expect(page.getByTestId("board-transport")).toBeVisible();
@@ -202,8 +204,101 @@ test.describe("expanding popover", () => {
     await expect(page.locator("[data-expand-popover]")).toHaveCount(0);
   });
 
+  test("a second press on the open row closes the panel and leaves focus on the trigger", async ({ page }) => {
+    await page.goto("/rep/xtrm-dev/xtrm/work/issues");
+    await page.locator(DROPUP).waitFor();
+
+    for (const selector of [DROPUP, REPO]) {
+      await page.locator(selector).click();
+      await expect(page.locator("[data-expand-popover]")).toBeVisible();
+      // The header is painted over the trigger, so a press on that row must reach the trigger.
+      const centre = await page.evaluate((sel) => {
+        const box = document.querySelector(sel)!.getBoundingClientRect();
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      }, selector);
+      await page.mouse.click(centre.x, centre.y);
+      await expect(page.locator("[data-expand-popover]")).toHaveCount(0);
+      const focused = await page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+      expect(focused === "Data sources" || focused?.startsWith("Repository:")).toBe(true);
+    }
+  });
+
+  test("a viewport resize keeps the header on the trigger and the panel on screen", async ({ page }) => {
+    await page.goto("/rep/xtrm-dev/xtrm/work/issues");
+    await page.locator(REPO).waitFor();
+    await page.locator(REPO).click();
+    await expect(page.locator('[data-expand-popover][data-side="bottom"]')).toBeVisible();
+
+    for (const size of [{ width: 1100, height: 760 }, { width: 1600, height: 900 }, { width: 900, height: 420 }]) {
+      await page.setViewportSize(size);
+      await page.waitForTimeout(250);
+      const measured = await page.evaluate(() => {
+        const popup = document.querySelector("[data-expand-popover]")!;
+        const header = popup.querySelector("[data-expand-popover-header]")!.getBoundingClientRect();
+        const trigger = document.querySelector('[data-testid="context-sidebar"] button[aria-label^="Repository:"]')!.getBoundingClientRect();
+        const surface = popup.querySelector("[data-expand-popover-surface]")!.getBoundingClientRect();
+        return {
+          header: { x: header.x, y: header.y, width: header.width, height: header.height },
+          trigger: { x: trigger.x, y: trigger.y, width: trigger.width, height: trigger.height },
+          surface: { top: surface.top, bottom: surface.bottom, width: surface.width },
+          viewport: { height: window.innerHeight, width: window.innerWidth },
+        };
+      });
+      expectSameRect(measured.header, measured.trigger);
+      expect(Math.abs(measured.surface.width - measured.header.width)).toBeLessThanOrEqual(1);
+      expect(measured.surface.top).toBeGreaterThanOrEqual(0);
+      expect(measured.surface.bottom).toBeLessThanOrEqual(measured.viewport.height);
+    }
+  });
+
+  test("dragging the sidebar edge closes the panel instead of leaving stale geometry", async ({ page }) => {
+    await page.goto("/rep/xtrm-dev/xtrm/work/issues");
+    await page.locator(REPO).waitFor();
+    await page.locator(REPO).click();
+    await expect(page.locator("[data-expand-popover]")).toBeVisible();
+
+    const handle = await page.getByRole("separator", { name: "Resize sidebar" }).boundingBox();
+    expect(handle).not.toBeNull();
+    await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(handle!.x + handle!.width / 2 + 60, handle!.y + 200, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.locator("[data-expand-popover]")).toHaveCount(0);
+  });
+
+  test("a short viewport keeps both panels on screen and scrolls their content", async ({ page }) => {
+    for (const [height, selector, testid] of [
+      [220, DROPUP, "board-transport"],
+      [300, REPO, null],
+    ] as const) {
+      await page.setViewportSize({ width: 1440, height });
+      await page.goto("/rep/xtrm-dev/xtrm/work/issues");
+      await page.locator(selector).waitFor();
+      await page.locator(selector).click();
+      await expect(page.locator("[data-expand-popover]")).toBeVisible();
+      if (testid) await expect(page.getByTestId(testid)).toBeVisible();
+      await page.waitForTimeout(300);
+
+      const measured = await page.evaluate(() => {
+        const surface = document.querySelector("[data-expand-popover-surface]")!.getBoundingClientRect();
+        const scroll = document.querySelector("[data-expand-popover-scroll]")!;
+        return {
+          top: surface.top,
+          bottom: surface.bottom,
+          height: window.innerHeight,
+          scrollable: scroll.scrollHeight > scroll.clientHeight + 1,
+        };
+      });
+      // The panel is capped at the room beside its trigger and scrolls inside; nothing runs off.
+      expect(measured.top).toBeGreaterThanOrEqual(0);
+      expect(measured.bottom).toBeLessThanOrEqual(measured.height);
+      expect(measured.scrollable).toBe(true);
+    }
+  });
+
   test("the collapsed sidebar hides the triggers and re-expanding restores the expanding panel", async ({ page }) => {
     await page.goto("/rep/xtrm-dev/xtrm/work/issues");
+    await page.locator(DROPUP).waitFor();
     await page.locator(DROPUP).click();
     await expect(page.locator("[data-expand-popover]")).toBeVisible();
     await page.keyboard.press("Escape");

@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Popover } from "./popover.tsx";
 import { cx } from "./primitives.tsx";
 
@@ -18,6 +18,11 @@ import { cx } from "./primitives.tsx";
  * There is no detached variant: the console has no collapsed icon rail (the sidebar collapses to
  * zero extent, so neither trigger is rendered), and the operator asked for an expanding popover in
  * every state the component can appear in.
+ *
+ * The header is painted over the trigger, so it must not eat the pointer: the popup box and the
+ * header are `pointer-events-none` (only the panel surface is interactive). A second press on the
+ * row that opened the panel therefore reaches the trigger and closes it, as it did before the
+ * change, while the header stays out of the accessibility tree and out of the tab order.
  */
 export function ExpandPopover({
   side,
@@ -51,6 +56,36 @@ export function ExpandPopover({
 }) {
   const content = typeof row === "function" ? row({ open }) : row;
 
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [cap, setCap] = useState<number | null>(null);
+
+  /**
+   * Cap the panel at the room between the trigger edge and the viewport edge, so a short window
+   * never pushes content off screen: the panel scrolls instead. `--available-height` (Base UI)
+   * measures the floating box, which here is the trigger rect, so it overstates the room the
+   * off-box surface really has.
+   */
+  useLayoutEffect(() => {
+    if (!open) {
+      setCap(null);
+      return;
+    }
+    const measure = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const room = side === "top" ? rect.top : window.innerHeight - rect.bottom;
+      setCap(Math.max(0, Math.floor(room - 8)));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open, side]);
+
   const header = (
     <div
       aria-hidden="true"
@@ -58,7 +93,7 @@ export function ExpandPopover({
       // The same attribute Base UI puts on the trigger while open, so the trigger's
       // `data-[popup-open]:` classes paint the header identically.
       data-popup-open={open ? "" : undefined}
-      className={cx("relative shrink-0", triggerClassName)}
+      className={cx("pointer-events-none relative shrink-0", triggerClassName)}
     >
       {content}
     </div>
@@ -72,17 +107,33 @@ export function ExpandPopover({
   const surface = (
     <div
       data-expand-popover-surface=""
-      className={cx("absolute inset-x-0 overflow-hidden", side === "top" ? "bottom-full" : "top-full", popupClassName)}
+      className={cx(
+        "pointer-events-auto absolute inset-x-0 overflow-hidden",
+        side === "top" ? "bottom-full" : "top-full",
+        popupClassName,
+      )}
     >
-      <div data-expand-popover-body="" className={cx("min-h-0 overflow-hidden", bodyClassName)}>
-        {children}
+      {/* The grid row is the animated height and clips while it grows; the box inside it scrolls
+          when the viewport caps the panel, so a short window never pushes content off screen. */}
+      <div data-expand-popover-body="" className="min-h-0 overflow-hidden">
+        <div
+          data-expand-popover-scroll=""
+          style={cap === null ? undefined : { maxHeight: `${cap}px` }}
+          className={cx(
+            // Children keep their height instead of compressing: the panel scrolls, it never squashes rows.
+            "max-h-[var(--available-height,calc(100vh_-_1rem))] overflow-y-auto overscroll-contain [&>*]:shrink-0",
+            bodyClassName,
+          )}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
 
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
-      <Popover.Trigger aria-label={label} className={triggerClassName}>
+      <Popover.Trigger ref={triggerRef} aria-label={label} className={triggerClassName}>
         {content}
       </Popover.Trigger>
       <Popover.Portal>
@@ -93,12 +144,13 @@ export function ExpandPopover({
           // The popover must stay on its side and on the trigger's left edge: a flip or a shift
           // would break the header/trigger geometry the component exists for.
           collisionAvoidance={{ side: "none", align: "none", fallbackAxisSide: "none" }}
-          className="z-50"
+          // The positioner box also sits on the trigger rect; it must not swallow the press either.
+          className="pointer-events-none z-50"
         >
           <Popover.Popup
             aria-label={label}
             data-expand-popover=""
-            className="relative w-[var(--anchor-width)] outline-none"
+            className="pointer-events-none relative w-[var(--anchor-width)] outline-none"
             onKeyDown={moveThroughRows}
           >
             {surface}
