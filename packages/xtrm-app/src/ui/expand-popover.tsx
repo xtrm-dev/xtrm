@@ -76,10 +76,10 @@ export function ExpandPopover({
    * off-box surface really has.
    */
   useLayoutEffect(() => {
-    if (!open) {
-      setCap(null);
-      return;
-    }
+    // Closing keeps the last cap: the panel animates out at the height it had. Clearing it here
+    // let the body grow to its full content for the 180 ms exit, which overflowed the viewport,
+    // flashed the page scrollbar and nudged the sidebar width (XTRM-1136).
+    if (!open) return;
     const measure = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;

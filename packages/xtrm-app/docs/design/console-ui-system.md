@@ -656,7 +656,8 @@ Four states plus `unknown` — `draft` is a flag on an open PR, resolved once by
   already has a coloured status (§2.3 rule 1).
 - `PrStateChip({ state, draft?, stateSource?, showSource?, size? })` — the glyph + word chip on the
   state's solid fill. Every status pill in the console has this shape (XTRM-1136): `IssueStatusBadge`
-  leads with a circle-family glyph from `issueStatus().icon`. Call
+  leads with a glyph from `issueStatus().icon`: one glyph per status family (open-like gaps share a
+  circle, Ready and Attested share a dotted circle), so the word still names the exact status. Call
   sites: the PR list row, the PR inspector header, and (as the `PrStateBadge` alias) a linked PR row
   in the issue page's PR block, where `showSource` adds the `assumed` chip. The PR list row's rollups
   are the bold diff (`text-success-ink` additions, `text-danger` deletions) and tint pills for checks
@@ -667,7 +668,8 @@ Four states plus `unknown` — `draft` is a flag on an open PR, resolved once by
   for none.
 
 Enforcement: `src/ui/pr-key.test.tsx` (four states, unknown rendered, distinct glyph per state, quiet,
-chip in its tone), `src/github/pulls.test.tsx` (Restraint rules 1 and 3), 
+chip in its tone), `src/github/pulls.test.tsx` (rule 1 as superseded for the PR row by XTRM-1136: coloured
+diff and state pills; rule 3), 
 `src/ui/linked-refs.test.tsx` (em dash) with the connected cases in `src/github/pulls.test.tsx`.
 
 ## 11. Hairlines, not boxes

@@ -299,6 +299,10 @@ test.describe("expanding popover", () => {
     await page.locator(REPO).waitFor();
     await page.locator(REPO).click();
     await expect(page.locator("[data-expand-popover]")).toBeVisible();
+    // Unfiltered, the picker lists only the most recently active repositories (XTRM-1136).
+    await expect(page.locator('[data-expand-popover] [role="option"]')).toHaveCount(8);
+    // The filter searches every repository, so a broad match still fills the capped panel.
+    await page.getByLabel("Filter repositories").fill("/");
     await expect(page.locator('[data-expand-popover] [role="option"]')).toHaveCount(45);
     await page.waitForTimeout(300);
 
@@ -335,6 +339,45 @@ test.describe("expanding popover", () => {
 
     // The wheel moved the list under the pointer, not just the panel.
     expect(await page.evaluate(() => document.querySelectorAll('[data-expand-popover] [role="option"]').length)).toBe(45);
+  });
+
+  test("closing the picker never grows the page or moves the sidebar (XTRM-1136)", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 600 });
+    await page.goto("/rep/xtrm-dev/xtrm/work/issues?fixtureRepos=45");
+    await page.locator(REPO).waitFor();
+    await page.locator(REPO).click();
+    await page.getByLabel("Filter repositories").fill("/");
+    await expect(page.locator('[data-expand-popover] [role="option"]')).toHaveCount(45);
+    await page.waitForTimeout(300);
+    const sidebarWidth = () => page.evaluate(() => document.querySelector('[data-testid="context-sidebar"]')!.getBoundingClientRect().width);
+    const before = await sidebarWidth();
+
+    // Sample every frame of the exit animation: the panel keeps its cap until it is gone.
+    const samples = page.evaluate(
+      () =>
+        new Promise<Array<{ overflow: number; panel: number }>>((resolve) => {
+          const out: Array<{ overflow: number; panel: number }> = [];
+          const start = performance.now();
+          const tick = () => {
+            const scroll = document.querySelector("[data-expand-popover-scroll]");
+            out.push({
+              overflow: document.documentElement.scrollHeight - window.innerHeight,
+              panel: scroll ? scroll.getBoundingClientRect().height : 0,
+            });
+            if (performance.now() - start < 400) requestAnimationFrame(tick);
+            else resolve(out);
+          };
+          requestAnimationFrame(tick);
+        }),
+    );
+    await page.keyboard.press("Escape");
+    const frames = await samples;
+    for (const frame of frames) {
+      expect(frame.overflow, "the page never scrolls while the picker closes").toBeLessThanOrEqual(0);
+      expect(frame.panel).toBeLessThanOrEqual(385);
+    }
+    await expect(page.locator("[data-expand-popover]")).toHaveCount(0);
+    expect(await sidebarWidth()).toBe(before);
   });
 
   test("a short viewport keeps both panels on screen and scrolls their content", async ({ page }) => {

@@ -12,8 +12,8 @@ import { TERMINAL } from "./meta.tsx";
  * - A state of work (In progress, Ready, Attested, Blocked, Rejected, Deferred, closed) is a solid chip.
  * - A gap (Draft, Unattested, Stale, Open) is the quiet tint on the `muted` tokens.
  * - Closed work is a fact, not a warning: a terminal lifecycle takes the success tone.
- * - Glyph plus word, the same shape as the PR state chip (XTRM-1136): the glyph names the status
- *   without colour.
+ * - Glyph plus word, the same shape as the PR state chip (XTRM-1136): the glyph marks the status
+ *   family without colour (open-like gaps share a circle); the word names the exact status.
  */
 export function IssueStatusBadge({ issue, size = "xs", className }: { issue: IssueSummary; size?: BadgeProps["size"]; className?: string }) {
   const status = issueStatus(issue);

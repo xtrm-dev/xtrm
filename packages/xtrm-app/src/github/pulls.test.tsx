@@ -119,11 +119,18 @@ describe("Pull requests surface", () => {
     expect(review.textContent).toBe("approved");
     expect(review.className).toContain("text-success-ink");
     // The review pill sheds below xl through its wrapper: a `hidden` on the Badge loses to its inline-flex.
-    expect(review.parentElement!.className).toBe("hidden xl:inline-flex");
+    expect(review.parentElement!.className).toContain("hidden");
+    expect(review.parentElement!.className).toContain("xl:inline-flex");
     expect(review.className).not.toContain("hidden");
     expect(within(countedRow).getByTitle(/3 conversation comments/)).toBeTruthy();
     expect(within(countedRow).getByTitle("24 added, 7 removed")).toBeTruthy();
     expect(within(countedRow).getByTitle("approved \u00b7 2 reviews")).toBeTruthy();
+
+    // A row whose aggregate has no checks reads "no checks" in a muted pill.
+    const noChecksRow = (await screen.findByText("docs: canonical Console v2 baseline")).closest('[data-testid="pull-row"]') as HTMLElement;
+    const noChecks = within(noChecksRow).getByTestId("pull-checks");
+    expect(noChecks.textContent).toBe("no checks");
+    expect(noChecks.className).toContain("text-ink-faint");
 
     const unknown = await screen.findByText("chore(XTRM-857): unknown metrics sample");
     const unknownRow = unknown.closest('[data-testid="pull-row"]') as HTMLElement;

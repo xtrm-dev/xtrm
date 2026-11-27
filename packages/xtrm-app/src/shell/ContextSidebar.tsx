@@ -20,6 +20,9 @@ export function useGo() {
   return (href: string) => void navigate({ to: href } as never);
 }
 
+/** How many recently active repositories the picker lists before the operator types a filter. */
+export const RECENT_REPOS = 8;
+
 function RepositorySelector() {
   const { repo } = useShell();
   const go = useGo();
@@ -33,7 +36,10 @@ function RepositorySelector() {
     const q = filter.trim().toLowerCase();
     return (repos.data ?? [])
       .filter((r) => !q || r.fullName.toLowerCase().includes(q))
-      .sort((a, b) => (last.get(b.fullName) ?? "").localeCompare(last.get(a.fullName) ?? "") || a.fullName.localeCompare(b.fullName));
+      .sort((a, b) => (last.get(b.fullName) ?? "").localeCompare(last.get(a.fullName) ?? "") || a.fullName.localeCompare(b.fullName))
+      // Unfiltered, the picker lists only the most recently active repositories (XTRM-1136); the
+      // filter searches all of them, and "All repositories" opens the full list.
+      .slice(0, q ? undefined : RECENT_REPOS);
   }, [repos.data, stats.data, filter]);
 
   const lastEvent = (fullName: string) => stats.data?.find((s) => s.fullName === fullName)?.lastEventAt ?? null;
