@@ -313,6 +313,18 @@ test("Pi permission gate: a title that scrolled above the prompt window is not u
   assert.equal(detectPermissionPrompt(screen, "pi"), null)
 })
 
+test("Pi permission gate: a dialog clipped at the top or bottom of the captured screen is still a prompt", () => {
+  const rule = "─".repeat(54)
+  const body = [" Dangerous Command Detected", "", " This command contains recursive force delete:", rule, "  1 rm -rf /tmp/x", rule, " Allow execution?", ""]
+  const clippedTop = [...body, " ↑/↓ or j/k: scroll • y/enter: allow • a: session", rule].join("\n")
+  const clippedBottom = ["output", rule, ...body, " ↑/↓ or j/k: scroll • y/enter:", " allow • a: session"].join("\n")
+  for (const screen of [clippedTop, clippedBottom]) {
+    const prompt = detectPermissionPrompt(screen, "pi")
+    assert.ok(prompt)
+    assert.match(prompt.text, /Allow execution\?$/)
+  }
+})
+
 test("no prompt: idle panes, prose that quotes the question, the bypass-permissions footer", () => {
   assert.equal(detectPermissionPrompt(pane("claude-idle.txt"), "claude"), null)
   assert.equal(detectPermissionPrompt(pane("pi-idle.txt"), "pi"), null)

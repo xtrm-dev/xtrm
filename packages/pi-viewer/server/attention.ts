@@ -117,8 +117,11 @@ function piPrompt(lines: string[]): PanePrompt | null {
     const after = lines.slice(index + 1, index + 7)
     const first = after.findIndex((line) => line.trim())
     if (first < 0 || !PI_HINT_START.test(after[first])) return null
-    const close = after.findIndex((line, at) => at > first && BORDER.test(line))
-    if (close < 0) return null
+    // The closing rule may sit below the captured screen; then the hint runs to the last line.
+    const ruled = after.findIndex((line, at) => at > first && BORDER.test(line))
+    const clippedBottom = ruled < 0 && index + after.length >= lines.length - 1
+    if (ruled < 0 && !clippedBottom) return null
+    const close = ruled < 0 ? after.length : ruled
     const hint = after
       .slice(first, close)
       .map((line) => line.trim())
@@ -128,7 +131,8 @@ function piPrompt(lines: string[]): PanePrompt | null {
     // well inside the prompt window even when the reason and the rows wrap in a narrow pane.
     let start = index
     while (start > 0 && index - start < PROMPT_WINDOW && !PI_TITLE.test(lines[start])) start -= 1
-    if (!PI_TITLE.test(lines[start]) || start === 0 || !BORDER.test(lines[start - 1])) return null
+    // The opening rule may sit above the captured screen when the title is its first line.
+    if (!PI_TITLE.test(lines[start]) || (start > 0 && !BORDER.test(lines[start - 1]))) return null
     return { tool: "Bash", text: capText(lines.slice(start, index + 1)) }
   }
   return null
