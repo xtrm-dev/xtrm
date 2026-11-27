@@ -153,7 +153,7 @@ const UserMessage = memo(function UserMessage({
           <BubbleContent
             data-fold-host="user"
             className={cn(
-              "rounded-lg border-0 bg-control px-3 py-3 text-[0.875rem] leading-[1.625] whitespace-pre-wrap text-read",
+              "rounded-lg border-0 bg-control px-3 py-3 text-[0.875rem] leading-[1.4] whitespace-pre-wrap text-read",
               joinsAbove && "rounded-tr-sm",
               joinsBelow && "rounded-br-sm",
             )}
