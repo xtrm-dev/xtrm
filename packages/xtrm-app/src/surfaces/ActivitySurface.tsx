@@ -182,7 +182,7 @@ function FeedRow({
         }
       />
       {open && row.body !== null && (
-        <div data-testid="activity-body" className="pb-3 pl-16 pr-3">
+        <div data-testid="activity-body" className="pb-3 pl-5 pr-3">
           <JournalBody text={row.body} />
         </div>
       )}
