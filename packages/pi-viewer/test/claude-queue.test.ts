@@ -246,3 +246,25 @@ test("an app send adopts the real queued row and keeps it through delivery", () 
   assert.equal(settledRows.length, 1)
   assert.equal(settledRows[0].id, "optimistic:app-1")
 })
+
+test("a prompt recorded as pasted content shows its text once and matches the composer send (XTRM-1114)", () => {
+  const file = fileOf("pasted")
+  dropClaudeCache(file)
+  const long = "a long composer prompt that tmux typed fast enough for Claude Code to read it as a paste"
+  write(file, [
+    {
+      type: "user",
+      uuid: "user-p",
+      timestamp: LATER,
+      sessionId: "11111111-2222-3333-4444-555555555555",
+      origin: { kind: "human" },
+      message: { role: "user", content: `\n\n<pasted_content id="bd88">\n${long}\n</pasted_content id="bd88">\n` },
+    },
+  ])
+  const users = eventsOf(file).filter((event) => event.kind === "user")
+  assert.equal(users.length, 1)
+  assert.equal(users[0].text, long)
+  const sent: OptimisticMessage = { id: "o1", paneId: AGENT.id, agentName: AGENT.name, text: long, at: Date.parse(LATER) - 500, status: "sent" }
+  const { visible } = matchEchoes(eventsOf(file), [sent])
+  assert.equal(visible.length, 0)
+})

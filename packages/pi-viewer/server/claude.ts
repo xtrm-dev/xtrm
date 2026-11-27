@@ -574,6 +574,17 @@ function slashCommand(text: string): string | null {
   return args ? `${name} ${args}` : name
 }
 
+/**
+ * Claude Code records a prompt that arrived as a paste (a long composer send typed by tmux reads as one)
+ * wrapped in `<pasted_content id="…">…</pasted_content id="…">`. The operator wrote the inner text, so the
+ * row shows it and the composer's optimistic row can match it (XTRM-1114).
+ */
+const PASTED = /<pasted_content\b[^>]*>\n?([\s\S]*?)\n?<\/pasted_content\b[^>]*>/g
+export function unwrapPasted(text: string): string {
+  if (!text.includes("<pasted_content")) return text
+  return text.replace(PASTED, "$1").trim()
+}
+
 function queuedText(value: string): string {
   return value.replace(/\s+/g, " ").trim()
 }
@@ -657,7 +668,8 @@ function deliverQueued(state: ClaudeState, record: Raw, text: string, sidechain:
   )
 }
 
-function ingestUserText(state: ClaudeState, record: Raw, text: string, sidechain: boolean, suffix: string): void {
+function ingestUserText(state: ClaudeState, record: Raw, raw: string, sidechain: boolean, suffix: string): void {
+  const text = unwrapPasted(raw)
   const uuid = asString(record.uuid)
   const id = uuid ? `${uuid}${suffix}` : undefined
   const origin = isRecord(record.origin) ? asString(record.origin.kind) : undefined
@@ -819,7 +831,7 @@ function ingest(state: ClaudeState, record: Raw): void {
       const attachmentRecord = isRecord(record.attachment) ? record.attachment : null
       const attachment = attachmentRecord ? asString(attachmentRecord.type) : undefined
       if (attachment === "queued_command" && asString(attachmentRecord?.commandMode) === "prompt") {
-        const prompt = asString(attachmentRecord?.prompt) ?? ""
+        const prompt = unwrapPasted(asString(attachmentRecord?.prompt) ?? "")
         // A peer envelope is not an operator prompt; it goes through the intercom mapper.
         if (ENVELOPE.test(prompt)) {
           consumeQueued(state, prompt)
@@ -834,7 +846,7 @@ function ingest(state: ClaudeState, record: Raw): void {
     }
     case "queue-operation": {
       const operation = asString(record.operation) ?? "?"
-      const content = asString(record.content)?.trim()
+      const content = unwrapPasted(asString(record.content) ?? "").trim() || undefined
       if (operation === "enqueue") {
         const pending: QueuedPrompt = { content, operator: !content || operatorQueuedText(content) }
         if (content && pending.operator) {
