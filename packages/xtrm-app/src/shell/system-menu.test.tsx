@@ -110,17 +110,29 @@ describe("System & settings menu", () => {
     expect(document.activeElement).toBe(within(panel).getByTestId("change-host"));
   });
 
-  it("navigates from the Go to rows and closes the menu", async () => {
+  it("navigates from the Go to rows to their settings sections and closes the menu", async () => {
     const router = await mount();
-    fireEvent.click(within(await openMenu()).getByTestId("goto-settings"));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/settings"));
+    const cases = [
+      ["goto-settings", "/settings/general"],
+      ["goto-appearance", "/settings/appearance"],
+      ["goto-connections", "/settings/connections"],
+      ["goto-project", "/settings/project"],
+    ] as const;
+    for (const [row, path] of cases) {
+      fireEvent.click(within(await openMenu()).getByTestId(row));
+      await waitFor(() => expect(router.state.location.pathname).toBe(path));
+      await waitFor(() => expect(menu()).toBeNull());
+    }
+  });
+
+  it("closes when the sidebar collapses, so it does not reopen stale", async () => {
+    await mount();
+    await openMenu();
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
     await waitFor(() => expect(menu()).toBeNull());
-
-    fireEvent.click(within(await openMenu()).getByTestId("goto-project"));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/rep/xtrm-dev/xtrm/project/settings"));
-
-    fireEvent.click(within(await openMenu()).getByTestId("goto-appearance"));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/settings"));
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    await screen.findByRole("button", { name: "Data sources" });
+    expect(menu()).toBeNull();
   });
 
   it("opens the host connection panel from Change host target…, then drops the request from the URL", async () => {

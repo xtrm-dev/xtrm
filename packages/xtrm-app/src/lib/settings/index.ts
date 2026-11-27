@@ -2,3 +2,4 @@
 export * from "./schema.ts";
 export * from "./resolve.ts";
 export * from "./migrate.ts";
+export * from "./labels.ts";

@@ -2,15 +2,14 @@ import { useGithubAuthStatus, useGithubInstallations, useGithubSignOut, useStart
 import { useShell } from "../shell/context.tsx";
 import { Fields } from "../ui/drawer.tsx";
 import { Icon } from "../ui/icon.tsx";
-import { EmptyState, LoadingState, SourceBadge, StatusDot, SurfaceToolbar, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx } from "../ui/primitives.tsx";
+import { EmptyState, LoadingState, SourceBadge, StatusDot, TOOLBAR_CONTROL, TOOLBAR_GHOST, cx } from "../ui/primitives.tsx";
 import { Section } from "../ui/section.tsx";
 import { ToolbarButton } from "../ui/toolbar.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 
-// Settings destination (XTRM-400): today a single GitHub section. Connection
-// state, identity, auth source, token store, installations with
-// Install/Configure links, permissions, and sign in/out. Display data only:
-// tokens never reach this surface.
+// The GitHub account block (XTRM-400), the account part of /settings/connections since XTRM-1103.
+// Connection state, identity, auth source, token store, installations with Install/Configure links,
+// permissions, and sign in/out. Display data only: tokens never reach this surface.
 
 /** The shared `Section` owns the frame and the heading; this wrapper only keeps the section's
  * accessible name, which `aria-labelledby` would otherwise have to repeat at every call site. */
@@ -34,7 +33,7 @@ function ActionLink({ href, children }: { href: string; children: React.ReactNod
   );
 }
 
-export function SettingsSurface() {
+export function GithubAccountBlock() {
   const { inspect } = useShell();
   const { githubAuth } = useAdapters();
   const auth = useGithubAuthStatus();
@@ -42,24 +41,17 @@ export function SettingsSurface() {
   const start = useStartDevice();
   const signOut = useGithubSignOut();
 
-  if (auth.isPending) return <LoadingState label="Loading settings" />;
-  if (auth.isError || !auth.data)
-    return (
-      <section className="flex min-h-0 flex-1 flex-col" aria-label="Settings">
-        <SurfaceToolbar />
-        <EmptyState icon="alert" title="Settings are unavailable" />
-      </section>
-    );
+  if (auth.isPending) return <LoadingState label="Loading GitHub account" />;
+  if (auth.isError || !auth.data) return <EmptyState icon="alert" title="The GitHub account is unavailable" />;
   const status = auth.data;
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col" aria-label="Settings">
-      <SurfaceToolbar>
+    <div className="flex flex-col" data-testid="github-account">
+      <div className="flex items-center gap-2 px-1 pb-1">
         <span className="text-xs text-ink-faint">GitHub</span>
         <SourceBadge source={githubAuth.source} />
-      </SurfaceToolbar>
-      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col">
+      </div>
+      <div className="flex flex-col">
           <SettingsSection title="Connection">
             <div className="flex flex-wrap items-center gap-2">
               <StatusDot tone={status.state === "signed_in" ? "done" : status.state === "error" ? "danger" : status.state === "pending" ? "active" : "neutral"} label={`GitHub ${status.state.replace("_", " ")}`} />
@@ -178,8 +170,7 @@ export function SettingsSurface() {
               </p>
             </SettingsSection>
           )}
-        </div>
       </div>
-    </section>
+    </div>
   );
 }

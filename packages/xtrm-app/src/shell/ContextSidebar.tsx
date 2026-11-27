@@ -1,5 +1,5 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAdapters } from "../adapters/index.tsx";
 import { AgentSidebar } from "../agent/AgentSidebar.tsx";
 import { useAgentStore } from "../agent/workspace.tsx";
@@ -10,7 +10,8 @@ import { ExpandPopover } from "../ui/expand-popover.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { IconButton, Row, StatusDot, Tip, cx, relativeTime } from "../ui/primitives.tsx";
 import { NavRailItem, SidebarRow, SidebarSection } from "../ui/sidebar.tsx";
-import { useShell, type ThemePreference } from "./context.tsx";
+import { ThemeChoice } from "../settings/ThemeChoice.tsx";
+import { useShell } from "./context.tsx";
 import { modShortcut } from "./layout.ts";
 
 export function useGo() {
@@ -104,55 +105,6 @@ function RepositorySelector() {
         </Row>
       </div>
     </ExpandPopover>
-  );
-}
-
-const THEME_CHOICES: readonly { value: ThemePreference; label: string }[] = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-];
-
-/**
- * Three-way theme control (System | Light | Dark): a radio group, so a screen reader announces the
- * choice and its state. Left/Right move the choice the way native radios do; Up/Down stay with the
- * drop-up's row navigation. It applies in place: the page changes theme while the menu stays open.
- */
-function ThemeChoice() {
-  const { themePreference, setThemePreference } = useShell();
-  const step = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    e.preventDefault();
-    const at = THEME_CHOICES.findIndex((c) => c.value === themePreference);
-    const next = THEME_CHOICES[(at + (e.key === "ArrowRight" ? 1 : -1) + THEME_CHOICES.length) % THEME_CHOICES.length]!;
-    setThemePreference(next.value);
-    e.currentTarget.querySelector<HTMLElement>(`[data-theme-choice="${next.value}"]`)?.focus();
-  };
-  return (
-    <div role="radiogroup" aria-label="Theme" onKeyDown={step} className="flex gap-px rounded-md bg-strip-rule p-px" data-testid="theme-choice">
-      {THEME_CHOICES.map((c) => {
-        const on = c.value === themePreference;
-        return (
-          <button
-            key={c.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            data-theme-choice={c.value}
-            // Out of the tab order like the status rows: the drop-up is read with the arrow keys, and
-            // opening it must not land on a control (Base UI focuses the first tabbable element).
-            tabIndex={-1}
-            onClick={() => setThemePreference(c.value)}
-            className={cx(
-              "h-6 flex-1 rounded-[5px] text-xs outline-none focus-visible:ring-1 focus-visible:ring-strip-ink-faint",
-              on ? "bg-strip-open font-medium text-strip-ink-strong" : "bg-strip text-strip-ink hover:text-strip-ink-strong",
-            )}
-          >
-            {c.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -255,19 +207,18 @@ function SourceFooter() {
         </div>
         <section aria-label="Appearance" className="mt-1 flex flex-col gap-1 border-t border-strip-rule px-1.5 pt-1.5 pb-1">
           <span className="text-xs text-strip-ink-faint">Appearance</span>
-          <ThemeChoice />
+          <ThemeChoice variant="menu" />
         </section>
-        {/* "Go to" rows. /settings has no sections yet (XTRM-1103): Appearance and Connections land on
-            /settings until their section routes exist. */}
+        {/* "Go to" rows: each opens its /settings section (XTRM-1103). */}
         <nav aria-label="Go to" className="flex flex-col gap-0.5 border-t border-strip-rule pt-1">
           <GoToRow
             testId="goto-appearance"
             label="Appearance"
             value={themePreference === "system" ? `System · ${theme === "dark" ? "Dark" : "Light"}` : themePreference === "dark" ? "Dark" : "Light"}
-            onActivate={() => goTo("/settings")}
+            onActivate={() => goTo("/settings/appearance")}
           />
-          <GoToRow testId="goto-connections" label="Connections" value={transport} onActivate={() => goTo("/settings")} />
-          <GoToRow testId="goto-project" label="Project integration" value={repo.fullName} onActivate={() => goTo(repoHref(repo, "/project/settings"))} />
+          <GoToRow testId="goto-connections" label="Connections" value={transport} onActivate={() => goTo("/settings/connections")} />
+          <GoToRow testId="goto-project" label="Project integration" value={repo.fullName} onActivate={() => goTo("/settings/project")} />
           <GoToRow testId="goto-settings" label="All settings" value={modShortcut(",")} onActivate={() => goTo("/settings")} />
           <GoToRow testId="change-host" label="Change host target…" onActivate={() => goTo("/agent", { host: 1 })} />
         </nav>

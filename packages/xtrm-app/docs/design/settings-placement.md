@@ -32,6 +32,6 @@ Rules:
 
 1. The menu changes only reversible device choices in place. Today that is the theme. Everything
    else in the menu is a "Go to" row that shows the current value at the end of the row.
-2. A "Go to" row whose section does not exist yet opens `/settings`. When XTRM-1103 adds a section,
-   it retargets that row.
+2. Each "Go to" row opens its `/settings/<section>` route (XTRM-1103). A row on `/settings/<section>`
+   has the anchor `#<section>-<name>`. A row the page cannot change yet says where to change it.
 3. The endpoint token is a secret. It is never a setting and is never served by `GET /settings`.

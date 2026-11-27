@@ -63,7 +63,7 @@ function Notice({
 function SettingsLink({ children }: { children: React.ReactNode }) {
   const go = useGo();
   return (
-    <ToolbarButton onClick={() => go("/settings")} className="shrink-0">
+    <ToolbarButton onClick={() => go("/settings/connections")} className="shrink-0">
       {children}
     </ToolbarButton>
   );
@@ -189,7 +189,7 @@ export function AccountControl() {
           </button>
         }
         items={[
-          { label: "Settings", icon: "settings", onSelect: () => void navigate({ to: "/settings" } as never) },
+          { label: "Settings", icon: "settings", onSelect: () => void navigate({ to: "/settings/connections" } as never) },
           { label: "Sign out", onSelect: () => signOut.mutate() },
         ]}
       />
