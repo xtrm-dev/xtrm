@@ -102,6 +102,10 @@ describe("System & settings menu", () => {
     await mount();
     const panel = await openMenu();
     const popup = document.querySelector<HTMLElement>("[data-expand-popover]")!;
+    // Opening does not land on a control: the first ArrowDown reaches the first status row.
+    expect(document.activeElement?.closest("[role=radiogroup],nav")).toBeNull();
+    fireEvent.keyDown(popup, { key: "ArrowDown" });
+    expect(document.activeElement?.hasAttribute("data-popover-row")).toBe(true);
     for (let i = 0; i < 30 && document.activeElement?.getAttribute("data-testid") !== "change-host"; i++) fireEvent.keyDown(popup, { key: "ArrowDown" });
     expect(document.activeElement).toBe(within(panel).getByTestId("change-host"));
   });

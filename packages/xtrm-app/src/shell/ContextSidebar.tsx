@@ -139,6 +139,9 @@ function ThemeChoice() {
             role="radio"
             aria-checked={on}
             data-theme-choice={c.value}
+            // Out of the tab order like the status rows: the drop-up is read with the arrow keys, and
+            // opening it must not land on a control (Base UI focuses the first tabbable element).
+            tabIndex={-1}
             onClick={() => setThemePreference(c.value)}
             className={cx(
               "h-6 flex-1 rounded-[5px] text-xs outline-none focus-visible:ring-1 focus-visible:ring-strip-ink-faint",
@@ -158,6 +161,7 @@ function GoToRow({ label, value, onActivate, testId }: { label: string; value?: 
   return (
     <button
       type="button"
+      tabIndex={-1}
       onClick={onActivate}
       data-testid={testId}
       className="flex h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-strip-ink-strong outline-none hover:bg-strip-open focus-visible:bg-strip-open"
