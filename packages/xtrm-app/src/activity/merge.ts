@@ -32,7 +32,7 @@ export interface ActivityCounts {
  * so a failure never reads as "zero activity".
  */
 export function activityCounts(states: readonly ActivitySourceState[]): ActivityCounts {
-  const bySource = { substrate: 0, github: 0, git: 0, jira: 0 } as Record<ActivitySource, number>;
+  const bySource = { substrate: 0, github: 0, jira: 0 } as Record<ActivitySource, number>;
   let all = 0;
   for (const state of states) {
     if (state.error !== null) continue;

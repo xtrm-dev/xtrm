@@ -32,12 +32,11 @@ test("the expanded row body sits one 1.25rem step in from its row", async ({ pag
   await expect(feed).toBeVisible();
 
   // Open the first row: the accordion is the only path to the body.
-  const row = feed.getByRole("button").first();
-  await row.click();
-
-  const listItem = feed.locator("> li").first();
-  // Child 0 is the Row itself (it carries the row gutter, px-3); the expanded body is child 1.
-  const body = listItem.locator("> div").nth(1);
+  // The body opens from the row's own disclosure (the row click inspects instead), so the first row
+  // that HAS a body is the one under test.
+  const listItem = feed.locator("> li").filter({ has: page.getByTestId("activity-expand") }).first();
+  await listItem.getByTestId("activity-expand").click();
+  const body = listItem.getByTestId("activity-body");
   await expect(body).toBeVisible();
 
   // Measured at each root, so the number and the step cannot be confused.
@@ -69,4 +68,15 @@ test("the expanded row body sits one 1.25rem step in from its row", async ({ pag
       expect((await refs.first().boundingBox())!.width).toBeLessThanOrEqual(cap);
     }
   }
+});
+
+// XTRM-1090 review: the feed row passes `h-row` into a `Row` that also sets `h-full`. The class string
+// proves nothing about which one wins, so the rendered height is measured.
+test("an Activity row is one 32px line, the list row height", async ({ page }) => {
+  await page.goto("/rep/xtrm-dev/xtrm/code/activity");
+  const feed = page.getByRole("list", { name: /activity feed/i });
+  await expect(feed).toBeVisible();
+  const row = feed.getByTestId("activity-row").first();
+  const box = (await row.boundingBox())!;
+  expect(Math.round(box.height)).toBe(32);
 });

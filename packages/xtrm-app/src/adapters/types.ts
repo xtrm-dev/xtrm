@@ -357,8 +357,8 @@ export interface IssueSummary {
   blockedBy: string[];
   /**
    * Real derived readiness from the board projection (PRD §13):
-   * `terminal|deferred|draft|blocked|claimed|ready`. Detail rows report
-   * `ready` when dispatchable and `not_ready` otherwise.
+   * `terminal|deferred|draft|blocked|claimed|ready`. Detail rows carry the same
+   * operational state; `not_ready` appears only when an older `sb` omits it.
    */
   readiness: Readiness;
 }
@@ -628,19 +628,8 @@ export interface SubstrateAdapter {
   createIssue(projectId: string, input: IssueCreate): Promise<string>;
 }
 
-/**
- * The git source of the Activity feed (XTRM-757): the LOCAL log of the
- * repository on disk, read by the bridge. GitHub never supplies commits, so
- * this is the only producer of a commit row.
- */
-export interface GitActivityAdapter {
-  readonly source: DataSource;
-  commits(repo: string, limit?: number): Promise<Array<{ sha: string; author: string; subject: string; at: number }>>;
-}
-
 export interface Adapters {
   agent: AgentAdapter;
-  gitActivity: GitActivityAdapter;
   agentHost: AgentHostConnectionAdapter;
   github: GithubAdapter;
   githubAuth: GithubAuthAdapter;

@@ -30,9 +30,9 @@ function TopBar() {
         type="button"
         onClick={() => openPalette("search")}
         aria-label="Search"
-        className="mx-auto flex h-8 w-full max-w-xl items-center gap-2 rounded-md px-3 text-left text-sm text-ink-faint outline-none hover:bg-hover hover:text-ink-muted focus-visible:bg-hover focus-visible:text-ink-muted"
+        className="mx-auto flex h-8 w-full max-w-xl items-center gap-2 rounded-md bg-control px-3 text-left text-sm text-ink-muted outline-none hover:text-ink focus-visible:text-ink"
       >
-        <Icon name="search" size="xs" />
+        <Icon name="search" size="sm" />
         <span className="flex-1 truncate">Search issues and repositories in {repo.name} or the workspace…</span>
         <Kbd>Ctrl K</Kbd>
       </button>

@@ -184,7 +184,7 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
 .cx .nn small{display:block;font-size:11px;color:var(--x-ink-faint)}
 .cx .at{display:grid;grid-template-columns:7.2rem minmax(0,1fr) auto 3.2rem;align-items:center;gap:0 10px;min-height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface)}
 .cx .at:hover{background:var(--x-hover)}.cx .at .w{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cx .at .w small{color:var(--x-ink-faint);margin-left:8px}
-.cx .dg{padding:6px 12px;background:var(--x-control);font:10.5px var(--cm);letter-spacing:.08em;text-transform:uppercase;color:var(--x-ink-muted);display:flex;justify-content:space-between}
+padding:6px 12px;background:var(--x-control);font:10.5px var(--cm);letter-spacing:.08em;text-transform:uppercase;color:var(--x-ink-muted);display:flex;justify-content:space-between}
 .cx .ev{display:grid;grid-template-columns:3.2rem 6.4rem minmax(0,1fr) auto;gap:0 10px;align-items:center;min-height:32px;padding:0 12px;border-bottom:1px solid var(--x-bs);background:var(--x-surface)}
 .cx .ev.past{color:var(--x-ink-muted)}.cx .ev .k{display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--x-ink-muted)}
 .cx .now{display:flex;align-items:center;gap:8px;height:20px;padding:0 12px;color:var(--x-danger);font:10.5px var(--cm);letter-spacing:.06em;background:var(--x-surface)}
@@ -219,13 +219,207 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
 .cx .fe .cli{font:11px/16px var(--cm);color:var(--x-ink-muted);background:var(--x-deep);border-radius:6px;padding:6px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cx .fe .acts{display:flex;gap:6px;justify-content:flex-end}.cx .fe .acts .tbn{border:1px solid var(--x-b)}
 .cx .cp{background:var(--x-deep);border-radius:6px;padding:8px 10px;font:11.5px/17px var(--cm);color:var(--x-ink-muted);max-height:84px;overflow:hidden}
+
+/* ===== Operator rulings, 2026-11-24: miniatures for the three scoped changes ===== */
+.cx{--x-strip-bg:var(--x-raised);--x-strip-open-bg:var(--x-control);--x-strip-ink:var(--x-ink-muted);--x-strip-ink-strong:var(--x-ink);--x-strip-ink-faint:var(--x-ink-faint);--x-strip-rule:var(--x-bm);
+  --x-shadow-strip:0 3px 6px rgb(15 15 20/.2),0 14px 30px -6px rgb(15 15 20/.34);--x-shadow-strip-open:0 6px 16px -4px rgb(15 15 20/.24),0 24px 56px -16px rgb(15 15 20/.38)}
+.cx[data-theme=dark]{--x-strip-bg:#1c1c1c;--x-strip-open-bg:#262626;--x-strip-ink:rgb(255 255 255/.72);--x-strip-ink-strong:#fff;--x-strip-ink-faint:rgb(255 255 255/.45);--x-strip-rule:rgb(255 255 255/.12);
+  --x-shadow-strip:0 3px 6px rgb(0 0 0/.5),0 14px 30px -6px rgb(0 0 0/.7);--x-shadow-strip-open:0 6px 16px -4px rgb(0 0 0/.6),0 24px 56px -16px rgb(0 0 0/.82)}
+.cx .oi-top{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;background:var(--x-surface);border-bottom:1px solid var(--x-bm)}
+.cx .oi-srch{display:flex;align-items:center;gap:8px;height:32px;width:100%;max-width:340px;margin:0 auto;padding:0 12px;border-radius:8px;font-size:13px;color:var(--x-ink-muted);background:var(--x-control);white-space:nowrap;overflow:hidden}
+.cx .oi-srch.ghost{background:transparent;color:var(--x-ink-faint)}
+.cx .oi-srch kbd{margin-left:auto;font:10px var(--cm);color:var(--x-ink-faint);border:1px solid var(--x-b);border-radius:4px;padding:1px 5px}
+.cx .oi-tbi{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--x-ink-muted);font-size:13px;flex:none}
+.cx .oi-stack{position:relative;padding:30px 10px 12px;background:var(--x-sidebar)}
+.cx .oi-duck{border-radius:8px;background:var(--x-strip-bg);color:var(--x-strip-ink);padding:6px;box-shadow:var(--x-float);font-size:11.5px;margin:0 0 10px}
+.cx .oi-duck.plain{box-shadow:var(--x-shadow-strip-open)}
+.cx .oi-dh{display:flex;align-items:center;gap:6px;padding:2px 6px 6px;color:var(--x-strip-ink-faint)}
+.cx .oi-dh .oi-r{margin-left:auto}
+.cx .oi-dr{display:flex;align-items:center;gap:6px;height:24px;padding:0 6px;border-radius:4px;background:none}
+.cx .oi-dr .oi-r{margin-left:auto;color:var(--x-strip-ink-faint)}
+.cx .oi-sd{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.6;flex:none}
+.cx .oi-df{border-top:1px solid var(--x-strip-rule);margin-top:5px;padding:5px 6px 1px;color:var(--x-strip-ink-faint)}
+.cx .oi-chip{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:6px;background:var(--x-strip-bg);color:var(--x-strip-ink);font-size:11.5px;box-shadow:var(--x-float)}
+.cx .oi-chip.plain{box-shadow:var(--x-shadow-strip)}
+.cx .oi-chip .oi-r{margin-left:auto;display:flex;align-items:center}
+.cx .oi-hs{display:flex;gap:2px;height:28px;padding:2px;border-radius:6px;background:var(--x-pressed);margin:0 0 8px}
+.cx .oi-hs b{flex:1;display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:11.5px;font-weight:500;color:var(--x-ink-faint)}
+.cx .oi-hs b.on{background:var(--x-control);color:var(--x-ink)}
+.cx .oi-nr{height:28px;gap:8px}
+.cx .ic.n2{width:14px;height:14px;stroke-width:2.25}
+/* ===== Approved state, 2026-11-24 (tab 9, authoritative) ===== */
+.cx .ac-v{color:var(--x-ink-muted)}
+.cx .ac-o{color:var(--x-ink)}
+.cx .ac-ref{font-family:var(--cm);font-size:12px;color:var(--x-ink-muted);white-space:nowrap}
+.cx .ac-k{font-family:var(--cm);font-size:10.9px;color:var(--x-ink-faint);white-space:nowrap}
+.cx .ac-n{font-size:10.9px;color:var(--x-ink-faint);font-weight:400}
+.cx .ap-row.tone-danger svg{color:var(--x-danger)}
+.cx .ap-row.tone-danger .ac-v{color:var(--x-danger)}
+.cx .ac-sec{display:flex;align-items:center;gap:8px;height:28px;padding:0 12px;background:var(--x-surface);font-size:11.5px;font-weight:600;color:var(--x-ink-faint)}
+.cx .ac-sec .d{width:7px;height:7px;border-radius:50%;background:var(--x-success);flex:none}
+.cx .ac-sec .d.off{background:var(--x-ink-faint);opacity:.45}
+.cx .ac-sec .c{margin-left:auto;font-weight:500}
+.cx .ac-note{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;font-size:12px;color:var(--x-ink-faint);background:var(--x-surface)}
+.cx .ac-note.bad{color:var(--x-danger)}
+.cx .ac-more{display:flex;align-items:center;justify-content:center;height:32px;font-size:11.5px;color:var(--x-ink-muted);background:var(--x-surface)}
+.cx .ac-split{display:flex;background:var(--x-surface);min-height:300px}
+.cx .ac-list{flex:1;min-width:0}
+.cx .ac-dr{width:420px;flex:none;border-left:1px solid var(--x-bm);box-shadow:var(--x-shadow-panel);display:flex;flex-direction:column}
+.cx .ac-dh{display:flex;align-items:center;gap:6px;height:44px;padding:0 12px;border-bottom:1px solid var(--x-bm);font-size:12px;color:var(--x-ink-muted)}
+.cx .ac-dh .t{font-weight:500;color:var(--x-ink);margin-left:4px}
+.cx .ac-dh .e{margin-left:auto;display:flex;gap:2px;align-items:center}
+.cx .ac-db{padding:12px;display:flex;flex-direction:column;gap:12px}
+.cx .ac-dt{font-size:14px;font-weight:600;color:var(--x-ink);line-height:1.3}
+.cx .ac-ds{font-size:12px;color:var(--x-ink-muted)}
+.cx .ac-sec2{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--x-ink-faint)}
+.cx .ac-meta{display:grid;grid-template-columns:5rem minmax(0,1fr);gap:3px 10px;font-size:11.5px}
+.cx .ac-meta dt{color:var(--x-ink-faint)}
+.cx .ac-meta dd{margin:0;font-family:var(--cm);color:var(--x-ink-muted)}
+.cx .ac-body{margin:0;padding-left:10px;border-left:1px solid var(--x-bm);font-size:12px;line-height:1.5;color:var(--x-ink-muted)}
+.cx .ac-acts{display:flex;gap:6px;align-items:center}
+.cx .ac-btn{display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;font-size:12px;color:var(--x-ink);background:var(--x-control)}
+.cx .ac-btn svg{width:13px;height:13px;stroke-width:2.25}
+.cx .ac-btn.ghost{background:transparent;color:var(--x-ink-muted)}
+
+.cx .ap-top{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;background:var(--x-surface);border-bottom:1px solid var(--x-bm)}
+.cx .ap-srch{display:flex;align-items:center;gap:8px;height:32px;flex:1;max-width:340px;margin:0 auto;padding:0 12px;border-radius:8px;background:var(--x-control);color:var(--x-ink-muted);font-size:13px;white-space:nowrap;overflow:hidden;box-shadow:none;border:0}
+.cx .ap-srch svg{width:16px;height:16px;stroke-width:2.25;flex:none}
+.cx .ap-kbd{margin-left:auto;font-family:var(--cm);font-size:10px;padding:1px 5px;border-radius:4px;background:var(--x-pressed);color:var(--x-ink-faint)}
+.cx .ap-cl{margin-left:auto;display:flex;align-items:center;gap:2px}
+.cx .ap-ib{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--x-ink-muted);flex:none}
+.cx .ap-ib svg{width:16px;height:16px;stroke-width:2.25}
+.cx .ap-av{width:22px;height:22px;border-radius:999px;background:linear-gradient(135deg,#9ec7e8,#5f8fbb);flex:none;margin:0 2px}
+.cx .ap-side{background:var(--x-sidebar);padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.cx .ap-hs{display:flex;height:28px;padding:2px;border-radius:6px;background:var(--x-pressed)}
+.cx .ap-hs b{flex:1;display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:11.5px;font-weight:500;color:var(--x-ink-faint)}
+.cx .ap-hs b.on{background:var(--x-surface);color:var(--x-ink)}
+.cx .ap-lbl{font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--x-ink-faint);padding:2px 8px 0}
+.cx .ap-nr{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:8px;font-size:14px;font-weight:600;color:var(--x-ink-muted)}
+.cx .ap-nr.sel{background:var(--x-pressed);color:var(--x-ink)}
+.cx .ap-nr svg{width:14px;height:14px;stroke-width:2.25;flex:none}
+.cx .ap-nr .ap-c{margin-left:auto;font-size:11.5px;font-weight:500;color:var(--x-ink-faint)}
+.cx .ap-strip{display:flex;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:8px;background:var(--x-strip-bg);color:var(--x-strip-ink);font-size:11.5px;box-shadow:var(--x-shadow-strip)}
+.cx .ap-strip .ap-sd{width:7px;height:7px;border-radius:50%;background:#5ccb8a;flex:none}
+.cx .ap-strip .ap-r{margin-left:auto;display:flex;align-items:center;gap:4px}
+.cx .ap-pop{margin-top:6px;border-radius:10px;padding:6px;background:var(--x-strip-open);box-shadow:var(--x-shadow-strip-open);color:var(--x-strip-ink);font-size:11.5px;display:flex;flex-direction:column;gap:2px}
+.cx .ap-pop div{display:flex;align-items:center;gap:6px;height:24px;padding:0 6px;border-radius:6px}
+.cx .ap-pop .ap-r{margin-left:auto;display:flex;align-items:center;gap:5px;color:var(--x-strip-ink-faint)}
+.cx .ap-row{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;font-size:13px;background:var(--x-surface);color:var(--x-ink);border:0}
+.cx .ap-row.sel{background:var(--x-pressed)}
+.cx .ap-row .ap-ind{flex:none;width:14px;display:flex;align-items:center;justify-content:center;color:var(--x-ink-faint)}
+.cx .ap-row svg{width:14px;height:14px;stroke-width:2.25;flex:none;color:var(--x-ink-faint)}
+.cx .ap-key{font-family:var(--cm);font-size:12px;color:var(--x-ink-muted);flex:none;white-space:nowrap}
+.cx .ap-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cx .ap-right{flex:none;display:flex;align-items:center;gap:11px;color:var(--x-ink-faint);font-size:11.5px}
+.cx .ap-pill{display:flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:999px;border:1px solid var(--x-bs);font-size:11px;color:var(--x-ink-faint)}
+.cx .ap-pill svg{width:12px;height:12px;stroke-width:2}
+.cx .ap-badge{display:inline-flex;align-items:center;height:18px;padding:0 8px;border-radius:999px;font-size:10.9px;font-weight:500;color:#fff;flex:none}
+.cx .ap-tabs{display:flex;align-items:center;gap:2px;height:36px;padding:0 12px;border-bottom:1px solid var(--x-bm);background:var(--x-surface);font-size:12px;color:var(--x-ink-muted)}
+.cx .ap-tabs b{display:flex;align-items:center;gap:6px;height:36px;padding:0 8px;font-weight:500;color:var(--x-ink);border-bottom:2px solid var(--x-ink)}
+.cx .ap-tabs span{display:flex;align-items:center;gap:6px;height:36px;padding:0 8px;color:var(--x-ink-muted)}
+.cx .ap-wrap{background:var(--x-surface)}
+.cx .ap-shell{display:flex;min-height:330px;background:var(--x-surface)}
+.cx .ap-side{width:264px;flex:none;border-right:1px solid var(--x-bm)}
+.cx .ap-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.cx .ap-body{flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:8px;background:var(--x-surface)}
+.cx .ap-sk{height:8px;border-radius:4px;background:var(--x-control)}
+
+/* ===== List rows: two-line grammar (2026-11-24) ===== */
+.cx .ol-wide{min-width:0}
+.cx .ol-before{background:var(--x-surface);font-size:13px}
+.cx .ol-th{display:grid;height:32px;align-items:center;border-bottom:1px solid var(--x-bm);color:var(--x-ink-faint);font-size:11.5px;padding:0 8px}
+.cx .ol-th span{padding:0 8px;white-space:nowrap;overflow:hidden}
+.cx .ol-th span.r{text-align:right}
+.cx .ol-tr{display:grid;height:32px;align-items:center;border-bottom:1px solid var(--x-bm);padding:0 8px;color:var(--x-ink-muted);font-size:11.5px}
+.cx .ol-tr > div{padding:0 8px;min-width:0;white-space:nowrap;overflow:hidden;display:flex;align-items:center;gap:6px}
+.cx .ol-tr .t{color:var(--x-ink);font-size:13px;overflow:hidden;text-overflow:ellipsis;display:inline-block}
+.cx .ol-tr.sel{background:var(--x-pressed)}
+.cx .ol-tr .un{color:var(--x-ink-faint)}
+.cx .ol-tr .r{justify-content:flex-end;text-align:right}
+.cx .ol-row{display:flex;gap:10px;padding:0 12px;height:44px;border-bottom:1px solid var(--x-bm);background:var(--x-surface)}
+.cx .ol-row.sel{background:var(--x-pressed)}
+.cx .ol-g{width:52px;flex:none;display:flex;align-items:center;height:20px}
+.cx .ol-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center}
+.cx .ol-l1{display:flex;align-items:center;gap:8px;min-width:0}
+.cx .ol-t{font-size:13px;line-height:20px;color:var(--x-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx .ol-age{margin-left:auto;flex:none;font-size:11.5px;line-height:20px;color:var(--x-ink-faint);font-variant-numeric:tabular-nums}
+.cx .ol-l2{display:flex;align-items:center;gap:6px;font-size:11.5px;line-height:18px;color:var(--x-ink-faint);white-space:nowrap;overflow:hidden;min-width:0}
+.cx .ol-l2 > span{overflow:hidden;text-overflow:ellipsis}
+.cx .ol-sep{flex:none;opacity:.4;margin:0 1px}
+.cx .ol-l2 .br{font-family:var(--cm);font-size:11px}
+.cx .ol-l2 .num{font-variant-numeric:tabular-nums}
+.cx .ol-l2 .add{color:var(--x-success)}
+.cx .ol-l2 .del{color:var(--x-danger)}
+.cx .ol-l2 .ck{display:inline-flex;align-items:center;gap:4px;flex:none}
+.cx .ol-dot{width:8px;height:8px;border-radius:50%;flex:none;background:currentColor;opacity:.55}
+.cx .ol-lb{font-size:10.5px;line-height:14px;padding:0 5px;border-radius:4px;border:1px solid var(--x-bm);color:var(--x-ink-muted);flex:none}
+/* work-issue rows: inline key, no gutter */
+.cx .ol-lead{flex:none;display:flex;align-items:center;gap:2px;padding-left:2px}
+.cx .ol-chv{display:flex;width:14px;height:14px;align-items:center;justify-content:center;color:var(--x-ink-faint);margin-right:2px}
+.cx .ol-chv .ic{width:12px;height:12px}
+.cx .ol-kico{display:flex;flex:none;color:var(--x-ink-faint);margin-right:1px}
+.cx .ol-kico .ic{width:13px;height:13px}
+.cx .ol-key{font-family:var(--cm);font-size:11.5px;color:var(--x-ink-muted);flex:none;margin-right:1px;white-space:nowrap}
+.cx .ol-badge{flex:none;height:16px;display:inline-flex;align-items:center;padding:0 5px;border-radius:4px;font-size:10.5px;font-weight:500;line-height:1;
+  color:var(--x-ink-muted);background:var(--x-hover)}
+.cx .ol-badge.accent{color:var(--x-accent);background:color-mix(in srgb,var(--x-accent) 12%,transparent)}
+.cx .ol-badge.active{color:var(--x-att);background:color-mix(in srgb,var(--x-att) 14%,transparent)}
+.cx .ol-badge.danger{color:var(--x-danger);background:color-mix(in srgb,var(--x-danger) 12%,transparent)}
+.cx .ol-badge.muted{color:var(--x-ink-faint);background:var(--x-hover)}
+.cx .ol-ind{padding-left:38px}
+.cx .ol-row.epic .ol-t{font-weight:500}
+/* one-line work-issue rows: no columns, right-aligned rollup cluster */
+.cx .ol-row.ol-one{height:32px}
+.cx .ol-one .ol-b{flex-direction:row;align-items:center;gap:0;justify-content:flex-start}
+.cx .ol-one .ol-l1{flex:1;min-width:0}
+.cx .ol-right{display:flex;align-items:center;gap:11px;flex:none;margin-left:auto;padding-left:10px;color:var(--x-ink-faint);font-size:11.5px;font-variant-numeric:tabular-nums}
+.cx .ol-right .grp{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.cx .ol-right .ic{width:12px;height:12px;opacity:.8}
+.cx .ol-right .ol-key{font-size:11px;margin:0}
+/* ===== Treatment: solid chips, key chips, radius, scale (2026-11-24) ===== */
+.cx{--chip-accent:#5b54ea;--chip-att:#b45309;--chip-success:#157f4d;--chip-danger:#c0392b;--chip-neutral:#6b6b76}
+.cx .chip{display:inline-flex;align-items:center;justify-content:center;height:20px;padding:0 8px;border-radius:999px;background:var(--c);color:#fff;font-size:11.5px;font-weight:600;letter-spacing:.005em;white-space:nowrap;flex:none}
+.cx .chip.sq{border-radius:6px;font-weight:500}
+.cx .chip.sm{height:18px;padding:0 7px;font-size:11px}
+.cx .key{display:inline-flex;align-items:center;font:12px/16px var(--cm);padding:1px 6px;border-radius:6px;background:color-mix(in srgb,var(--tone) 13%,transparent);color:var(--tone-ink);white-space:nowrap;flex:none}
+.cx[data-theme=dark] .key{background:color-mix(in srgb,var(--tone) 22%,transparent)}
+.cx .key.accent{--tone:var(--x-accent);--tone-ink:var(--x-accent-ink)}
+.cx .key.mute{background:var(--x-control);color:var(--x-ink-muted)}
+.cx .pillstat{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:999px;background:var(--x-pressed);color:var(--x-ink-muted);font-size:11.5px;font-variant-numeric:tabular-nums;flex:none}
+.cx .pillstat .ic{width:12px;height:12px}
+.cx .glyphdot{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:999px;background:var(--x-pressed);color:var(--x-ink-muted);flex:none}
+.cx .glyphdot .ic{width:12px;height:12px}
+.cx .tx-matrix{display:flex;flex-direction:column;gap:0;background:var(--x-surface)}
+.cx .tx-mrow{display:grid;grid-template-columns:7.5rem 1fr 1fr 1fr;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--x-bm);font-size:12px;color:var(--x-ink-muted)}
+.cx .tx-mrow.hd{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--x-ink-faint);background:var(--x-deep)}
+.cx .tx-lbl{color:var(--x-ink-faint);font-size:11.5px}
+.cx .tx-scale{display:flex;flex-direction:column;gap:10px;padding:14px 16px;background:var(--x-surface)}
+.cx .tx-sc{display:flex;align-items:center;gap:14px}
+.cx .tx-dim{font:11px/14px var(--cm);color:var(--x-ink-faint);width:52px;flex:none;text-align:right}
+.cx .tx-frame{border:1px dashed var(--x-b);border-radius:8px;padding:0;overflow:hidden;flex:1;min-width:0}
+.cx .tx-sbrow{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:8px;color:var(--x-ink-muted);font-weight:600;font-size:14px;background:var(--x-pressed);color:var(--x-ink)}
+.cx .tx-lrow{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;font-size:14px;color:var(--x-ink);border-bottom:1px solid var(--x-bm)}
+.cx .tx-l2row{display:flex;align-items:center;height:52px;padding:0 12px;font-size:14px;color:var(--x-ink)}
+.cx .tx-l2row .ol-l2{font-size:12px}
+.cx .tx .ol-row.ol-one{height:36px;min-height:36px;padding:0 12px}
+.cx .tx .ol-t{font-size:14px;line-height:20px}
+.cx .tx .ol-l2{font-size:12px;line-height:18px}
+.cx .tx .ol-age{font-size:12px;line-height:20px}
+.cx .tx .ol-row{padding:7px 12px;min-height:52px}
+.cx .tx .ol-key{font-size:11.5px}
+.cx .tx .ol-badge{font-size:11px;height:18px;border-radius:999px;padding:0 7px}
+.cx .tx-rad{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px 16px;background:var(--x-surface)}
+.cx .tx-rc{display:flex;flex-direction:column;gap:9px;align-items:flex-start}
+.cx .tx-rc .tile{width:76px;height:56px;background:var(--x-control);border:1px solid var(--x-b)}
+.cx .tx-rc .lab{font:11px/14px var(--cm);color:var(--x-ink-faint)}
+.cx .tx-rc .cap2{font-size:11px;color:var(--x-ink-muted)}
 </style></head><body>
 <noscript><div class="wrap"><div class="note"><b>JavaScript is off.</b> The Console specimens are drawn from data by a short inline script; the tables below each figure carry the same facts as text.</div></div></noscript>
 <div class="wrap">
 <p class="eyebrow">XTRM-853 · Console v2 · design pass</p>
 <h1>The Console UI system: one rail, quiet toolbars, small rows, PR identity, Project visuals, one Factory drawer</h1>
 <p class="dek">The operator's review of 2026-11-18 asked for a coherent UI system before more surfaces land. This page shows the six answers in the Console's own tokens, in light and dark. The committed spec <code>packages/xtrm-app/docs/design/console-ui-system.md</code> names every token and component, with file, props and consuming surfaces.</p>
-<div class="meta"><span>Status: proposal for lead review, then operator look</span><span>Binding: ADR-002 §D9 and §12, XTRM-632/636/637</span><span>Nothing in <code>src/</code> changes under XTRM-853</span></div>
+<div class="meta"><span>Status: proposal for lead review, then operator look</span><span>Binding: ADR-002 §D9 and §12, XTRM-632/636/637</span><span>Nothing in <code>src/</code> changes under XTRM-853</span><span><b>Update 2026-11-24:</b> three operator corrections in the last tab</span></div>
 <div class="note good"><b>Reading the page.</b> The page chrome follows the Mercury style (light grey page, white cards). Each “Console” frame inside a card is a faithful miniature of the app, rendered with the token values of <code>src/styles.css</code> in the light theme and in the dark theme. Rows, keys and titles are sample data (merged PR numbers and issue keys come from repository history; open, draft and closed states are illustrative). The one deliberate token deviation is the light <code>--x-success</code> shown at the proposed <code>#1b7f46</code> (ruling R1).</div>
 
 <div class="note" style="border-left-color:var(--teal);background:var(--card)"><b>Restraint (binding for every slice, operator 2026-11-18).</b> The app must not become too colourful or fill the viewport with pills. (1) At most one coloured element per row: a PR key or a status, not both. (2) Chips only for state, never for metadata: counts, branches, refs, roles and layers are plain text or mono. (3) No chip backgrounds in toolbars or headers. (4) Colour only through the existing tokens. (5) A surface may not add a pill row: use a count plus a popover. The frames below already follow it; the PR state chip appears only in the PR inspector header.</div>
@@ -233,14 +427,14 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
 <div class="facts">
  <div class="fact" style="--c:var(--accent)"><div class="v">1 rail</div><div class="k">nested sections, no child icons</div></div>
  <div class="fact" style="--c:var(--sched)"><div class="v">0 chips</div><div class="k">in the resting toolbar</div></div>
- <div class="fact" style="--c:var(--teal)"><div class="v">13 px</div><div class="k">icons in rows (text size)</div></div>
+ <div class="fact" style="--c:var(--teal)"><div class="v">16 px</div><div class="k">chrome glyph; 14 px inside rows</div></div>
  <div class="fact" style="--c:var(--ok)"><div class="v">4 states</div><div class="k">PR key: open, draft, merged, closed</div></div>
  <div class="fact" style="--c:var(--att)"><div class="v">3 sources</div><div class="k">behind the Workers tree</div></div>
  <div class="fact" style="--c:var(--bad)"><div class="v">5 rulings</div><div class="k">R1–R5 for the lead</div></div>
 </div>
 
 <nav class="tabs" aria-label="Views">
- <a href="#shell" data-v="shell">Shell · items 1–3</a><a href="#pulls" data-v="pulls">Pull requests · item 4</a><a href="#project" data-v="project">Project · item 5</a><a href="#factory" data-v="factory">Factory · item 6</a><a href="#tokens" data-v="tokens">Tokens and registry</a>
+ <a href="#shell" data-v="shell">Shell · items 1–3</a><a href="#pulls" data-v="pulls">Pull requests · item 4</a><a href="#project" data-v="project">Project · item 5</a><a href="#factory" data-v="factory">Factory · item 6</a><a href="#tokens" data-v="tokens">Tokens and registry</a><a href="#rulings" data-v="rulings">Operator rulings · 2026-11-24</a><a href="#lists" data-v="lists">Row lists · 2026-11-24</a><a href="#treatment" data-v="treatment">Treatment · 2026-11-24</a><a href="#approved" data-v="approved">Approved state · 2026-11-24</a><a href="#activity" data-v="activity">Activity · proposed</a><a href="#identity" data-v="identity">Issue links · proposed</a>
 </nav>
 
 <!-- ================= SHELL ================= -->
@@ -279,7 +473,7 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
  <p class="q"><b>The question:</b> which controls act on this list, and how is filtering this list different from searching everything? Click the filter icon below; it widens. Type to see a value state.</p>
  <div class="chips"><span class="kc"><i style="--c:var(--sched)"></i><b>0</b> resting fills</span><span class="kc"><i style="--c:var(--accent)"></i><b>28 → 192 px</b> filter width</span><span class="kc"><i></i><b>/</b> focuses the filter</span><span class="kc"><i></i><b>Ctrl K</b> stays global</span></div>
  <p class="q" style="margin-top:12px"><b>Today</b> (light, from the current source): resting <code>bg-pressed</code> on every filter and on “New issue”.</p>
- <div class="pair" data-s="tbToday" data-one="light"></div>
+ <div class="pair" data-s="tbToday" data-one="light" data-note="current source"></div>
  <p class="q" style="margin-top:14px"><b>Proposed</b>: three states of one toolbar — resting, an active filter, and the focused local filter holding a value.</p>
  <div class="pair" data-s="tb"></div>
  <figcaption class="cap">The global palette (top bar, <kbd>Ctrl K</kbd>) searches across surfaces and opens results. The list filter narrows only the rows already loaded in this surface, by title, key and author. Selected tab = ink text plus a 2 px ink bar, no fill (ruling R5). Filter shortcut <kbd>/</kbd> and the filter glyph are ruling R4.</figcaption>
@@ -291,7 +485,7 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
  <p class="q"><b>The question:</b> can I read key, state and title in one glance, and what can I do with a row? Hover the rows.</p>
  <div class="chips"><span class="kc"><i style="--c:var(--teal)"></i><b>14 → 13 px</b> row icons</span><span class="kc"><i style="--c:var(--accent)"></i><b>key → chip → title</b></span><span class="kc"><i></i><b>2 → 1</b> hover actions</span><span class="kc"><i></i><b>20 px</b> action target</span></div>
  <p class="q" style="margin-top:12px"><b>Today</b> (light): status chip before the key; open and copy actions at 14 px.</p>
- <div class="pair" data-s="rowsToday" data-one="light"></div>
+ <div class="pair" data-s="rowsToday" data-one="light" data-note="current source"></div>
  <p class="q" style="margin-top:14px"><b>Proposed</b> (row 3 shows the hover state; row 2 is the selected row).</p>
  <div class="pair" data-s="rows"></div>
  <details><summary>Text equivalent</summary><div class="tbox"><table><tr><th>slot</th><th>today</th><th>proposed</th></tr>
@@ -411,7 +605,7 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
 <h2>No new colour, no new surface level<small>Four additions, all derived: two icon sizes, one badge tone, one PR state map. Everything else is a role the system already has.</small></h2>
 <div class="spec"><div class="spec-h"><h3>Console tokens used by this system</h3><span class="src">src/styles.css</span></div><div class="spec-b">
  <div class="pair" data-s="tokens"></div>
- <div class="spec-b" style="padding:12px 0 0"><p class="q"><b>Icon scale against a 13 px title and 11.5 px meta.</b> <code>micro</code> 12 and <code>text</code> 13 are new; <code>xs</code> 14 leaves rows and toolbars; <code>nav</code> 16 stays for top-level sidebar destinations.</p></div>
+ <div class="spec-b" style="padding:12px 0 0"><p class="q"><b>Icon scale against a 13 px title and 11.5 px meta.</b> <code>micro</code> 12 and <code>text</code> 13 are new; <code>xs</code> 14 leaves rows and toolbars; <code>nav</code> 16 stays for top-level sidebar destinations. <b>Superseded on 2026-11-24 (O3):</b> the top-level row glyph moves to <code>xs</code> 14 and the <code>nav</code> step retires.</p></div>
  <div class="pair" data-s="iconScale"></div>
 </div></div>
 <div class="spec"><div class="spec-h"><h3>Registry search record</h3><span class="src">ADR-001 Decision 6 · shadcn and spectrum-ui MCP, 2026-11-18</span></div><div class="spec-b">
@@ -432,7 +626,381 @@ figure{margin:10px 0;padding:14px 16px 12px}figure svg{width:100%;height:auto;di
  <tr><td>R4</td><td>ListFilter shortcut “/” and the filter glyph instead of the magnifier?</td><td>Adopt</td></tr>
  <tr><td>R5</td><td>Selected toolbar tab = ink text plus 2 px ink bar, no fill?</td><td>Adopt</td></tr></table></div></div></div>
 </div>
+
+
+<!-- ================= OPERATOR RULINGS 2026-11-24 ================= -->
+<div class="view" id="view-rulings" hidden>
+<div class="kicker">08 · Operator rulings, 2026-11-24</div>
+<p class="note"><b>Exploration, not the decision.</b> This tab records the review that produced the ruling. The approved state is tab 9 (<a href="#approved">Approved state</a>); where they differ, tab 9 wins.</p>
+<h2>Three corrections from the live review<small>Two were ruled before and came back; one was never ruled. Every measurement below comes from the deployed Console at <code>bc7fb81e</code> and its own computed style, not from a mock.</small></h2>
+
+<div class="note" style="border-left-color:var(--teal);background:var(--card)"><b>Binding rulings of 2026-11-24.</b> <b>O1</b> The global search keeps its footprint and takes a slight resting fill, with no border. <b>O2</b> The source strip and its drop-up carry no border and no ring inside the shadow; separation is the shadow stack alone (XTRM-765, restored). <b>O3</b> A top-level sidebar row is never taller than the Work/Agent switcher, and its glyph sits at the 14 px text step so it stops outweighing the 13 px label.</div>
+
+<div class="facts" style="margin-top:18px">
+ <div class="fact" style="--c:var(--accent)"><div class="v">3 rulings</div><div class="k">two restore earlier decisions</div></div>
+ <div class="fact" style="--c:var(--bad)"><div class="v">1 px ring</div><div class="k">came back through a token name</div></div>
+ <div class="fact" style="--c:var(--teal)"><div class="v">30 → 28 px</div><div class="k">top-level row height</div></div>
+ <div class="fact" style="--c:var(--ok)"><div class="v">5.83 : 1</div><div class="k">search text, dark, proposed</div></div>
 </div>
+
+<div class="spec"><div class="spec-h"><h3>O1 · Global search control</h3><span class="src">src/shell/AppShell.tsx:33 · src/styles.css</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> where do I search, and does this control read as a field? The ghost resting state arrived with XTRM-939 (migration row 28, “ghost resting state, fill on hover/focus”) and in the live top bar it reads as empty space.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--accent)"></i><b>32 px</b> height, unchanged</span><span class="kc"><i style="--c:var(--teal)"></i><b>--x-control</b> resting fill</span><span class="kc"><i style="--c:var(--sched)"></i><b>0</b> borders, 0 shadows</span><span class="kc"><i style="--c:var(--ok)"></i><b>≥ 4.5 : 1</b> text on the fill</span></div>
+ <p class="q" style="margin-top:12px"><b>Today</b>: transparent at rest, so only the placeholder carries the affordance, and the placeholder itself sits below 4.5:1 in both themes.</p>
+ <div class="pair" data-s="searchToday"></div>
+ <p class="q" style="margin-top:14px"><b>Proposed</b>: the existing <code>--x-control</code> fill, muted text, nothing else changes. A fill value of <code>#2a2a2a</code> lands within 4/255 of <code>#262626</code>, so the token wins over a literal.</p>
+ <div class="pair" data-s="search"></div>
+ <p class="cap">Bar slice at 1×. The fill step against the top bar is 1.15:1 in light and 1.21:1 in dark — the “very slight contrast” the ruling asks for, without a border.</p>
+ <details><summary>Measured values</summary><div class="tbox"><table><tr><th>property</th><th>today</th><th>proposed</th><th>token or utility</th></tr>
+ <tr><td>Resting fill</td><td>transparent</td><td><code>#efeff1</code> light, <code>#262626</code> dark</td><td><code>bg-control</code></td></tr>
+ <tr><td>Border</td><td>none</td><td>none (ruling O1)</td><td>—</td></tr>
+ <tr><td>Shadow</td><td>none</td><td>none</td><td>—</td></tr>
+ <tr><td>Label ink</td><td><code>--x-ink-faint</code> <code>#94949c</code> / <code>#6a6a72</code></td><td><code>--x-ink-muted</code> <code>#5f5f68</code> / <code>#a0a0a8</code></td><td><code>text-ink-muted</code></td></tr>
+ <tr><td>Height, width</td><td>32 px, 576 px</td><td>unchanged</td><td><code>h-8 max-w-xl</code></td></tr>
+ <tr><td>Keyboard shortcut</td><td><code>Ctrl K</code> label</td><td>unchanged</td><td>—</td></tr></table></div></details>
+ <details><summary>Contrast on the new fill</summary><div class="tbox"><table><tr><th>text on the bar</th><th>light</th><th>dark</th><th>verdict</th></tr>
+ <tr><td><code>--x-ink-faint</code> on the surface (today)</td><td>3.01 : 1</td><td>3.41 : 1</td><td>below 4.5</td></tr>
+ <tr><td><code>--x-ink-faint</code> on <code>--x-control</code></td><td>2.62 : 1</td><td>2.82 : 1</td><td>worse, so the fill cannot keep the faint ink</td></tr>
+ <tr><td><code>--x-ink-muted</code> on <code>--x-control</code></td><td>5.50 : 1</td><td>5.83 : 1</td><td>passes, proposed</td></tr></table></div></details>
+ <div class="note"><b>Open decision O1a: the hover step.</b> <code>bg-hover</code> and <code>bg-pressed</code> are translucent ink over the surface, and a utility replaces a fill rather than stacking on it. As raw colour, <code>--x-pressed</code> over the top bar is <code>#232323</code> in dark — <i>darker</i> than <code>--x-control</code> <code>#262626</code> — and <code>--x-hover</code> is <code>#1c1c1c</code>. A fill step on hover therefore inverts between the themes. Default: hover lifts the text to <code>text-ink</code> and leaves the fill. A real step needs one new solid token, <code>--x-control-hover</code> (<code>#2e2e2e</code> dark, <code>#e4e4e8</code> light): 1.11 : 1 against the resting fill in both themes.</div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>O2 · Source strip and drop-up</h3><span class="src">src/shell/ContextSidebar.tsx:131,141 · src/styles.css:58,104 · XTRM-759 / 760 / 765</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what is the state of my data sources, and is that chip a control? XTRM-765 ruled, on the operator's word, that neither surface carries a border or a ring: separation comes from the shadow stack alone, at <code>0 3px 6px</code> plus <code>0 14px 30px -6px</code> for the chip and <code>0 24px 56px -16px</code> plus <code>0 6px 16px -4px</code> for the drop-up.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--bad)"></i><b>2</b> surfaces regained a ring</span><span class="kc"><i style="--c:var(--att)"></i><b>2 → 1</b> shadow layers, near layer lost</span><span class="kc"><i style="--c:var(--ok)"></i><b>2</b> ring-free tokens</span><span class="kc"><i style="--c:var(--sched)"></i><b>1</b> call site keeps <code>shadow-float</code></span></div>
+ <p class="q" style="margin-top:12px"><b>Today</b> (#481, XTRM-939): both surfaces use <code>shadow-float</code>, and that token's definition ends in a ring: <code>0 0 0 1px rgb(15 15 20 / 0.06)</code> light, <code>0 0 0 1px rgb(255 255 255 / 0.08)</code> dark. Measured on both elements in the deployed app. The swap also halved the elevation.</p>
+ <div class="pair" data-s="stripToday"></div>
+ <p class="q" style="margin-top:14px"><b>Proposed</b>: two strip tokens at the 765 depth and geometry, with no ring anywhere in the stack. The repository picker popup keeps <code>shadow-float</code>; it is a floating menu, not the strip.</p>
+ <div class="pair" data-s="strip"></div>
+ <p class="cap">Sidebar footer at 1×. The chip is the closed state; the drop-up floats above it. Hover either frame: no edge appears at any state, by construction.</p>
+ <details><summary>Shadow stacks</summary><div class="tbox"><table><tr><th>surface</th><th>today (#481)</th><th>proposed</th><th>token</th></tr>
+ <tr><td>Chip, closed</td><td><code>0 10px 30px -12px</code> + <code>0 0 0 1px</code></td><td><code>0 3px 6px</code> + <code>0 14px 30px -6px</code></td><td><code>shadow-strip</code></td></tr>
+ <tr><td>Drop-up, open</td><td><code>0 18px 44px -12px</code> + <code>0 0 0 1px</code></td><td><code>0 6px 16px -4px</code> + <code>0 24px 56px -16px</code></td><td><code>shadow-strip-open</code></td></tr>
+ <tr><td>Repository picker popup</td><td><code>0 10px 30px -12px</code> + <code>0 0 0 1px</code></td><td>unchanged</td><td><code>shadow-float</code></td></tr></table></div></details>
+ <details><summary>Token values, both themes</summary><div class="tbox"><table><tr><th>token</th><th>light</th><th>dark</th></tr>
+ <tr><td><code>--shadow-strip</code></td><td><code>0 3px 6px rgb(15 15 20 / 0.2), 0 14px 30px -6px rgb(15 15 20 / 0.34)</code></td><td><code>0 3px 6px rgb(0 0 0 / 0.5), 0 14px 30px -6px rgb(0 0 0 / 0.7)</code></td></tr>
+ <tr><td><code>--shadow-strip-open</code></td><td><code>0 6px 16px -4px rgb(15 15 20 / 0.24), 0 24px 56px -16px rgb(15 15 20 / 0.38)</code></td><td><code>0 6px 16px -4px rgb(0 0 0 / 0.6), 0 24px 56px -16px rgb(0 0 0 / 0.82)</code></td></tr>
+ <tr><td><code>--x-strip</code> / <code>--x-strip-open</code></td><td>unchanged (<code>--x-raised</code> / <code>--x-control</code>)</td><td><code>#1c1c1c</code> / <code>#262626</code></td></tr></table></div></details>
+ <div class="note"><b>Why review did not catch it.</b> XTRM-939 asked only that literals become tokens; the diff read as a cleanup, the token is named <code>float</code>, the ring lives inside its definition, and no test asserted the strip's shadow. The ruling lived in prose only. This section carries the guard that ends that class of regression, and the spec sentence that names the strip as the one floating layer without a ring.</div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>O3 · Sidebar row and glyph</h3><span class="src">src/ui/sidebar.tsx:82,83 · src/ui/primitives.tsx (Row) · src/ui/icon.tsx</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> can I scan the sections, and does the selected row read as one item? Measured in the deployed app: the row is 30 px against a 28 px Work/Agent switcher, and a 16 px glyph outweighs the 13 px label.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--teal)"></i><b>30 → 28 px</b> row height</span><span class="kc"><i style="--c:var(--accent)"></i><b>16 → 14 px</b> glyph</span><span class="kc"><i style="--c:var(--sched)"></i><b>10 → 8 px</b> icon gap</span><span class="kc"><i style="--c:var(--ok)"></i><b>28 = 28 px</b> row never taller than the switcher</span></div>
+ <p class="q" style="margin-top:12px"><b>Today</b>: the row carries an <code>h-[30px]</code> override over the <code>Row</code> density, the glyph is the 16 px <code>nav</code> step at 2.25 stroke, and <code>nav</code> has exactly one consumer — this row.</p>
+ <div class="pair" data-s="sbRowsToday"></div>
+ <p class="q" style="margin-top:14px"><b>Proposed</b>: the override goes, the glyph moves to the 14 px <code>xs</code> step at the same 2.25 stroke, and the gap tightens to 8 px. Nested rows stay 28 px and carry no icon, so the rail does not jog.</p>
+ <div class="pair" data-s="sbRows"></div>
+ <p class="cap">Sidebar at 1×, Work/Agent switcher above the first row. The switcher is the ceiling; a top-level row may not exceed it. 13 px would match the label exactly, but it closes up lucide detail in <code>git-pull-request</code>, <code>box</code> and <code>target</code> at 2.25 stroke, so 14 px is the floor that keeps the glyph legible.</p>
+ <details><summary>Geometry</summary><div class="tbox"><table><tr><th>element</th><th>measured today</th><th>proposed</th><th>where</th></tr>
+ <tr><td>Work/Agent switcher</td><td>28 px (<code>h-7</code>, inner 24)</td><td>unchanged — this is the ceiling</td><td><code>HalfSwitch</code>, ContextSidebar.tsx</td></tr>
+ <tr><td>Top-level row</td><td>30 px</td><td>28 px</td><td><code>sidebar.tsx:82</code>: drop <code>h-[30px]</code></td></tr>
+ <tr><td>Row glyph</td><td>16 px <code>nav</code>, 2.25 stroke</td><td>14 px <code>xs</code>, 2.25 stroke</td><td><code>sidebar.tsx:83</code></td></tr>
+ <tr><td>Icon to label</td><td>10 px</td><td>8 px</td><td>that row's <code>gap-2</code></td></tr>
+ <tr><td>Label</td><td>13 px, 600</td><td>unchanged</td><td>—</td></tr>
+ <tr><td>Nested row</td><td>28 px, no glyph</td><td>unchanged</td><td><code>nav-rail.tsx</code></td></tr>
+ <tr><td>Glyph to label ratio</td><td>1.23</td><td>1.08</td><td>—</td></tr></table></div></details>
+ <div class="note good"><b>Consequence for the scale.</b> The <code>nav</code> 16 step loses its last consumer and retires; the ladder becomes <code>micro</code> 12, <code>text</code> 13, <code>xs</code> 14, <code>sm</code> 16. §07 and the spec keep <code>sm</code> 16 for controls that need a full tap target, not for sidebar rows.</div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>Guards these rulings add</h3><span class="src">packages/xtrm-app/tests · units-gate.ts</span></div><div class="spec-b">
+ <div class="tbox"><table><tr><th>check</th><th>how it is proven</th></tr>
+ <tr><td>Strip has no ring</td><td>DOM test on the trigger and the open popup: neither computed <code>box-shadow</code> contains a <code>0 0 0 1px</code> layer, and the popup's first layer is deeper than the chip's.</td></tr>
+ <tr><td>Strip does not inherit a floating token</td><td>Source test: <code>shadow-float</code> is absent from <code>ContextSidebar.tsx</code> except the repository picker.</td></tr>
+ <tr><td>Row is never taller than the switcher</td><td>DOM test compares the two measured heights in the same frame; it fails when the row exceeds the switcher by any amount.</td></tr>
+ <tr><td>Glyph stays at the text step</td><td>DOM test reads the row <code>svg</code> box: 14 px, and not above 14.</td></tr>
+ <tr><td>Search has a resting fill, no edge</td><td>DOM test: background is not transparent, <code>border-width</code> is 0, <code>box-shadow</code> is none.</td></tr>
+ <tr><td>Search text passes contrast</td><td>Token-pair test in both themes: the resting label on <code>--x-control</code> is at least 4.5:1.</td></tr></table></div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>Not in this scope</h3><span class="src">recorded, not changed</span></div><div class="spec-b">
+ <div class="tbox"><table><tr><th>item</th><th>observed</th><th>disposition</th></tr>
+ <tr><td><code>Agent host</code> reads <code>fixture</code></td><td>No <code>~/.xtrm/agent-host*.json</code> on the host and nothing listens on <code>127.0.0.1:3030</code>; a <code>bun</code> process listens on <code>100.113.49.52:3030</code>.</td><td>Host wiring, not a UI change. Own issue.</td></tr>
+ <tr><td>Board lanes lose the card frame</td><td>One hairline replaces the frame (XTRM-943).</td><td>Intentional, keep.</td></tr>
+ <tr><td>Footer sources as status dot plus text</td><td>Badges removed (XTRM-939).</td><td>Intentional, keep.</td></tr>
+ <tr><td>Inspector tabs as underline</td><td>XTRM-937.</td><td>Intentional, keep.</td></tr>
+ <tr><td>Light <code>--x-success</code></td><td>Proposal R1 in §07.</td><td>Still a lead decision.</td></tr></table></div>
+</div></div>
+
+
+</div>
+
+
+
+
+<div class="view" id="view-treatment" hidden>
+ <div class="section"><div class="kick">10 · Treatment, 2026-11-24</div><h2>Make the console read as UI, not as a spreadsheet</h2><p class="note"><b>Exploration, not the decision.</b> This tab records how the treatment was reached. The approved state is tab 9 (<a href="#approved">Approved state</a>); where the two differ, tab 9 wins and the numbers here are history.</p>
+ <p class="lede">Four changes, all visible at a glance. Chips become solid colour with pure white ink. Substrate issue keys get a tinted chip with matching ink. Every row grows to one height that the sidebar and the lists share. Corners become rounder than 4 px everywhere a pill or a card appears.</p>
+ <div class="facts">
+  <div class="fact" style="--c:var(--accent)"><div class="v">5.03–5.44</div><div class="k">white ink contrast on every solid chip</div></div>
+  <div class="fact" style="--c:var(--ok)"><div class="v">36 px</div><div class="k">one row height for sidebar and lists</div></div>
+  <div class="fact" style="--c:var(--att)"><div class="v">14 px</div><div class="k">list title, was 13 px</div></div>
+  <div class="fact" style="--c:var(--sched)"><div class="v">999 px</div><div class="k">badge radius, was 4 px</div></div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>T1 · Chips: solid colour, pure white ink</h3><span class="src">src/ui/badge.tsx · src/styles.css</span></div><div class="spec-b">
+  <p class="q"><b>The change:</b> the chip stops being a dim tint with muted ink. The chip becomes the colour, the ink becomes pure white, and the shape becomes a pill. One solid tone set serves both themes, so a status never changes meaning between light and dark.</p>
+  <div class="pair" data-s="txChips" data-one="light" data-note="Console · light theme"></div>
+  <div class="pair" data-s="txChips" data-one="dark" data-note="Console · dark theme" style="margin-top:12px"></div>
+  <p class="cap">Same tone set in both themes: <code>--chip-accent #5b54ea</code>, <code>--chip-att #b45309</code>, <code>--chip-success #157f4d</code>, <code>--chip-danger #c0392b</code>, <code>--chip-neutral #6b6b76</code>. Pure white on each tone measures 5.38, 5.02, 5.03, 5.44 and 5.26 to 1, so every chip clears 4.5:1 without a per-theme ink swap. Each tone also clears 3.3:1 against the dark surface, so the chip keeps a visible edge in dark mode.</p>
+  <div class="tbox"><table><tr><th>status</th><th>solid tone</th><th>why this tone</th></tr>
+  <tr><td>Ready</td><td>accent</td><td>the product accent means “dispatchable”, matching the accent used for “Start work”</td></tr>
+  <tr><td>In progress</td><td>attention, amber</td><td>amber is the only tone that reads as “live now” without reading as a warning</td></tr>
+  <tr><td>Blocked</td><td>danger</td><td>unchanged meaning, now filled instead of tinted</td></tr>
+  <tr><td>Done, Attested</td><td>success</td><td>unchanged meaning, now filled</td></tr>
+  <tr><td>Draft, Deferred, Stale</td><td>neutral</td><td>a desaturated slate keeps three “not active” states quiet without hiding them</td></tr>
+  <tr><td>Rejected</td><td>danger</td><td>shares the danger tone with Blocked; the word separates them</td></tr></table></div>
+  <div class="note"><b>What this costs.</b> A solid chip is louder than a tint, so the list now has colour at every row. That is the request, but it means only one saturated chip may appear per row — the status. Everything else stays neutral, which is why the key chip and the rollup pills are tinted, not filled.</div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>T2 · Issue keys get a tinted chip</h3><span class="src">src/ui/sidebar.tsx · list rows</span></div><div class="spec-b">
+  <p class="q"><b>The change:</b> <code>XTRM-933</code> stops being bare mono text. It gets a chip with a 13 % accent tint (22 % in dark) and accent ink, so the key is a stable anchor the eye can find without reading, and the title still carries the weight.</p>
+  <div class="pair" data-s="txKeys" data-one="light" data-note="Console · light theme"></div>
+  <div class="pair" data-s="txKeys" data-one="dark" data-note="Console · dark theme" style="margin-top:12px"></div>
+  <p class="cap">Tinted chip ink measures 6.50:1 light and 7.77:1 dark against its own chip, and the chip itself stays quiet against the surface, so it never competes with the status chip beside it. The same chip serves nested keys and PR refs.</p>
+  <div class="note"><b>One question first.</b> A key chip on every row adds a second coloured object per row. The alternative is to tint only the prefix shortlist, or to tint keys in the sidebar and the drawer but leave list keys plain. This is O6 below.</div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>T3 · Corners: 4 px was the outlier</h3><span class="src">src/styles.css · all primitives</span></div><div class="spec-b">
+  <p class="q"><b>The change:</b> the console uses 4 px on badges, 6 px on buttons, 8 px on rows and popovers and 12 px on cards. Every step moves up: badges become full pills, buttons and inputs 10 px, popovers 14 px, cards 16 px.</p>
+  <div class="pair" data-s="txRad" data-one="light" data-note="radius ladder · light"></div>
+  <div class="pair" data-s="txRad" data-one="dark" data-note="radius ladder · dark" style="margin-top:12px"></div>
+  <div class="tbox"><table><tr><th>primitive</th><th>today</th><th>proposed</th></tr>
+  <tr><td>badge, chip, key chip</td><td>4 px</td><td>999 px, a pill</td></tr>
+  <tr><td>button, input, select</td><td>6 px</td><td>10 px</td></tr>
+  <tr><td>row highlight</td><td>6–8 px</td><td>10 px</td></tr>
+  <tr><td>popover, menu, tooltip</td><td>8 px</td><td>14 px</td></tr>
+  <tr><td>card, panel</td><td>12 px</td><td>16 px</td></tr></table></div>
+  <div class="note"><b>Constraint.</b> The row highlight radius must stay at or below the row height divided by four, or a selected top and bottom row shows a notch against the list edge. At 36 px, 10 px is the practical ceiling.</div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>T4 · One row height, shared by the sidebar and the lists</h3><span class="src">src/shell/ContextSidebar.tsx · src/ui/sidebar.tsx · lists</span></div><div class="spec-b">
+  <p class="q"><b>The change:</b> the sidebar row, the single-line list row and the two-line list row become three fixed heights that all derive from one label size. The label grows to 14 px, meta stays 12 px, and every row that holds a 14 px label becomes 36 px.</p>
+  <div class="pair" data-s="txScale" data-one="light" data-note="row heights · light"></div>
+  <div class="pair" data-s="txScale" data-one="dark" data-note="row heights · dark" style="margin-top:12px"></div>
+  <div class="tbox"><table><tr><th></th><th>today</th><th>proposed</th><th>rows per 900 px</th></tr>
+  <tr><td>sidebar row</td><td>30 px, 13 px label</td><td>36 px, 14 px label</td><td>14 to 12</td></tr>
+  <tr><td>single-line list row</td><td>32 px, 13 px</td><td>36 px, 14 px</td><td>28 to 25</td></tr>
+  <tr><td>two-line list row</td><td>44 px, 13 px</td><td>52 px, 14 + 12 px</td><td>20 to 17</td></tr>
+  <tr><td>section header, group label</td><td>11–12 px</td><td>12 px</td><td>unchanged</td></tr></table></div>
+  <div class="note"><b>Cost, stated plainly.</b> Two-line rows lose three visible items per screen and single-line rows lose three. That is the price of the larger label. The recovery is the density toggle in L4: comfortable keeps 52 px, compact keeps 36 px.</div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>T5 · The treated single-line list</h3><span class="src">issues list, one-line variant · everything at once</span></div><div class="spec-b">
+  <p class="q"><b>What it shows:</b> the one-line row from L3b, at 36 px with a 14 px title, with a tinted key chip, a solid status chip, and round pills behind the three rollup counts. The pills replace the bare glyph and number.</p>
+  <div class="pair" data-s="txIssues1" data-one="light" data-note="Console · light theme"></div>
+  <div class="pair" data-s="txIssues1" data-one="dark" data-note="Console · dark theme" style="margin-top:12px"></div>
+  <p class="cap">The rollup pills use a 12 % tint of their own tone so the count and its glyph read as one object: layers for children, activity for events, outbound for pointers. The PR ref stays neutral. The age stays faint and tabular.</p>
+  <div class="note"><b>Pills are optional per column.</b> Children, events and pointers each gain a pill; the PR ref and the age do not, because a pill around a key would compete with the key chip and a pill around a relative time would be noise. If a row carries only one count, drop the pill and keep the bare glyph.</div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>T6 · The treated two-line list</h3><span class="src">pull requests, two-line variant</span></div><div class="spec-b">
+  <p class="q"><b>What it shows:</b> the L2 row at 52 px with a 14 px title, a solid state chip at the start of line 1, a tinted key chip for the commit key, and the PR number as a key chip in the gutter.</p>
+  <div class="pair" data-s="txPrs" data-one="light" data-note="Console · light theme"></div>
+  <div class="pair" data-s="txPrs" data-one="dark" data-note="Console · dark theme" style="margin-top:12px"></div>
+  <div class="note"><b>Order on line 1.</b> State chip, then title, then age at the right edge. The state is a word, so it reads before the title and the eye can skip whole groups by colour. Line 2 keeps author, diff, checks, review, comments and the issue key, in that order.</div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>T7 · Tokens, contrast, open questions</h3><span class="src">src/styles.css · src/ui/badge.tsx · src/ui/sidebar.tsx</span></div><div class="spec-b">
+  <p class="q">Five new tokens, no per-theme ink swap, and four questions that need your word before implementation.</p>
+  <div class="tbox"><table><tr><th>token</th><th>value</th><th>used by</th><th>white ink</th></tr>
+  <tr><td><code>--chip-accent</code></td><td><code>#5b54ea</code></td><td>Ready, merged</td><td>5.38:1</td></tr>
+  <tr><td><code>--chip-att</code></td><td><code>#b45309</code></td><td>In progress</td><td>5.02:1</td></tr>
+  <tr><td><code>--chip-success</code></td><td><code>#157f4d</code></td><td>Done, Attested, open</td><td>5.03:1</td></tr>
+  <tr><td><code>--chip-danger</code></td><td><code>#c0392b</code></td><td>Blocked, Rejected, closed</td><td>5.44:1</td></tr>
+  <tr><td><code>--chip-neutral</code></td><td><code>#6b6b76</code></td><td>Draft, Deferred, Stale</td><td>5.26:1</td></tr>
+  <tr><td><code>--row-h</code></td><td><code>36px</code></td><td>sidebar row, single-line row</td><td></td></tr>
+  <tr><td><code>--row-h-2</code></td><td><code>52px</code></td><td>two-line row</td><td></td></tr>
+  <tr><td><code>--r-badge</code></td><td><code>999px</code></td><td>chips, keys, pills</td><td></td></tr>
+  <tr><td><code>--r-control</code></td><td><code>10px</code></td><td>buttons, inputs</td><td></td></tr>
+  <tr><td><code>--r-pop</code></td><td><code>14px</code></td><td>popover, menu</td><td></td></tr></table></div>
+  <div class="tbox" style="margin-top:12px"><table><tr><th>question</th><th>options</th></tr>
+  <tr><td><b>O1</b> Chip shape</td><td>pill 999 px (shown) or rounded 8 px, which is calmer next to the dense lists</td></tr>
+  <tr><td><b>O2</b> Chip height</td><td>20 px at 11.5 px ink (shown) or 18 px at 11 px ink, which fits the 36 px row with more air</td></tr>
+  <tr><td><b>O3</b> Key chips</td><td>tinted chip everywhere (shown), or tinted in the sidebar and drawer only, plain mono in lists</td></tr>
+  <tr><td><b>O4</b> Status as word or dot</td><td>solid chip with the word (shown) or a solid dot with a tooltip, which halves the row's colour area</td></tr>
+  <tr><td><b>O5</b> Density</td><td>one list with a comfortable 52 px and compact 36 px toggle, or a single fixed height</td></tr>
+  <tr><td><b>O6</b> Scope</td><td>treatment applied to sidebar, lists, drawer and toolbar in the same pass, or sidebar and lists first</td></tr></table></div>
+  <div class="note"><b>Guard against regression.</b> The solid chip palette is the only place where colour alone carries meaning, so the word stays inside every chip in this pass. If O4 chooses a dot, the dot must come with a tooltip and an <code>aria-label</code>, and the drawer keeps the word.</div>
+ </div></div>
+</div>
+
+<div class="view" id="view-approved" hidden>
+ <div class="section"><div class="kick">11 · Approved state, 2026-11-24</div><h2>What the console is now<small>Approved at this state and still open to edits. Every number below is the shipped value, measured on the mock deployment of the current sources; tabs 6–8 record how the state was reached and are history where they disagree.</small></h2>
+ <div class="facts">
+  <div class="fact" style="--c:var(--accent)"><div class="v">32 px</div><div class="k">list row, one line, no separator</div></div>
+  <div class="fact" style="--c:var(--ok)"><div class="v">28 px</div><div class="k">sidebar row = the Work/Agent switch</div></div>
+  <div class="fact" style="--c:var(--att)"><div class="v">16 px</div><div class="k">chrome glyph in a 28 px control</div></div>
+  <div class="fact" style="--c:var(--sched)"><div class="v">6 / 8 / 10</div><div class="k">radius ladder; only chips are pills</div></div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>A1 · Chrome: the settled heights and the settled restraint</h3><span class="src">src/shell/AppShell.tsx · src/shell/ContextSidebar.tsx · src/ui/primitives.tsx</span></div><div class="spec-b">
+  <p class="q"><b>What is decided:</b> the search field keeps a resting fill and no border; the Work/Agent switch stays 28 px with 24 px buttons and 6 px corners; every icon-only control is 28 px with a <b>16 px</b> glyph; the sidebar strip keeps its ring-free shadow and its drop-up sits deeper than the chip.</p>
+  <div class="pair" data-s="apChrome" data-one="light" data-note="Approved · light theme"></div>
+  <div class="pair" data-s="apChrome" data-one="dark" data-note="Approved · dark theme" style="margin-top:12px"></div>
+  <p class="cap">Search: <code>h-8 rounded-md bg-control text-sm text-ink-muted</code>, hover and focus lift the ink, never the fill — in dark <code>--x-pressed</code> composites <i>darker</i> than <code>--x-control</code>, so a fill step would invert. Switch: 28 px frame, 24 px buttons, 6 px corners, 11.5 px labels. Icon buttons: 28 px box, 16 px glyph (0.57 of the box), because a chrome control reads by its glyph and has no label beside it.</p>
+  <div class="tbox"><table><tr><th>surface</th><th>value</th><th>why</th></tr>
+  <tr><td>search field</td><td>32 px · 8 px radius · <code>bg-control</code></td><td>a resting fill separates it from the page without a border; the ghost state of XTRM-939 read as a label, not a field</td></tr>
+  <tr><td>Work/Agent switch</td><td>28 px · 24 px buttons · 6 px</td><td>it is chrome, not a list row: growing it to 32 px made the whole sidebar top-heavy</td></tr>
+  <tr><td>sidebar destination row</td><td>28 px · 8 px radius</td><td>no navigation row outweighs the switch above it</td></tr>
+  <tr><td>chrome glyph</td><td>16 px in 28 px</td><td>13 px in 28 px measured 0.46 and read as undersized</td></tr>
+  <tr><td>strip trigger / drop-up</td><td><code>shadow-strip</code> / <code>shadow-strip-open</code></td><td>the XTRM-765 stacks carry no <code>0 0 0 1px</code> ring; the strip is the one floating layer without it</td></tr></table></div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>A2 · Pull requests: one line, 32 px, with an <code>All</code> view</h3><span class="src">src/github/PullsSurface.tsx · src/github/pr.ts</span></div><div class="spec-b">
+  <p class="q"><b>What is decided:</b> no column table. The key is the first thing on the line, dim mono; the state chip is solid; author, diff, checks, review, comments and age trail to the right and shed widest-first. <code>All</code> is the first view and mixes open, merged and closed, ordered by last update.</p>
+  <div class="pair" data-s="apPrs" data-one="light" data-note="Approved · light theme"></div>
+  <div class="pair" data-s="apPrs" data-one="dark" data-note="Approved · dark theme" style="margin-top:12px"></div>
+  <p class="cap">The list renders what the store gives it. Diff, checks and review are empty in production because the console v1 poller never collects them (<code>additions</code>/<code>deletions</code>/<code>changed_files</code> are written as <code>null</code>; there is no <code>check_state</code> or <code>review_state</code> column at all). The layout is ready for them; the data is an open item, tracked outside this surface.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>A3 · Work issues: the same line, with the tree intact</h3><span class="src">src/issues/IssuesSurface.tsx · src/ui/list-row.tsx</span></div><div class="spec-b">
+  <p class="q"><b>What is decided:</b> one row per issue, 32 px, no separator. Chevron and indent carry the tree (1.25 rem per level); the kind glyph and the dim key precede the title; the status chip is solid; rollups (children, events, pointers, PR, age) sit at the right edge and shed widest-first. Sorting lives in the <code>Order by</code> menu that replaced the header.</p>
+  <div class="pair" data-s="apIssues" data-one="light" data-note="Approved · light theme"></div>
+  <div class="pair" data-s="apIssues" data-one="dark" data-note="Approved · dark theme" style="margin-top:12px"></div>
+  <p class="cap">Row actions stay hidden until hover or keyboard focus. Terminal issues take the success tone. Every sort key the columns offered — updated, created, priority, title, key, children, events, pointers, PR — is in the menu, so nothing was lost with the header.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>A4 · Every ruling on this pass</h3><span class="src">docs/design/console-ui-system.md §2026-11-24</span></div><div class="spec-b">
+  <div class="tbox"><table>
+  <tr><th>ruling</th><th>decision</th><th>evidence</th></tr>
+  <tr><td>list grammar</td><td>one line per item, no columns, both surfaces</td><td>column tables forced a horizontal scan for data that reads as one sentence; header sort moved to <code>Order by</code></td></tr>
+  <tr><td>row height</td><td>list 32 px, sidebar 28 px, no separators</td><td>32 px is the pre-epic list height; the sidebar matches the switch so no row outweighs it</td></tr>
+  <tr><td>status chip</td><td>solid tone, pure white ink</td><td>5.02–5.44:1 on every tone, one set for both themes</td></tr>
+  <tr><td>issue key</td><td>dim mono, no fill, ref in <code>title</code></td><td>a coloured key competes with the status chip; the chip carries the colour</td></tr>
+  <tr><td>radius</td><td>6 / 8 / 10, chips only are pills</td><td>the wider ladder read as "too rounded"; frames went back, pills stayed</td></tr>
+  <tr><td>chrome glyph</td><td>16 px in a 28 px control</td><td>13 px measured 0.46 of the box and read as undersized</td></tr>
+  <tr><td>search</td><td>resting fill, no border, ink lifts on hover</td><td>a fill step inverts in dark: <code>--x-pressed</code> composites darker than <code>--x-control</code></td></tr>
+  <tr><td>strip</td><td>ring-free shadow, drop-up deeper than the chip</td><td>XTRM-765 rejected the hairline; XTRM-939 reinstated it silently</td></tr>
+  <tr><td>PR views</td><td><code>All</code> first, mixed order by last update</td><td>reviewing needs one stream, not three tabs</td></tr>
+  </table></div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>A5 · Open, and the next pass</h3><span class="src">status</span></div><div class="spec-b">
+  <div class="tbox"><table>
+  <tr><th>state</th><th>item</th></tr>
+  <tr><td>open</td><td>PR metrics — diff, checks, review, comments: the console v1 poller never collects them, so the row renders what exists</td></tr>
+  <tr><td>open</td><td>two-line row variant — <code>--x-row-tall</code> 48 px exists, no shipped surface uses it</td></tr>
+  <tr><td>next</td><td><b>Activity page overhaul</b> — new rulings expected: reuse this list grammar for its rows and the inspector's patterns for its detail column</td></tr>
+  </table></div>
+  <p class="cap">This page is the record of an approved-but-open state. A later ruling edits this tab rather than adding a new one, so the artifact always shows exactly what the console is.</p>
+ </div></div>
+</div>
+
+<div class="view" id="view-lists" hidden>
+<div class="kicker">09 · Row lists, 2026-11-24</div>
+<p class="note"><b>Exploration, not the decision.</b> This tab records the review that produced the ruling. The approved state is tab 9 (<a href="#approved">Approved state</a>); where they differ, tab 9 wins.</p>
+<h2>One row per item, two lines<small>Both column tables go: the pull-request list and the work-issue list. Identity and state sit on the first line, every metadata field those columns carry today moves to the second line, and the key is inline rather than parked in a gutter. Nothing is dropped and nothing needs a horizontal scroll.</small></h2>
+
+<div class="note" style="border-left-color:var(--teal);background:var(--card)"><b>What this asks for.</b> The list answers one question per row: <i>what is this and where does it stand</i>. A column header only earns its place when a reader scans one field down the whole table. Both of these lists are read as <i>rows</i>, so the headers were costing width the title needed — eight tracks on pull requests, seven on work issues. Neither list keeps a column, a gutter, or a header.</div>
+
+<div class="facts" style="margin-top:18px">
+ <div class="fact" style="--c:var(--accent)"><div class="v">8 → 0</div><div class="k">columns removed</div></div>
+ <div class="fact" style="--c:var(--bad)"><div class="v">696 px</div><div class="k">fixed width the columns held of 1098</div></div>
+ <div class="fact" style="--c:var(--teal)"><div class="v">32 → 44 px</div><div class="k">row height, two lines</div></div>
+ <div class="fact" style="--c:var(--sched)"><div class="v">402 px</div><div class="k">title column left for the whole row</div></div>
+ <div class="fact" style="--c:var(--ok)"><div class="v">2</div><div class="k">issue layouts: two lines, or one</div></div>
+</div>
+
+<div class="spec"><div class="spec-h"><h3>L1 · What the column table costs today</h3><span class="src">src/github/PullsSurface.tsx · COLUMNS, GRID</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> which item am I looking at, and what is its state? The grid fixes eight tracks and gives the first one what remains: <code>minmax(0,1fr)</code> after <code>9.5rem + 6.5rem + 5.5rem + 6.5rem + 6rem + 5rem + 4.5rem</code>. At a 1440 px viewport that is 402 px for the title and 696 px for metadata that is mostly the same value on every row.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--bad)"></i><b>87 of 87</b> print <code>unknown</code> for checks and review</span><span class="kc"><i style="--c:var(--att)"></i><b>85 of 87</b> print <code>unknown</code> for diff and comments</span><span class="kc"><i style="--c:var(--sched)"></i><b>32 px</b> of header per column</span><span class="kc"><i style="--c:var(--teal)"></i><b>60 of 87</b> merged, so their state is the same</span></div>
+ <p class="q" style="margin-top:12px"><b>Today, light and dark</b>, at 1×. The selected row is the dependabot bump: the shape the list takes when the backend holds no enrichment at all.</p>
+ <div class="pair" data-s="listToday" data-one="light" data-note="current source"></div>
+ <div class="pair" data-s="listToday" data-one="dark" data-note="current source" style="margin-top:12px"></div>
+ <details><summary>Where the width goes</summary><div class="tbox"><table><tr><th>track</th><th>width</th><th>share</th><th>value on most rows</th></tr>
+ <tr><td>Pull request</td><td><code>minmax(0,1fr)</code>, 402 px measured</td><td>37%</td><td>the only column carrying the item</td></tr>
+ <tr><td>Linked issue</td><td>152 px</td><td>14%</td><td>empty for 80 of 87</td></tr>
+ <tr><td>Author</td><td>104 px</td><td>9%</td><td>two values: a human and a bot</td></tr>
+ <tr><td>Diff</td><td>88 px</td><td>8%</td><td><code>unknown</code> for 85 of 87</td></tr>
+ <tr><td>Checks</td><td>104 px</td><td>9%</td><td><code>unknown</code> for 87 of 87</td></tr>
+ <tr><td>Review</td><td>96 px</td><td>9%</td><td><code>unknown</code> for 87 of 87</td></tr>
+ <tr><td>Comments</td><td>80 px</td><td>7%</td><td><code>unknown</code> for 85 of 87</td></tr>
+ <tr><td>Updated</td><td>72 px</td><td>7%</td><td>always present</td></tr></table></div></details>
+ <div class="note"><b>This is not an epic 933 regression.</b> The columns render; the poller stores null. <code>1a0a730c</code> (#429, XTRM-857) replaced invented zeros with <code>unknown</code>, which is honest and which also made a two-year-old data gap visible. The upstream fix belongs to the collector, not to this list.</div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>L2 · Pull requests, two lines per row</h3><span class="src">src/github/PullsSurface.tsx · PullRow, COLUMNS</span></div><div class="spec-b">
+ <p class="q"><b>The shape:</b> no gutter and no track. The key opens the title line inline, the body carries a title line and a metadata line, and the age closes the title line at the right edge. The key keeps its state colour, which is the only colour in the row besides the diff signs and the checks dot.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--accent)"></i><b>0 px</b> gutter, the key is inline</span><span class="kc"><i style="--c:var(--teal)"></i><b>13 / 11.5</b> title and metadata</span><span class="kc"><i style="--c:var(--att)"></i><b>44 px</b> row, 44 px virtual step</span><span class="kc"><i style="--c:var(--ok)"></i><b>1</b> separator glyph between fields</span></div>
+ <div class="pair" data-s="listPrs" data-one="light"></div>
+ <div class="pair" data-s="listPrs" data-one="dark" style="margin-top:12px"></div>
+ <p class="cap">Light and dark at 1×. Field order is fixed: author, branch range, diff, checks, review, comments, linked issue. A field with no value is omitted, never printed as <code>unknown</code> — the dependabot row shows the honest minimum: key, title, age, author.</p>
+ <details><summary>Geometry and what replaces each column</summary><div class="tbox"><table><tr><th>column today</th><th>where it goes</th><th>rendering</th></tr>
+ <tr><td>Pull request (key, title)</td><td>key and title share line 1</td><td>mono 12 px in the state colour, 6 px gap, then 13 px title, ellipsis</td></tr>
+ <tr><td>Linked issue</td><td>line 2, last field</td><td><code>XTRM-943</code> as a reference, same mono as the key</td></tr>
+ <tr><td>Author</td><td>line 2, first field</td><td>plain text; the bot takes a badge when it is the only field</td></tr>
+ <tr><td>Diff</td><td>line 2, third field</td><td><code>+412 −318</code>, tabular, success and danger ink</td></tr>
+ <tr><td>Checks</td><td>line 2, fourth field</td><td>colour dot plus words: <code>checks passing</code>, <code>checks failing</code>, <code>checks pending</code></td></tr>
+ <tr><td>Review</td><td>line 2, fifth field</td><td><code>review approved</code> / <code>review changes requested</code> / <code>no review yet</code></td></tr>
+ <tr><td>Comments</td><td>line 2, sixth field</td><td><code>6 comments</code>; omitted at zero</td></tr>
+ <tr><td>Updated</td><td>line 1, right edge</td><td><code>11h</code>, tabular, faint; the full timestamp in the title attribute</td></tr></table></div></details>
+ <div class="note good"><b>What does not change.</b> Sorting stays (<code>updated</code>, <code>created</code>, <code>comments</code>) and moves from the removed headers into the toolbar filter menu. The virtual list keeps its windowing, at a 44 px step. Filter, tabs, keyboard selection and the drawer are untouched. The branch-range field needs <code>headRefName</code> and <code>baseRefName</code>, which the payload has but the poller does not fill.</div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>L3 · Work issues, the same grammar</h3><span class="src">src/issues/IssuesSurface.tsx · COLUMNS (7), IssueRow</span></div><div class="spec-b">
+ <p class="q"><b>The question:</b> what is still open, where does it stand, and how much is under it? The list already reads as one line — key, status badge and title share the first cell (XTRM-926) — but seven fixed tracks still cost <code>4.5 + 3.5 + 3.75 + 5.5 + 4 + 4 + 2 = 27.25rem</code> per row, and the density ladder drops four of them below 62 rem. Two lines keep every field at every width and remove the ladder.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--bad)"></i><b>7</b> columns removed, none of the fields</span><span class="kc"><i style="--c:var(--ok)"></i><b>9</b> fields kept on two lines</span><span class="kc"><i style="--c:var(--teal)"></i><b>0 px</b> gutter, the key is inline</span><span class="kc"><i style="--c:var(--sched)"></i><b>14 px</b> per tree level, unchanged</span></div>
+ <div class="pair" data-s="listIssues" data-one="light"></div>
+ <div class="pair" data-s="listIssues" data-one="dark" style="margin-top:12px"></div>
+ <p class="cap">Light and dark at 1×, real refs and titles from the XTRM board; the counts are illustrative. The epic expands one level to show that nesting survives: the chevron and the indent stay, and the metadata line indents with the row. <code>XTRM-473</code> shows a row whose only metadata is its creation age.</p>
+ <details><summary>Column preservation</summary><div class="tbox"><table><tr><th>column today</th><th>width</th><th>where it goes</th></tr>
+ <tr><td>Title (whole reading line: chevron, kind icon, priority, key, status badge, title)</td><td><code>minmax(0,1fr)</code></td><td>line 1, same composition — that cluster was already inline</td></tr>
+ <tr><td>Children</td><td>4.5rem, right</td><td>line 2, <code>3/7 children</code>, subtree rollup</td></tr>
+ <tr><td>Events</td><td>3.5rem, right</td><td>line 2, <code>42 events</code>, rollup</td></tr>
+ <tr><td>Pointers</td><td>3.75rem, right</td><td>line 2, <code>5 pointers</code>, rollup</td></tr>
+ <tr><td>PR</td><td>5.5rem, right</td><td>line 2, the quiet <code>PrKey</code> with its state dot</td></tr>
+ <tr><td>Created</td><td>4rem, right</td><td>line 2, <code>created 6d</code>; the sort key stays available</td></tr>
+ <tr><td>Updated (rolled-up activity)</td><td>4rem, right</td><td>line 1, right edge, age only; the tooltip keeps created and rolled-up activity</td></tr>
+ <tr><td>Row-action slot</td><td>2rem</td><td>line 1 right edge, revealed on hover as now — it stops reserving 32 px on every row</td></tr></table></div></details>
+ <div class="note"><b>What replaces the density ladder.</b> <code>listDensity</code> and <code>hiddenColumns</code> (<code>packages/xtrm-app/src/issues/issue-table.ts:149</code>) drop <code>events</code> and <code>pointers</code> below 62 rem, and <code>created</code> and <code>updated</code> below 48 rem. With two lines nothing is dropped by width; the metadata line sheds fields in one fixed order instead — <code>created</code>, then <code>pointers</code>, then <code>events</code>, then the <code>children</code> count, with the <code>PR</code> key last to go. Sorting moves from the deleted headers into the existing <code>Order by</code> menu, which gains every sort key (title, children, events, pointers, PR, created).</div>
+ <div class="note good"><b>What does not change.</b> The tree: chevron, indent per level, expand and collapse, arrow-key behaviour. Selection, inspect on activation, open on double click, copy on hover, the board toggle, the four toolbar facets, and the <code>Status</code> vocabulary of <code>issueStatus</code> (Ready, In progress, Blocked, Draft, Attested, Stale, Done…) all stay. The badge keeps its word, not a dot, because an issue must say <i>why</i> it is not dispatchable.</div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>L3b · The same issues on one line</h3><span class="src">src/issues/IssuesSurface.tsx · alternative to L3</span></div><div class="spec-b">
+ <p class="q"><b>The other option you asked for:</b> one line, no columns. Everything after the title becomes a right-aligned cluster of icon and count, so the row keeps today's 32 px height and the list stays as dense as it is now — while still having no header, no track and no dropped field by width.</p>
+ <div class="chips"><span class="kc"><i style="--c:var(--accent)"></i><b>32 px</b> row, today's density</span><span class="kc"><i style="--c:var(--teal)"></i><b>0</b> columns, 0 gutters</span><span class="kc"><i style="--c:var(--att)"></i><b>5</b> rollup fields at the right edge</span><span class="kc"><i style="--c:var(--ok)"></i><b>icon + count</b> replaces the word, the tooltip keeps it</span></div>
+ <div class="pair" data-s="listIssues1" data-one="light"></div>
+ <div class="pair" data-s="listIssues1" data-one="dark" style="margin-top:12px"></div>
+ <p class="cap">Light and dark at 1×, same specimens as L3. The title takes every pixel the right cluster does not need, so a long title truncates a full line later than it does today. Nesting keeps its chevron and its 14 px indent; <code>XTRM-394.4</code> shows the one nested level.</p>
+ <details><summary>What each field becomes</summary><div class="tbox"><table><tr><th>field</th><th>two lines (L3)</th><th>one line (L3b)</th></tr>
+ <tr><td>Children</td><td><code>3/7 children</code></td><td>layers glyph plus <code>3/7</code>, tooltip “3 of 7 children done”</td></tr>
+ <tr><td>Events</td><td><code>42 events</code></td><td>activity glyph plus <code>42</code>, tooltip “42 journal events, children included”</td></tr>
+ <tr><td>Pointers</td><td><code>5 pointers</code></td><td>outbound glyph plus <code>5</code>, tooltip “5 pointers”</td></tr>
+ <tr><td>PR</td><td>quiet <code>PrKey</code> with dot</td><td>bare mono <code>#509</code>; the state lives in the drawer, the key stays the address</td></tr>
+ <tr><td>Updated</td><td>line 1 right edge</td><td>cluster end, same tabular age</td></tr>
+ <tr><td>Created</td><td>line 2, <code>created 6d</code></td><td>tooltip on the age (the sort key survives in <code>Order by</code>)</td></tr>
+ <tr><td>Status</td><td>badge on line 1</td><td>badge on line 1, or a dot before the key below 44 rem</td></tr></table></div></details>
+ <div class="tbox" style="margin-top:12px"><table><tr><th></th><th>L3 · two lines, 44 px</th><th>L3b · one line, 32 px</th></tr>
+ <tr><td>Rows per 900 px viewport</td><td>20</td><td>28</td></tr>
+ <tr><td>Scan for “what is this”</td><td>strong: title gets a whole line</td><td>strong: title is on the only line</td></tr>
+ <tr><td>Scan for “how much is under it”</td><td>exact words, no decoding</td><td>requires learning four glyphs once</td></tr>
+ <tr><td>Long titles</td><td>full line, then ellipsis</td><td>ellipsis earlier, roughly 220 px sooner</td></tr>
+ <tr><td>Fields lost by width</td><td>none; the metadata line sheds in a fixed order</td><td>none; the cluster sheds in the same order (pointers, events, children)</td></tr>
+ <tr><td>Tree</td><td>indent plus chevron, metadata indents with the row</td><td>indent plus chevron, cluster stays at the right edge</td></tr>
+ <tr><td>Where it is familiar</td><td>GitHub issues, Linear's comfortable density</td><td>Linear's compact density, GitHub's notifications list</td></tr></table></div>
+ <div class="note"><b>The trade this makes.</b> A count without its noun is only readable after the first pass: <code>42</code> beside an activity glyph means events, not comments. That is acceptable in a dense board scan and unacceptable in a list that must be self-explanatory to a new reader. If both are wanted, the honest form is one list with a density control — comfortable (L3) and compact (L3b) — not two lists.</div>
+</div></div>
+
+<div class="spec"><div class="spec-h"><h3>L4 · Rules, code changes, open questions</h3><span class="src">both surfaces</span></div><div class="spec-b">
+ <div class="tbox"><table><tr><th>rule</th><th>reason</th></tr>
+ <tr><td>No column, no gutter, no header row — in either list</td><td>The key is short enough to open the line, and a reader scans rows, not fields. Header tracks were the only reason the title ever shrank.</td></tr>
+ <tr><td>A field with no value is omitted, never rendered <code>unknown</code></td><td>The row stays short exactly where the data is thin. The truthful alternative is one list-level disclosure, not a word repeated per row.</td></tr>
+ <tr><td>One coloured element per row</td><td>The key colour on pull requests, the status badge on issues. Diff signs and the checks dot are the only other colour; everything else is ink.</td></tr>
+ <tr><td>Metadata order is fixed and semantic</td><td>Pull requests: who, what range, how big, how it stands, then the reference. Issues: how many children, how much activity, how many pointers, which PR, when created.</td></tr>
+ <tr><td>Ellipsis on line 1 only, never on line 2</td><td>The title and the branch range may shorten; the counts cannot. When the metadata line does not fit, the last fields drop in the fixed order above rather than overflowing.</td></tr>
+ <tr><td>Row height is one token, 44 px, and the virtual step matches it</td><td>A windowed list that measures rows differently from the CSS paints gaps; the constant lives next to the list.</td></tr>
+ <tr><td>No horizontal scroll, ever</td><td>The failure mode of the table returns the moment one field gets a fixed track.</td></tr></table></div>
+ <details><summary>Code changes</summary><div class="tbox"><table><tr><th>file</th><th>change</th></tr>
+ <tr><td><code>packages/xtrm-app/src/ui/list-row.tsx</code> (new)</td><td>The two-line grammar: leading cluster, title line with age, metadata line with separators and chips. One component, two configurations.</td></tr>
+ <tr><td><code>packages/xtrm-app/src/github/PullsSurface.tsx</code></td><td>Delete <code>COLUMNS</code>, <code>GRID</code> and the header row; <code>PullRow</code> becomes two lines; <code>VirtualList rowHeight</code> 32 → 44.</td></tr>
+ <tr><td><code>packages/xtrm-app/src/issues/IssuesSurface.tsx</code></td><td>Delete <code>COLUMNS</code>, <code>gridFor</code>, the <code>numeric.map</code> cells and the header; keep the leading cluster; <code>IssueRow</code> becomes two lines; <code>rowHeight</code> 32 → 44.</td></tr>
+ <tr><td><code>packages/xtrm-app/src/issues/issue-table.ts</code></td><td>Remove <code>listDensity</code>, <code>hiddenColumns</code> and <code>DROPPED</code>; add the metadata drop order; keep every <code>SortKey</code>.</td></tr>
+ <tr><td>toolbar</td><td><code>Order by</code> grows from three keys to every sort key, in both surfaces.</td></tr>
+ <tr><td>tests</td><td>Row height 44; metadata line contains no <code>unknown</code>; zero counts render no field; no <code>role="columnheader"</code>; a nested row keeps its indent and its chevron.</td></tr></table></div></details>
+ <div class="note"><b>Open questions.</b> <b>Q1</b> 44 px or 40 px: 44 gives the metadata line air and matches the shell's 4 px rhythm; 40 shows one more row per screen. <b>Q3</b> Issues: should the status badge stay a word on line 1, or become a dot in front of the key with the word in the tooltip? <b>Q4</b> Should the metadata line show the claim holder (the worker) when an issue is in progress — a field the table has never shown? <b>Q5</b> L3 (two lines, 44 px, worded) or L3b (one line, 32 px, icon and count) — or one list with a comfortable and a compact density?</div>
+</div></div>
+
 
 <script>
 /* ---- icons (lucide paths, 24 grid) ---- */
@@ -474,6 +1042,7 @@ const ST={'In progress':'active','Ready':'accent','Blocked':'danger','Done':'mut
 const st=(l)=>`<span class="bd xs ${ST[l]}" style="width:4.25rem" title="${l}">${l}</span>`;
 const ref=k=>`<span class="rf">${k}</span>`;
 const ll=l=>l==='locked'?`<span class="ll repo">${ic('lock','m')}locked</span>`:`<span class="ll ${l==='repo'?'repo':''}">${l}</span>`;
+const kindIcon=k=>({epic:'layers',task:'box',bug:'bug',feature:'flask',decision:'check',chore:'file'}[k]||'box');
 const pri=n=>`<span class="pri3" aria-label="priority ${n}">${[0,1,2].map(i=>`<i class="${i<3-n?'f':''}" style="height:${5+i*3}px"></i>`).join('')}</span>`;
 const ch=(open)=>`<span class="chv">${ic(open?'chevron-down':'chevron-right','m')}</span>`;
 const cp=l=>`<button class="btn" aria-label="Copy ${l}" data-copy title="Copy ${l}">${ic('copy')}</button>`;
@@ -495,6 +1064,185 @@ const navFull=(cur)=>`<div class="sb" role="navigation" aria-label="Work navigat
  <div class="sh" style="margin-top:8px"><span>GitHub</span>${ic('chevron-down','m')}</div>
  <div class="nr">${ic('pull','n')}<span>Pull requests</span><span class="ct tab">7</span></div><div class="nr">${ic('tag','n')}<span>Releases</span></div></div>`;
 S.nav=()=>`<div style="display:flex">${navFull()}<div style="flex:1;background:var(--x-surface);padding:14px 16px;display:flex;flex-direction:column;gap:10px"><span class="f" style="font-size:11.5px">Content area · Project / Workers</span>${[80,62,70,48].map(w=>`<span style="height:8px;width:${w}%;border-radius:4px;background:var(--x-control)"></span>`).join('')}</div></div>`;
+
+/* ---- operator rulings of 2026-11-24 ---- */
+const topSlice=(ghost)=>`<div class="oi-top"><span class="f" style="font-size:11.5px">xtrm / Issues</span><div class="oi-srch ${ghost?'ghost':''}">${ic('search','m')}<span>Search issues, repos and agents</span><kbd>Ctrl K</kbd></div><span class="oi-tbi">&#9789;</span><span class="oi-tbi">&#9881;</span></div>`;
+S.searchToday=()=>topSlice(true);
+S.search=()=>topSlice(false);
+const duck=(plain)=>`<div class="oi-stack">
+ <div class="nc" style="width:190px"><span>Overview</span></div><div class="nc act" style="width:190px"><span>Workers</span><span class="ct tab">5</span></div>
+ <div class="oi-duck ${plain?'plain':''}">
+  <div class="oi-dh"><span>Data sources</span><span class="oi-r">3 of 4 live</span></div>
+  <div class="oi-dr"><span class="oi-sd"></span><span>Board</span><span class="oi-r">local db</span></div>
+  <div class="oi-dr"><span class="oi-sd"></span><span>Agent host</span><span class="oi-r">fixture</span></div>
+  <div class="oi-dr"><span class="oi-sd"></span><span>GitHub</span><span class="oi-r">live</span></div>
+  <div class="oi-df">3 of 4 live &#183; checked 2 min ago</div>
+ </div>
+ <div class="oi-chip ${plain?'plain':''}"><span class="oi-sd"></span><span>3 of 4 live</span><span class="oi-r">${ic('chevron-down','m')}</span></div>
+</div>`;
+S.stripToday=()=>duck(false);
+S.strip=()=>duck(true);
+const sbRows=(v2)=>{const g=v2?'n2':'n',r=v2?'nr oi-nr':'nr';
+ return `<div style="background:var(--x-sidebar)"><div class="sb" style="width:264px">
+  <div class="oi-hs"><b class="on">Work</b><b>Agent</b></div>
+  <div class="sh"><span>Workspace</span>${ic('chevron-down','m')}</div>
+  <div class="${r}">${ic('activity',g)}<span>Activity</span></div>
+  <div class="${r}">${ic('issues',g)}<span>Issues</span><span class="ct tab">41</span></div>
+  <div class="${r} sel">${ic('box',g)}<span>Project</span><span class="ct tab">5</span></div>
+  <div class="${r}">${ic('agent',g)}<span>Agents</span></div>
+ </div></div>`};
+S.sbRowsToday=()=>sbRows(false);
+S.sbRows=()=>sbRows(true);
+
+/* ---- two-line list rows (2026-11-24) ---- */
+const olBefore=(rows)=>`<div class="ol-before">
+ <div class="ol-th" style="grid-template-columns:minmax(0,1fr) 9.5rem 6.5rem 5.5rem 6.5rem 6rem 5rem 4.5rem"><span>Pull request</span><span>Linked</span><span>Author</span><span class="r">Diff</span><span>Checks</span><span>Review</span><span class="r">Comments</span><span class="r">Updated</span></div>
+ ${rows.map(r=>`<div class="ol-tr${r.sel?' sel':''}" style="grid-template-columns:minmax(0,1fr) 9.5rem 6.5rem 5.5rem 6.5rem 6rem 5rem 4.5rem">
+   <div>${pk(r.s,r.n)}<span class="t">${r.t}</span></div>
+   <div>${r.l?ref(r.l):'<span class="un">—</span>'}</div>
+   <div>${r.a}</div>
+   <div class="r">${r.d?`<span class="num">${r.d}</span>`:'<span class="un">unknown</span>'}</div>
+   <div>${r.c?`<span class="ck"><span class="ol-dot"></span>${r.c}</span>`:'<span class="un">unknown</span>'}</div>
+   <div>${r.v??'<span class="un">unknown</span>'}</div>
+   <div class="r">${r.m?`<span class="num">${r.m}</span>`:'<span class="un">unknown</span>'}</div>
+   <div class="r">${r.u}</div></div>`).join('')}</div>`;
+const BR=[{s:'merged',n:508,t:'XTRM-943 board lanes: one hairline instead of a card frame',l:'XTRM-943',a:'Jaggerxtrm',d:'+412 −318',c:'passing',v:'approved',m:6,u:'11h'},
+ {s:'open',n:507,t:'chore(deps): bump the actions group with 3 updates',l:null,a:'dependabot[bot]',d:null,c:null,v:null,m:null,u:'11h',sel:1},
+ {s:'merged',n:506,t:'XTRM-939 console UI system: token and migration pass',l:'XTRM-939',a:'Jaggerxtrm',d:'+640 −505',c:'passing',v:'approved',m:4,u:'2d'},
+ {s:'merged',n:491,t:'XTRM-933 console v2: sidebar strip and top bar',l:'XTRM-933',a:'worker-7',d:'+214 −44',c:'passing',v:'approved',m:0,u:'2d'},
+ {s:'closed',n:452,t:'XTRM-853 proposed light --x-success token',l:'XTRM-853',a:'worker-7',d:'+18 −2',c:'failing',v:'changes requested',m:1,u:'5d'}];
+S.listToday=()=>olBefore(BR);
+
+const sep=`<span class="ol-sep">·</span>`;
+const prRow=(r)=>`<div class="ol-row${r.sel?' sel':''}">
+ <div class="ol-b">
+  <div class="ol-l1">${pk(r.s,r.n)}<span class="ol-t">${r.t}</span><span class="ol-age">${r.u}</span></div>
+  <div class="ol-l2"><span>${r.a}</span>${r.br?sep+`<span class="br">${r.br}</span>`:''}${r.d?sep+`<span class="num"><span class="add">${r.d.split(' ')[0]}</span> <span class="del">${r.d.split(' ')[1]}</span></span>`:''}${r.c?sep+`<span class="ck"><span class="ol-dot" style="opacity:1;color:${{passing:"var(--x-success)",failing:"var(--x-danger)"}[r.c]||"var(--x-att)"}"></span>checks ${r.c}</span>`:''}${r.v?sep+`<span>review ${r.v}</span>`:''}${r.m?sep+`<span class="num">${r.m} comment${r.m===1?'':'s'}</span>`:''}${r.l?sep+`<span>${ref(r.l)}</span>`:''}</div>
+ </div></div>`;
+const PRL=[{s:'merged',n:508,u:'11h',t:'XTRM-943 board lanes: one hairline instead of a card frame',a:'Jaggerxtrm',br:'main ← xt/board-lanes',d:'+412 −318',c:'passing',v:'approved',m:6,l:'XTRM-943'},
+ {s:'open',n:507,u:'11h',t:'chore(deps): bump the actions group with 3 updates',a:'dependabot[bot]',sel:0},
+ {s:'merged',n:506,u:'2d',t:'XTRM-939 console UI system: token and migration pass',a:'Jaggerxtrm',br:'main ← xt/ui-tokens',d:'+640 −505',c:'passing',v:'approved',m:4,l:'XTRM-939'},
+ {s:'merged',n:491,u:'2d',t:'XTRM-933 console v2: sidebar strip and top bar',a:'worker-7',br:'main ← xt/console-strip',d:'+214 −44',c:'passing',v:'approved',l:'XTRM-933'},
+ {s:'draft',n:509,u:'1d',t:'XTRM-947 workers surface: lease column and claim state',a:'worker-7',br:'main ← xt/lease-col',d:'+96 −40',l:'XTRM-947'},
+ {s:'closed',n:452,u:'5d',t:'XTRM-853 proposed light --x-success token',a:'worker-7',br:'main ← xt/success-token',d:'+18 −2',c:'failing',v:'changes requested',m:1,l:'XTRM-853'}];
+S.listPrs=()=>`<div class="tbl" style="background:var(--x-surface)">${PRL.map(prRow).join('')}</div>`;
+
+const isRow=(r)=>`<div class="ol-row${r.epic?' epic':''}">
+ <div class="ol-b">
+  <div class="ol-l1"><span class="ol-lead" style="width:${(r.depth||0)*14}px">${r.kids?'<span class="ol-chv">'+ic('chevronDown')+'</span>':''}</span><span class="ol-kico" title="${r.kind}">${ic(kindIcon(r.kind))}</span>${r.p!==undefined?pri(r.p):''}<span class="ol-key">${r.n}</span><span class="ol-badge ${r.tone}">${r.st}</span><span class="ol-t">${r.t}</span><span class="ol-age">${r.u}</span></div>
+  <div class="ol-l2 ol-ind" style="padding-left:${38+(r.depth||0)*14}px">${[r.kids?`<span class="num">${r.kids[0]}/${r.kids[1]} children</span>`:null, r.ev?`<span class="num">${r.ev} events</span>`:null, r.pt?`<span class="num">${r.pt} pointers</span>`:null, r.pr?`<span class="ck"><span class="ol-dot" style="opacity:1;color:${r.pr[1]==='merged'?'var(--x-success)':'var(--x-att)'}"></span>${r.pr[0]}</span>`:null, r.cr?`<span class="num">created ${r.cr}</span>`:null].filter(Boolean).join(sep)}</div>
+ </div></div>`;
+const ISL=[{n:'XTRM-394',k:'epic',kind:'epic',p:1,st:'Ready',tone:'accent',t:'Console v2 GitHub surfaces: pull requests, GitHub issues, releases, content, and real actions',kids:[3,7],ev:42,pt:5,u:'2h',cr:'6d',kidsOpen:1},
+ {n:'XTRM-394.4',depth:1,kind:'task',st:'In progress',tone:'active',t:'XTRM-398 · Console v2 real GitHub actions: create PR, merge, review, comment (authority-derived)',ev:9,pr:['#509','open'],u:'4h',cr:'5d'},
+ {n:'XTRM-472',k:'task',kind:'task',p:2,st:'In progress',tone:'active',t:'Console v2 efficiency pass: measured baseline, route splitting, cache discipline, virtualization gaps',ev:18,pt:3,pr:['#505','merged'],u:'35m',cr:'4d'},
+ {n:'XTRM-473',k:'task',kind:'task',p:2,st:'Draft',tone:'muted',t:'Substrate: attribute issue mutations with the canonical ExecutionContext instead of an authoredBy string',u:'1d',cr:'9d'},
+ {n:'XTRM-487',k:'task',kind:'bug',p:1,st:'Blocked',tone:'danger',t:'release.mjs stages an explicit asset list, so package.json files is dead and CHANGELOG.md never shipped in 0.2.1',ev:12,pt:2,u:'3d',cr:'11d'},
+ {n:'XTRM-453',k:'epic',kind:'epic',p:2,st:'Done',tone:'muted',t:'Console v2 Specialists Factory: configuration authoring, provenance, and diagnostics',kids:[6,6],ev:64,pt:9,u:'5d',cr:'38d'}];
+const isRow1=(r)=>`<div class="ol-row ol-one">
+ <div class="ol-b">
+  <div class="ol-l1">${r.kids?'<span class="ol-chv">'+ic('chevronDown')+'</span>':`<span class="ol-lead" style="width:${(r.depth||0)*14}px"></span>`}<span class="ol-kico" title="${r.kind}">${ic(kindIcon(r.kind))}</span>${r.p!==undefined?pri(r.p):''}<span class="ol-key">${r.n}</span><span class="ol-badge ${r.tone}">${r.st}</span><span class="ol-t">${r.t}</span>
+   <span class="ol-right">${r.kids?`<span class="grp" title="${r.kids[0]} of ${r.kids[1]} children done">${ic('layers')}${r.kids[0]}/${r.kids[1]}</span>`:''}${r.ev?`<span class="grp" title="${r.ev} journal events, children included">${ic('activity')}${r.ev}</span>`:''}${r.pt?`<span class="grp" title="${r.pt} pointers">${ic('external')}${r.pt}</span>`:''}${r.pr?`<span class="grp" title="pull request ${r.pr[0]}">${r.pr[0]}</span>`:''}<span class="grp" title="updated ${r.u} ago">${r.u}</span></span>
+  </div>
+ </div></div>`;
+S.listIssues1=()=>`<div class="tbl" style="background:var(--x-surface)">${ISL.map(isRow1).join('')}</div>`;
+
+S.listIssues=()=>`<div class="tbl" style="background:var(--x-surface)">${ISL.map(isRow).join('')}</div>`;
+
+/* ---- treatment: solid chips, key chips, radius, scale (2026-11-24) ---- */
+const CH={'accent':'var(--chip-accent)','att':'var(--chip-att)','success':'var(--chip-success)','danger':'var(--chip-danger)','neutral':'var(--chip-neutral)'};
+const chip=(t,tone,cls='')=>`<span class="chip ${cls}" style="--c:${CH[tone]}">${t}</span>`;
+const chipToday=(t)=>`<span class="bd neutral sm">${t}</span>`;
+S.txChips=()=>`<div class="tx-matrix">
+ <div class="tx-mrow hd"><div>meaning</div><div>today · dim tint</div><div>proposed · solid, white ink</div><div>key chip, tinted ink</div></div>
+ ${[['Ready','accent','success'],['In progress','att','accent'],['Blocked','danger','danger'],['Draft','neutral','mute'],['Done','success','mute'],['Attested','success','success'],['Rejected','danger','danger'],['Deferred','neutral','mute']]
+  .map(([t,tone,k])=>`<div class="tx-mrow"><div class="tx-lbl">status · ${t}</div><div>${chipToday(t)}</div><div>${chip(t,tone)}</div><div><span class="key accent">XTRM-933</span></div></div>`).join('')}
+ ${[['merged','accent'],['open','success'],['draft','neutral'],['closed','danger']].map(([t,tone])=>`<div class="tx-mrow"><div class="tx-lbl">pull request · ${t}</div><div>${chipToday(t)}</div><div>${chip(t,tone)}</div><div><span class="key accent">#509</span></div></div>`).join('')}
+</div>`;
+S.txKeys=()=>`<div class="tx-matrix">
+ <div class="tx-mrow hd"><div>form</div><div>specimen</div><div></div><div></div></div>
+ <div class="tx-mrow"><div class="tx-lbl">today · plain mono</div><div><span class="ik">XTRM-933</span> <span class="f" style="font-size:12px">Console v2 GitHub surfaces</span></div><div></div><div></div></div>
+ <div class="tx-mrow"><div class="tx-lbl">tinted chip</div><div><span class="key accent">XTRM-933</span> <span style="font-size:12.5px">Console v2 GitHub surfaces</span></div><div></div><div></div></div>
+ <div class="tx-mrow"><div class="tx-lbl">neutral chip</div><div><span class="key mute">XTRM-933</span> <span style="font-size:12.5px">Console v2 GitHub surfaces</span></div><div></div><div></div></div>
+ <div class="tx-mrow"><div class="tx-lbl">child, nested</div><div><span class="key accent">XTRM-394.4</span> <span style="font-size:12.5px">Nested issue keeps the same chip</span></div><div></div><div></div></div>
+ <div class="tx-mrow"><div class="tx-lbl">pull request ref</div><div><span class="key accent">#509</span> <span style="font-size:12.5px">PR refs use the same chip, not a state colour</span></div><div></div><div></div></div>
+</div>`;
+S.txRad=()=>`<div class="tx-rad">
+ ${[[4,'4 px','today: badge, card 12 px'],[8,'8 px','rounded chip'],[10,'10 px','proposed control'],[999,'pill','proposed chip']]
+  .map(([r,lab,cap])=>`<div class="tx-rc"><div class="tile" style="border-radius:${r}px"></div><span class="chip sm" style="--c:${CH.accent};border-radius:${r}px">Ready</span><div class="lab">${lab}</div><div class="cap2">${cap}</div></div>`).join('')}
+</div>`;
+S.txScale=()=>`<div class="tx-scale">
+ <div class="tx-sc"><div class="tx-dim">36 px</div><div class="tx-frame"><div class="tx-sbrow"><span class="glyphdot"><svg class="ic" viewBox="0 0 24 24">${P.board}</svg></span>Project surface</div></div></div>
+ <div class="tx-sc"><div class="tx-dim">36 px</div><div class="tx-frame"><div class="tx-lrow"><span class="ol-key">XTRM-933</span> Console v2 GitHub surfaces<span style="margin-left:auto" class="f">2h</span></div></div></div>
+ <div class="tx-sc"><div class="tx-dim">52 px</div><div class="tx-frame"><div class="tx-l2row"><div class="ol-b"><div class="ol-l1"><span class="ol-t">Console v2 GitHub surfaces</span><span class="ol-age">2h</span></div><div class="ol-l2"><span>Jaggerxtrm</span><span class="ol-sep">·</span><span>4 comments</span></div></div></div></div></div>
+ <div class="tx-sc"><div class="tx-dim">20 px</div><div class="tx-frame" style="padding:6px 10px"><span style="font-size:12px">Section header and group label keep 12 px, not 14</span></div></div>
+</div>`;
+const STAT=(tone,ic)=>`<span class="pillstat" style="color:${CH[tone]};background:color-mix(in srgb,${CH[tone]} 12%,transparent)"><svg class="ic" viewBox="0 0 24 24">${P[ic]}</svg>`;
+const stTone=s=>({'Ready':'accent','In progress':'att','Blocked':'danger','Draft':'neutral','Done':'success'}[s]||'neutral');
+const txIsRow=(r)=>`<div class="ol-row ol-one">
+ ${r.kids?'<span class="ol-chv"><svg class="ic" viewBox="0 0 24 24">'+P.chevronDown+'</svg></span>':`<span class="ol-lead" style="width:${(r.depth||0)*14}px"></span>`}
+ <span class="ol-kico"><svg class="ic" viewBox="0 0 24 24">${P[kindIcon(r.kind)]}</svg></span>
+ <span class="key accent" style="margin-right:2px">${r.n}</span>
+ ${chip(r.st,stTone(r.st),'sm')}
+ <div class="ol-l1" style="gap:8px"><span class="ol-t">${r.t}</span>
+  <span class="ol-right">
+   ${r.kids?STAT('accent','layers')+`${r.kids[0]}/${r.kids[1]}</span>`:''}
+   ${r.ev?`<span class="pillstat"><svg class="ic" viewBox="0 0 24 24">${P.activity}</svg>${r.ev}</span>`:''}
+   ${r.pt?`<span class="pillstat"><svg class="ic" viewBox="0 0 24 24">${P.external}</svg>${r.pt}</span>`:''}
+   ${r.pr?`<span class="key mute">${r.pr[0]}</span>`:''}
+   <span class="ol-age">${r.u}</span>
+  </span></div></div>`;
+S.txIssues1=()=>`<div class="tbl tx" style="background:var(--x-surface)">${TX_ISSUES.map(txIsRow).join('')}</div>`;
+const TX_ISSUES=[{n:'XTRM-394',st:'Ready',kind:'epic',t:'Console v2 GitHub surfaces: pull requests, releases, content, real actions',kids:[3,7],ev:42,pt:5,u:'2h'},
+ {n:'XTRM-394.4',st:'In progress',kind:'task',depth:1,t:'XTRM-398 actions: create PR, merge, review, comment',ev:9,pr:['#509','merged'],u:'4h'},
+ {n:'XTRM-472',st:'In progress',kind:'task',t:'Efficiency pass: measured baseline, route splitting, cache discipline',ev:18,pt:3,pr:['#505','merged'],u:'35m'},
+ {n:'XTRM-473',st:'Draft',kind:'task',t:'Substrate mutations: canonical ExecutionContext instead of authoredBy',ev:3,u:'1d'},
+ {n:'XTRM-487',st:'Blocked',kind:'bug',t:'release.mjs stages an explicit asset list, package.json files is dead',ev:12,pt:2,u:'3d'},
+ {n:'XTRM-453',st:'Done',kind:'chore',t:'Specialists Factory: configuration authoring, provenance, diagnostics',kids:[6,6],ev:64,pt:9,u:'5d'}];
+const txPrRow=(r)=>`<div class="ol-row">
+ <div class="ol-g"><span class="key ${r.s==='merged'?'accent':''}" style="width:100%;justify-content:center;font-size:11.5px">#${r.n}</span></div>
+ <div class="ol-b"><div class="ol-l1">${chip(r.s,{merged:'accent',open:'success',draft:'neutral',closed:'danger'}[r.s],'sm')}<span class="ol-t">${r.t}</span><span class="ol-age">${r.u}</span></div>
+ <div class="ol-l2"><span>${r.a}</span>${r.d?sep+`<span class="num"><span class="add">${r.d.split(' ')[0]}</span> <span class="del">${r.d.split(' ')[1]}</span></span>`:''}${r.c?sep+`<span><svg class="ic m" viewBox="0 0 24 24" style="color:${r.c==='passing'?'var(--x-success)':'var(--x-danger)'}">${r.c==='passing'?P.check:P.x}</svg> checks ${r.c}</span>`:''}${r.v?sep+`<span>review ${r.v}</span>`:''}${r.m?sep+`<span class="num">${r.m} comments</span>`:''}${r.l?sep+`<span class="key mute">${r.l}</span>`:''}</div></div></div>`;
+S.txPrs=()=>`<div class="tbl tx" style="background:var(--x-surface)">${PRL.map(txPrRow).join('')}</div>`;
+
+
+// ===== Approved state (2026-11-24): the shipped surfaces, measured 1:1 =====
+const AP_CHIP={'Ready':'accent','In progress':'att','Blocked':'danger','Draft':'neutral','Done':'success','Attested':'success','Deferred':'neutral','Stale':'neutral','Rejected':'danger','Untested':'neutral'};
+const AP_STATE={'merged':'accent','open':'success','draft':'neutral','closed':'danger'};
+const apBadge=(w,t)=>`<span class="ap-badge" style="background:${CH[t||AP_CHIP[w]||'neutral']}">${w}</span>`;
+const apPill=(ic,v)=>`<span class="ap-pill"><svg viewBox="0 0 24 24">${P[ic]}</svg>${v}</span>`;
+const AP_I={command:'<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
+ moon:'<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+ gear:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'};
+S.apChrome=()=>`<div class="ap-shell">
+ <div class="ap-side">
+  <div class="ap-hs"><b class="on">Work</b><b>Agent</b></div>
+  <div class="ap-lbl">Repository</div>
+  <div class="ap-nr"><span style="color:var(--x-ink);font-weight:600">xtrm</span><span class="ap-c" style="margin-left:4px;font-weight:400">xtrm-dev</span><span class="ap-c">⌄</span></div>
+  <div class="ap-lbl">Workspace</div>
+  <div class="ap-nr"><svg viewBox="0 0 24 24">${P.activity}</svg>Activity</div>
+  <div class="ap-nr sel"><svg viewBox="0 0 24 24">${P.issues}</svg>Issues<span class="ap-c">199</span></div>
+  <div class="ap-nr" style="padding-left:30px;font-weight:400;font-size:13px">Project<span class="ap-c">⌄</span></div>
+  <div class="ap-lbl">GitHub</div>
+  <div class="ap-nr" style="font-weight:400;font-size:13px"><svg viewBox="0 0 24 24">${P.pull}</svg>Pull requests</div>
+  <div style="margin-top:auto">
+   <div class="ap-strip"><span class="ap-sd"></span><span>3 of 4 live</span><span class="ap-r"><svg style="width:12px;height:12px" viewBox="0 0 24 24">${P.chevronDown}</svg></span></div>
+   <div class="ap-pop"><div><span class="ap-sd"></span><span>Board</span><span class="ap-r">local db</span></div><div><span class="ap-sd"></span><span>Agent host</span><span class="ap-r">fixture</span></div><div><span class="ap-sd" style="opacity:.4"></span><span>Jira</span><span class="ap-r">unbound</span></div></div>
+  </div>
+ </div>
+ <div class="ap-main">
+  <div class="ap-top"><div class="ap-srch"><svg viewBox="0 0 24 24">${P.search}</svg><span>Search issues and repositories…</span><span class="ap-kbd">Ctrl K</span></div>
+   <span class="ap-cl"><span class="ap-ib"><svg viewBox="0 0 24 24">${AP_I.command}</svg></span><span class="ap-ib"><svg viewBox="0 0 24 24">${AP_I.moon}</svg></span><span class="ap-av"></span><span class="ap-ib"><svg viewBox="0 0 24 24">${AP_I.gear}</svg></span></span>
+  </div>
+  <div class="ap-body"><span class="ap-sk" style="width:62%"></span><span class="ap-sk" style="width:44%"></span><span class="ap-sk" style="width:71%"></span><span class="ap-sk" style="width:38%"></span></div>
+ </div>
+</div>`;
+S.apPrs=()=>`<div class="ap-tabs"><b>All <span>100</span></b><span>Open <span>2</span></span><span>Merged <span>96</span></span><span>Closed <span>2</span></span><span style="margin-left:auto">Recently updated ⌄</span></div><div class="ap-wrap">${PRL.map(r=>`<div class="ap-row"><span class="ap-key">#${r.n}</span>${apBadge(r.s==='merged'?'Merged':r.s==='open'?'Open':r.s==='draft'?'Draft':'Closed',AP_STATE[r.s])}<span class="ap-t">${r.t}</span><span class="ap-right"><span>${r.a}</span>${r.d?`<span class="num"><span class="add">${r.d.split(' ')[0]}</span> <span class="del">${r.d.split(' ')[1]}</span></span>`:''}${r.c?`<span style="color:${r.c==='passing'?'var(--x-success)':'var(--x-danger)'}">checks ${r.c}</span>`:''}${r.v?`<span>review ${r.v}</span>`:''}${r.m?`<span>${r.m} comments</span>`:''}<span>${r.u}</span></span></div>`).join('')}</div>`;
+S.apIssues=()=>`<div class="ap-wrap">${TX_ISSUES.map(r=>`<div class="ap-row${r.n==='XTRM-394.4'?' sel':''}">
+ ${r.kids?`<span class="ap-ind"><svg viewBox="0 0 24 24">${P.chevronDown}</svg></span>`:`<span class="ap-ind" style="width:${14+((r.depth||0)*20)}px"></span>`}
+ <svg viewBox="0 0 24 24">${P[kindIcon(r.kind)]}</svg>
+ <span class="ap-key">${r.n}</span>${apBadge(r.st)}
+ <span class="ap-t">${r.t}</span>
+ <span class="ap-right">${r.kids?apPill('layers',`${r.kids[0]}/${r.kids[1]}`):''}${r.ev?apPill('activity',r.ev):''}${r.pt?apPill('external',r.pt):''}${r.pr?`<span class="ap-key" style="font-size:11.5px">${r.pr[0]}</span>`:''}<span>${r.u}</span></span></div>`).join('')}</div>`;
 
 const tbToday=`<div class="tb"><span class="tbn pri chipy">${ic('plus','big')} New issue</span><span class="tbn chipy">Status ${ic('chevron-down','m')}</span><span class="tbn chipy">Priority ${ic('chevron-down','m')}</span><span class="tbn chipy">Type ${ic('chevron-down','m')}</span><span class="tbn chipy">Order by ${ic('chevron-down','m')}</span><span class="tbn chipy" style="gap:6px;width:150px;color:var(--x-ink-faint)">${ic('search','m')}Search</span><span class="seg"><span class="ib on">${ic('list')}</span><span class="ib">${ic('board')}</span></span></div>`;
 S.tbToday=()=>tbToday;
@@ -609,12 +1357,15 @@ S.tokens=(th)=>`<div style="padding:12px 14px;display:grid;grid-template-columns
 S.iconScale=()=>`<div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">${[['micro 12','m','Badge xs, dense PrKey'],['text 13','','rows, toolbar, row actions (new)'],['xs 14','big','leaves rows and toolbars'],['nav 16','n','top-level sidebar only']].map(r=>`<div class="row" style="gap:12px;height:24px"><span class="mono" style="width:5.5rem;flex:none;font-size:11.5px">${r[0]}</span>${ic('pull',r[1])}<span style="font-size:13px;white-space:nowrap">Title 13 px</span><span class="f" style="font-size:11.5px;white-space:nowrap">meta 11.5</span><span class="mu" style="margin-left:auto;font-size:11.5px;text-align:right">${r[2]}</span></div>`).join('')}</div>`;
 </script>
 <script>
+/* vocabulary glyph cells */
+const hydrateGlyphs=()=>document.querySelectorAll('td.vgl').forEach(td=>{td.innerHTML=(typeof ic==='function'?ic(td.dataset.g):td.dataset.g)});
+if(document.readyState==='loading')addEventListener('DOMContentLoaded',hydrateGlyphs);else hydrateGlyphs();
 /* ---- render pairs ---- */
 document.querySelectorAll('.pair').forEach(p=>{
   const fn=S[p.dataset.s]; if(!fn) return;
   const themes=p.dataset.one?[p.dataset.one]:['light','dark'];
   themes.forEach(th=>{const w=document.createElement('div');w.className='cxw';
-    w.innerHTML=`<div class="cxh"><b>${th==='light'?'Light':'Dark'}</b><span>Console tokens · ${th}${p.dataset.one?' · current source':''}</span></div><div class="cxi"><div class="cx" data-theme="${th}">${fn(th)}</div></div>`;p.appendChild(w)});
+    w.innerHTML=`<div class="cxh"><b>${th==='light'?'Light':'Dark'}</b><span>${p.dataset.note||('Console tokens · '+th+(p.dataset.one?' · current source':''))}</span></div><div class="cxi"><div class="cx" data-theme="${th}">${fn(th)}</div></div>`;p.appendChild(w)});
 });
 /* lineage figure (Mercury grammar: node cards, labelled edges) */
 (function(){const el=document.getElementById('lineage');if(!el)return;
@@ -645,8 +1396,322 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.pop.open').forEach(p=>p.classList.remove('open'))});
 document.addEventListener('input',e=>{const i=e.target.closest('.lf input');if(!i)return;const lf=i.closest('.lf'),m=lf.querySelector('.m');lf.classList.toggle('on',i.value.length>0);m.textContent=i.value?`${Math.max(0,41-i.value.length*7)} of 41`:''});
 /* ---- tabs ---- */
-const V=['shell','pulls','project','factory','tokens'];
+const ACP=[
+ {s:'github',k:'pr.opened',g:'pull',a:'dependabot[bot]',v:'opened',o:'xtrm-dev/xtrm#507 Actions group bump',refs:['#507'],at:'11h'},
+ {s:'git',k:'commit',g:'git',a:'dependabot[bot]',v:'committed',o:'e91b33d bump the actions group with 3 updates',refs:['e91b33d'],at:'11h'},
+ {s:'substrate',k:'decision',g:'check',a:'worker-7',v:'decided',o:'Chrome uses a 16 px glyph in a 28 px control',refs:['XTRM-943'],at:'1d',meta:[['journal','XTRM-943'],['seq','104'],['entry','dec-01'],['holder','worker-7']],b:'A chrome control has no label beside it, so the glyph carries the whole affordance. Thirteen pixels in a twenty-eight pixel box read as an undersized icon, not as restraint. Sixteen pixels restores the ratio the list rows already had.'},
+ {s:'github',k:'pr.merged',g:'merge',a:'jaggerxtrm',v:'merged',o:'xtrm-dev/xtrm#491 console v2: sidebar strip and top bar',refs:['#491','XTRM-933'],at:'2d'},
+ {s:'github',k:'review.approved',g:'check',a:'jaggerxtrm',v:'approved',o:'xtrm-dev/xtrm#506 console UI system: token and migration pass',refs:['#506'],at:'2d'},
+ {s:'git',k:'commit',g:'git',a:'worker-7',v:'committed',o:'7f2c1ab list rows: one line, no separator',refs:['7f2c1ab','xt/jpnl'],at:'3d'},
+ {s:'github',k:'review.changes_requested',g:'alert',a:'jaggerxtrm',v:'requested changes on',o:'xtrm-dev/xtrm#452 proposed light --x-success token',refs:['#452'],at:'3d',tone:'danger'},
+ {s:'substrate',k:'blocker',g:'alert',a:'worker-2',v:'raised a blocker',o:'The GitHub poller never collects checks or reviews',refs:['XTRM-960'],at:'4d',tone:'danger'},
+ {s:'substrate',k:'handoff',g:'forward',a:'worker-4',v:'handed off',o:'Activity page overhaul to worker-9',refs:['XTRM-961'],at:'5d'},
+ {s:'github',k:'issue_comment',g:'comment',a:'worker-7',v:'commented on',o:'xtrm-dev/xtrm#470 board lanes: one hairline',refs:['#470'],at:'5d'},
+ {s:'substrate',k:'checkpoint',g:'pin',a:'worker-7',v:'checkpointed',o:'976 tests green, dist rebuilt',refs:['XTRM-933'],at:'6d'},
+ {s:'substrate',k:'compaction',g:'layers',a:'system',v:'compacted',o:'XTRM-933 journal prefix',refs:['XTRM-933'],at:'6d'}
+];
+const acRow=(e,o)=>{o=o||{};return '<div class="ap-row'+(e.tone?' tone-'+e.tone:'')+(o.sel?' sel':'')+'">'+ic(e.g)+
+ '<span class="ap-t"><span class="ac-v">'+(e.a?e.a+' ':'')+e.v+' </span><span class="ac-o">'+e.o+'</span></span>'+
+ '<span class="ap-right"><span class="ac-ref">'+e.refs.join(' · ')+'</span><span class="ac-k">'+e.k+'</span><span>'+e.at+'</span></span></div>'};
+const acBar=()=>'<div class="ap-tabs"><b>All <span class="ac-n">'+ACP.length+'</span></b><span>Substrate 6</span><span>GitHub 4</span><span>Git 2</span>'+
+ '<span style="margin-left:auto">'+ic('list-filter')+' Filter</span><span>'+ic('activity')+' Live</span></div>';
+const acSec=(n,live,c)=>'<div class="ac-sec"><span class="d'+(live?'':' off')+'"></span>'+n+'<span class="c">'+c+'</span></div>';
+S.acMerged=()=>'<div class="ap-wrap">'+acBar()+ACP.map(e=>acRow(e)).join('')+'</div>';
+S.acGrouped=()=>{
+ const g=s=>ACP.filter(e=>e.s===s);
+ return '<div class="ap-wrap">'+acBar()+
+  acSec('Substrate journal',true,g('substrate').length+' events')+g('substrate').map(e=>acRow(e)).join('')+
+  acSec('GitHub',true,g('github').length+' events')+g('github').map(e=>acRow(e)).join('')+
+  acSec('Git',false,'0 events · the page did not return')+
+  '</div>'};
+S.acStates=()=>'<div class="ap-wrap">'+
+ acRow(ACP[6])+
+ '<div class="ac-note">'+ic('alert')+'Git returned an error · last successful page 6m ago — open the source to read the reason</div>'+
+ '<div class="ac-note bad">'+ic('question')+'A journal entry in XTRM-933 could not be read — the row is kept, the entry is skipped</div>'+
+ '<div class="ac-note">Nothing in this window. The feed starts where the first source has data, not at midnight.</div>'+
+ '<div class="ac-more">'+ic('chevron-down')+' Load older</div></div>';
+S.acDrawer=()=>{
+ const e=ACP[2];
+ return '<div class="ac-split"><div class="ac-list">'+ACP.slice(0,8).map((x,i)=>acRow(x,{sel:i===2})).join('')+'</div>'+
+ '<div class="ac-dr"><div class="ac-dh">'+ic('check')+'<span class="t">Decision</span><span class="e">'+ic('copy')+ic('x')+'</span></div>'+
+ '<div class="ac-db"><div><div class="ac-dt">'+e.o+'</div><div class="ac-ds">'+e.a+' · '+e.at+' ago · Substrate journal</div></div>'+
+ '<div><div class="ac-sec2">Reference</div><div class="ap-row" style="height:28px;padding:0;background:transparent">'+ic('issues')+'<span class="ac-ref" style="color:var(--x-ink)">XTRM-943</span><span class="ac-v" style="font-size:12px">chrome heights</span></div></div>'+
+ '<div><div class="ac-sec2" style="margin-bottom:4px">Provenance</div><dl class="ac-meta"><dt>journal</dt><dd>XTRM-943</dd><dt>seq</dt><dd>104</dd><dt>entry</dt><dd>dec-01</dd><dt>holder</dt><dd>worker-7</dd><dt>head</dt><dd>db0a3ec</dd></dl></div>'+
+ '<div><div class="ac-sec2" style="margin-bottom:4px">Entry</div><p class="ac-body">'+e.b+'</p></div>'+
+ '<div class="ac-acts"><span class="ac-btn">'+ic('external')+'Open issue</span><span class="ac-btn ghost">'+ic('copy')+'Copy id</span></div>'+
+ '</div></div></div>'};
+
+
+const IPK='XTRM-1019';
+const ipPr='<span class="ip-pr">'+ic('merge')+'#514</span>';
+const ipJira='<span class="ip-jira"><i class="ip-dot" style="background:var(--x-ink-faint)"></i>OPS-482'+ic('external')+'</span>';
+const ipRow=(inner,note,tag)=>'<div class="ip-row">'+(tag?'<span class="ip-tag">'+tag+'</span>':'')+inner+'<span class="ip-note" style="margin-left:auto;padding-left:10px">'+(note||'')+'</span></div>';
+const ipSt=(w,t)=>'<span class="chip sm" style="--c:var(--chip-'+t+')">'+w+'</span>';
+S.ipFamily=()=>'<div class="ip-grid">'+
+ ipRow(ipPr,'state colour and glyph, no fill — it reads as a key','PR')+
+ ipRow(ipJira,'bordered chip: the border means it leaves the console','Jira')+
+ ipRow('<span class="ip-id">'+IPK+'</span>','dim mono with nothing around it — reads as prose','today')+
+ ipRow('<span class="ip-pill">'+IPK+'</span>','filled pill: the same weight as the other two keys','proposed')+
+ '</div>';
+S.ipTreat=()=>'<div class="ip-grid">'+
+ ipRow('<span class="ip-pill">'+IPK+'</span><span class="ip-pill hov">'+IPK+'</span>','rest · hovered — quiet, unmistakably a control','F1')+
+ ipRow('<span class="ip-pill edge">'+IPK+'</span><span class="ip-pill edge hov" style="border-color:var(--x-bx)">'+IPK+'</span>','rest · hovered — the Jira grammar, wrong meaning','F2')+
+ ipRow('<span class="ip-pill tint">'+IPK+'</span><span class="ip-pill tint hov">'+IPK+'</span>','rest · hovered — legible, but turns identity into event','F3')+
+ ipRow('<span class="ip-pill ghost">'+IPK+'</span><span class="ip-pill ghost hov">'+IPK+'</span>','rest · hovered — invisible until touched','F4')+
+ ipRow('<span class="ip-pill acc">'+IPK+'</span><span class="ip-pill acc hov">'+IPK+'</span>','rest · hovered — a soft accent rule, no fill','F5')+
+ ipRow('<span class="ip-pill acc2">'+IPK+'</span><span class="ip-pill acc2 hov">'+IPK+'</span>','rest · hovered — accent rule on the control fill','F6')+
+ '</div>';
+S.ipInsp=()=>'<div style="padding:2px 0 0">'+
+ '<div class="ip-note" style="padding-bottom:2px">TODAY</div>'+
+ '<div class="ip-eyebrow">'+ic('issues')+'<span class="ip-id">'+IPK+'</span><span>·</span><span class="ip-kind">epic</span><span class="ip-rev">rev 1</span></div>'+
+ '<div class="ip-title">Thread viewer: Claude adapter, session tree and scoped views</div>'+
+ '<div class="ip-note" style="padding:6px 0 2px">PROPOSED — F5 + L1</div>'+
+ '<div class="ip-eyebrow">'+ic('issues')+'<span class="ip-pair">'+ipL1+'</span><span class="ip-sep">·</span><span class="ip-kind">epic</span><span class="ip-rev">rev 1</span></div>'+
+ '<div class="ip-title">Thread viewer: Claude adapter, session tree and scoped views</div></div>';
+S.ipKeep=()=>'<div class="ip-grid">'+
+ ipRow(ic('issues')+'<span class="ip-id">XTRM-933</span>'+ipSt('Done','success')+'<span class="ip-act">Console v2 UI alignment: one design language</span>','3h','')+
+ ipRow(ic('issues')+'<span class="ip-id">XTRM-1019</span>'+ipSt('Unattested','neutral')+'<span class="ip-act">Thread viewer: Claude adapter, session tree</span>','2h','')+
+ ipRow(ic('issues')+'<span class="ip-id">XTRM-1016</span>'+ipSt('Draft','neutral')+'<span class="ip-act">Activity feed: Option G, grouped by source</span>','19h','')+
+ '</div>';
+S.ipUse=()=>'<div class="ip-grid">'+
+ ipRow(ic('issues')+'<span class="ip-pair">'+ipL1+'</span><span class="ip-sep">·</span><span class="ip-kind">epic</span><span class="ip-rev">rev 1</span>','drawer eyebrow','')+
+ ipRow('<span class="ip-act">captain</span><span class="ip-act">handed off on</span><span class="ip-pill acc">'+IPK+'</span>','feed target · root issue, locator equals ref','')+
+ ipRow(ic('agent')+'<span class="ip-act">worker</span><span class="ip-loc">'+LOC+'</span><span class="ip-pill acc">'+IPK+'</span>'+ipSt('In progress','att'),'worker row · child issue','')+
+ '</div>';
+
+const LOC='XTRM-1019.1', SLIM='XTRM-1019';
+const ipL1='<span class="ip-loc">'+LOC+'</span><span class="ip-pill">'+SLIM+'</span>';
+const ipL2='<span class="ip-pill">'+LOC+'</span><span class="ip-slim">'+SLIM+'</span>';
+const ipL3='<span class="ip-pill"><span class="ip-loc">'+LOC+'</span><span class="ip-sep">/</span>'+SLIM+'</span>';
+const ipL4='<span class="ip-id">'+LOC+'</span><span class="ip-pill">'+SLIM+'</span>';
+const ipL5='<span class="ip-pill acc">'+LOC+'</span><span class="ip-pill">'+SLIM+'</span>';
+S.ipLoc=()=>'<div class="ip-grid">'+
+ ipRow(ipL1,'accent locator, slim in the pill','L1')+
+ ipRow(ipL2,'locator in the pill, slim in muted mono','L2')+
+ ipRow(ipL3,'one pill, slash between the two','L3')+
+ ipRow(ipL4,'original inks, only the slim becomes a pill','L4')+
+ ipRow(ipL5,'accent rule on the locator, fill on the slim','L5')+
+ '</div>';
+S.ipLocDrawer=()=>'<div class="ip-grid">'+
+ ['L1','L2','L3','L4','L5'].map((t,i)=>{
+  const pair=[ipL1,ipL2,ipL3,ipL4,ipL5][i];
+  return '<div class="ip-eyebrow" style="padding:7px 0">'+ic('issues')+'<span class="ip-pair">'+pair+'</span><span class="ip-sep">·</span><span class="ip-kind">epic</span><span class="ip-rev">rev 1</span></div>';
+ }).join('')+'</div>';
+document.addEventListener('DOMContentLoaded',()=>{
+ document.querySelectorAll('.pair').forEach(el=>{
+  if(el.childElementCount) return;
+  const fn=S[el.dataset.s]; if(!fn) return;
+  (el.dataset.one?[el.dataset.one]:['light','dark']).forEach(th=>{
+   const w=document.createElement('div'); w.className='cxw';
+   w.innerHTML='<div class="cxh"><b>'+(th==='light'?'Light':'Dark')+'</b><span>'+(el.dataset.note||('Console tokens \u00b7 '+th))+'</span></div><div class="cxi"><div class="cx" data-theme="'+th+'">'+fn(th)+'</div></div>';
+   el.appendChild(w);
+  });
+ });
+});
+
+const V=['shell','pulls','project','factory','tokens','rulings','lists','treatment','approved','activity','identity'];
 function show(){const h=(location.hash||'#shell').slice(1);const v=V.includes(h)?h:'shell';V.forEach(n=>{document.getElementById('view-'+n).hidden=n!==v});document.querySelectorAll('.tabs a').forEach(a=>{if(a.dataset.v===v)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')})}
-addEventListener('hashchange',show);show();
+addEventListener('hashchange',show);if(document.readyState==='loading')addEventListener('DOMContentLoaded',show);else show();
 </script>
+</div><div class="view" id="view-activity" hidden>
+ <div class="section"><div class="kick">12 · Activity, built 2026-11-24</div><h2>One feed, every event, one grammar<small>Proposal for <code>src/surfaces/ActivitySurface.tsx</code>. Three sources feed one stream today — Substrate journal, GitHub, Git — and Jira is declared but withheld. The page keeps the approved row grammar and borrows the inspector for detail; nothing here introduces a new token.</small></h2>
+ <div class="facts">
+  <div class="fact" style="--c:var(--accent)"><div class="v">25</div><div class="k">event kinds, each with one glyph and one verb</div></div>
+  <div class="fact" style="--c:var(--ok)"><div class="v">32 px</div><div class="k">row, same as the issue and PR lists</div></div>
+  <div class="fact" style="--c:var(--att)"><div class="v">3 / 4</div><div class="k">sources live; Jira withheld by <code>LIVE_ACTIVITY_SOURCES</code></div></div>
+  <div class="fact" style="--c:var(--sched)"><div class="v">0</div><div class="k">borders, dividers or new colours</div></div>
+ </div></div>
+
+ <p class="q" style="border-left:2px solid var(--ok);padding-left:10px"><b>Built.</b> Option M is implemented in <code>src/surfaces/ActivitySurface.tsx</code> and live on the mock deployment: one merged stream, <code>All</code> first, 32px rows, no dividers, danger ink only on <code>blocker</code>, <code>review.changes_requested</code> and <code>unreadable</code>, detail in the side panel. Option G (AC3) was reviewed and deferred — filed as XTRM-1016, not scheduled.</p>
+ <div class="spec"><div class="spec-h"><h3>AC1 · Every event the feed can carry</h3><span class="src">src/activity/substrate.ts · github.ts · git.ts · types.ts</span></div><div class="spec-b">
+  <p class="q"><b>What is decided:</b> the vocabulary is closed and comes from the loaders, not from taste. A journal kind maps to a verb through <code>KIND_VERB</code>; GitHub maps <code>pr.*</code>, <code>issue.*</code>, <code>review.*</code> and <code>issue_comment</code>; Git contributes <code>commit</code>. One glyph per event family, one verb phrase, one reference kind that the drawer resolves.</p>
+  <div class="tbox"><table>
+  <tr><th>kind</th><th>glyph</th><th>verb on the line</th><th>reference</th><th>what the drawer adds</th></tr>
+  <tr><td><code>journal.note</code></td><td class="vgl" data-g="comment"></td><td>noted</td><td>issue</td><td>holder, seq, entry id, body</td></tr>
+  <tr><td><code>journal.finding</code></td><td class="vgl" data-g="search"></td><td>raised a finding</td><td>issue</td><td>holder, seq, body</td></tr>
+  <tr><td><code>journal.decision</code></td><td class="vgl" data-g="check"></td><td>decided</td><td>issue</td><td>holder, seq, body</td></tr>
+  <tr><td><code>journal.blocker</code></td><td class="vgl" data-g="alert"></td><td>raised a blocker</td><td>issue</td><td>holder, seq, body, <b class="xdg">danger ink</b></td></tr>
+  <tr><td><code>journal.milestone</code></td><td class="vgl" data-g="flag"></td><td>reached a milestone</td><td>issue</td><td>holder, seq, body</td></tr>
+  <tr><td><code>journal.handoff</code></td><td class="vgl" data-g="forward"></td><td>handed off</td><td>issue</td><td>holder, seq, body</td></tr>
+  <tr><td><code>journal.result</code></td><td class="vgl" data-g="tag"></td><td>reported a result</td><td>issue</td><td>holder, seq, body</td></tr>
+  <tr><td><code>journal.checkpoint</code></td><td class="vgl" data-g="pin"></td><td>checkpointed</td><td>issue</td><td>holder, seq, head commit, tests</td></tr>
+  <tr><td><code>journal.compaction</code></td><td class="vgl" data-g="layers"></td><td>compacted</td><td>issue</td><td>holder, seq range</td></tr>
+  <tr><td><code>journal.cancel</code></td><td class="vgl" data-g="x"></td><td>cancelled</td><td>issue</td><td>holder, seq, body</td></tr>
+  <tr><td><code>journal.&lt;unknown&gt;</code></td><td class="vgl" data-g="comment"></td><td>recorded</td><td>issue</td><td>the raw kind, so an unmapped kind stays visible</td></tr>
+  <tr><td><code>journal.unreadable</code></td><td class="vgl" data-g="question"></td><td>could not be read</td><td>journal</td><td>the error, <b class="xdg">danger ink</b> — the row is kept, never dropped</td></tr>
+  <tr><td><code>pr.opened</code></td><td class="vgl" data-g="pull"></td><td>opened</td><td>pr</td><td>repo, author, state, checks, comments</td></tr>
+  <tr><td><code>pr.merged</code></td><td class="vgl" data-g="merge"></td><td>merged</td><td>pr</td><td>repo, author, merged time, linked issue</td></tr>
+  <tr><td><code>pr.closed</code></td><td class="vgl" data-g="closed"></td><td>closed</td><td>pr</td><td>repo, author, closed time</td></tr>
+  <tr><td><code>pr.draft</code></td><td class="vgl" data-g="draft"></td><td>marked draft</td><td>pr</td><td>repo, author, state</td></tr>
+  <tr><td><code>issue.opened</code></td><td class="vgl" data-g="issues"></td><td>opened</td><td>gh-issue</td><td>repo, author, labels, comments</td></tr>
+  <tr><td><code>issue.closed</code></td><td class="vgl" data-g="closed"></td><td>closed</td><td>gh-issue</td><td>repo, author, closed time</td></tr>
+  <tr><td><code>review.approved</code></td><td class="vgl" data-g="check"></td><td>approved</td><td>pr</td><td>repo, reviewer, the reviewed title</td></tr>
+  <tr><td><code>review.changes_requested</code></td><td class="vgl" data-g="alert"></td><td>requested changes on</td><td>pr</td><td>repo, reviewer, <b class="xdg">danger ink</b></td></tr>
+  <tr><td><code>review.commented</code></td><td class="vgl" data-g="comment"></td><td>reviewed</td><td>pr</td><td>repo, reviewer</td></tr>
+  <tr><td><code>issue_comment</code></td><td class="vgl" data-g="comment"></td><td>commented on</td><td>gh-issue</td><td>repo, author, body excerpt</td></tr>
+  <tr><td><code>commit</code></td><td class="vgl" data-g="git"></td><td>committed</td><td>commit</td><td>sha, branch, files, subject</td></tr>
+  <tr><td><code>jira.*</code></td><td class="vgl" data-g="board"></td><td>—</td><td>issue</td><td>declared in <code>ActivitySource</code>, withheld from the filter until the integration lands</td></tr>
+  </table></div>
+  <p class="cap">Colour is the exception, not the grammar: <code>blocker</code>, <code>review.changes_requested</code> and <code>unreadable</code> take <code>--x-danger</code> on the glyph and the verb. Everything else stays in ink and ink-muted, so a coloured row means "read this one". No event gets a chip — the chip vocabulary belongs to state surfaces, and a feed that chips every row has no emphasis left.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>AC2 · Option M — one merged stream, source as a glyph</h3><span class="src">ToolbarTabs · ListFilter · ListRow</span></div><div class="spec-b">
+  <p class="q"><b>What is decided:</b> the default. All three live sources arrive in one list ordered by time; the leading glyph says which source and which event; <code>All</code> is the first tab and the per-source tabs are filters, exactly as the PR <code>All</code> view works. This is the shape that answers "what happened", not "what happened in Substrate".</p>
+  <div class="pair" data-s="acMerged" data-one="light" data-note="Option M · light theme"></div>
+  <div class="pair" data-s="acMerged" data-one="dark" data-note="Option M · dark theme" style="margin-top:12px"></div>
+  <p class="cap">Line one: source glyph, actor in ink-muted, verb in ink-muted, object in ink. Right edge, widest-first: references as dim mono until <code>lg</code>, the kind in <code>text-2xs</code> mono, the age. Nothing is truncated before the object is; the object carries the meaning and the kind is a hint.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>AC3 · Option G — grouped by source, with the source's live state</h3><span class="src">loadSourceState · ActivityPage</span></div><div class="spec-b">
+  <p class="q"><b>What is decided:</b> the alternative, for when a source is failing or slow. Each source opens a 28 px section header carrying its live dot and count, so a source that returned <code>error</code> is visible as "0 events, not live" instead of silently contributing nothing to a merged stream.</p>
+  <div class="pair" data-s="acGrouped" data-one="light" data-note="Option G · light theme"></div>
+  <p class="cap">Section header: source name, live dot (<code>--x-success</code> when the page returned, faint when the source errored), the count in <code>text-2xs</code>. Rows inside keep the identical grammar, so switching between M and G changes grouping only.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>AC4 · The five states a feed row can be in</h3><span class="src">loadSourceState · substrate.ts unreadable guard</span></div><div class="spec-b">
+  <p class="q"><b>What is decided:</b> a feed that hides its failures is worse than one that shows none. Each failure has one row shape and no decoration: a failed source, an unreadable journal entry, an empty day, and the cursor at the end of the page.</p>
+  <div class="pair" data-s="acStates" data-one="light" data-note="States · light theme"></div>
+  <p class="cap">Top to bottom: danger row (blocker / changes requested), a source that errored (<code>text-ink-faint</code> with the reason in the drawer, never a red banner), the unreadable journal marker, an empty result, and the <code>Load older</code> cursor at 32 px. The feed keeps 50 rows per page (<code>ACTIVITY_PAGE</code>) and appends the cursor as a row, not as a floating button.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>AC5 · Detail in the inspector, not in the row</h3><span class="src">src/ui/inspector · provenance block</span></div><div class="spec-b">
+  <p class="q"><b>What is decided:</b> clicking a row opens the inspector drawer on the right — the same frame, section header, meta grid and body block the issue detail uses. The row never expands in place: expansion inside a 32 px list shifts every following row and loses the reading position.</p>
+  <div class="pair" data-s="acDrawer" data-one="light" data-note="Drawer · light theme"></div>
+  <div class="pair" data-s="acDrawer" data-one="dark" data-note="Drawer · dark theme" style="margin-top:12px"></div>
+  <p class="cap">Header: source glyph, the event verb as the title, the object as the subtitle, then copy and close. Sections: the reference (resolved, with its own key), the provenance grid (holder, seq, entry, head), the body at <code>text-sm</code> with a rule on the left, and the actions — open the reference, copy the id, load the source. No new tokens: <code>--x-border-muted</code> for the rule, <code>--x-ink-faint</code> for the meta labels.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>AC6 · Elements and the tokens they use</h3><span class="src">nothing new — every part is an existing token or component</span></div><div class="spec-b">
+  <div class="tbox"><table>
+  <tr><th>element</th><th>class in the app</th><th>token</th><th>rule</th></tr>
+  <tr><td>row</td><td><code>ListRow</code></td><td>32 px, <code>--x-surface</code></td><td>no divider, no hover fill, hover raises the ink only</td></tr>
+  <tr><td>source and event glyph</td><td><code>Icon size="xs"</code></td><td>14 px, stroke 2.25, <code>text-ink-faint</code></td><td>one glyph per event family; danger for the three exceptions</td></tr>
+  <tr><td>reference</td><td><code>KeyChip</code></td><td><code>font-mono text-xs</code>, <code>text-ink-muted</code></td><td>no fill, no chip; a reference is not a state</td></tr>
+  <tr><td>kind</td><td><code>text-2xs</code> mono</td><td><code>text-ink-faint</code></td><td>the first thing shed below <code>lg</code></td></tr>
+  <tr><td>age</td><td><code>tabular</code></td><td><code>text-ink-faint</code></td><td>never shed; it is the sort key</td></tr>
+  <tr><td>section header (G)</td><td>28 px, <code>text-xs</code> 600</td><td><code>--x-success</code> dot, <code>text-ink-faint</code> label</td><td>only in the grouped variant</td></tr>
+  <tr><td>empty, error, cursor</td><td>32 px rows</td><td><code>text-ink-faint</code>, danger only for a real failure</td><td>a state is never a banner or a card</td></tr>
+  <tr><td>drawer</td><td>existing inspector</td><td><code>--x-shadow-panel</code>, <code>--x-border-muted</code></td><td>no second drawer style</td></tr>
+  </table></div>
+  <p class="cap"><b>Not used, on purpose:</b> solid chips (no state to show), tinted key chips (ruled out on 2026-11-24), dividers between rows, per-source colours, avatars (an actor is text), and any expansion inside the list.</p>
+ </div></div>
+</div>
+
+<style>
+.cx .ip-row{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;font:13px/20px var(--cf);white-space:nowrap}
+.cx .ip-tag{flex:none;min-width:58px;font:10.9px/16px var(--cm);color:var(--x-ink-faint);text-transform:uppercase;letter-spacing:.06em}
+.cx .ip-note{font:11.5px/16px var(--cm);color:var(--x-ink-faint)}
+.cx .ip-id{font:12px/16px var(--cm);color:var(--x-ink-muted)}
+.cx .ip-pr{display:inline-flex;align-items:center;gap:4px;font:12px/16px var(--cm);color:var(--x-accent-ink)}
+.cx .ip-jira{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 4px;border:1px solid var(--x-border-muted);border-radius:3px;font:12px/16px var(--cm);color:var(--x-ink-muted)}
+.cx .ip-pill{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 6px;border-radius:6px;font:12px/16px var(--cm);color:var(--x-ink-muted);background:var(--x-control);white-space:nowrap}
+.cx .ip-pill.hov{background:#e7e7ea;color:var(--x-ink)}
+.cx[data-theme=dark] .ip-pill.hov{background:#2e2e2e}
+.cx .ip-pill.edge{background:transparent;border:1px solid var(--x-b);color:var(--x-ink-muted)}
+.cx .ip-pill.edge.hov{background:var(--x-hover)}
+.cx .ip-pill.tint{background:var(--x-accent-soft);color:var(--x-accent-ink)}
+.cx .ip-pill.tint.hov{background:var(--x-accent-soft);color:var(--x-ink)}
+.cx .ip-pill.ghost{background:transparent}
+.cx .ip-pill.ghost.hov{background:var(--x-hover);color:var(--x-ink)}
+.cx .ip-grid{display:flex;flex-direction:column;gap:3px}
+.cx .ip-eyebrow{display:flex;align-items:center;gap:6px;padding:6px 0;font:13px/20px var(--cf);color:var(--x-ink-faint)}
+.cx .ip-kind{font:12px/16px var(--cf);color:var(--x-ink-faint)}
+.cx .ip-rev{margin-left:auto;font:11.5px/16px var(--cm);color:var(--x-ink-faint)}
+.cx .ip-title{padding:2px 0 10px;font:13px/20px var(--cf);font-weight:600;color:var(--x-ink)}
+.cx .ip-pill.acc{border:1px solid color-mix(in srgb,var(--x-accent) 40%,transparent);background:transparent;color:var(--x-ink-muted)}
+.cx .ip-pill.acc.hov{border-color:color-mix(in srgb,var(--x-accent) 58%,transparent);background:var(--x-accent-soft);color:var(--x-ink)}
+.cx .ip-pill.acc2{background:var(--x-control);border:1px solid color-mix(in srgb,var(--x-accent) 34%,transparent);color:var(--x-ink-muted)}
+.cx .ip-pill.acc2.hov{background:#e7e7ea;border-color:color-mix(in srgb,var(--x-accent) 52%,transparent);color:var(--x-ink)}
+.cx[data-theme=dark] .ip-pill.acc2.hov{background:#2e2e2e}
+.cx .ip-loc{color:var(--x-accent-ink);font:12px/16px var(--cm)}
+.cx .ip-slim{font:12px/16px var(--cm);color:var(--x-ink-muted)}
+.cx .ip-sep{color:var(--x-ink-faint);opacity:.7}
+.cx .ip-pair{display:inline-flex;align-items:center;gap:6px}
+.cx .ip-dot{display:inline-block;width:6px;height:6px;border-radius:50%;flex:none}
+.cx .ip-act{color:var(--x-ink-faint)}
+.ip-t{width:100%;border-collapse:collapse;font:12.5px/18px var(--sans)}
+.ip-t th{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);font:11px/16px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+.ip-t td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--mut)}
+.ip-t td:first-child{color:var(--fg);font-weight:650;white-space:nowrap}
+.ip-t tr:last-child td{border-bottom:0}
+.ip-t code{font-size:11.5px}
+</style>
+<div class="view" id="view-identity" hidden>
+ <div class="section">
+  <div class="kicker">13 · Issue links, proposed 2026-11-25</div>
+  <h2>One pill where the key is a link<br><small>The issues list keeps the key it has. Everywhere else — the drawer, the pages that link to an issue, the feed — the Substrate key gets a shape of its own, because the PR key and the Jira chip already have one and this one reads as prose.</small></h2>
+  <div class="facts">
+   <div class="fact"><div class="v">3</div><div class="k">key shapes in the app today: state-coloured mono (PR), bordered chip (Jira), bare text (Substrate)</div></div>
+   <div class="fact" style="--c:var(--teal)"><div class="v">1</div><div class="k">surface keeps the bare key: the issues list, by the operator's word</div></div>
+   <div class="fact" style="--c:var(--att)"><div class="v">6</div><div class="k">places where the key is a link or an identity: breadcrumb, drawer, feed, project rows, linked refs, agent chips</div></div>
+   <div class="fact" style="--c:var(--bad)"><div class="v">0</div><div class="k">of those six shows the key as clickable today — none has a fill, border, or hover</div></div>
+  </div>
+ </div>
+
+ <div class="spec"><div class="spec-h"><h3>P1 · The family the key belongs to</h3><span class="src">src/ui/pr-key.tsx · src/project/jira/JiraChip.tsx · src/ui/list-row.tsx</span></div><div class="spec-b">
+  <p class="q"><b>The problem:</b> the console already has a shape language for keys, and the Substrate key is the one member with no shape. A PR shows a state-coloured glyph and number. A Jira key shows a bordered chip with a status dot and an external glyph — the border means "this leaves the console". A Substrate key shows nothing: in the drawer it is the same dim mono as an anonymous code span, so the reader has to know that it is the issue.</p>
+  <div class="pair" data-s="ipFamily" data-one="light" data-note="Four key shapes, light"></div>
+  <div class="pair" data-s="ipFamily" data-one="dark" data-note="Four key shapes, dark" style="margin-top:12px"></div>
+  <p class="cap">Read down the left column: three keys, three shapes, and one that is only text. The proposed member is the fourth row — a filled pill, not a bordered one, because the key stays inside the console; the border keeps meaning "opens elsewhere", which is what the Jira chip spends it on.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>P2 · Which pill</h3><span class="src">same row, six candidates, each shown at rest and hovered</span></div><div class="spec-b">
+  <p class="q"><b>The question:</b> the pill has to be visible at rest — the operator's complaint is that the key had no background at all — but it must not compete with the solid status chip that usually sits beside it. Six candidates, at rest and on hover:</p>
+  <div class="pair" data-s="ipTreat" data-one="light" data-note="Six candidates, at rest and hovered, light"></div>
+  <div class="pair" data-s="ipTreat" data-one="dark" data-note="Six candidates, at rest and hovered, dark" style="margin-top:12px"></div>
+  <p class="cap"><b>F1 fill</b> uses <code>--x-control</code> — measured 1.15:1 on the light surface and 1.21:1 on the dark one, the same step the search field and the Work/Agent switch already take; <code>--x-pressed</code> would double that to 1.18:1 but inverts direction in dark, which is why the hover token below is separate. Hover takes it to <code>#e7e7ea</code> / <code>#2e2e2e</code> on hover: quiet at rest, unmistakably a control. <b>F2 border</b> repeats the Jira grammar, which inverts the meaning — the console key does not leave the console. <b>F3 tint</b> is accent-soft with accent ink: legible, but it turns an identity into an event, and the feed already uses accent fill for PR events. <b>F4 ghost</b> is what the sidebar keys do today: invisible until hovered, which does not fix the complaint. <b>F5 soft accent border</b> — the operator's idea — marks the key as Substrate's own without spending a fill: the rule is the accent at 40 % light, and hovering lifts it to 58 % with an accent wash. <b>F6</b> pairs the accent rule with the control fill, which is the most present of the six and the closest to a chip.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>P3 · The locator and the slim ref, side by side</h3><span class="src">same pill component, five pairings</span></div><div class="spec-b">
+  <p class="q"><b>The problem:</b> a locator (<code>XTRM-1019.1</code>) and its slim ref (<code>XTRM-1019</code>) answer different questions — "exactly which issue" and "which thread" — and today only one of them can be shown, in one dim ink. The pairing has to read as one token, survive truncation, and not turn into two competing chips.</p>
+  <div class="pair" data-s="ipLoc" data-one="light" data-note="Five pairings, link form, light"></div>
+  <div class="pair" data-s="ipLoc" data-one="dark" data-note="Five pairings, link form, dark" style="margin-top:12px"></div>
+  <p class="cap"><b>L1</b> locator in accent ink, slim in the soft pill — the locator is the text you read, the pill is the thread you can click. <b>L2</b> the reverse: the pill carries the locator, the slim ref sits beside it in muted mono. <b>L3</b> one pill around both, separated by a slash. <b>L4</b> your suggestion taken literally: original inks kept, only the slim ref becomes a pill. <b>L5</b> both in pills, the locator in the accent border and the slim in the fill.</p>
+  <div class="pair" data-s="ipLocDrawer" data-one="light" data-note="The same pairings in the drawer eyebrow, light"></div>
+  <div class="pair" data-s="ipLocDrawer" data-one="dark" data-note="The same pairings in the drawer eyebrow, dark" style="margin-top:12px"></div>
+  <p class="cap">In the drawer the pair sits before the kind, so the line reads <i>which issue · which thread · what kind · which revision</i>. The locator never appears twice: where the drawer already prints the locator as its title, the eyebrow carries the slim ref only.</p>
+ </div></div>
+
+<div class="spec"><div class="spec-h"><h3>P4 · The drawer, where the complaint started</h3><span class="src">src/issues/IssueView.tsx · IssueBreadcrumb</span></div><div class="spec-b">
+  <p class="q"><b>The problem:</b> the drawer's first line is the only place that pairs the key with the <i>kind</i> and the <i>revision</i>. Today the key is dim mono and reads like a label; with the pill it reads like the issue the panel is about, and the line keeps its two other facts.</p>
+  <div class="pair" data-s="ipInsp" data-one="light" data-note="Drawer eyebrow, today vs proposed, light"></div>
+  <div class="pair" data-s="ipInsp" data-one="dark" data-note="Drawer eyebrow, today vs proposed, dark" style="margin-top:12px"></div>
+  <p class="cap">Proposed: the locator in accent ink, the slim ref in the accent-rule pill, then <code>·</code>, the kind, and <code>rev N</code> pinned to the right edge. The pill is not a second status: the drawer's Details grid still carries the lifecycle word, so the pill shows no dot.</p>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>P5 · Where it applies, and where it does not</h3><span class="src">audit of the running mock, 2026-11-25</span></div><div class="spec-b">
+  <div class="tbox"><table class="ip-t">
+   <tr><th>Surface</th><th>Today</th><th>Proposed</th></tr>
+   <tr><td>issues list</td><td><code>KeyChip</code> — dim mono, no fill, inert</td><td><b>unchanged</b> — the list keeps the key it has</td></tr>
+   <tr><td>issue page breadcrumb</td><td><code>IssueKey</code> with <code>locator={null}</code>: ref only, inert</td><td>pill, links back to the list row's inspector</td></tr>
+   <tr><td>drawer header / eyebrow</td><td><code>IssueKey</code> + <code>·</code> kind + <code>rev</code>, dim</td><td>pill + kind + <code>rev</code> (P4)</td></tr>
+   <tr><td>activity feed target</td><td>resolved <code>ReferenceChip</code>: dot + key + title</td><td>pill + title, no dot — the kind chip already names the event</td></tr>
+   <tr><td>project worker rows</td><td>bare key inside the worker's issue trail</td><td>pill, opens the inspector</td></tr>
+   <tr><td>linked refs on a PR row</td><td><code>IssueKey</code>, dim, inert</td><td>pill, opens the inspector</td></tr>
+   <tr><td>agent chips (substrate refs)</td><td>accent-ink mono, a fourth ink</td><td>the same pill, so all issue refs agree</td></tr>
+   <tr><td>copy actions</td><td>copy the bare key</td><td>unchanged — the clipboard never carries decoration</td></tr>
+  </table></div>
+ </div></div>
+
+ <div class="spec"><div class="spec-h"><h3>P6 · Recommendation and the decisions to take</h3><span class="src">what I would build unless told otherwise</span></div><div class="spec-b">
+  <p class="q"><b>Side by side:</b> the list keeps its key; the places that link to an issue get the pill. Left: unchanged list rows. Right: the three link surfaces.</p>
+  <div class="pair" data-s="ipKeep" data-one="light" data-note="Issues list — unchanged"></div>
+  <div class="pair" data-s="ipUse" data-one="light" data-note="Link surfaces — drawer eyebrow, feed target, worker row" style="margin-top:12px"></div>
+  <div class="pair" data-s="ipUse" data-one="dark" data-note="Link surfaces, dark" style="margin-top:12px"></div>
+  <p class="q" style="margin-top:14px"><b>Recommended:</b> <b>F5 with L1</b> — <code>IssueKeyPill</code> draws the locator in <code>text-accent-ink</code> and the slim ref in a pill: <code>inline-flex h-5 items-center gap-1 rounded-md border border-accent/35 bg-transparent px-1.5 font-mono text-xs</code>, the border stepping to <code>accent/55</code> with an <code>accent-soft</code> wash on hover and focus. It needs no new colour token — <code>--x-accent</code> already exists and the opacity does the softening — and it gives Substrate keys a signature that no other key in the app shares: PR keys are state-coloured text, Jira keys are bordered and external, and this one is violet and internal. Where the locator equals the ref (a root issue), only the pill is drawn, so the row never shows the same string twice. F1 remains the quiet fallback if the accent reads as too much colour in the drawer.</p>
+  <div class="tbox"><table class="ip-t">
+   <tr><th>#</th><th>Decision</th><th>Options</th><th>My answer</th></tr>
+   <tr><td>O1</td><td>scope</td><td>everywhere incl. the list · only where the key is a link</td><td><b>only where it is a link</b> — the list stays plain</td></tr>
+   <tr><td>O2</td><td>shape</td><td>F1 fill · F2 border · F3 tint · F4 ghost</td><td><b>F5 accent rule</b>, with F1 fill as the quiet fallback; the neutral border stays reserved for external links</td></tr>
+   <tr><td>O3</td><td>hover</td><td>none · new <code>--x-control-hover</code> · reuse <code>--x-hover</code></td><td><b>new token</b> — the existing overlay inverts in dark</td></tr>
+   <tr><td>O4</td><td>locator</td><td>visible · tooltip only</td><td><b>visible</b>, in the L1 pairing — the locator is the point of the key, and the slim pill keeps one stable anchor when the locator is absent</td></tr>
+   <tr><td>O5</td><td>status on the pill</td><td>dot · none</td><td><b>none</b> — the status chip and the Details grid already say it</td></tr>
+   <tr><td>O6</td><td>what a click does</td><td>navigate · open the inspector</td><td><b>inspector</b>, matching every other reference in the app</td></tr>
+   <tr><td>O7</td><td>locator and slim</td><td>L1 locator accent + slim pill · L2 locator pill + slim mono · L3 one pill · L4 slim only in a pill · L5 both in pills</td><td><b>L1</b> — the locator stays readable as text and the pill names the thread</td></tr>
+   <tr><td>O8</td><td>border or fill</td><td>F1 fill · F5 soft accent rule · F6 both</td><td><b>F5</b> — the soft accent rule marks the key as Substrate's own without spending a fill, and pairs with L1</td></tr>
+  </table></div>
+  <p class="cap">Scope if approved: new <code>src/ui/issue-key-pill.tsx</code>; used by the drawer eyebrow, <code>ReferenceChip</code>'s issue branch, the breadcrumb, project worker rows and the agent chips. <code>KeyChip</code> in <code>src/ui/list-row.tsx</code> stays untouched so the issues list does not move. Three tests: the pill opens the inspector; the locator is visible text and the tooltip carries it in full; no link surface renders the key without the pill.</p>
+ </div></div>
+</div>
+</div>
 </body></html>

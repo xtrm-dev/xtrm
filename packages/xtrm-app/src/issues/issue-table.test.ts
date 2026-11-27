@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IssueSummary } from "../adapters/index.tsx";
-import { buildTree, hiddenColumns, issueStatus, keyNames, listDensity, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
+import { ISSUE_STATUSES, buildTree, issueStatus, issueStatusId, keyNames, matchesIssueStatusSet, primaryKey, rollupActivity, type Sort } from "./issue-table.ts";
 
 const issue = (ref: string, over: Partial<IssueSummary> = {}): IssueSummary => ({
   id: ref, ref, locator: ref, title: ref, kind: "task", lifecycle: "open", revision: 1, priority: 2, scrutiny: null,
@@ -10,6 +10,8 @@ const issue = (ref: string, over: Partial<IssueSummary> = {}): IssueSummary => (
 const updated: Sort = { key: "updated", desc: true };
 const order = (rows: IssueSummary[], sort: Sort, collapsed = new Set<string>()) =>
   buildTree(rows, rollupActivity(rows), sort, collapsed).map((r) => `${"  ".repeat(r.depth)}${r.issue.ref}`);
+
+
 
 describe("issue table", () => {
   it("nests children under the parent and moves the parent on child journal activity", () => {
@@ -65,19 +67,45 @@ describe("issue table", () => {
     expect(label({ readiness: "draft", contractComplete: true, attestation: "rejected" })).toBe("Rejected");
   });
 
-  it("drops the low-value numeric columns as the list narrows, header and rows together (XTRM-911)", () => {
-    expect(listDensity(1098)).toBe("wide");
-    expect([...hiddenColumns("wide")]).toEqual([]);
-    expect(listDensity(62 * 16 - 1)).toBe("medium");
-    expect([...hiddenColumns("medium")]).toEqual(["events", "pointers"]);
-    expect(listDensity(48 * 16 - 1)).toBe("compact");
-    expect([...hiddenColumns("compact")]).toEqual(["events", "pointers", "created", "updated"]);
-  });
-
   it("names the address and the tooltip that keeps both names (XTRM-926)", () => {
     const imported = issue("X-1", { locator: "XTRM-300.12", ref: "XTRM-1234" });
     expect(primaryKey(imported)).toBe("XTRM-300.12");
     expect(keyNames(imported)).toBe("XTRM-300.12 / XTRM-1234");
     expect(keyNames(issue("X-2"))).toBe("X-2");
+  });
+});
+
+describe("the status vocabulary sb owns", () => {
+  it("derives every status in Substrate's order, so in progress is reachable", () => {
+    const id = (over: Partial<IssueSummary>) => issueStatusId(issue("X-1", over));
+    expect(id({ readiness: "claimed" })).toBe("in_progress");
+    // A claim outranks a blocker: the work is being done, even if its prerequisites moved.
+    expect(id({ readiness: "claimed", blockedBy: ["X-2"] })).toBe("in_progress");
+    expect(id({ readiness: "blocked" })).toBe("blocked");
+    expect(id({ readiness: "ready", dispatchable: true })).toBe("ready");
+    expect(id({ readiness: "draft" })).toBe("open");
+    expect(id({ lifecycle: "deferred", readiness: "deferred" })).toBe("deferred");
+    expect(id({ lifecycle: "done", readiness: "terminal" })).toBe("done");
+    expect(id({ lifecycle: "cancelled", readiness: "terminal" })).toBe("cancelled");
+    expect(id({ lifecycle: "archived", readiness: "terminal" })).toBe("archived");
+  });
+
+  it("matches the multi-select set on the derived status only, so members cannot overlap", () => {
+    const claimed = issue("X-1", { readiness: "claimed" });
+    const ready = issue("X-2", { readiness: "ready", dispatchable: true });
+    const done = issue("X-3", { lifecycle: "done", readiness: "terminal" });
+    // The set holds disjoint members: a row belongs to exactly one of them.
+    expect(matchesIssueStatusSet(claimed, new Set(["in_progress"]))).toBe(true);
+    expect(matchesIssueStatusSet(claimed, new Set(["open"]))).toBe(false);
+    expect(matchesIssueStatusSet(claimed, new Set(["open", "in_progress"]))).toBe(true);
+    expect(matchesIssueStatusSet(ready, new Set(["in_progress", "ready"]))).toBe(true);
+    expect(matchesIssueStatusSet(done, new Set(["done", "cancelled"]))).toBe(true);
+    // An empty set is "nothing selected", never "everything": the surface shows an empty state.
+    expect(matchesIssueStatusSet(claimed, new Set())).toBe(false);
+  });
+
+  it("offers the eight disjoint statuses as the filter list, labelled, never a bare id", () => {
+    expect(ISSUE_STATUSES.map((s) => s.label)).toEqual(["Open", "In progress", "Ready", "Blocked", "Deferred", "Done", "Cancelled", "Archived"]);
+    expect(ISSUE_STATUSES.map((s) => s.id)).toContain("in_progress");
   });
 });

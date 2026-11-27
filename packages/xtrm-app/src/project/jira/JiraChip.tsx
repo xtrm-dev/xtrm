@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { JiraIssue, JiraSearchPage } from "../../adapters/jira/types.ts";
 import { useJiraIssues } from "../../app/queries.ts";
 import { Icon } from "../../ui/icon.tsx";
-import { StatusDot, cx, type Tone } from "../../ui/primitives.tsx";
+import { cx } from "../../ui/primitives.tsx";
 
 /**
  * Jira links and their one resolution point (ADR-002 D6).
@@ -14,19 +14,6 @@ import { StatusDot, cx, type Tone } from "../../ui/primitives.tsx";
  * bound them. The status tone is read from the fetched remote status only
  * (D5/D6); a board record never decides it.
  */
-
-/**
- * Remote workflow status → tone. The remote status is the only input: an
- * unrecognised word stays neutral rather than guessing a lifecycle.
- */
-export function jiraStatusTone(status: string | null): Tone {
-  if (status === null) return "muted";
-  const word = status.trim().toLowerCase();
-  if (["done", "closed", "resolved", "complete", "completed", "cancelled", "canceled"].includes(word)) return "done";
-  if (["in progress", "in review", "review", "active"].includes(word)) return "active";
-  if (["blocked", "failed"].includes(word)) return "danger";
-  return "neutral";
-}
 
 /**
  * The row's Substrate link state. A null `syncState` is two different facts: no
@@ -90,7 +77,6 @@ export function JiraChip({ issue, showStatusText, className }: { issue: JiraIssu
         className,
       )}
     >
-      {issue.status !== null && <StatusDot tone={jiraStatusTone(issue.status)} label={issue.status} />}
       <span className="truncate font-mono">{issue.key}</span>
       {showStatusText && issue.status !== null && <span data-testid="jira-chip-status" className="truncate text-ink-muted">{issue.status}</span>}
       <Icon name="external" size="text" className="shrink-0 text-ink-faint" />

@@ -29,10 +29,10 @@ import {
   lifecycleOptions,
   lifecycleTone,
   priorityOptions,
-  readinessLabel,
   scrutinyOptions,
-  IssueKey,
 } from "./meta.tsx";
+import { IssueKeyPill } from "../ui/issue-key-pill.tsx";
+import { IssueStatusBadge } from "./IssueStatusBadge.tsx";
 import { ReferenceActionsProvider, ReferenceChip, type ContextReference } from "../refs/references.tsx";
 
 type Variant = "page" | "panel";
@@ -57,7 +57,13 @@ export function IssueView({ issue, canWrite, variant, nav }: { issue: IssueDetai
     <div className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-1.5">
         <IssueBreadcrumb issue={issue} nav={nav} />
-        <InlineTitle value={issue.title} canEdit={canWrite} onSave={actions.setTitle} className={variant === "page" ? "text-xl leading-snug font-semibold" : "text-base leading-snug font-semibold"} />
+        {/* The status leads the title, as the PR view's state does (2026-11-27 ruling): the same chip the
+            list row shows, one size up, so the drawer and the board can never name a different state. */}
+        <div className="flex min-w-0 items-baseline gap-2" data-testid="issue-title-row">
+          <IssueStatusBadge issue={issue} size="sm" />
+          <InlineTitle value={issue.title} canEdit={canWrite} onSave={actions.setTitle} className={cx("min-w-0 flex-1", variant === "page" ? "text-xl leading-snug font-semibold" : "text-base leading-snug font-semibold")} />
+        </div>
+        <IssueGaps issue={issue} />
       </div>
 
       {variant === "panel" && <DetailsGrid issue={issue} canWrite={canWrite} nav={nav} compact />}
@@ -144,13 +150,13 @@ function IssueBreadcrumb({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
                 {
                   key: "parent",
                   icon: kindIcon(issue.parent.kind ?? "epic"),
-                  label: <IssueKey locator={null} humanRef={issue.parent.ref} />,
+                  label: <IssueKeyPill locator={issue.parent.locator} humanRef={issue.parent.ref} />,
                   title: issue.parent.locator ?? issue.parent.ref,
                   onClick: () => nav.onOpenIssue(issue.parent!.ref),
                 },
               ]
             : []),
-          { key: "self", icon: kindIcon(issue.kind), label: <IssueKey locator={null} humanRef={issue.ref} />, title: issue.locator ?? issue.ref },
+          { key: "self", icon: kindIcon(issue.kind), label: <IssueKeyPill locator={issue.locator} humanRef={issue.ref} /> },
         ]}
       />
       <span>·</span>
@@ -181,50 +187,53 @@ function IssueChip({ link }: { link: IssueLink }) {
   return <ReferenceChip reference={{ kind: "issue", ref: link.ref }} showTitle fallback={`${link.locator ?? link.ref} ${link.title}`} className="-mx-1" />;
 }
 
+/**
+ * What keeps an open issue from dispatch, under the title. It replaces the Readiness row, which
+ * repeated the status in Substrate's raw vocabulary and could disagree with the chip beside the title.
+ */
+function IssueGaps({ issue }: { issue: IssueDetail }) {
+  const [open, setOpen] = useState(false);
+  if (issue.reasons.length === 0 || TERMINAL.has(issue.lifecycle)) return null;
+  const count = `${issue.reasons.length} ${issue.reasons.length === 1 ? "gap" : "gaps"} before dispatch`;
+  return (
+    <div className="flex flex-col gap-1" data-testid="issue-gaps">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="-mx-1 flex h-6 items-center gap-1 self-start rounded-md px-1 text-xs text-ink-faint outline-none hover:bg-hover hover:text-ink-muted focus-visible:bg-hover"
+      >
+        <Icon name={open ? "chevronDown" : "chevronRight"} size="micro" />
+        {count}
+      </button>
+      {open && (
+        <ul className="flex flex-col gap-1 text-xs text-ink-muted">
+          {issue.reasons.map((r) => (
+            <li key={r} className="flex gap-1.5">
+              <span className="mt-1.5 size-1 shrink-0 rounded-full bg-ink-faint" />
+              {r}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function DetailsGrid({ issue, canWrite, nav, compact }: { issue: IssueDetail; canWrite: boolean; nav: Nav; compact?: boolean }) {
   const actions = useIssueActions(issue);
-  const [reasonsOpen, setReasonsOpen] = useState(false);
   const jira = useJiraRow(issue.ref);
   const progress = issue.release ?? (issue.childCount ? { childrenDone: issue.childrenDone, childrenTotal: issue.childCount } : null);
   const rows: Array<[ReactNode, ReactNode]> = [
     [
-      "Status",
+      "Lifecycle",
       <SelectField
-        label="Status"
+        label="Lifecycle"
         value={LIFECYCLES.some((l) => l.value === issue.lifecycle) ? (issue.lifecycle as (typeof LIFECYCLES)[number]["value"]) : null}
         options={lifecycleOptions}
         canEdit={canWrite}
         onChange={actions.setLifecycle}
       />,
-    ],
-    [
-      "Readiness",
-      <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          disabled={!issue.reasons.length}
-          onClick={() => setReasonsOpen((v) => !v)}
-          className="-mx-2 flex h-7 items-center gap-2 self-start rounded-md px-2 outline-none enabled:hover:bg-hover focus-visible:bg-hover"
-        >
-          <StatusDot tone={issue.dispatchable ? "accent" : TERMINAL.has(issue.lifecycle) ? "done" : "neutral"} label={issue.readinessState} />
-          <span className={issue.dispatchable ? "text-accent-ink" : "text-ink"}>{readinessLabel(issue.readinessState)}</span>
-          {issue.reasons.length > 0 && (
-            <span className="text-xs text-ink-faint">
-              {issue.reasons.length} {issue.reasons.length === 1 ? "gap" : "gaps"}
-            </span>
-          )}
-        </button>
-        {reasonsOpen && (
-          <ul className="flex flex-col gap-1 text-xs text-ink-muted">
-            {issue.reasons.map((r) => (
-              <li key={r} className="flex gap-1.5">
-                <span className="mt-1.5 size-1 shrink-0 rounded-full bg-ink-faint" />
-                {r}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>,
     ],
     [
       "Priority",
@@ -381,7 +390,7 @@ function LineageTab({ issue, nav }: { issue: IssueDetail; nav: Nav }) {
             {items.map((l) => (
               <Row key={l.ref} density="sidebar" onActivate={() => nav.onOpenIssue(l.ref)}>
                 <StatusDot tone={lifecycleTone(l.lifecycle)} label={lifecycleLabel(l.lifecycle)} />
-                <IssueKey locator={l.locator} humanRef={l.ref} className="shrink-0" />
+                <IssueKeyPill locator={l.locator} humanRef={l.ref} className="shrink-0" />
                 <span className={cx("min-w-0 flex-1 truncate", TERMINAL.has(l.lifecycle) ? "text-ink-muted" : "text-ink")}>{l.title}</span>
                 <span className="text-xs text-ink-faint">{lifecycleLabel(l.lifecycle)}</span>
               </Row>

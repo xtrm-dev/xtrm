@@ -42,9 +42,10 @@ describe("Issues toolbar (XTRM-855)", () => {
 
     // A Status facet narrows the population, so the denominator must narrow with it instead of
     // mixing a post-facet numerator with the all-loaded denominator ("1 of 60" for one done issue).
+    // The facet is a multi-select, so every status starts checked and one click turns one off.
     fireEvent.click(screen.getByRole("button", { name: "Status filter" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "done" }));
-    const narrowed = await screen.findByText(/^\d+ of \d+$/);
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Done" }));
+    const narrowed = await screen.findByText(/^\d+ of \d+$/, { selector: "[title='Rows matching this filter']" });
     const total = Number(narrowed.textContent!.split(" of ")[1]);
     expect(total).toBeLessThan(60);
   });

@@ -20,24 +20,76 @@ export function refOrder(a: string, b: string) {
 export type StatusTone = "accent" | "active" | "danger" | "neutral" | "muted";
 
 /**
- * One status per issue, in Substrate's vocabulary. The stored lifecycle wins once settled; otherwise
- * the derived readiness, with `draft` split by what is missing and `ready` by whether dispatch is allowed.
+ * The status vocabulary `sb issue list --status` accepts (XTRM: the console must not invent its own).
+ * Only the terminal lifecycle states are stored; `in_progress`, `ready`, `blocked` and `open` are derived
+ * views over readiness and claim, exactly as `packages/substrate/src/presentation/terminal.ts` derives them.
  */
-export function issueStatus(i: IssueSummary): { label: string; tone: StatusTone; hint: string } {
-  if (TERMINAL.has(i.lifecycle)) return { label: lifecycleLabel(i.lifecycle), tone: "muted", hint: "Closed" };
-  if (i.lifecycle === "deferred" || i.readiness === "deferred") return { label: "Deferred", tone: "muted", hint: "Deferred" };
-  if (i.blockedBy.length > 0 || i.readiness === "blocked") return { label: "Blocked", tone: "danger", hint: `Blocked by ${i.blockedBy.join(", ") || "an open issue"}` };
-  if (i.readiness === "claimed") return { label: "In progress", tone: "active", hint: "Claimed by a worker" };
-  if (i.readiness === "ready") {
+export type IssueStatusId = "open" | "in_progress" | "ready" | "blocked" | "deferred" | "done" | "cancelled" | "archived";
+
+/** Filter-only aggregate: every settled lifecycle state, which is what `--status closed|terminal` means. */
+export const ISSUE_STATUSES: ReadonlyArray<{ id: IssueStatusId; label: string }> = [
+  { id: "open", label: "Open" },
+  { id: "in_progress", label: "In progress" },
+  { id: "ready", label: "Ready" },
+  { id: "blocked", label: "Blocked" },
+  { id: "deferred", label: "Deferred" },
+  { id: "done", label: "Done" },
+  { id: "cancelled", label: "Cancelled" },
+  { id: "archived", label: "Archived" },
+];
+
+/**
+ * The derived status, in Substrate's order: a settled lifecycle wins, then deferred, then a live claim
+ * (`in_progress`), then a blocker, then dispatchability. Anything else is still `open`.
+ */
+export function issueStatusId(i: IssueSummary): IssueStatusId {
+  if (TERMINAL.has(i.lifecycle)) return i.lifecycle as IssueStatusId;
+  if (i.lifecycle === "deferred" || i.readiness === "deferred") return "deferred";
+  if (i.readiness === "claimed") return "in_progress";
+  if (i.blockedBy.length > 0 || i.readiness === "blocked") return "blocked";
+  if (i.dispatchable === true || i.readiness === "ready") return "ready";
+  return "open";
+}
+
+/**
+ * The multi-select form of the status filter (§2026-11-26 ruling). The set holds the eight disjoint
+ * `IssueStatusId` values only, and a row matches when its derived status is in the set. Overlapping
+ * members are refused by construction: `closed` is not a set member because it aggregates three
+ * others, so unchecking one item can never leave that item's rows visible. An empty set matches
+ * nothing — "everything" is only ever the full set.
+ */
+export function matchesIssueStatusSet(i: IssueSummary, statuses: ReadonlySet<string>): boolean {
+  return statuses.has(issueStatusId(i));
+}
+
+/**
+ * The badge for one row. The derived status supplies the tone; an open issue is refined by what it
+ * lacks (a complete contract, an attestation against the current revision) so the board says why.
+ *
+ * `quiet` marks the statuses that describe a gap, not a state of work: Draft, Unattested, Stale and
+ * plain Open. They render as the dim tint (2026-11-27 ruling); only a state of work earns a fill,
+ * the same rule the Activity feed applies to its chips.
+ */
+export type IssueStatus = { label: string; tone: StatusTone; hint: string; quiet?: boolean };
+
+export function issueStatus(i: IssueSummary): IssueStatus {
+  const status = issueStatusId(i);
+  if (status === "done" || status === "cancelled" || status === "archived") {
+    return { label: lifecycleLabel(i.lifecycle), tone: "muted", hint: "Closed" };
+  }
+  if (status === "deferred") return { label: "Deferred", tone: "muted", hint: "Deferred" };
+  if (status === "in_progress") return { label: "In progress", tone: "active", hint: "Claimed by a worker" };
+  if (status === "blocked") return { label: "Blocked", tone: "danger", hint: `Blocked by ${i.blockedBy.join(", ") || "an open issue"}` };
+  if (status === "ready") {
     return i.dispatchable === false
       ? { label: "Attested", tone: "neutral", hint: "Attested, but the scrutiny policy denies dispatch" }
       : { label: "Ready", tone: "accent", hint: "Attested and dispatchable" };
   }
-  if (i.contractComplete === false) return { label: "Draft", tone: "muted", hint: "The work contract is incomplete" };
+  if (i.contractComplete === false) return { label: "Draft", tone: "muted", hint: "The work contract is incomplete", quiet: true };
   if (i.attestation === "rejected") return { label: "Rejected", tone: "danger", hint: "Attestation rejected this revision" };
-  if (i.attestation === "stale") return { label: "Stale", tone: "neutral", hint: "Attested on an older revision" };
-  if (i.attestation === "none") return { label: "Unattested", tone: "neutral", hint: "The contract is complete but not attested" };
-  return { label: "Draft", tone: "muted", hint: "Not ready for dispatch" };
+  if (i.attestation === "stale") return { label: "Stale", tone: "neutral", hint: "Attested on an older revision", quiet: true };
+  if (i.attestation === "none") return { label: "Unattested", tone: "neutral", hint: "The contract is complete but not attested", quiet: true };
+  return { label: "Open", tone: "neutral", hint: "Open, not ready for dispatch", quiet: true };
 }
 
 export interface Rollup {
@@ -139,20 +191,3 @@ export const primaryKey = (i: IssueSummary) => i.locator || i.ref;
 /** Both names, for the key cell's tooltip: a narrow list truncates the inline key, not its address. */
 export const keyNames = (i: IssueSummary) => (primaryKey(i) !== i.ref ? `${primaryKey(i)} / ${i.ref}` : primaryKey(i));
 
-/**
- * How many numeric columns the list can afford at its measured width. The summary always wins the
- * width argument: below `wide` the two rollups go, below `medium` the two timestamps follow, and the
- * shipped `minWidth` keeps the rest scrolling sideways instead of squeezing the title to nothing.
- */
-export type ListDensity = "wide" | "medium" | "compact";
-
-export const listDensity = (width: number): ListDensity => (width >= 62 * 16 ? "wide" : width >= 48 * 16 ? "medium" : "compact");
-
-const DROPPED: Record<ListDensity, ReadonlySet<SortKey>> = {
-  wide: new Set(),
-  medium: new Set<SortKey>(["events", "pointers"]),
-  compact: new Set<SortKey>(["events", "pointers", "created", "updated"]),
-};
-
-/** The column keys the list hides at this width, so header and rows stay in step. */
-export const hiddenColumns = (density: ListDensity) => DROPPED[density];

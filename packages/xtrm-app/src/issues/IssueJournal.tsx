@@ -116,7 +116,8 @@ function renderValue(v: unknown): ReactNode {
   return typeof v === "string" && v.length > 80 ? <span className="whitespace-pre-wrap">{v}</span> : String(v);
 }
 
-function JournalBody({ text }: { text: string }) {
+/** The one renderer for a journal entry's body — the inspector and the activity preview both use it. */
+export function JournalBody({ text }: { text: string }) {
   const long = text.length > 700;
   const [open, setOpen] = useState(false);
   return (

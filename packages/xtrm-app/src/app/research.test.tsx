@@ -162,7 +162,7 @@ describe("Research uses the shared shell, and nothing of its own", () => {
   it("inspecting from a Research route opens the canonical drawer in the inspector dock", async () => {
     renderAt("/research/runs?inspect=issue:XTRM-301");
     const el = await screen.findByTestId("inspector-drawer");
-    expect(await within(el).findByText("Readiness")).toBeTruthy();
+    expect(await within(el).findByText("Lifecycle")).toBeTruthy();
     expect(screen.getByTestId("inspector-dock").contains(el)).toBe(true);
     expect(screen.getByTestId("primary-region").contains(el)).toBe(false);
   });

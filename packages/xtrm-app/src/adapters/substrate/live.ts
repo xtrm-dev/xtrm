@@ -10,6 +10,7 @@ import type {
   JournalPaging,
   Lifecycle,
   ProvenanceSummary,
+  Readiness,
   SubstrateAdapter,
   SubstrateProject,
 } from "../types.ts";
@@ -276,6 +277,19 @@ type IssueDetailCtx = { projectId: string | null; resume: WireResume | null; tra
  * The detail as the four per-issue reads describe it. Fields that only the project board carries
  * (priority, scrutiny, dates, parent, blockers) are neutral here; `applyBoard` fills them in.
  */
+const OPERATIONAL: ReadonlySet<string> = new Set(["terminal", "deferred", "draft", "blocked", "claimed", "ready"]);
+
+/**
+ * The detail's readiness is Substrate's operational state, the same value the board row carries.
+ * It used to collapse to `ready`/`not_ready` from `dispatchable`, which dropped `claimed` and
+ * `blocked`: a claimed, attested issue then derived as "Open" in the drawer while the list said
+ * "In progress". `not_ready` remains only for an `sb` build that omits the state.
+ */
+export function detailReadiness(state: string | undefined, dispatchable: boolean): Readiness {
+  if (state !== undefined && OPERATIONAL.has(state)) return state as Readiness;
+  return dispatchable ? "ready" : "not_ready";
+}
+
 export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDetail {
   const children: IssueLink[] = (ctx.resume?.children ?? []).map((c) => ({ id: c.issueId, ref: c.humanRef, locator: c.locator, title: c.title, lifecycle: c.lifecycleState }));
   const journal = ctx.journal.map(mapJournalEntry).sort((a, b) => b.sequence - a.sequence);
@@ -303,7 +317,7 @@ export function mapIssueCore(d: WireIssueDetail, ctx: IssueDetailCtx): IssueDeta
     childCount: children.length,
     childrenDone: children.filter((c) => TERMINAL.has(c.lifecycle)).length,
     blockedBy: [],
-    readiness: d.dispatchable ? "ready" : "not_ready",
+    readiness: detailReadiness(d.readinessState, d.dispatchable),
     projectId: ctx.projectId,
     readinessState: d.readinessState,
     dispatchable: d.dispatchable,

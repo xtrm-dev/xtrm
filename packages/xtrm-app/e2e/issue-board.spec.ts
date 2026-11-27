@@ -78,7 +78,7 @@ for (const theme of ["light", "dark"] as const) {
 
     // A lane owns one hairline on its leading edge and no frame of its own: no radius, no fill, no
     // top rule. This is the finding — five `rounded-lg border bg-deep/40` boxes are gone.
-    expect(g.columns, "the fixture renders five lanes").toBe(5);
+    expect(g.columns, "the fixture renders six lanes (In progress joined, XTRM-1090 review)").toBe(6);
     expect(g.lane.borderLeft, "a lane is separated by a hairline, not a box").toBe("1px");
     expect(g.lane.borderTop, "a lane has no frame of its own").toBe("0px");
     expect(g.lane.radius, "a lane is not rounded").toBe("0px");
@@ -128,7 +128,7 @@ for (const theme of ["light", "dark"] as const) {
 for (const theme of ["light", "dark"] as const) {
   test(`the hovered lane takes the accent affordance (${theme})`, async ({ page }) => {
     await openBoard(page, theme);
-    const lane = page.locator('[data-testid^="board-column-"]').nth(3);
+    const lane = page.locator('[data-testid^="board-column-"]').nth(4);
     const read = () =>
       lane.evaluate((el) => {
         const s = getComputedStyle(el);
@@ -140,7 +140,7 @@ for (const theme of ["light", "dark"] as const) {
 
     const settled = await page.evaluate(async () => {
       const card = document.querySelector('[data-testid="board-card"]')!;
-      const target = document.querySelectorAll('[data-testid^="board-column-"]')[3] as Element;
+      const target = document.querySelectorAll('[data-testid^="board-column-"]')[4] as Element;
       const frame = () => new Promise((r) => requestAnimationFrame(r));
       const dt = new DataTransfer();
       card.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer: dt }));
@@ -159,7 +159,7 @@ for (const theme of ["light", "dark"] as const) {
 
     // Drop clears it again, so the affordance is not sticky.
     const dropped = await page.evaluate(async () => {
-      const target = document.querySelectorAll('[data-testid^="board-column-"]')[3] as Element;
+      const target = document.querySelectorAll('[data-testid^="board-column-"]')[4] as Element;
       const frame = () => new Promise((r) => requestAnimationFrame(r));
       target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() }));
       await frame();

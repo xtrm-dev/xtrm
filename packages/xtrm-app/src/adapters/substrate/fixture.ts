@@ -186,7 +186,7 @@ export function createFixtureSubstrate(): SubstrateAdapter {
         linkGate: ref === "XTRM-301"
           ? { mode: "manual", manual: { verdict: "refuse", codes: ["gate_mentioned_only"] } }
           : { mode: "manual", manual: { verdict: "pass", codes: [] } },
-        readiness: s.readiness === "ready" ? "ready" : "not_ready",
+        readiness: s.readiness,
         projectId: "prj_xtrm",
         readinessState: terminal ? "terminal" : s.readiness === "ready" ? "ready" : "draft",
         dispatchable: s.readiness === "ready",

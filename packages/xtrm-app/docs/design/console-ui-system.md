@@ -210,13 +210,24 @@ is also why a deferred sidebar destination cannot use it (2.74:1 on the light si
 
 | token | utility | value | role |
 |---|---|---|---|
-| — (Tailwind default) | `rounded` | 4px | chips (`Badge`), tiny marks |
-| `--radius-sm` | `rounded-sm` | 6px | `Kbd`, `SourceBadge`, `JiraChip`, the toolbar layout switch |
-| `--radius-md` | `rounded-md` | 8px | **rows**, `Card`, toolbar controls, inputs, `IconButton`, drawer/dialog inner boxes |
+| — (Tailwind default) | `rounded` | 4px | retired 2026-11-24: chips are pills (below) |
+| `--radius-sm` | `rounded-sm` | 6px | `Kbd`, `SourceBadge`, `JiraChip`, the toolbar layout switch, the Work/Agent switch |
+| `--radius-md` | `rounded-md` | 8px | **rows**, toolbar controls, inputs, `IconButton`, drawer/dialog inner boxes |
 | `--radius-lg` | `rounded-lg` | 10px | floating layers only: drawer frame, dialog, popover, menu |
-| `100%` | `rounded-full` | — | dots, markers, the inspector collapse handle, glyph dots |
-| `--x-shadow-float` | `shadow-float` | see file | every floating layer: popover, menu, tooltip, dialog, sidebar strip |
+
+The 2026-11-24 treatment briefly raised this ladder to 6/8/10/14/16 for "less squared" pills; the
+operator reverted it the same day ("the ui became too rounded, need a balance"). Pills and chips are
+the one shape that stayed round: a chip is `rounded-full`, every frame keeps the scale above.
+| `100%` | `rounded-full` | — | chips (`Badge`), rollup pills, dots, markers, the inspector collapse handle |
+| `--x-shadow-float` | `shadow-float` | see file | floating layers **except the sidebar strip**: popover, menu, tooltip, dialog |
+| `--x-shadow-strip` | `shadow-strip` | see file | the sidebar strip trigger, resting |
+| `--x-shadow-strip-open` | `shadow-strip-open` | see file | the sidebar strip's drop-up, open |
 | `--x-shadow-panel` | `shadow-panel` | see file | the inspector panel only, because it carries no border |
+
+The strip tokens exist because the operator rejected a hairline on the chip and the drop-up (XTRM-765):
+separation is the shadow stack alone, so the strip may not use `--x-shadow-float`, whose definition owns
+a `0 0 0 1px` ring. XTRM-939 swapped the two bespoke strip shadows for `shadow-float` and silently
+reinstated the ring; the 2026-11-24 treatment restored the 765 stacks as tokens.
 
 No surface names a `shadow-[…]` literal. Measured 2026-11-23: the last one outside `src/agent`
 survives in `src/shell/GlobalSearch.tsx` (`shadow-[0_0_0_1px_var(--x-border-muted)]`, the search-scope
@@ -268,15 +279,18 @@ derived from it so the ladder cannot drift into hand-kept copies.
 `GithubMark` (`src/ui/github-mark.tsx`) has no size of its own: it renders `ICON_CLASS[size]`, so the
 octocat is on this ladder (`GithubPill` passes `micro`/`xs`).
 
-**The rule: a glyph never exceeds its row's text.** A row's text is `text-sm` (13px), so a row glyph
-is `text`; a toolbar's text is `text-xs` and its control glyph is `text`. `IconButton` derives its
-default from its own box (a `size-7` control takes `text`, a `size-9` control takes `md`), so a call
-site must pass `iconSize` to say something different. Before XTRM-934 it defaulted to `sm`, and 18 of
-20 call sites rendered a 16px glyph beside 11.5px text.
+**The rule: a row glyph matches its row's text; a chrome glyph fills its control.** A row's text is
+`text-sm` (13px), so a row glyph is `text`; a toolbar's text is `text-xs` and its control glyph is
+`text`. An icon-only control has no label to match, so it is sized by its box instead: `IconButton`
+gives a `size-7` (28px) control a 16px glyph (0.57 of the box) and a `size-9` (36px) control 18px; a
+control below 28px passes `iconSize="xs"` (14px). XTRM-934 had defaulted the 28px control to 13px to
+stop the glyph outweighing the 11.5px label *beside* it; on 2026-11-24 the operator rejected that
+result — "the icons … are way too small and disproportionate" — because a chrome control reads by its
+glyph, not by a label it does not have.
 
 Enforcement: `src/ui/scale.test.tsx` (glyph ladder derives to finite rem; `ListFilter` and
-`ToolbarButton` glyphs are the same step, 13px; `IconButton` default is `text` for `sm` and `md` for
-`md`); `src/ui/icon.test.tsx` (per-step size and stroke); `e2e/ui-scale.spec.ts` measures at a 12px
+`ToolbarButton` glyphs are the same step, 13px; `IconButton` default is 16px for a 28px
+control and 18px for a 36px one); `src/ui/icon.test.tsx` (per-step size and stroke); `e2e/ui-scale.spec.ts` measures at a 12px
 root that the filter glyph is not larger than the toolbar text it sits beside. Which of `xs`, `sm`, `nav` and `md` a given call site picks is **review only**; the ladder values
 and the `IconButton` defaults are enforced.
 
@@ -867,10 +881,10 @@ statement at `xt/1qkh`/`e9a4a6da`; "replacement" is the export in the shipped tr
 | 2 | five selected-state idioms: `bg-hover` tab fill, `bg-pressed` view switch, `aria-pressed`+`font-medium`, `IconButton active`, underline tab | `ToolbarTabs` underline for a view switch; `aria-pressed` + `font-medium text-ink` in `TOOLBAR_CONTROL` for a filter toggle | XTRM-934, XTRM-936, XTRM-937 |
 | 3 | five label/value grids (3.5/6.5/7.5/8/10rem) and two value sizes | `Fields` + `labelWidth` from the five-step ladder + `size` `xs`/`sm` | XTRM-934, XTRM-948, XTRM-971 |
 | 4 | inline `gridTemplateColumns` on a label/value grid | `Fields labelWidth={STEP}`; the gate refuses the literal forms | XTRM-948, XTRM-971 |
-| 5 | five row heights: 32 list, 36 (`JiraRow` `h-9`), 36 (`other.tsx` `rowHeight`), 44 (`Activity` `min-h-11`), auto (`QuestionRow`) | `Row density="list"` 32px everywhere; `JiraRow`/Repositories/Activity converged; a two-line row keeps 32px with a `text-2xs` detail line | XTRM-936 |
+| 5 | five row heights: 32 list, 36 (`JiraRow` `h-9`), 36 (`other.tsx` `rowHeight`), 44 (`Activity` `min-h-11`), auto (`QuestionRow`) | `Row density="list"` 32px everywhere; `JiraRow`/Repositories/Activity converged; a two-line row is the `--x-row-tall` 48px variant, unused today (§2026-11-24 item 2) | XTRM-936 |
 | 6 | px indent literal (`paddingLeft: depth * 14`) invisible to the gate | `INDENT_REM` + `--row-indent`; the gate refuses every px/multiplier indent spelling | XTRM-936, XTRM-947 |
 | 7 | 54 off-scale micro text literals (0.6–0.95rem) | `text-2xs` / `text-xs` tokens; `Badge xs` is `text-2xs`, `Kbd` is `text-2xs` | XTRM-934, XTRM-907 |
-| 8 | `IconButton` defaulting to a 16px glyph beside 11.5px text | `text` default in the 28px control, `md` in the 36px control; `iconSize` is an explicit opt-in | XTRM-934 |
+| 8 | `IconButton` defaulting to a 16px glyph beside 11.5px text | reversed 2026-11-24: 16px in the 28px control, 18px in the 36px control, `xs` below 28px; a chrome control reads by its glyph (§2026-11-24 item 5) | XTRM-934, superseded |
 | 9 | 38 `rounded-md`/`rounded-lg` border cards around lists and field groups | `Card` for a record box, `Section`/hairline for a section, no box around a list | XTRM-935, XTRM-938, XTRM-942, XTRM-943, XTRM-989, XTRM-990 |
 | 10 | `EmptyState`'s 36px rounded icon tile | a bare `Icon size="md"` in faint ink | XTRM-934 |
 | 11 | `.tabular` (108) versus `tabular-nums` (5) for one concept | `.tabular` utility; 2 raw usages remain (§15.2 item 5) | XTRM-936 (partial) |
@@ -929,3 +943,133 @@ Implementation: `.xtrm-shimmer`, `.xtrm-fade-in`, `.xtrm-meta` and the `@media (
 block at the foot of `packages/pi-viewer/src/styles.css` ("Chat restyle (XTRM-1034)").
 Enforcement: **review only**, except the follow rule, which `npm run test:follow` and
 `npm run test:anchor` in `packages/pi-viewer` assert.
+
+## 2026-11-24 · Row treatment and one-line lists (approved state)
+
+Status: **approved at this state, open to further edits.** Where this section and anything above it
+disagree, this section wins. The visual record is `docs/design/mocks/console-ui-system.html` — tab
+`#approved` is the as-shipped state, tabs `#rulings`, `#lists` and `#treatment` are the exploration that
+led to it and are kept as history, not as options. The shape below is implemented in
+`src/ui/list-row.tsx`, `src/ui/badge.tsx`, `src/ui/sidebar.tsx`, `src/ui/primitives.tsx`,
+`src/shell/{AppShell,ContextSidebar}.tsx` and both list surfaces, and is visible on the mock deployment
+(`http://v2202602340735437128.tail89d741.ts.net:5179`).
+
+### 1. One line per item, no columns
+
+`PullsSurface` and `IssuesSurface` render one reading line per item: identity cluster, title, then the
+rollups at the right edge. The column header, the grid, `COLUMNS`, `gridFor`, `listDensity` and
+`hiddenColumns` are retired from both surfaces; every sort key a header offered moved into the
+`Order by` menu (`SORTS`/`SORT_LABEL`). The tree keeps its chevron and its 1.25rem-per-level indent
+(`--row-indent`), and a row's leading cluster is `padding-left: calc(0.75rem + depth × 1.25rem)`.
+Rollups shed widest-first by media query, never by measured width, so the DOM keeps every field at
+every viewport. **A second line is a variant, not the default:** `--x-row-tall` (48px) exists for it,
+and no shipped surface uses it today.
+
+### 2. Rows are lists, not frames
+
+| row | height | source |
+|---|---|---|
+| sidebar destination | 28px (`h-7`) | the Work/Agent switch height, so no navigation row outweighs the switch above it |
+| nav-rail child | 28px | same |
+| list row (issue, PR, timeline, factory) | 32px | `--x-row` = 2rem, the pre-epic list height |
+| two-line variant | 48px | `--x-row-tall` = 3rem, unused |
+
+A row glyph is 14px (`size="xs"`) beside a 14px label, so the icon no longer outweighs the word.
+**Rows draw no separator.** The 2026-11-24 hairline (`border-b border-border-subtle`) was removed the
+same day: spacing and the hover fill carry the rhythm. Row actions stay `opacity-0` until hover or
+keyboard focus.
+
+### 3. Status chips are solid, keys are plain
+
+`Badge variant="solid"` fills one tone and inks it pure white from a single `--x-chip-*` set shared by
+both themes: `#5b54ea` accent (5.38:1), `#b45309` attention (5.02:1), `#157f4d` success (5.03:1),
+`#c0392b` danger (5.44:1), `#6b6b76` neutral (5.26:1); each value also clears 3.36:1 against the dark
+surface `#151515`. Terminal issues take the success tone. The key is the shared `IssueKeyPill`
+(2026-11-27 ruling, superseding the bare key): a hairline-bordered mono pill with no fill,
+`locator | short ref`, carrying the full address in its `title`. The status chip carries the colour;
+the key carries the address. Gaps (Draft, Unattested, Stale, Open) are the quiet muted tint; only a
+state of work is solid (`IssueStatusBadge`, the one chip for the list and the drawer).
+
+### 4. The chrome stays on the 6/8/10 ladder
+
+Chips and pills are the only round shape (`rounded-full`). Every frame keeps the pre-treatment scale:
+`--radius-sm` 6px (kbd, source badge, the Work/Agent switch), `--radius-md` 8px (rows, toolbar controls,
+inputs, `IconButton`, inner boxes), `--radius-lg` 10px (floating layers only). The treatment briefly
+raised the ladder to 6/8/10/14/16 and was reverted the same day — "the ui became too rounded, need a
+balance". No component names a radius literal.
+
+### 5. A chrome glyph fills its control
+
+An icon-only control is sized by its box, not by a neighbouring label: `IconButton` gives a 28px control
+a 16px glyph (0.57 of the box) and a 36px control 18px; a control below 28px passes `iconSize="xs"`
+(14px). XTRM-934 had defaulted the 28px control to 13px and was reversed after the operator called the
+result "way too small and disproportionate". Rows and toolbars keep 13px, where a glyph really does sit
+beside 13px text.
+
+### 6. The search control has a resting fill
+
+`h-8 rounded-md bg-control text-sm text-ink-muted`, no border, no shadow; hover and focus lift the ink
+(`text-ink`) rather than the fill, because a fill step in dark inverts (`--x-pressed` composites darker
+than `--x-control`). This supersedes the ghost resting state of XTRM-939.
+
+### 7. The sidebar strip carries no ring
+
+`shadow-strip` (trigger) and `shadow-strip-open` (drop-up) are the XTRM-765 stacks as tokens; neither
+contains a `0 0 0 1px` layer, and the strip is the one floating layer that does not use
+`--x-shadow-float`. The repository picker keeps `shadow-float`. A test asserts the absence of the ring
+and that the open popup sits deeper than its trigger.
+
+### 8. Pull requests show every state by default
+
+The PR state filter is a multi-select over `open | merged | closed` (`ToolbarMultiFilter`), all
+selected by default (2026-11-26 ruling); `listPulls(repo, "all")` omits the `state` parameter, and the
+default sort is `updated`.
+
+### 9. The Activity feed is one merged stream
+
+`ActivitySurface` renders the two live sources (Substrate and GitHub, pushes included) as ONE list (`mergeActivity` + `sortActivity`), newest
+first, with `All` as the first tab and each source as a filter, exactly as the PR `All` view works. The row
+is the same 32px `ListRow` the issue and PR lists use, with the same 14px glyph — the feed is not a
+separate visual dialect.
+
+The line, left to right: the expand chevron (when the event has a body), the event glyph, **the kind as a
+chip**, the actor and verb in `text-ink-muted`, then the target. A GitHub event names its target **once**,
+in the console's own `ReferenceChip` — `Jaggerxtrm merged #509 xtrm-dev/xtrm fix(remote): …` — never as a
+text report followed by a link. A Substrate event names the work issue it was recorded on — `i1wb reported a result on
+● XTRM-1013 pi-viewer: deterministic channel ordering…` — with the key and title in the same chip, and no
+second chip at the right. A git event keeps its message as text plus the sha. The age is always at the
+edge. Under width pressure the actor shrinks first, then the chip's own title ellipsises. There is no fixed
+floor and no percentage cap: the chip takes whatever the row leaves and the title truncates to that. Inside
+the chip the number is `shrink-0` and the title carries `min-w-0 truncate`, so the identity survives at any
+width (`#509 xtrm-dev/xtrm fix(…)`) and the chip clips its own children with `overflow-hidden` instead of
+letting them paint over the number. Only a state change of real work earns a solid chip — `pr.opened`, `pr.merged`
+(accent), `issue.closed`, `review.approved` (success), `pr.closed`, `pr.draft` (neutral solid),
+`review.changes_requested` and `journal.blocker` (danger). Every other kind takes the dim neutral chip, so
+emphasis still means something.
+
+**There is no detail panel.** Activating a row opens the one inspector on its first openable reference, the
+same gesture every other list uses; double click opens that reference on GitHub (or the issue page, for a
+work issue). The row carries its actions on hover: copy reference, and open on GitHub where the row has a
+URL. A row whose event carries a body expands **in place** under the line, and the expanded body is
+`JournalBody` — the exact renderer the inspector's journal tab uses, so an entry's body has one renderer and
+cannot drift into two. The body shows the entry's text only; the line is not repeated. A failed source loses its count in the tab (an em dash, never a `0`)
+and states its error above the stream. The grouped-by-source variant (Option G, with a live dot per source
+header) was reviewed and deferred to XTRM-1016.
+
+### Settled and open
+
+| state | item |
+|---|---|
+| settled | one-line list grammar, both surfaces |
+| settled | 32px list rows / 28px sidebar rows / no separators |
+| settled | solid status chips, plain mono keys |
+| settled | CHIP palette above, 6/8/10 radius ladder, pill chips only |
+| settled | 16px chrome glyph, 14px row glyph |
+| settled | search resting fill, ring-free strip shadow, PR `All` view |
+| open | PR metrics (diff, checks, review, comments) — console v1 never collects them; see §2026-11-24 note in the journal |
+| settled | Activity feed: one merged stream, 32px rows, kind chip at the left, inspector on activate, danger-only solid colour (§9) |
+| open | Activity Option G (grouped by source, live dot per header) — deferred, not scheduled |
+| open | two-line row variant: kept as a token, no shipped user |
+
+The Activity page now follows §9. The next piece of design work is the Issues surface's remaining
+open items (label/assignee rollups, and the two-line variant if a work item ever needs a second line).

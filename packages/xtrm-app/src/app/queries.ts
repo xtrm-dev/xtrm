@@ -5,7 +5,7 @@ import { useAdapters, type GithubAuthStatus, type IssueDetail, type PullListStat
 // Pure board merge; fixture details pass through it unchanged (it is idempotent).
 import { applyBoard } from "../adapters/substrate/live.ts";
 import { loadSourceState } from "../activity/feed.ts";
-import type { ActivityRow } from "../activity/types.ts";
+import type { ActivityRow, ActivitySource } from "../activity/types.ts";
 
 const LIVE_MS = 10_000;
 
@@ -35,13 +35,15 @@ export function useConnection() {
  * its own state instead of taking the feed down with it. `enabled` lets the
  * surface ask for only the sources it will render.
  */
-export function useActivityFeed(opts: { repo: string; projectId: string | null; enabled?: Partial<Record<"substrate" | "github" | "git", boolean>> }) {
-  const { github, substrate, gitActivity } = useAdapters();
-  const sources = ["substrate", "github", "git"] as const;
+export function useActivityFeed(opts: { repo: string; projectId: string | null; enabled?: Partial<Record<"substrate" | "github", boolean>> }) {
+  const { github, substrate } = useAdapters();
+  // `git` is retired (operator reversal 2026-11-26): GitHub pushes replace the
+  // local commit log, so the feed asks only the two sources that still exist.
+  const sources = ["substrate", "github"] as const;
   const results = useQueries({
     queries: sources.map((source) => ({
       queryKey: ["activity", source, opts.repo, opts.projectId],
-      queryFn: () => loadSourceState(source, { repo: opts.repo, projectId: opts.projectId, github, substrate, gitActivity }),
+      queryFn: () => loadSourceState(source, { repo: opts.repo, projectId: opts.projectId, github, substrate }),
       staleTime: 30_000,
       refetchInterval: false,
       enabled: opts.enabled?.[source] ?? true,
@@ -50,7 +52,7 @@ export function useActivityFeed(opts: { repo: string; projectId: string | null; 
   // A page per source is the default; "older" pages are appended on demand and
   // kept per source, so one source's history never blocks another's.
   const [older, setOlder] = useState<
-    Partial<Record<(typeof sources)[number], { rows: ActivityRow[]; cursor: string | null; olderError?: string }>>
+    Partial<Record<Exclude<ActivitySource, "jira">, { rows: ActivityRow[]; cursor: string | null; olderError?: string }>>
   >({});
   const states = sources.map((source, i) => {
     const r = results[i]!;
@@ -66,10 +68,12 @@ export function useActivityFeed(opts: { repo: string; projectId: string | null; 
       pending: r.isPending && (opts.enabled?.[source] ?? true),
     };
   });
-  const loadOlder = async (source: (typeof sources)[number]): Promise<void> => {
+  // The parameter stays as wide as the surface's cast: a retired source still
+  // typechecks, and `loadSourceState` answers it with its own error state.
+  const loadOlder = async (source: Exclude<ActivitySource, "jira">): Promise<void> => {
     const state = states.find((s) => s.source === source);
     if (!state?.cursor) return;
-    const page = await loadSourceState(source, { repo: opts.repo, projectId: opts.projectId, github, substrate, gitActivity }, state.cursor);
+    const page = await loadSourceState(source, { repo: opts.repo, projectId: opts.projectId, github, substrate }, state.cursor);
     setOlder((prev) => {
       const previous = prev[source];
       if (page.error !== null) {
@@ -98,11 +102,12 @@ export function useEvents(repo: string, follow = false) {
   });
 }
 
-export function usePulls(repo: string, state: PullListState = "open", follow = false) {
+export function usePulls(repo: string, state: PullListState = "open", follow = false, enabled = true) {
   const { github } = useAdapters();
   return useQuery({
     queryKey: ["github", "pulls", repo, state],
     queryFn: () => github.listPulls(repo, state),
+    enabled,
     staleTime: 30_000,
     refetchInterval: follow ? LIVE_MS : false,
   });

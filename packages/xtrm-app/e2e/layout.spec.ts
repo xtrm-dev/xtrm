@@ -18,59 +18,19 @@ test("inspector frame keeps the 6 px search-pill inset at the bottom", async ({ 
   expect(await frameBottomGap(page)).toBe(6);
 });
 
-test("issues table header is squared and keeps the rail below it", async ({ page }) => {
-  await page.goto("/");
-  const head = page.getByTestId("issues-table-head");
-  await expect(head).toBeVisible();
+test("the list has no header row: the first row starts at the top of the scroller", async ({ page }) => {
+  await page.goto("/#/rep/xtrm-dev/xtrm/work/issues");
+  await expect(page.getByRole("region", { name: "XTRM Issues" })).toBeVisible();
 
-  const measured = await page.evaluate(() => {
-    const header = document.querySelector('[data-testid="issues-table-head"]') as HTMLElement;
-    const row = document.querySelector('[role="listitem"]') as HTMLElement;
-    let scroller: HTMLElement | null = row.parentElement;
-    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
-    if (!scroller) throw new Error("no vertical scroll container above the first row");
-    const style = getComputedStyle(header);
-    const body = header.getBoundingClientRect();
-    const track = scroller.getBoundingClientRect();
-    const cell = row.firstElementChild as HTMLElement;
-    return {
-      headerBottom: body.bottom,
-      headerHeight: Math.round(body.height),
-      headerRule: style.borderBottomWidth,
-      headerRuleColor: style.borderBottomColor,
-      headerFill: style.backgroundColor,
-      scrollerTop: track.top,
-      scrollerClientWidth: scroller.clientWidth,
-      scrollerOffsetWidth: scroller.offsetWidth,
-      topLeft: style.borderTopLeftRadius,
-      topRight: style.borderTopRightRadius,
-      bottomLeft: style.borderBottomLeftRadius,
-      bottomRight: style.borderBottomRightRadius,
-      rowDivider: getComputedStyle(cell).borderBottomWidth,
-      columnRule: getComputedStyle(cell).borderRightWidth,
-    };
-  });
+  // 2026-11-24 ruling: one line per item, so the column header is gone and the scroller starts at
+  // the toolbar. The old 32px squared header strip (XTRM-633) has no successor to guard.
+  expect(await page.getByTestId("issues-table-head").count(), "no header strip").toBe(0);
+  expect(await page.getByRole("columnheader").count(), "no column headers").toBe(0);
 
-  // XTRM-633 squared the header: "the table header keeps 32px, loses its bg-deep band and rounded
-  // card corner for a single rule" (0b10877a). XTRM-694 had asked for the frame's radius; that
-  // design is retired, and this guard could not notice while the suite ran only locally (XTRM-931).
-  expect(measured.topLeft).toBe("0px");
-  expect(measured.topRight).toBe("0px");
-  expect(measured.bottomLeft).toBe("0px");
-  expect(measured.bottomRight).toBe("0px");
-  // ...and it keeps its own strip: a 32px box, no band behind it, one 4% rule underneath.
-  expect(measured.headerHeight).toBe(32);
-  expect(measured.headerFill).toBe("rgba(0, 0, 0, 0)");
-  expect(measured.headerRule).toBe("1px");
-  expect(measured.headerRuleColor).toBe("rgba(15, 15, 20, 0.04)");
-  // The rail belongs to a container that begins at or below the header's bottom edge.
-  expect(measured.scrollerTop).toBeGreaterThanOrEqual(measured.headerBottom - 0.5);
-  // XTRM-633 removed the grid: "column rules are gone; spacing separates the columns" (0b10877a),
-  // and the row cells draw no rule on either axis. XTRM-694's 4% divider token is retired with it.
-  expect(measured.rowDivider).toBe("0px");
-  expect(measured.columnRule).toBe("0px");
-  // A classic scrollbar must not reappear inside the header strip.
-  expect(measured.scrollerClientWidth).toBeLessThanOrEqual(measured.scrollerOffsetWidth);
-
-  await page.getByTestId("issues-table-head").screenshot({ path: "e2e/.results/issues-header.png" });
+  const first = page.locator('[role="button"]').filter({ hasText: /XTRM-\d/ }).first();
+  await expect(first).toBeVisible();
+  const rowTop = (await first.boundingBox())!.y;
+  // The toolbar is the region's first child; the first row starts right under it.
+  const toolbar = (await page.getByRole("region", { name: "XTRM Issues" }).locator(":scope > div").first().boundingBox())!;
+  expect(rowTop).toBeGreaterThanOrEqual(toolbar.y + toolbar.height - 1);
 });

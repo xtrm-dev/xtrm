@@ -78,10 +78,16 @@ export function SidebarRow({
             }
           : undefined
       }
-      className={cx("h-[30px]", selected ? "bg-pressed text-ink" : "text-ink-muted")}
+      // Sidebar rows sit at the Work/Agent switch height (28px) so no navigation row outweighs the
+      // switch above it; the label stays at 14px and the glyph at 14px beside it.
+      className={cx("h-7 gap-2", selected ? "bg-pressed text-ink" : "text-ink-muted")}
     >
-      <Icon name={icon} size="nav" className={selected ? "text-ink" : "text-ink-faint"} />
-      <span className="truncate font-semibold">{label}</span>
+      {/* The 14px glyph sits in a 1rem box: the label then starts on the same 42px column the
+          rail's child labels use (--x-rail-text), at every root size. */}
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <Icon name={icon} size="xs" className={selected ? "text-ink" : "text-ink-faint"} />
+      </span>
+      <span className="truncate text-base font-semibold">{label}</span>
       {status && <StatusDot tone={status.tone} label={status.label} />}
       {count != null && <span className={cx("text-xs text-ink-faint tabular group-hover/row:hidden group-focus-within/row:hidden", !onToggle && "ml-auto")}>{count}</span>}
       {onToggle && (
