@@ -17,10 +17,10 @@ Surfaces:
 | Palette: presets or mix (`appearance.palette`) | device | none (console palettes arrive in XTRM-1105) | appearance | presets and mix |
 | Chat width (`appearance.chatWidth`) | device | none | appearance | presets and slider |
 | Density, font scale, motion, code wrap | device | none | appearance | none |
-| Sidebar open and width, inspector width | device | none | layout: reset only. Direct control stays Mod+B and drag. | none |
-| Folded groups (`layout.foldedGroups`) | device | none | layout: reset | none. The tree folds them in place. |
+| Sidebar open and width, inspector width | device | none | layout: value and reset. Direct control stays Mod+B and drag. | none |
+| Folded groups (`layout.foldedGroups`) | device | none | layout: value; the reset arrives with the layout page (XTRM-1105) | none. The tree folds them in place. |
 | Last repository (`layout.lastRepository`) | device | none. The repository selector expands from its trigger. | none | none. Scope comes from the URL. |
-| Agent scope, thread view | device | none | layout | inline toggle |
+| Agent scope, thread view | device | none | layout: value, with where to change it | inline toggle |
 | Agent names (`layout.agentNames`) | device | none | none. Renaming happens inline. | none |
 | SSH target, remote command, direct URL, device name | host | status block, and a "Change host target…" row that opens the agent host panel | connections (editor) | none |
 | Peers, connect-to (`connections.peers`, `connections.connectTo`) | device | Connections row with the current transport | connections (editor) | host picker and per-host status, with a link to connections |
@@ -32,6 +32,6 @@ Rules:
 
 1. The menu changes only reversible device choices in place. Today that is the theme. Everything
    else in the menu is a "Go to" row that shows the current value at the end of the row.
-2. A "Go to" row whose section does not exist yet opens `/settings`. When XTRM-1103 adds a section,
-   it retargets that row.
+2. Each "Go to" row opens its `/settings/<section>` route (XTRM-1103). A row on `/settings/<section>`
+   has the anchor `#<section>-<name>`. A row the page cannot change yet says where to change it.
 3. The endpoint token is a secret. It is never a setting and is never served by `GET /settings`.

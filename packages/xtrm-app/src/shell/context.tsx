@@ -141,6 +141,10 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     if (local) writeDeviceSettings("console", { local }, { "appearance.theme": next });
   }, []);
   const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+  // The menu lives in the sidebar: collapsing the sidebar closes it, so it does not reopen stale.
+  useEffect(() => {
+    if (!layout.sidebar.open) setSystemMenuOpen(false);
+  }, [layout.sidebar.open]);
 
   const [palette, setPaletteState] = useState<ShellContextValue["palette"]>({ open: false, query: "", scope: "repository" });
   const setPalette = useCallback((next: Partial<ShellContextValue["palette"]>) => setPaletteState((p) => ({ ...p, ...next })), []);

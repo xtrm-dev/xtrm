@@ -13,6 +13,9 @@ import {
   SETTINGS_SCOPE,
   SETTINGS_SECTIONS,
   SETTINGS_VALIDATORS,
+  SETTING_LABELS,
+  formatSettingValue,
+  settingAnchor,
   differsFromDefault,
   hostLayerFromConnection,
   parseSettings,
@@ -106,6 +109,18 @@ describe("settings schema", () => {
       { name: "b", address: "b", transport: "carrier-pigeon" },
     ];
     expect(parseSettings({ "connections.peers": peers })["connections.peers"]).toEqual([{ name: "a", address: "a.ts.net", transport: "direct" }]);
+  });
+
+  it("gives every key a row label, a CSS-safe anchor and a display value", () => {
+    expect(new Set(Object.keys(SETTING_LABELS))).toEqual(new Set(SETTING_KEYS));
+    const anchors = SETTING_KEYS.map(settingAnchor);
+    expect(new Set(anchors).size).toBe(SETTING_KEYS.length);
+    for (const a of anchors) expect(a).toMatch(/^[a-z]+-[A-Za-z]+$/);
+    for (const key of SETTING_KEYS) expect(formatSettingValue(key, DEFAULT_APP_SETTINGS[key]), key).not.toBe("");
+    expect(formatSettingValue("connections.sshTarget", "me@box")).toBe("me@box");
+    expect(formatSettingValue("appearance.theme", "system")).toBe("System");
+    expect(formatSettingValue("appearance.palette", PALETTE_PRESETS["console-soft"])).toBe("Console soft");
+    expect(formatSettingValue("project.jiraSite", null)).toBe("Derived (no override)");
   });
 
   it("labels every section once, in navigation order", () => {

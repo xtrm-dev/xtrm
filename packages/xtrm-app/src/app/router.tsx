@@ -22,7 +22,8 @@ import { QuestionsSurface } from "../project/questions/QuestionsSurface.tsx";
 import { IntegrationSurface } from "../project/settings/IntegrationSurface.tsx";
 import { WorkersSurface, validateWorkersSearch } from "../project/workers/WorkersSurface.tsx";
 import { DeferredSurface, RepositoriesSurface } from "../surfaces/other.tsx";
-import { SettingsSurface } from "../settings/SettingsSurface.tsx";
+import { SECTION_ORDER, type SettingsSection } from "../lib/settings/index.ts";
+import { SettingsPage, sectionHref } from "../settings/SettingsPage.tsx";
 import { MODES, PROJECT_ROOT, PROJECT_SECTIONS, REPO_SECTIONS, RESEARCH_SECTIONS, type Destination } from "./destinations.ts";
 import { validateCompareSearch } from "./research-compare-search.ts";
 
@@ -101,7 +102,25 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
       throw redirect({ to: repo ? `/rep/${repo.owner}/${repo.name}${PROJECT_ROOT}` : "/repositories" } as never);
     },
   });
-  const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsSurface });
+  // Settings (XTRM-1103): `/settings` opens its first section; an unknown section does too.
+  const settingsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings",
+    beforeLoad: () => {
+      throw redirect({ to: sectionHref(SECTION_ORDER[0]!) } as never);
+    },
+  });
+  const settingsSectionRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings/$section",
+    beforeLoad: ({ params }) => {
+      if (!SECTION_ORDER.includes(params.section as SettingsSection)) throw redirect({ to: sectionHref(SECTION_ORDER[0]!) } as never);
+    },
+    component: function SettingsSectionRoute() {
+      const { section } = settingsSectionRoute.useParams();
+      return <SettingsPage key={section} section={section as SettingsSection} />;
+    },
+  });
 
   // Research (XTRM-433 slice 2): `/research` redirects to its first section, mirroring the
   // app-root index redirect above. Each section is a real route; a `deferred` one renders the
@@ -191,6 +210,7 @@ export function createAppRouter({ adapters, history, queryClient = new QueryClie
     researchRunRoute,
     researchCompareRoute,
     settingsRoute,
+    settingsSectionRoute,
     ...deferredModes,
     ...systemRoutes,
     repoRoute.addChildren(repoChildren),

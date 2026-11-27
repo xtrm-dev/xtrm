@@ -83,7 +83,7 @@ describe("top-bar account control", () => {
     const avatar = await within(await topBar()).findByRole("button", { name: /Jaggerxtrm — GitHub account/ });
     fireEvent.click(avatar);
     fireEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/settings"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/settings/connections"));
   });
 
   it("signs out from the avatar menu", async () => {
@@ -102,7 +102,7 @@ describe("top-bar account control", () => {
 
 describe("Settings > GitHub", () => {
   it("shows connection state, identity, auth source, and token store when signed in", async () => {
-    renderAtAuth("/settings", createFixtureGithubAuth());
+    renderAtAuth("/settings/connections", createFixtureGithubAuth());
     expect(await screen.findByText("GitHub — signed in")).toBeTruthy();
     expect(screen.getByText("Jaggerxtrm")).toBeTruthy();
     const rows = screen.getByLabelText("Identity");
@@ -112,7 +112,7 @@ describe("Settings > GitHub", () => {
   });
 
   it("lists installations with Install and Configure links", async () => {
-    renderAtAuth("/settings", createFixtureGithubAuth());
+    renderAtAuth("/settings/connections", createFixtureGithubAuth());
     const section = await screen.findByLabelText("Installations");
     expect(await within(section).findByText("xtrm-dev")).toBeTruthy();
     const install = within(section).getAllByRole("link", { name: /Install/ })[0]!;
@@ -123,15 +123,16 @@ describe("Settings > GitHub", () => {
   });
 
   it("explains the signed-out shared-token state and offers sign-in", async () => {
-    renderAt("/settings", { state: "signed_out", auth_source: "shared" });
+    renderAt("/settings/connections", { state: "signed_out", auth_source: "shared" });
     const page = await screen.findByRole("region", { name: "Settings" });
-    expect(within(page).getByText("GitHub — signed out")).toBeTruthy();
+    // The page renders before the account block has loaded its status.
+    expect(await within(page).findByText("GitHub — signed out")).toBeTruthy();
     expect(within(page).getByText(/read-only/)).toBeTruthy();
     expect(within(page).getByRole("button", { name: "Sign in with GitHub" })).toBeTruthy();
   });
 
   it("explains the not-configured state", async () => {
-    renderAt("/settings", { state: "not_configured", auth_source: "none" });
+    renderAt("/settings/connections", { state: "not_configured", auth_source: "none" });
     expect(await screen.findByText(/no GitHub App configured/)).toBeTruthy();
   });
 });
@@ -352,13 +353,13 @@ describe("device start error surfacing", () => {
   });
 
   it("renders the start error in Settings with a working Try again", async () => {
-    renderAt("/settings", {
+    renderAt("/settings/connections", {
       state: "error",
       auth_source: "none",
       error: { code: "bad_gateway", message: "GitHub login is unavailable" },
     });
     const page = await screen.findByRole("region", { name: "Settings" });
-    expect(within(page).getByText(/GitHub login is unavailable/)).toBeTruthy();
+    expect(await within(page).findByText(/GitHub login is unavailable/)).toBeTruthy();
     fireEvent.click(within(page).getByRole("button", { name: "Try again" }));
     expect(await within(page).findByText(/is waiting at github.com\/login\/device/)).toBeTruthy();
   });
