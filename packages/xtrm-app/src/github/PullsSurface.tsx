@@ -8,7 +8,8 @@ import { useShell } from "../shell/context.tsx";
 import { useAdapters } from "../adapters/index.tsx";
 import { Icon } from "../ui/icon.tsx";
 import { OptionsMenu } from "../ui/menu.tsx";
-import { EmptyState, ErrorState, LoadingState, SourceBadge, StatusDot, SurfaceToolbar, ago, cx } from "../ui/primitives.tsx";
+import { Badge, type BadgeTone } from "../ui/badge.tsx";
+import { EmptyState, ErrorState, LoadingState, SourceBadge, SurfaceToolbar, ago } from "../ui/primitives.tsx";
 import { ListFilter, ToolbarButton, ToolbarMultiFilter } from "../ui/toolbar.tsx";
 import { LinkedRefs } from "../ui/linked-refs.tsx";
 import { PrStateChip, prStateMeta } from "../ui/pr-key.tsx";
@@ -22,10 +23,26 @@ const SORTS: Array<{ id: PullSort; label: string }> = [
   { id: "comments", label: "Most commented" },
 ];
 
+/** Tint pills for the rollups: green and red only where the state asks for action or is done. */
+const CHECK_TONE: Record<NonNullable<PullRequestSummary["checks"]> | "unknown", BadgeTone> = {
+  passing: "success",
+  failing: "danger",
+  pending: "neutral",
+  none: "muted",
+  unknown: "muted",
+};
+const REVIEW_TONE: Record<NonNullable<PullRequestSummary["review"]> | "unknown", BadgeTone> = {
+  approved: "success",
+  changes_requested: "danger",
+  commented: "neutral",
+  pending: "neutral",
+  none: "muted",
+  unknown: "muted",
+};
+
 function PullRow({ pull, fullName, selected, onOpen }: { pull: PullRequestSummary; fullName: string; selected: boolean; onOpen: () => void }) {
   const refs = usePrLinkedRefs(pull);
-  const checkTone = pull.checks === "passing" ? "done" : pull.checks === "failing" ? "danger" : "muted";
-  const diff = pull.additions === null || pull.deletions === null ? null : `+${pull.additions} −${pull.deletions}`;
+  const hasDiff = pull.additions !== null && pull.deletions !== null;
   return (
     // One line, no columns (2026-11-24 ruling): identity, state, title, then the rollups at the right
     // edge. The trailing cluster sheds widest-first (linked, then review), so nothing is dropped by a
@@ -62,16 +79,30 @@ function PullRow({ pull, fullName, selected, onOpen }: { pull: PullRequestSummar
           </span>
           {/* An absent metric is stated, not shouted: it keeps its accessible name and drops to the
               faint ink, so a poller that has not enriched a row does not turn the list into noise. */}
-          <span className={cx("tabular", !diff && "text-ink-faint")} title={diff ? `${pull.additions} added, ${pull.deletions} removed` : "Diff counts unknown"}>
-            {diff ?? "unknown"}
-          </span>
-          <span className="inline-flex items-center gap-1" title={checkLabel(pull.checks)}>
-            <StatusDot tone={checkTone} label={checkLabel(pull.checks)} />
-            <span className={cx("hidden lg:inline", pull.checks == null && "text-ink-faint")}>{checkShortLabel(pull.checks)}</span>
-          </span>
-          <span className="hidden items-center xl:inline-flex" title={pull.reviewCount ? `${reviewLabel(pull.review)} · ${pull.reviewCount} reviews` : `Review state: ${reviewLabel(pull.review)}`}>
+          {/* The diff reads in GitHub's own colours, bold, so the size of a change is the first
+              thing the eye finds in the cluster (XTRM-1136). */}
+          {hasDiff ? (
+            <span className="inline-flex gap-1 font-semibold tabular" data-testid="pull-diff" title={`${pull.additions} added, ${pull.deletions} removed`}>
+              <span className="text-success-ink">+{pull.additions}</span>{" "}
+              <span className="text-danger">−{pull.deletions}</span>
+            </span>
+          ) : (
+            <span className="tabular text-ink-faint" data-testid="pull-diff" title="Diff counts unknown">
+              unknown
+            </span>
+          )}
+          <Badge tone={CHECK_TONE[pull.checks ?? "unknown"]} size="xs" title={checkLabel(pull.checks)} data-testid="pull-checks">
+            {pull.checks === "none" ? "no checks" : checkShortLabel(pull.checks)}
+          </Badge>
+          <Badge
+            tone={REVIEW_TONE[pull.review ?? "unknown"]}
+            size="xs"
+            className="hidden xl:inline-flex"
+            title={pull.reviewCount ? `${reviewLabel(pull.review)} · ${pull.reviewCount} reviews` : `Review state: ${reviewLabel(pull.review)}`}
+            data-testid="pull-review"
+          >
             {reviewLabel(pull.review)}
-          </span>
+          </Badge>
           <span
             className="inline-flex items-center gap-1 tabular"
             title={pull.comments === null ? "Conversation comment count unknown" : `${pull.comments} conversation comments · review comments excluded`}

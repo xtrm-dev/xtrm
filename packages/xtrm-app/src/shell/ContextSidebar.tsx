@@ -45,7 +45,7 @@ function RepositorySelector() {
       open={open}
       onOpenChange={setOpen}
       triggerClassName="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
-      popupClassName="rounded-b-lg bg-raised shadow-float"
+      popupClassName="rounded-lg bg-raised shadow-float"
       row={
         <>
           <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Repository</span>
@@ -159,7 +159,7 @@ function SourceFooter() {
         open={open}
         onOpenChange={setOpen}
         triggerClassName="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-left text-xs text-strip-ink shadow-strip outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
-        popupClassName="rounded-t-md bg-strip text-sm text-strip-ink shadow-strip-open"
+        popupClassName="rounded-md bg-strip-open text-sm text-strip-ink shadow-strip-open"
         bodyClassName="flex flex-col gap-0.5 p-1.5"
         row={({ open }) => (
           <>

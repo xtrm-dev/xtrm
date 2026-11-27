@@ -8,7 +8,10 @@ import { cx } from "./primitives.tsx";
  * The popup opens on the same side as a normal popover, but its positioner sits on the trigger
  * rect (`sideOffset` = -anchor height) and its width is the anchor width. The trigger row is
  * rendered again inside the popup as the panel header, so the popup box is the trigger box and the
- * panel (an absolutely positioned surface behind the body) grows out of its outer edge. Height
+ * panel grows out of its outer edge. One shell spans the header and the panel and carries the
+ * caller's background, radius and shadow, so the open popover reads as the trigger itself growing:
+ * there is no second box, no seam at the trigger edge, and the header paints no colour of its own
+ * (XTRM-1136). Height
  * animates with `grid-template-rows` (no `scaleY`) and opacity in the same 180 ms ease-out;
  * `prefers-reduced-motion` removes both transitions.
  *
@@ -46,9 +49,9 @@ export function ExpandPopover({
   /** The trigger element's classes; the header copy reuses them so both boxes measure identically. */
   triggerClassName: string;
   /**
-   * The panel surface behind the body: background, shadow, text colour, and the outer radius — the
-   * caller passes `rounded-b-*` for a drop-up and `rounded-t-*` for a downward panel. The popup box
-   * itself is always the trigger rect.
+   * The shell behind the header and the body: background, shadow, text colour and radius. It spans
+   * the trigger row and the panel as one shape, so the caller passes a plain `rounded-*` for all
+   * corners. The popup box itself is always the trigger rect.
    */
   popupClassName?: string;
   /** Classes for the content box under the header (padding, gaps). */
@@ -97,38 +100,45 @@ export function ExpandPopover({
       // The same attribute Base UI puts on the trigger while open, so the trigger's
       // `data-[popup-open]:` classes paint the header identically.
       data-popup-open={open ? "" : undefined}
-      className={cx("pointer-events-none relative shrink-0", triggerClassName)}
+      // The shell behind it is the open colour; the trigger's own hover/open fill and shadow would
+      // paint a second box over it, so the header copy keeps the row's layout and ink only.
+      className={cx("pointer-events-none relative shrink-0", triggerClassName, "bg-transparent! shadow-none!")}
     >
       {content}
     </div>
   );
 
   /**
-   * The panel. It is absolutely positioned against the header's outer edge, so the popup box
-   * stays exactly the trigger rect while the panel grows: no reposition frame lags the
-   * animation, and the header cannot drift off the trigger.
+   * The shell: one shape from the header's inner edge to the panel's outer edge. It is absolutely
+   * positioned on the popup box, so the popup stays exactly the trigger rect while the panel grows:
+   * no reposition frame lags the animation, and the header cannot drift off the trigger. A spacer
+   * the height of the trigger sits under the header; the panel starts at the header's outer edge.
+   * Only the panel takes the pointer, so a press on the header still reaches the trigger.
    */
   const surface = (
     <div
-      data-expand-popover-surface=""
+      data-expand-popover-shell=""
       className={cx(
-        "pointer-events-auto absolute inset-x-0 overflow-hidden",
-        side === "top" ? "bottom-full" : "top-full",
+        "pointer-events-none absolute inset-x-0 flex overflow-hidden",
+        side === "top" ? "bottom-0 flex-col-reverse" : "top-0 flex-col",
         popupClassName,
       )}
     >
-      {/* The grid row is the animated height and clips while it grows; the box inside it scrolls
-          when the viewport caps the panel, so a short window never pushes content off screen. */}
-      <div data-expand-popover-body="" className="min-h-0 overflow-hidden">
-        <div
-          data-expand-popover-scroll=""
-          style={cap === null ? undefined : { maxHeight: `${cap}px` }}
-          // One scroller for the whole panel: the inline cap from the layout effect above is the only
-          // height limit, the repo's scrollbar treatment sits beside the overflow, and children keep
-          // their height instead of compressing, so the panel scrolls rather than squashing rows.
-          className={cx("thin-scrollbar overflow-y-auto overscroll-contain [&>*]:shrink-0", bodyClassName)}
-        >
-          {children}
+      <div aria-hidden="true" className="h-[var(--anchor-height)] shrink-0" />
+      <div data-expand-popover-surface="" className="pointer-events-auto min-h-0">
+        {/* The grid row is the animated height and clips while it grows; the box inside it scrolls
+            when the viewport caps the panel, so a short window never pushes content off screen. */}
+        <div data-expand-popover-body="" className="min-h-0 overflow-hidden">
+          <div
+            data-expand-popover-scroll=""
+            style={cap === null ? undefined : { maxHeight: `${cap}px` }}
+            // One scroller for the whole panel: the inline cap from the layout effect above is the only
+            // height limit, the repo's scrollbar treatment sits beside the overflow, and children keep
+            // their height instead of compressing, so the panel scrolls rather than squashing rows.
+            className={cx("thin-scrollbar overflow-y-auto overscroll-contain [&>*]:shrink-0", bodyClassName)}
+          >
+            {children}
+          </div>
         </div>
       </div>
     </div>
