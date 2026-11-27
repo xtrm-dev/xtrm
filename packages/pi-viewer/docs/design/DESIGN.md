@@ -570,9 +570,9 @@ at the box's bottom right, and an empty attach slot on the left for a control th
 `--x-composer-shadow` and `--x-composer-shadow-focus` (`.xtrm-composer-box`, `src/styles.css:749-765`), so
 a palette decides the step, the elevation and the focus signal without touching the component.
 
-The two controls are bare glyphs (XTRM-1149). Send is a `16px` `SendIcon` in `text-github`, whose hover
-steps to `text-github-hover`; Stop is a `14px` outline `SquareIcon` in `text-ink`, whose hover shifts
-opacity. Neither draws a background box, both keep a `32px` hit area, their `aria-label` and `title`, and
+The two controls are bare glyphs (XTRM-1149). Send is a `16px` `CornerDownLeftIcon` — a return arrow, the
+gesture the button sends — in `text-github`, whose hover steps to `text-github-hover`; Stop is a `14px`
+outline `SquareIcon` in `text-ink`, whose hover shifts opacity. Neither draws a background box, both keep a `32px` hit area, their `aria-label` and `title`, and
 a `focus-visible` accent ring; a disabled control fades to `opacity-30`, and the working spinner replaces
 the glyph unchanged.
 
@@ -831,7 +831,7 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-26 | Bundle split and a lazy events view; latin fonts only; `motion-panels` replaced by an in-repo split | XTRM-1067 |
 | 2026-11-26 | A send pins the thread to the end until the reader scrolls | XTRM-1064 |
 | 2026-11-26 | Scope is applied server-side, discovery leaves the request path, frames are cached | XTRM-1066 |
-| 2026-11-27 | Composer send and stop are bare glyphs: an outline square in ink and the send in the github tone, no filled boxes, hover by tone or opacity; the hint reads only `@ to mention` | XTRM-1149 |
+| 2026-11-27 | Composer send and stop are bare glyphs: an outline square in ink and a return arrow in the github tone, no filled boxes, hover by tone or opacity; the hint reads only `@ to mention` | XTRM-1149 |
 
 ## 11. Open questions
 

@@ -1,4 +1,4 @@
-import { ChevronDownIcon, LoaderCircleIcon, SendIcon, SquareIcon, XIcon } from "lucide-react"
+import { ChevronDownIcon, CornerDownLeftIcon, LoaderCircleIcon, SquareIcon, XIcon } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { StatusDot, statusWord } from "@/components/StatusDot"
@@ -313,7 +313,7 @@ export function Composer({
                 {sending ? (
                   <LoaderCircleIcon className="size-4 animate-spin" />
                 ) : (
-                  <SendIcon className="size-4" />
+                  <CornerDownLeftIcon className="size-4" />
                 )}
               </button>
             </div>
