@@ -7,7 +7,9 @@
 // base plus the soft-text layer in dark, and equals its base in light.
 // Since XTRM-1048 it also holds the sidebar's status dot to 3:1 against the sidebar: the dot carries
 // the state alone, so its colour is a non-text mark that must stay visible in every palette.
-// Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1 or a dot below 3:1)
+// Since XTRM-1155 it also holds the chrome marks to 3:1: the header icon buttons, the sidebar collapse
+// control, the host glyph and the row counters paint in --x-icon-ink, which soft text dims to #8e8e8e.
+// Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1, or a dot or chrome mark below 3:1)
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
@@ -176,11 +178,31 @@ for (const [palette, theme, set] of sets) {
   }
 }
 
+// XTRM-1155: the chrome marks — the header's icon buttons, the sidebar's collapse control, the host glyph
+// and the row counters — are non-text marks, so each is held to the 3:1 minimum against the planes it sits
+// on, not the 4.5:1 text floor. Soft text dims them to #8e8e8e, which clears 3:1 everywhere except
+// Desktop's #454545 selected row; there the same rule that lifts muted text lifts the marks, so the
+// selected row is read in --x-ink-muted-selected.
+const iconPlanes = ["sidebar", "deep", "surface", "raised", "control", "canvas", "selected"]
+let iconFailures = 0
+for (const [palette, theme, set] of sets) {
+  for (const name of iconPlanes) {
+    const bg = plane(set, name)
+    const token = name === "selected" && set["muted-selected-rule"] ? "ink-muted-selected" : "icon-ink"
+    const result = ratio(parse(value(set, token), bg), bg)
+    if (result < 3) iconFailures += 1
+    console.log(`${result >= 3 ? "PASS" : "FAIL"} ${palette.padEnd(12)} ${theme.padEnd(5)} ${("icon-ink marks (" + token + ")").padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
+  }
+}
+
 if (failures) {
   console.error(`${failures} pair(s) below 4.5:1`)
 }
 if (dotFailures) {
   console.error(`${dotFailures} sidebar dot(s) below 3:1`)
 }
-if (failures || dotFailures) process.exit(1)
-console.log(`all transcript text roles >= 4.5:1 (Desktop dark muted text on a selected row reads in --x-ink-muted-selected), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, in all five palettes`)
+if (iconFailures) {
+  console.error(`${iconFailures} chrome mark(s) below 3:1`)
+}
+if (failures || dotFailures || iconFailures) process.exit(1)
+console.log(`all transcript text roles >= 4.5:1 (Desktop dark muted text on a selected row reads in --x-ink-muted-selected), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, and all chrome marks (icon-ink) >= 3:1, in all five palettes`)

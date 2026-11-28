@@ -58,8 +58,8 @@ The left sidebar is a tree of tmux session > window > pane. Only panes that hold
 listed; windows and sessions without an agent are omitted. Session and window rows are one 28px line: the name, a small chevron right after it, and the agent count.
 A window that holds a single pane has no row of its own: its pane sits directly under the session, and the
 window name is in the pane's tooltip. Every row that speaks for a window carries a small host glyph before the
-name: `monitor` when all its agents run on this machine, `server` when they run on another host, in the ink of
-the name beside it (XTRM-1155, for XTRM-1139; an absent host reads as this machine, and a window that mixes
+name: `monitor` when all its agents run on this machine, `server` when they run on another host, in the row's
+chrome ink (XTRM-1155, for XTRM-1139; an absent host reads as this machine, and a window that mixes
 hosts defers the glyph to its pane rows). A pane row is two lines (48px): the agent name, then the role, the runtime (`Claude` or `Pi`) and the repo. The role is plain text at the line's size; only Lead and Manager are bold and coloured (the thread view's role colours), with one
 small static status dot on the right (idle, running, error; the server's `waiting` is a finished turn, so it
 reads as idle, and no state is proven to "need attention"). The dark sidebar plane is `#181818`, a quiet step from the `#0d0d0d` viewport. Every level is a selectable scope (see Scope and URL below). The sidebar sits in the console's shell

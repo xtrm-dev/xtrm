@@ -160,6 +160,7 @@ Every token below is declared in `src/styles.css:34-116` (light) and `:118-163` 
 | `--x-ink` | `#18181b` | `#ececef` | primary text |
 | `--x-ink-muted` | `#5f5f68` | `#a0a0a8` | meta, time, resting icons, quiet text |
 | `--x-ink-faint` | `#94949c` | `#6a6a72` | third text step; not used for the sidebar dot |
+| `--x-icon-ink` | `#5f5f68` | `#a0a0a8` | chrome marks: header icon buttons, the sidebar's collapse control, the host glyph, the row counters. A 3:1 role, not text (XTRM-1155) |
 | `--x-border-muted` | `rgb(15 15 20 / 0.07)` | `rgb(255 255 255 / 0.08)` | default hairline |
 | `--x-border-subtle` | `rgb(15 15 20 / 0.04)` | `rgb(255 255 255 / 0.06)` | table grid only |
 | `--x-border` | `rgb(15 15 20 / 0.11)` | `rgb(255 255 255 / 0.12)` | control border |
@@ -215,7 +216,8 @@ step and the drop shadow are its only separation, and focus either rises a plane
 
 | `--x-inset` (activity detail, intercom card) | `--x-surface` | `--x-control` | `--x-surface` |
 | `--x-code` / `--x-code-edge` | `--x-surface` / `--x-border-muted` (light), `transparent` (dark) | `--x-deep` / `--x-border-muted` | `--x-deep` / `--x-border` |
-| `--x-read` (thread prose, operator bubble) | `--x-ink` | `--x-ink` | `#c8c8c8` |
+| `--x-read` (thread prose, operator bubble, and every sidebar name since XTRM-1155) | `--x-ink` | `--x-ink` | `#c8c8c8` |
+| `--x-icon-ink` (chrome marks) | `--x-ink-muted` | `--x-ink-muted` | `#8e8e8e` |
 | `--x-selected` (selected list row) | `--x-hover` | `--x-hover` | `#454545` |
 
 #### 4.1.3 Console — differences from Threads
@@ -244,6 +246,7 @@ set.
 | read (prose) | `#c8c8c8` |
 | ink-muted (meta) | `#a1a1a1` |
 | ink-muted inside a selected row | `#c8c8c8` |
+| icon ink (chrome marks) | `#8e8e8e`, `#c8c8c8` inside a selected row |
 | danger | `#f58f8f` |
 
 Not supplied by the operator and therefore inherited from the dark base, marked inferred in
@@ -254,15 +257,21 @@ palette uses `#f58f8f` at 5.1:1 (`src/styles.css:200`).
 
 #### 4.1.5 Soft text — one text-only layer
 
-A soft-text palette keeps its base's surfaces, borders and accents and overrides four text variables
-only (`src/styles.css:210-225`; `test/palette.test.ts` holds the block to that list). Dark only.
+A soft-text palette keeps its base's surfaces, borders and accents and overrides five ink variables
+only (`src/styles.css:210-235`; `test/palette.test.ts` holds the block to that list). Dark only.
 
 | token | value | role |
 |---|---|---|
-| `--x-ink` | `#e4e4e4` | names, titles, selected rows |
-| `--x-read` | `#c8c8c8` | thread prose, operator bubble |
-| `--x-ink-muted` | `#a1a1a1` | meta, time, unselected labels, resting icons |
+| `--x-ink` | `#e4e4e4` | titles, the top-bar labels |
+| `--x-read` | `#c8c8c8` | thread prose, operator bubble, every sidebar name |
+| `--x-ink-muted` | `#a1a1a1` | meta, time, unselected labels |
 | `--x-ink-muted-selected` | `#c8c8c8` | muted text inside Desktop's `#454545` row |
+| `--x-icon-ink` | `#8e8e8e` | chrome marks: header icon buttons, the collapse control, the host glyph, the row counters |
+
+The chrome marks take their own variable because an icon only needs 3:1 (WCAG 1.4.11) and the muted
+**text** role cannot follow the tone down: Desktop's `#383838` composer fill pins `--x-ink-muted` at
+`#a1a1a1` (4.54:1). `#8e8e8e` reads 5.42:1 on the sidebar, 5.93:1 on the canvas and 3.58:1 on that
+control, and Desktop's selected row lifts it to `#c8c8c8` (5.73:1) like muted text.
 
 `#a1a1a1` is one step above the operator's original `#a0a0a0` so muted text reaches 4.5:1 on the
 `#383838` input fill (operator ruling 2026-11-26, XTRM-1053).
@@ -451,8 +460,11 @@ accessible name ends with the dot's state word.
 when every agent in that window runs on the machine that serves the viewer, the lucide `server` when it runs
 on another host (XTRM-1155, for XTRM-1139). A single-pane window has no row of its own, so its stand-in pane
 row carries the glyph. A window that mixes hosts draws no window glyph: each pane row then carries its own,
-in front of the agent name. The glyph takes the ink of the name beside it and never exceeds that line; it is
-decorative, and the row's accessible name ends with the host in words (`this machine`, `host <id>`). The rule
+in front of the agent name. The glyph paints in the row's chrome ink role (`text-icon-ink`, `--x-icon-ink`)
+and never exceeds the name's line; it is decorative, and the row's accessible name ends with the host in words
+(`this machine`, `host <id>`). Every name in the tree — session, window and pane — paints in the reading role
+(`text-read`), so the sidebar follows the same Standard/Soft choice the chat follows; the row level then reads
+from weight, indent and the chevron. The rule
 is one function over `ViewerAgent.host` (`src/lib/host-glyph.ts`): an absent host is this machine, so every
 row draws the monitor until XTRM-1139 stage 1 reports hosts. The glyph sits in the leading text run, so moving
 it to the row's right edge, beside the status dot, is a single call-site change.
@@ -847,7 +859,8 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-26 | Scope is applied server-side, discovery leaves the request path, frames are cached | XTRM-1066 |
 | 2026-11-27 | Composer send and stop are bare glyphs: an outline square in ink and a return arrow in the github tone, no filled boxes, hover by tone or opacity; the hint reads only `@ to mention` | XTRM-1149 |
 | 2026-11-27 | One scrollbar: every scroll container in both packages takes the chat's thin dim bar (`* { scrollbar-width: thin; scrollbar-color: var(--color-border-strong) transparent }` in the base layer), so no container falls back to the browser default; the composer's `@ to mention` moves onto the box's 12px text inset; the send button names its key (`Send (Enter)`) | XTRM-1153 |
-| 2026-11-27 | The sidebar marks the host: a `monitor` glyph on a window whose agents all run on this machine, a `server` glyph when they run on another host, in the name's ink and in front of the name; a mixed window defers the glyph to its pane rows; an absent host reads as this machine | XTRM-1155, for XTRM-1139 |
+| 2026-11-27 | The sidebar marks the host: a `monitor` glyph on a window whose agents all run on this machine, a `server` glyph when they run on another host, in front of the name; a mixed window defers the glyph to its pane rows; an absent host reads as this machine | XTRM-1155, for XTRM-1139 |
+| 2026-11-28 | Tone alignment: every sidebar name takes the reading role, so the tree follows Standard/Soft like the chat; a standalone chrome-mark role (`--x-icon-ink`, `#a0a0a8` standard / `#8e8e8e` soft, 3:1) carries the header icon buttons, the collapse control, the host glyph and the row counters, because the muted text role cannot dim past Desktop's 4.5:1 floor; row counters leave the faint step | XTRM-1155 |
 
 ## 11. Open questions
 

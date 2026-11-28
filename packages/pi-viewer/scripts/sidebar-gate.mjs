@@ -107,30 +107,105 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     check(tag + " one-pane windows add no row (window rows have 2+ agents)", await p.evaluate(() => [...document.querySelectorAll('[role=treeitem][aria-level="2"][aria-expanded]')].every((e) => Number(/(\d+) agents/.exec(e.getAttribute("aria-label"))[1]) >= 2)))
     // XTRM-1155: the host glyph. A row that speaks for a whole window (a window row, or the stand-in
     // row of a single-pane window) draws exactly one glyph; a pane row draws none inside a uniform
-    // window, or its own when the window mixes hosts. The glyph takes the ink of the name beside it, so
-    // an icon cannot read as a different kind of row, and the row's aria-label names the host.
-    const hosts = await p.evaluate(() => [...document.querySelectorAll("[role=treeitem]")].map((row) => {
-      const glyph = row.querySelector("[data-testid=host-glyph]")
-      const name = glyph?.nextElementSibling ?? null
-      const box = glyph ? glyph.getBoundingClientRect() : null
-      const ink = (el) => (el ? getComputedStyle(el).color : "")
-      return {
-        level: row.getAttribute("aria-level"),
-        glyphs: row.querySelectorAll("[data-testid=host-glyph]").length,
-        host: glyph?.getAttribute("data-host") ?? null,
-        ink: box ? ink(glyph) : "",
-        nameInk: box ? ink(name) : "",
-        box: box ? [Math.round(box.width), Math.round(box.height)] : null,
-        label: row.getAttribute("aria-label") || "",
+    // window, or its own when the window mixes hosts. The glyph paints in the row's chrome ink role and
+    // every name paints in the row's reading role, so an icon cannot read as a different kind of row and
+    // the tree follows the Colours setting the chat follows. Both roles are resolved per row, because
+    // Desktop's selected row lifts --x-icon-ink and --x-ink-muted above their palette values. The row's
+    // aria-label names the host.
+    const rgb = await p.evaluate(() => {
+      const canvas = document.createElement("canvas")
+      canvas.width = canvas.height = 1
+      const ctx = canvas.getContext("2d", { willReadFrequently: true })
+      // One parser for both sides: any CSS colour becomes sRGB bytes plus alpha, or null. A colour this
+      // canvas cannot read fails the check that needs it; it never passes by default.
+      const px = (css) => {
+        const text = (css || "").trim()
+        if (!text || !CSS.supports("color", text)) return null
+        ctx.clearRect(0, 0, 1, 1)
+        ctx.fillStyle = text
+        ctx.fillRect(0, 0, 1, 1)
+        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+        return [r, g, b, a / 255]
       }
-    }))
-    const spokesmen = hosts.filter((r) => r.level === "2"), panes = hosts.filter((r) => r.level === "3"), marked = hosts.filter((r) => r.glyphs > 0)
+      // A translucent ink reads as itself composited over the plane it sits on.
+      const over = (c, base) => (c[3] === 1 ? c.slice(0, 3) : [0, 1, 2].map((i) => Math.round(c[i] * c[3] + base[i] * (1 - c[3]))))
+      const lum = (c) => {
+        const [r, g, b] = c.map((v) => {
+          const x = v / 255
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+      }
+      const ratio = (a, b) => {
+        const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
+        return (hi + 0.05) / (lo + 0.05)
+      }
+      const sidebar = px(getComputedStyle(document.querySelector('[data-testid="sidebar"]')).backgroundColor)
+      const base = sidebar ? sidebar.slice(0, 3) : null
+      return [...document.querySelectorAll("[role=treeitem]")].map((row) => {
+        const style = getComputedStyle(row)
+        const glyph = row.querySelector("[data-testid=host-glyph]")
+        const svg = glyph?.querySelector("svg") ?? null
+        const name = glyph?.nextElementSibling ?? row.querySelector(".truncate")
+        const box = glyph ? glyph.getBoundingClientRect() : null
+        const ink = svg ? px(getComputedStyle(svg).color) : null
+        const want = px(style.getPropertyValue("--color-icon-ink"))
+        const nameInk = name ? px(getComputedStyle(name).color) : null
+        const wantName = px(style.getPropertyValue("--color-read"))
+        return {
+          level: row.getAttribute("aria-level"),
+          glyphs: row.querySelectorAll("[data-testid=host-glyph]").length,
+          host: glyph?.getAttribute("data-host") ?? null,
+          ink: ink && base ? over(ink, base) : null,
+          want: want && base ? over(want, base) : null,
+          nameInk: nameInk && base ? over(nameInk, base) : null,
+          wantName: wantName && base ? over(wantName, base) : null,
+          contrast: ink && base ? ratio(over(ink, base), base) : null,
+          box: box ? [Math.round(box.width), Math.round(box.height)] : null,
+          label: row.getAttribute("aria-label") || "",
+        }
+      })
+    })
+    // One parser, one tolerance: the canvas quantises #a0a0a8 and rgb(160, 160, 168) to the same bytes.
+    const same = (a, b) => Array.isArray(a) && Array.isArray(b) && a.every((v, i) => Math.abs(v - b[i]) <= 1)
+    const spokesmen = rgb.filter((r) => r.level === "2"), panes = rgb.filter((r) => r.level === "3"), marked = rgb.filter((r) => r.glyphs > 0)
     check(tag + " every row that speaks for a window draws one host glyph", spokesmen.length > 0 && spokesmen.every((r) => r.glyphs === 1), JSON.stringify(spokesmen.slice(0, 3)))
     check(tag + " a pane row draws no shared glyph, only its own in a mixed window", panes.every((r) => r.glyphs <= 1), JSON.stringify(panes.slice(0, 3)))
     check(tag + " every host glyph is the monitor or the server, never anything else", marked.every((r) => r.host === "local" || r.host === "remote"), JSON.stringify(marked.slice(0, 3).map((r) => r.host)))
-    check(tag + " a host glyph takes the ink of the name beside it", marked.every((r) => r.ink !== "" && r.ink === r.nameInk), JSON.stringify(marked.slice(0, 3).map((r) => r.ink + " vs " + r.nameInk)))
-    check(tag + " a host glyph fits inside the name's line", marked.every((r) => r.box[0] <= 16 && r.box[1] <= 16), JSON.stringify(marked.slice(0, 3).map((r) => r.box)))
+    check(tag + " a host glyph paints in its row's icon role", marked.every((r) => same(r.ink, r.want)), JSON.stringify(marked.slice(0, 2).map((r) => [r.ink, r.want])))
+    check(tag + " a host glyph clears the 3:1 non-text minimum", marked.every((r) => r.contrast !== null && r.contrast >= 3), JSON.stringify(marked.slice(0, 3).map((r) => (r.contrast === null ? null : Number(r.contrast.toFixed(2))))))
+    check(tag + " a host glyph fits inside the name's line", marked.every((r) => r.box && r.box[0] <= 16 && r.box[1] <= 16), JSON.stringify(marked.slice(0, 3).map((r) => r.box)))
+    check(tag + " every sidebar name paints in its row's reading role", rgb.every((r) => same(r.nameInk, r.wantName)), JSON.stringify(rgb.slice(0, 2).map((r) => [r.nameInk, r.wantName])))
     check(tag + " every row with a host glyph names the host", marked.every((r) => /, (this machine|host \S+)$/.test(r.label)), JSON.stringify(marked.slice(0, 3).map((r) => r.label)))
+    // XTRM-1155: soft text reaches the tree. The Colours control sets it; every name must then read in the
+    // soft reading role and every chrome mark in the soft icon role, which is the change that made the tone
+    // visible in the sidebar at all. Soft is dark only, so the light theme keeps the standard values (checked
+    // as the same pair, not as "unchanged", so a palette edit cannot pass silently). Desktop widths only: at
+    // 390 the sidebar is an overlay that covers the header control, and the tone renders the same at any width.
+    if (!narrow) {
+      const tones = async () => p.evaluate(() => {
+        const colour = (el) => (el ? getComputedStyle(el).color : null)
+        const rows = [...document.querySelectorAll("[role=treeitem]")]
+        const names = rows.map((r) => r.querySelector("[data-testid=host-glyph]")?.nextElementSibling ?? r.querySelector(".truncate"))
+        const glyphs = rows.map((r) => r.querySelector("[data-testid=host-glyph] svg")).filter(Boolean)
+        return { names: names.map(colour), glyphs: glyphs.map(colour) }
+      })
+      const choose = async (name) => {
+        await p.getByRole("button", { name: /^Colours:/ }).click()
+        await p.getByRole("radiogroup", { name: "Colours" }).getByRole("radio", { name, exact: true }).click()
+        await p.keyboard.press("Escape")
+        await p.waitForTimeout(400)
+      }
+      const dark = tag.endsWith("dark")
+      const standard = await tones()
+      await choose("Threads · soft text")
+      const soft = await tones()
+      const wantName = dark ? "rgb(200, 200, 200)" : "rgb(24, 24, 27)", wantGlyph = dark ? "rgb(142, 142, 142)" : "rgb(95, 95, 104)"
+      check(tag + " standard tone: every name reads in the primary ink", standard.names.every((c) => c === (dark ? "rgb(236, 236, 239)" : "rgb(24, 24, 27)")), JSON.stringify(standard.names.slice(0, 2)))
+      check(tag + " soft tone: every name dims to the soft reading role", soft.names.length > 0 && soft.names.every((c) => c === wantName), JSON.stringify(soft.names.slice(0, 2)))
+      check(tag + " soft tone: every chrome mark dims to the soft icon role", soft.glyphs.length > 0 && soft.glyphs.every((c) => c === wantGlyph), JSON.stringify(soft.glyphs.slice(0, 2)))
+      await choose("Threads")
+    }
     check(tag + " no overflow", !g.overflow)
     await p.screenshot({ path: SHOTS + "/g4-" + tag + ".png" })
     // scopes
@@ -191,10 +266,17 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       const cons = await p.evaluate(async () => {
         const root = document.documentElement, prev = root.getAttribute("data-palette")
         root.setAttribute("data-palette", "console")
-        await new Promise((r) => setTimeout(r, 500))
         const rgba = (c) => { const x = document.createElement("canvas").getContext("2d"); x.fillStyle = "#000"; x.fillStyle = c; x.fillRect(0, 0, 1, 1); return [...x.getImageData(0, 0, 1, 1).data].join(",") }
         const tok = (n) => rgba(getComputedStyle(root).getPropertyValue(n).trim())
         const hs = document.querySelector("[data-testid=half-switch]"), vs = document.querySelector('[role=tablist][aria-label=View]')
+        // The switcher animates its colours (transition-colors), so a fixed wait reads a mid-transition value
+        // whenever the page has not painted for a while. Wait for the transition to settle instead: the
+        // selected half must reach the console's control fill, then the rest of the values are read.
+        for (let i = 0; i < 80; i += 1) {
+          const sel = hs.querySelector("[aria-checked=true]")
+          if (sel && rgba(getComputedStyle(sel).backgroundColor) === tok("--x-control")) break
+          await new Promise((r) => setTimeout(r, 25))
+        }
         const hsSel = hs.querySelector("[aria-checked=true]"), hsOff = hs.querySelector("[aria-checked=false]"), vsSel = vs.querySelector("[aria-selected=true]"), vsOff = vs.querySelector("[aria-selected=false]")
         const c = (e, k) => rgba(getComputedStyle(e)[k])
         const r = {

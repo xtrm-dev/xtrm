@@ -75,9 +75,12 @@ function GroupRow({
   return (
     <>
       <span className="flex min-w-0 items-center gap-1" style={{ marginLeft: "var(--row-indent)" }}>
-        {host?.glyph ? <HostGlyph glyph={host.glyph} label={host.label} className="text-ink-muted" /> : null}
+        {host?.glyph ? <HostGlyph glyph={host.glyph} label={host.label} className="text-icon-ink" /> : null}
+        {/* Every name takes the reading role (XTRM-1155): --x-read is primary under standard text and
+            #c8c8c8 under soft, so the tree follows the Colours setting the chat already follows. Level
+            then reads from weight, indent and the chevron. */}
         <span
-          className={cn("min-w-0 truncate text-sm", isSession ? "font-semibold text-ink" : "font-medium text-ink-muted")}
+          className={cn("min-w-0 truncate text-sm text-read", isSession ? "font-semibold" : "font-medium")}
           title={node.kind === "window" ? `window ${node.index}${host ? ` · ${host.label}` : ""}` : undefined}
         >
           {node.name}
@@ -95,7 +98,7 @@ function GroupRow({
       >
         <Icon name="chevronDown" size="xs" className={cn("transition-transform", !row.expanded && "-rotate-90")} />
       </span>
-      <span className="ml-auto shrink-0 text-xs text-ink-faint tabular">{count}</span>
+      <span className="ml-auto shrink-0 text-xs text-icon-ink tabular">{count}</span>
     </>
   )
 }
@@ -108,8 +111,8 @@ function PaneRowBody({ pane, selected, host }: { pane: PaneNode; selected: boole
         {/* The pane row carries a host glyph only when it is the row that speaks for the window: a
             single-pane window's stand-in row, or a pane in a window that mixes hosts (XTRM-1155). */}
         <span className="flex min-w-0 items-center gap-1">
-          {host ? <HostGlyph glyph={host.glyph} label={host.label} className="text-ink" /> : null}
-          <span className={cn("min-w-0 truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
+          {host ? <HostGlyph glyph={host.glyph} label={host.label} className="text-icon-ink" /> : null}
+          <span className={cn("min-w-0 truncate text-sm text-read", selected ? "font-medium" : undefined)}>{agent.name}</span>
         </span>
         {/* Line 2, in the operator's order (XTRM-1048): the role, then the runtime, then the folder and
             the repo. Spacing only, no separators; the state rides on the dot alone and is not written

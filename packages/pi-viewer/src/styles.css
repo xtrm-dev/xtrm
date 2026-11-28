@@ -45,6 +45,10 @@
   --x-ink: #18181b;
   --x-ink-muted: #5f5f68;
   --x-ink-faint: #94949c;
+  /* Non-text chrome marks: the header's icon buttons, the sidebar's collapse control, the host glyph
+     and the row counters (XTRM-1155). Its own role, because an icon only needs 3:1 and the muted text
+     role is pinned at 4.5:1 by Desktop's composer fill; light equals muted, so nothing moves here. */
+  --x-icon-ink: #5f5f68;
   --x-border-muted: rgb(15 15 20 / 0.07);
   /* Table grid only: present, but close to transparent so rows read as a list, not a box. */
   --x-border-subtle: rgb(15 15 20 / 0.04);
@@ -136,6 +140,7 @@
   --x-ink: #ececef;
   --x-ink-muted: #a0a0a8;
   --x-ink-faint: #6a6a72;
+  --x-icon-ink: #a0a0a8; /* chrome marks follow the text tone; standard equals muted */
   --x-border-muted: rgb(255 255 255 / 0.08);
   --x-border-subtle: rgb(255 255 255 / 0.06);
   --x-border: rgb(255 255 255 / 0.12);
@@ -228,6 +233,10 @@
   --x-read: #c8c8c8;
   --x-ink-muted: #a1a1a1;
   --x-ink-muted-selected: #c8c8c8; /* inside Desktop's selected row: #a1a1a1 is 3.7:1 on #454545 */
+  /* Chrome marks dim with the reading colour, one step below muted: 5.42:1 on the sidebar and 3.58:1 on
+     Desktop's #383838 control, which clears the 3:1 non-text minimum. Muted text cannot follow it down
+     because it is held at 4.5:1 there (XTRM-1155). */
+  --x-icon-ink: #8e8e8e;
 }
 
 /* Sidebar plane (operator, 2026-11-26): the sidebar's fill and selected row follow data-sidebar, set
@@ -249,9 +258,11 @@
   --x-selected: #454545;
 }
 /* On the #454545 selected row muted text reads one step brighter, whatever the text tone: standard muted
-   (#a0a0a8) and soft muted (#a1a1a1) are both under 4.5:1 there; #c8c8c8 is 6.4:1. */
+   (#a0a0a8) and soft muted (#a1a1a1) are both under 4.5:1 there; #c8c8c8 is 6.4:1. The chrome marks take
+   the same bump: soft icon ink (#8e8e8e) is 2.93:1 on #454545, under the 3:1 non-text minimum. */
 :root[data-sidebar="desktop"][data-theme="dark"] [data-testid="sidebar"] [aria-selected="true"] {
   --x-ink-muted: #c8c8c8;
+  --x-icon-ink: #c8c8c8;
 }
 
 @theme inline {
@@ -273,6 +284,7 @@
   --color-selected: var(--x-selected);
   --color-ink-muted: var(--x-ink-muted);
   --color-ink-faint: var(--x-ink-faint);
+  --color-icon-ink: var(--x-icon-ink);
   --color-border-muted: var(--x-border-muted);
   --color-border-subtle: var(--x-border-subtle);
   --color-border: var(--x-border);

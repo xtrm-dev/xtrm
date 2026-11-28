@@ -48,7 +48,7 @@ export function PaletteControl() {
           type="button"
           aria-label={`Colours: ${label}`}
           title={`Colours: ${label}`}
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-ink-muted transition-colors outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover active:bg-pressed data-[state=open]:bg-hover data-[state=open]:text-ink"
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-icon-ink transition-colors outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover active:bg-pressed data-[state=open]:bg-hover data-[state=open]:text-ink"
         >
           <PaletteIcon className="size-4" aria-hidden="true" />
         </button>
