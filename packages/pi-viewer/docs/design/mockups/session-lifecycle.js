@@ -42,7 +42,7 @@ function pane(p, ind, cls = "") {
 const group = (name, n, ind, session, cls = "") =>
   `<div class="row g ${cls}" style="padding-left:${8 + ind * 12}px"><span class="tsm ${session ? "b ink" : "m muted"}">${name}</span><span class="chev">${i("down", 12)}</span><span class="cnt">${n}</span></div>`
 const draftRow = (ind, label, starting) =>
-  `<div class="row p draft" style="padding-left:${8 + ind * 12}px"><div style="min-width:0;flex:1"><div class="tsm muted">${label}</div><div class="l2"><span>${starting ? "Starting…" : "Draft"}</span></div></div>${starting ? '<span class="spin sm"></span>' : '<svg class="ddot" width="9" height="9" viewBox="0 0 9 9"><circle cx="4.5" cy="4.5" r="3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 2.2"/></svg>'}</div>`
+  `<div class="row p draft" style="padding-left:${8 + ind * 12}px"><div style="min-width:0;flex:1"><div class="tsm muted">${label}</div><div class="l2"><span>${starting ? "Starting…" : "Draft"}</span></div></div>${starting ? '<span class="spin sm"></span>' : '<span class="hdot" title="Draft: not started"></span>'}</div>`
 
 function sidebar(o = {}) {
   const c = o.ctx || ""
@@ -109,7 +109,7 @@ function draftComposer(o) {
     <div class="where">
       <span class="pick set" data-k="place">${i(o.place === "pane" ? "split" : o.place === "window" ? "window" : "session", 13)}${pk}${pv ? ` <span class="m">${pv}</span>` : ""} ${i("down", 12)}</span>
       <span class="pick ${set("repo")}">${i("folder", 13)}xtrm <span class="mono txs faint">~/dev/xtrm</span> ${i("down", 12)}</span>
-      <span class="pick ${set("wt")}">${i("branch", 13)}${o.wt || "New worktree"} <span class="txs faint">from origin/main</span> ${i("down", 12)}</span>
+      <span class="pick ${set("wt")}">${i("branch", 13)}${o.wt || "New worktree"} <span class="txs faint">${o.branch ? `<span class="mono">${o.branch}</span> · ` : ""}from origin/main</span> ${i("down", 12)}</span>
     </div>
     <div class="box"><div class="ta ${o.text ? "" : locked ? "locked" : "ph"}">${o.text || (locked ? "The issue is the prompt: XTRM-1078 renders as the first turn." : "Describe the task, or leave it empty to start idle")}</div>
       <span class="send">${o.busy ? '<span class="spin"></span>' : i("enter", 16)}</span></div>
@@ -215,16 +215,17 @@ F["F5"] = {
       <div class="st"><span>Fetching origin/main, creating xt/&lt;name&gt;, starting the pane</span></div></div>` }),
 }
 F["F6"] = {
-  t: "Launch failed card: inputs kept, reason shown, Retry", why: "The card shows reason_code and the summary from xtrm.command-outcome.v1. Nothing typed is lost.",
-  html: () => draftFrame({ place: "pane", rt: "Codex", cmdOpen: true, set: ["place", "rt"], text: "Port the board-helper lanes to the new schema",
-    argv: "xt codex --pane xx:workers --no-attach --json",
-    card: `<div class="card err"><div class="t"><span class="danger">${i("alert", 14)}</span><span>Could not start codex</span><span class="mono txs faint" style="margin-left:auto">placement_unsupported</span></div>
-      <div class="st"><span class="ink">xt codex has no --pane option; it can open a new session or a new window.</span></div>
-      <div class="act"><span class="btn">Retry as new window</span><span class="btn">${i("copy", 12)}Copy command</span></div></div>` }),
+  t: "Launch failed card: a failure the UI cannot prevent", why: "Branch xt/8137 already exists. Observed 2026-11-28: xt codex --json printed plain text, no outcome object, so the card shows the exit status and xt's own line. Inputs kept; Retry, Use existing worktree, Copy command. Runtime switched to Codex, so the model reset to Codex's default.",
+  html: () => draftFrame({ place: "window", rt: "Codex", cmdOpen: true, set: ["rt", "wt"], branch: "xt/8137", text: "Port the board-helper lanes to the new schema",
+    model: '<span class="faint">Codex default</span>', role: '<span class="faint">No role</span>',
+    argv: "xt codex 8137 --window --session xx --prompt '…' --no-attach --json",
+    card: `<div class="card err"><div class="t"><span class="danger">${i("alert", 14)}</span><span>Could not start codex</span><span class="mono txs faint" style="margin-left:auto">exit 1 · no outcome</span></div>
+      <div class="st"><span class="ink mono">✗ Worktree branch already exists: xt/8137</span><span>Pick another name, or start a new session in the existing worktree.</span></div>
+      <div class="act"><span class="btn">Retry</span><span class="btn">${i("branch", 12)}Use existing worktree</span><span class="btn">${i("copy", 12)}Copy command</span></div></div>` }),
 }
 const closeDialog = (o) => `<div class="backdrop"></div><div class="dialog">
   <div class="dh"><div class="tt">Close sessiondesign</div><div class="pathline txs faint" title="~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-sessiondesign"><span class="mono">xt/sessiondesign</span><span>·</span><span class="ltrunc mono"><bdi>~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-sessiondesign</bdi></span></div></div>
-  <div class="sec" style="display:flex;gap:8px;align-items:center"><span class="sdot idle"></span><span class="txs">Agent idle</span><span class="txs faint" style="margin-left:auto">Commit and Discard are off while the agent works</span></div>
+  <div class="sec" style="display:flex;gap:8px;align-items:center">${o.working ? `<span class="sdot run"></span><span class="txs">Agent working</span>` : `<span class="sdot idle"></span><span class="txs">Agent idle</span>`}</div>${o.working ? `<div class="warn">${i("alert", 12)}Commit and push and Discard are off while the agent works. Stop it with Esc in the composer.</div>` : ""}
   <div class="sec"><div class="st"><span>Changes</span><span>4 files</span></div>
     <div class="file"><span class="g M">M</span><span class="mono">packages/pi-viewer/docs/design/xtrm-1078-session-lifecycle.md</span></div>
     <div class="file"><span class="g A">A</span><span class="mono">packages/pi-viewer/docs/design/mockups/session-lifecycle.html</span></div>
@@ -232,8 +233,8 @@ const closeDialog = (o) => `<div class="backdrop"></div><div class="dialog">
     <div class="file"><span class="g U">??</span><span class="mono">packages/pi-viewer/docs/design/shots/scratch.png</span></div>
     ${o.commit ? `<label class="flabel">Commit message</label><div class="field">XTRM-1078: session lifecycle design note and mockups<span class="caret"></span></div>` : ""}</div>
   <div class="sec"><div class="st"><span>Not pushed</span></div><div class="txs muted">1 commit ahead of origin/xt/sessiondesign</div></div>
-  <div class="ft"><span class="btn dghost">Discard changes…</span><span class="sp"></span>
-    <span class="btn">Commit and push</span><span class="btn pri dis" title="Commit and push first">Close thread</span></div>
+  <div class="ft"><span class="btn dghost ${o.working ? "dis" : ""}">Discard changes…</span><span class="sp"></span>
+    <span class="btn ${o.working ? "dis" : ""}">Commit and push</span><span class="btn pri dis" title="Commit and push first">Close thread</span></div>
   <div class="why2 txs faint">Close thread · commit and push first</div></div>`
 F["F7"] = {
   t: "Close dialog: git state, Commit and push", why: "Read with git status (never release --dry-run, which nudges the agent). Close is enabled only when the tree is clean and pushed.",
@@ -251,6 +252,11 @@ F["F9"] = {
   t: "After a move: selection follows, row flashes once, Undo toast", why: "viewer-gate moved from workers to a new window in xx (break-pane). workers now holds one pane, so its row folds away as the tree already does. 5 s Undo, ⌘Z while shown.",
   html: () => desktop({ side: sidebar({ moved: true }), title: "viewer-gate", detail: "xx › viewer-gate", body: threadBody(), composer: messageComposer(),
     overlay: `<div class="toast">${i("check", 13)}Moved viewer-gate to a new window in xx<span class="u">Undo</span><span class="kbd">⌘Z</span></div>` }),
+}
+
+F["F10"] = {
+  t: "Close dialog while the agent works", why: "Commit and push and Discard are disabled and the reason shows; Close thread stays disabled. The dialog adds no interrupt: Esc in the composer is the existing stop.",
+  html: () => desktop({ side: sidebar({ ctx: "w1" }), title: "sessiondesign", body: threadBody(), composer: messageComposer(), overlay: closeDialog({ working: true }) }),
 }
 
 // ---- phone ------------------------------------------------------------------

@@ -1,8 +1,8 @@
 # Start, close and move agent sessions from the threads app (XTRM-1078)
 
-Status: phase-1 draft 2 (thread-lead review round 1 of #527 applied: rulings in §9, design fixes a-g, the socket test in §3.4). For the operator after the lead. No application code changes in this phase.
+Status: phase-1 draft 3 (thread-lead reviews of #527 applied: round 1 rulings in §9, design fixes a-g, the socket test in §3.4; round 2 polish: draft dot, runtime/model rule, F6, F10, §8). For the operator after the lead. No application code changes in this phase.
 Contract: Substrate `XTRM-1078` rev 2; journal seq 2-5 (operator note, lead inventory, the native-tmux correction, the operator direction).
-Mockups: [`mockups/session-lifecycle.html`](mockups/session-lifecycle.html) (desktop 1440, `?w=390` for phone, `?theme=light|dark`). Screenshots: [`shots/XTRM-1078/`](shots/XTRM-1078/) (`xtrm-1078-<frame>-<theme>.png`, frames F1-F9 at 1440 and M1-M3 at 390).
+Mockups: [`mockups/session-lifecycle.html`](mockups/session-lifecycle.html) (desktop 1440, `?w=390` for phone, `?theme=light|dark`). Screenshots: [`shots/XTRM-1078/`](shots/XTRM-1078/) (`xtrm-1078-<frame>-<theme>.png`, frames F1-F10 at 1440 and M1-M3 at 390).
 Reference studied: `pingdotgg/t3code` at `17a44b5e5fb9548571a0e3016ec51f5d74b884c8` (2026-11-28), shallow clone, source read only. `T3/` means `apps/web/src/`.
 
 Every statement is marked when it matters: **verified** (read in source or observed in a command this session), **inferred** (derived, not observed), **proposal** (my design choice, open to the operator).
@@ -68,13 +68,15 @@ Ruling to test: does `xt` honour a child `TMUX="<sock>,<pid>,0"` with an explici
 | `XTRM_SESSION_SOCKET=<sock>`, `env -i` | `--workers --session probe --json` | `no current client`, orphan pane left |
 | any | `--window --session probe [--window-name w2]` with `--json` | `✗ --window cannot combine with --json` |
 | `XTRM_SESSION_SOCKET=<sock>`, `env -i` | `--window --session probe --window-name w2` (no `--json`) | worktree created, then `no current client`, orphan window left |
+| `XTRM_SESSION_SOCKET=<sock>`, `env -i` | `xt codex 8137 --no-attach --json` / `xt pi 8137 …` with `xt/8137` taken | plain text, **no outcome object**: `✗ Worktree branch already exists: xt/8137` / `✗ Worktree path already exists. Refusing to reuse stale directory.`, exit status non-zero |
 
 Also observed: launched from this agent's pane, the child inherited `XTMUX_AGENT_ISSUE`, `XTMUX_AGENT_ROLE` and others, and the new panes carried `@agent_issue XTRM-1078`, `@agent_role worker` and `@agent_dispatcher sessiondesign`. With `env -i`, `@agent_dispatcher sessiondesign` still appeared, so `xt` reads the dispatcher from a source other than the child env (**inferred**: an ancestor process). No claim or journal entry was written on XTRM-1078 (checked with `sb issue show` and `sb journal show`).
 
 **Conclusions.**
 1. The socket is solved without a fake `TMUX`. The viewer runs `xt` with `XTRM_SESSION_SOCKET=<its socket>` and **no** `TMUX`. A fake `TMUX` corrupts `@agent_parent_session`. The variable the lead proposed (`XTMUX_SOCKET`) is not needed; C2 as a socket change is dropped.
-2. Placement is the real gap. Only `--new-session` works from a process with no tmux client. With `--json`, `--pane` is silently ignored (a wrong placement reported as `ok`) and `--window` is refused. C2 becomes "placement without a client, under `--json`" (§4).
-3. A failed placement leaves a running orphan pane, a worktree and a branch (C4, a core bug).
+2. Placement is the real gap. Only `--new-session` works from a process with no tmux client. With `--json`, `--pane` is silently ignored (a wrong placement reported as `ok`) and `--window` is refused. Filed by the lead as **CORE-2826**.
+3. A failed placement leaves a running orphan pane, a worktree and a branch. Filed by the lead as **CORE-2827**.
+6. Under `--json`, launch failures print plain text and no `xtrm.command-outcome.v1` object, so there is no `reason_code` to show. The viewer maps them to `{status: "failed", reason_code: null}`, plus the exit status and the last `✗` line from xt's output. Proposed as C5: `--json` emits an outcome on every exit.
 4. The viewer builds the child env from an allowlist (`HOME`, `PATH`, `USER`, `LANG`, `TMUX_TMPDIR`, `XTRM_SESSION_SOCKET`) and passes identity only as flags. Inheriting the env of the shell that started the viewer would stamp every launch with that shell's issue and role. The dispatcher leak is reported to core with C4.
 5. The viewer's own tmux calls take `-S <socket>` everywhere. Today they carry none (`server/api.ts:619-620,649`, `server/discover.ts:91`); P1 fixes that.
 
@@ -106,12 +108,15 @@ Also observed: launched from this agent's pane, the child inherited `XTMUX_AGENT
 | # | Change | Why no existing flag works | Evidence |
 |---|---|---|---|
 | C1 | `xt codex`: `--pane`, `--session`, `--layout`, `--workers`, `--new-session` with `xt pi` semantics | Codex has `--window` only | `xt codex --help` |
-| C2 | Launcher placement from a process with no tmux client: `--pane`, `--workers` and `--window [--window-name] --session` must work under `XTRM_SESSION_SOCKET` and with `--json`. An unsupported combination must fail, never report `ok` for a different placement | `--json` ignores `--pane` and refuses `--window`; without `--json`, placement fails with "no current client" | §3.4 table |
+| C2 = **CORE-2826** | Launcher placement from a process with no tmux client: `--pane`, `--workers` and `--window [--window-name] --session` must work under `XTRM_SESSION_SOCKET` and with `--json`. An unsupported combination must fail, never report `ok` for a different placement | `--json` ignores `--pane` and refuses `--window`; without `--json`, placement fails with "no current client" | §3.4 table |
 | C3 | `xt worktree release --pane <id> --confirmed-by <actor>`, logged, server from `XTRM_SESSION_SOCKET` | Without `--client` release only checks; it refuses without `TMUX` | §3.5, core `worktree-release-pane.ts` |
-| C4 | Bug: a failed placement rolls back its pane, worktree and branch. Identity comes from flags, not from inherited `XTMUX_AGENT_*` env or ancestors | Orphan panes and worktrees after "no current client"; `@agent_issue`/`@agent_role`/`@agent_dispatcher` leaked | §3.4 |
+| C4 = **CORE-2827** | Bug: a failed placement rolls back its pane, worktree and branch. Identity comes from flags, not from inherited `XTMUX_AGENT_*` env or ancestors | Orphan panes and worktrees after "no current client"; `@agent_issue`/`@agent_role`/`@agent_dispatcher` leaked | §3.4 |
+| C5 | `--json` emits an `xtrm.command-outcome.v1` object on every exit, failures included | Branch and path collisions print plain text only | §3.4 |
 | — | CORE-2825: release `--dry-run` nudges (filed by the lead) | | §3.5 |
 
-Until C2 lands, phase 2 can ship entry point (c), New session, which works today (`--new-session --json` under `XTRM_SESSION_SOCKET`). Entry points a, a', b and d wait for C2, or the composer offers only New session with the reason "placement needs core C2".
+Filed: CORE-2825, CORE-2826, CORE-2827. C1 and C3 are filed after operator approval (lead ruling). C5 is a proposal for the lead.
+
+Until CORE-2826 lands, phase 2 ships entry point (c), New session, only. It works today (`--new-session --json` under `XTRM_SESSION_SOCKET`). Entry points a, a', b and d stay hidden until then.
 
 No new verb for move or close (non-goal, journal seq 4).
 
@@ -144,7 +149,7 @@ Disabled items stay visible with their reason, for example "Close thread… · a
 
 ### 5.3 The new-thread draft (one component)
 
-The main pane switches to a **draft** scope. The sidebar shows a draft row at the target placement with a static dashed dot. The dot becomes a spinner only after Enter, while the launch runs (F5). The draft has three parts, from top to bottom:
+The main pane switches to a **draft** scope. The sidebar shows a draft row at the target placement: a dashed row border and a static hollow dot, the size of the status dots. Every dashed or dotted ring tried at 7-10px read as a loader, so the dashes are on the row border, not on the dot. The dot becomes a spinner only after Enter, while the launch runs (F5). The draft has three parts, from top to bottom:
 
 1. **Hero:** "New thread" (`text-base font-semibold`) and one plain sentence for the placement: "Adds a pane to **workers** in **xx**." The sentence updates as the pickers change.
 2. **Where row** (above the box, left-aligned, the same 13px muted step as the existing under-row): `Placement ▾` (for example "Add pane to xx › workers") · `Repo ▾ path` · `Worktree ▾`.
@@ -162,6 +167,7 @@ Pickers (all popovers that open upward from their trigger, like the current agen
 - **Runtime:** Claude · Pi · Codex, one line each, with a reason when disabled (§3.3).
 - **Role:** none (plain session) · grouped list from `specialists list --json` (`name`, `description`, `category`, `model`). Line 2 is the description, truncated.
 - **Model:** the role's default as the placeholder, then the models allowed for the runtime. Anthropic models are hidden for Pi (rule in `ANTHROPIC_MODEL`). Free text is allowed.
+  **Runtime change rule:** when the runtime changes, the model resets to the role's default for that runtime, else to the runtime's own default (shown as "<Runtime> default", which sends no `--model`). The list then shows only the models that runtime can run. A free-text model that the new runtime cannot run is cleared. The same reset applies when the role changes (F6: Codex with "Codex default").
 - **Issue:** free text with a ref check (`sb issue show --json` through the host). It shows the title when the ref resolves.
 
 **Default placement (d):** the window of the currently selected scope when one is selected, else a new session. The last-used repo, runtime, role and model persist in localStorage. As in t3code, a picker that is not at its default reads in `--x-ink`.
@@ -170,7 +176,7 @@ Pickers (all popovers that open upward from their trigger, like the current agen
 
 - *Starting:* a launch card "Starting claude in a new worktree…" with shimmer (the existing `xtrm-shimmer`) and elapsed seconds. The send button shows a spinner. The fields are locked.
 - *Ready:* the outcome `ok` arrives with `session_name:pane_id`. The viewer selects the new pane's scope. The draft row becomes the real pane row once discovery sees it (one poll). An audit toast reads "Started worker-a3 in xx › workers".
-- *Failed:* the card turns `--x-danger` and shows the outcome `reason_code`, the `summary`, Retry and Copy command. The fields unlock and keep their values. Nothing is lost.
+- *Failed:* the card turns `--x-danger`. It shows the outcome `reason_code` and `summary` when xt returned an outcome; otherwise it shows the exit status and xt's own `✗` line (§3.4 item 6). Actions: Retry, Copy command, and "Use existing worktree" when the failure is a taken branch or path (`xt attach <slug> --fresh`). The fields unlock and keep their values. Nothing is lost. F6 shows a failure the UI cannot prevent: the branch `xt/8137` already exists. A placement the runtime cannot do is never offered (§3.3), so it cannot fail here.
 
 **Empty states:** with no tmux server, the sidebar says "No tmux server. Start one with New session" and the `+` stays. With no agent, the main pane offers the `+ New thread` button in place of "No agent".
 
@@ -179,7 +185,7 @@ Pickers (all popovers that open upward from their trigger, like the current agen
 Pane row ▸ **Close thread…** opens a console `DialogFrame` (`packages/xtrm-app/src/ui/dialog.tsx`, `rounded-lg bg-raised shadow-float`, width 32rem):
 
 - Header: "Close worker-a3" plus the branch and worktree path in mono.
-- **Agent:** status dot plus word ("Agent idle"). While `working`: "The agent is working. Stop it in the composer (Esc) before you close." Commit, Discard and Close are disabled.
+- **Agent:** status dot plus word ("Agent idle", "Agent working"). Only while `working`, a note row under it reads "Commit and push and Discard are off while the agent works. Stop it with Esc in the composer.", and Commit and push, Discard and Close thread are disabled (F10). While idle, the note row is absent (F7).
 - **Changes:** one row per file from porcelain v2, with an `M / A / D / R / ??` glyph in diff colours, and counts in the section title.
 - **Not pushed:** n commits ahead of upstream, or "no upstream".
 - The header shows the branch, then the worktree path in mono, truncated **from the left** on one line with the full path in a tooltip.
@@ -223,7 +229,7 @@ All endpoints are `POST`, pass `requireWrite` and `hostVerdict` (`server/guard.t
 | PR | Content | Gate |
 |---|---|---|
 | P1 | Socket resolution and `-S` on all existing viewer tmux calls; `menus.ts` builder plus the Base UI context menu on all four row kinds (copy items only); Shift+F10 and long press | unit tests for the builder; browser gate: menus on each row kind, keyboard open |
-| P2 | `/api/topology`, `/api/launch` (child env from an allowlist, `XTRM_SESSION_SOCKET`, identity only as flags), the draft scope, pickers, Command disclosure, launch card; entry point c at once, a, a', b, d when C2 lands; `Ctrl+Alt+N` | browser gate on a private socket: every entry point starts a pane at the right placement; `@agent_*` options match the identity doc after each, with no inherited issue or role |
+| P2 | `/api/topology`, `/api/launch` (child env from an allowlist, `XTRM_SESSION_SOCKET`, identity only as flags), the draft scope, pickers, Command disclosure, launch card, `Ctrl+Alt+N`. **Ships entry point (c) New session only; a, a', b and d stay hidden until CORE-2826 merges** | gate on a private socket: (c) starts a session, `@agent_*` match the identity doc with no inherited issue or role; failure card on a taken branch. **When CORE-2826 merges**, a follow-up PR enables a, a', b and d and extends the same gate to all of them |
 | P3 | `/api/worktree-status`, `/api/worktree-action`, close dialog, discard confirmation | browser gate: dirty → commit and push → close; dirty → discard → close; working agent disables actions |
 | P4 | `/api/move`, Move submenus, Undo toast | browser gate: join, break, move-window and undo; options unchanged after each |
 | core | C1, C2, C3, C4 (owner 9hym); CORE-2825 | core CI |
