@@ -88,7 +88,7 @@ function ChatWidthControl({
           aria-label={`Chat width: ${widthLabel(width)}`}
           title={`Chat width: ${widthLabel(width)}`}
           // Below 640px the lane is already the full column.
-          className="hidden size-7 items-center justify-center rounded-md text-ink-muted transition-colors outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover active:bg-pressed data-[state=open]:bg-hover data-[state=open]:text-ink sm:flex"
+          className="hidden size-7 items-center justify-center rounded-md text-icon-ink transition-colors outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover active:bg-pressed data-[state=open]:bg-hover data-[state=open]:text-ink sm:flex"
         >
           <Icon name="width" size="sm" />
         </button>

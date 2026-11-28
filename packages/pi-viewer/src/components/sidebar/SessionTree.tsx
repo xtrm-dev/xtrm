@@ -98,7 +98,7 @@ function GroupRow({
       >
         <Icon name="chevronDown" size="xs" className={cn("transition-transform", !row.expanded && "-rotate-90")} />
       </span>
-      <span className="ml-auto shrink-0 text-xs text-icon-ink tabular">{count}</span>
+      <span className="ml-auto shrink-0 text-xs text-ink-muted tabular">{count}</span>
     </>
   )
 }
@@ -162,13 +162,13 @@ export function SessionTree({
     const map = new Map<string, { glyph: HostGlyphName; label: string }>()
     for (const session of tree) {
       for (const window of session.windows) {
-        const host = windowHost(window.panes.map((pane) => pane.agent), localHost)
-        if (window.panes.length !== 1 && !host.mixed) continue
+        const host = windowHosts.get(window.key)
+        if (!host || (window.panes.length !== 1 && !host.mixed)) continue
         for (const pane of window.panes) map.set(pane.key, { glyph: hostGlyph(pane.agent.host, localHost), label: hostLabel(pane.agent.host, localHost) })
       }
     }
     return map
-  }, [tree, localHost])
+  }, [tree, windowHosts, localHost])
   const refs = useRef(new Map<string, HTMLDivElement>())
   const [focusKey, setFocusKey] = useState<string | null>(null)
   // The row that holds focus now, and the parents seen so far. When a render removes the focused

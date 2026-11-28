@@ -109,7 +109,7 @@ row). Both equal `ink` and `hover` in Threads and Console, so nothing changes th
 | text secondary | `#c8c8c8` | `--x-read` (thread prose, operator bubble text, every sidebar name since XTRM-1155) |
 | text muted | `#8e8e8e`, ruled up to `#a1a1a1` (see below) | `--x-ink-muted` (meta, time, unselected labels); inside a selected row `--x-ink-muted-selected` = `#c8c8c8` |
 | border | `#383838` | `--x-border` (and the code frame edge) |
-| icon ink | `#8e8e8e`, `#c8c8c8` inside a selected row | `--x-icon-ink`: the header icon buttons, the sidebar's collapse control, the host glyph and the row counters. Its own role since XTRM-1155 (3:1), because the muted **text** role stops at `#a1a1a1` on the `#383838` input |
+| icon ink | `#8e8e8e`, `#c8c8c8` inside a selected row | `--x-icon-ink`: the header icon buttons, the sidebar's collapse control and the host glyph. Its own role since XTRM-1155 (3:1), because the muted **text** role stops at `#a1a1a1` on the `#383838` input. The row counters are text, not marks, and stay on muted ink (4.54:1 on the input) |
 
 ### Tokens, dark: Threads, Console, Desktop
 

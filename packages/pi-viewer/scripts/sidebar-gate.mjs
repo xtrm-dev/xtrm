@@ -112,7 +112,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
     // the tree follows the Colours setting the chat follows. Both roles are resolved per row, because
     // Desktop's selected row lifts --x-icon-ink and --x-ink-muted above their palette values. The row's
     // aria-label names the host.
-    const rgb = await p.evaluate(() => {
+    const hostScan = await p.evaluate(() => {
       const canvas = document.createElement("canvas")
       canvas.width = canvas.height = 1
       const ctx = canvas.getContext("2d", { willReadFrequently: true })
@@ -142,7 +142,21 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
       }
       const sidebar = px(getComputedStyle(document.querySelector('[data-testid="sidebar"]')).backgroundColor)
       const base = sidebar ? sidebar.slice(0, 3) : null
-      return [...document.querySelectorAll("[role=treeitem]")].map((row) => {
+      const rowsEl = [...document.querySelectorAll("[role=treeitem]")]
+      // A pane row carries a glyph exactly when its window row cannot: the window has no row (one pane),
+      // or its row drew none (a window that mixes hosts). Counting alone would pass a uniform window
+      // whose pane rows repeat the window's glyph.
+      const wrong = []
+      let windowGlyphs = null
+      for (const row of rowsEl) {
+        const level = row.getAttribute("aria-level")
+        const glyphs = row.querySelectorAll("[data-testid=host-glyph]").length
+        if (level === "1") { windowGlyphs = null; continue }
+        if (level === "2") { windowGlyphs = glyphs; continue }
+        if (level !== "3") continue
+        if (glyphs !== (windowGlyphs === 0 || windowGlyphs === null ? 1 : 0)) wrong.push({ windowGlyphs, glyphs })
+      }
+      return { wrong, rows: rowsEl.map((row) => {
         const style = getComputedStyle(row)
         const glyph = row.querySelector("[data-testid=host-glyph]")
         const svg = glyph?.querySelector("svg") ?? null
@@ -164,8 +178,10 @@ for (const [w, h] of [[1440, 900], [390, 844]]) for (const theme of ["dark", "li
           box: box ? [Math.round(box.width), Math.round(box.height)] : null,
           label: row.getAttribute("aria-label") || "",
         }
-      })
+      }) }
     })
+    const rgb = hostScan.rows
+    check(tag + " a pane row repeats its window's glyph only when the window row is absent", hostScan.wrong.length === 0, JSON.stringify(hostScan.wrong.slice(0, 3)))
     // One parser, one tolerance: the canvas quantises #a0a0a8 and rgb(160, 160, 168) to the same bytes.
     const same = (a, b) => Array.isArray(a) && Array.isArray(b) && a.every((v, i) => Math.abs(v - b[i]) <= 1)
     const spokesmen = rgb.filter((r) => r.level === "2"), panes = rgb.filter((r) => r.level === "3"), marked = rgb.filter((r) => r.glyphs > 0)

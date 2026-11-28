@@ -160,7 +160,7 @@ Every token below is declared in `src/styles.css:34-116` (light) and `:118-163` 
 | `--x-ink` | `#18181b` | `#ececef` | primary text |
 | `--x-ink-muted` | `#5f5f68` | `#a0a0a8` | meta, time, resting icons, quiet text |
 | `--x-ink-faint` | `#94949c` | `#6a6a72` | third text step; not used for the sidebar dot |
-| `--x-icon-ink` | `#5f5f68` | `#a0a0a8` | chrome marks: header icon buttons, the sidebar's collapse control, the host glyph, the row counters. A 3:1 role, not text (XTRM-1155) |
+| `--x-icon-ink` | `#5f5f68` | `#a0a0a8` | chrome marks: header icon buttons, the sidebar's collapse control, the host glyph. A 3:1 role, not text; the row counters count as text and stay on `--x-ink-muted` (XTRM-1155) |
 | `--x-border-muted` | `rgb(15 15 20 / 0.07)` | `rgb(255 255 255 / 0.08)` | default hairline |
 | `--x-border-subtle` | `rgb(15 15 20 / 0.04)` | `rgb(255 255 255 / 0.06)` | table grid only |
 | `--x-border` | `rgb(15 15 20 / 0.11)` | `rgb(255 255 255 / 0.12)` | control border |
@@ -266,7 +266,7 @@ only (`src/styles.css:210-235`; `test/palette.test.ts` holds the block to that l
 | `--x-read` | `#c8c8c8` | thread prose, operator bubble, every sidebar name |
 | `--x-ink-muted` | `#a1a1a1` | meta, time, unselected labels |
 | `--x-ink-muted-selected` | `#c8c8c8` | muted text inside Desktop's `#454545` row |
-| `--x-icon-ink` | `#8e8e8e` | chrome marks: header icon buttons, the collapse control, the host glyph, the row counters |
+| `--x-icon-ink` | `#8e8e8e` | chrome marks: header icon buttons, the collapse control, the host glyph |
 
 The chrome marks take their own variable because an icon only needs 3:1 (WCAG 1.4.11) and the muted
 **text** role cannot follow the tone down: Desktop's `#383838` composer fill pins `--x-ink-muted` at
@@ -860,7 +860,7 @@ Operator rulings that shape the app, with the durable record. "seq" is a journal
 | 2026-11-27 | Composer send and stop are bare glyphs: an outline square in ink and a return arrow in the github tone, no filled boxes, hover by tone or opacity; the hint reads only `@ to mention` | XTRM-1149 |
 | 2026-11-27 | One scrollbar: every scroll container in both packages takes the chat's thin dim bar (`* { scrollbar-width: thin; scrollbar-color: var(--color-border-strong) transparent }` in the base layer), so no container falls back to the browser default; the composer's `@ to mention` moves onto the box's 12px text inset; the send button names its key (`Send (Enter)`) | XTRM-1153 |
 | 2026-11-27 | The sidebar marks the host: a `monitor` glyph on a window whose agents all run on this machine, a `server` glyph when they run on another host, in front of the name; a mixed window defers the glyph to its pane rows; an absent host reads as this machine | XTRM-1155, for XTRM-1139 |
-| 2026-11-28 | Tone alignment: every sidebar name takes the reading role, so the tree follows Standard/Soft like the chat; a standalone chrome-mark role (`--x-icon-ink`, `#a0a0a8` standard / `#8e8e8e` soft, 3:1) carries the header icon buttons, the collapse control, the host glyph and the row counters, because the muted text role cannot dim past Desktop's 4.5:1 floor; row counters leave the faint step | XTRM-1155 |
+| 2026-11-28 | Tone alignment: every sidebar name takes the reading role, so the tree follows Standard/Soft like the chat; a standalone chrome-mark role (`--x-icon-ink`, `#a0a0a8` standard / `#8e8e8e` soft, 3:1) carries the header icon buttons, the collapse control and the host glyph, because the muted text role cannot dim past Desktop's 4.5:1 floor; the row counters are text, so they leave the 3.31:1 faint step for `--x-ink-muted` (4.54:1 on Desktop's control) | XTRM-1155 |
 
 ## 11. Open questions
 

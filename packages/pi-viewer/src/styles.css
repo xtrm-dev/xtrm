@@ -46,7 +46,7 @@
   --x-ink-muted: #5f5f68;
   --x-ink-faint: #94949c;
   /* Non-text chrome marks: the header's icon buttons, the sidebar's collapse control, the host glyph
-     and the row counters (XTRM-1155). Its own role, because an icon only needs 3:1 and the muted text
+     (XTRM-1155). Its own role, because an icon only needs 3:1 and the muted text
      role is pinned at 4.5:1 by Desktop's composer fill; light equals muted, so nothing moves here. */
   --x-icon-ink: #5f5f68;
   --x-border-muted: rgb(15 15 20 / 0.07);
