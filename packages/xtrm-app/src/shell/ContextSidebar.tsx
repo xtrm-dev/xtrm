@@ -69,8 +69,9 @@ function RepositorySelector() {
       triggerClassName="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
       // No ring (XTRM-1136): the strip drop-up's ringless shadow, so the open picker carries no border.
       popupClassName="rounded-lg bg-raised shadow-strip-open"
-      // A short picker (XTRM-1136): the search row plus about ten of the most recently active
-      // repositories; the rest scroll in the panel's one scroller.
+      // A height guard (XTRM-1136): unfiltered, pickerRepos lists only RECENT_REPOS rows (plus the
+      // current repository), so the cap matters for a broad filter, which then scrolls in the panel's
+      // one scroller.
       maxHeight={384}
       row={
         <>

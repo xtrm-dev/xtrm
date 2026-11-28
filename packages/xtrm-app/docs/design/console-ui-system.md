@@ -1044,8 +1044,10 @@ panel and carries the background, radius and shadow, and the header copy paints 
 so the panel grows out of the button with no seam at its edge (XTRM-1136). Neither carries a ring:
 the repository picker's shell is `rounded-lg bg-raised shadow-strip-open`, and the strip's drop-up
 is `rounded-md bg-strip-open shadow-strip-open`, the strip's own open colour. The picker's panel is
-capped at 384px (`maxHeight`), so it stays a short list of the most recently active repositories
-and still has one scroller.
+capped at 384px (`maxHeight`). Unfiltered it lists only the 8 most recently active repositories
+(`pickerRepos`, `RECENT_REPOS`), plus the current repository when it is not among them; a filter
+searches every repository, and a long match scrolls in the panel's one scroller. The exit animation
+keeps the cap, so closing never grows the page.
 
 ### 8. Pull requests show every state by default
 
