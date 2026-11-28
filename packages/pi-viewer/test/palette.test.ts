@@ -129,8 +129,9 @@ function tokens(text: string): Record<string, string> {
   return out
 }
 
-/** The only variables a soft-text layer may set: Desktop's text roles. */
-const TEXT = ["ink", "read", "ink-muted", "ink-muted-selected"]
+/** The only variables a soft-text layer may set: Desktop's text roles, plus the chrome marks that follow
+ * them (XTRM-1155: the icon role dims with the reading colour). */
+const TEXT = ["ink", "read", "ink-muted", "ink-muted-selected", "icon-ink"]
 
 const threadsLight = tokens(block(":root {"))
 const dark = tokens(block(':root[data-theme="dark"]'))
@@ -179,7 +180,7 @@ test("in the light theme a soft version equals its base: no light rule names the
 })
 
 test("the soft text values are Desktop's text set and Desktop's surfaces are unchanged", () => {
-  assert.deepEqual(layer, { ink: "#e4e4e4", read: "#c8c8c8", "ink-muted": "#a1a1a1", "ink-muted-selected": "#c8c8c8" })
+  assert.deepEqual(layer, { ink: "#e4e4e4", read: "#c8c8c8", "ink-muted": "#a1a1a1", "ink-muted-selected": "#c8c8c8", "icon-ink": "#8e8e8e" })
   // Desktop wears the same layer through its preset (text: soft), so its text equals the soft versions'; the
   // layer is no longer tied to the Desktop palette, so Desktop surfaces can read in standard text too.
   assert.equal(PRESETS.desktop.text, "soft")
@@ -198,7 +199,7 @@ test("the soft text values are Desktop's text set and Desktop's surfaces are unc
     code: "var(--x-deep)",
     "code-edge": "var(--x-border)",
   })
-  assert.deepEqual(differing(threadsDark, { ...threadsDark, ...layer }).sort(), ["ink", "ink-muted", "ink-muted-selected", "read"].sort())
+  assert.deepEqual(differing(threadsDark, { ...threadsDark, ...layer }).sort(), ["icon-ink", "ink", "ink-muted", "ink-muted-selected", "read"].sort())
 })
 
 

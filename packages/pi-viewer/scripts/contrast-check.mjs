@@ -7,7 +7,9 @@
 // base plus the soft-text layer in dark, and equals its base in light.
 // Since XTRM-1048 it also holds the sidebar's status dot to 3:1 against the sidebar: the dot carries
 // the state alone, so its colour is a non-text mark that must stay visible in every palette.
-// Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1 or a dot below 3:1)
+// Since XTRM-1155 it also holds the chrome marks to 3:1: the header icon buttons, the sidebar collapse
+// control and the host glyph paint in --x-icon-ink, which soft text dims to #8e8e8e.
+// Usage: node scripts/contrast-check.mjs   (exit 1 when a text pair is below 4.5:1, or a dot or chrome mark below 3:1)
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
@@ -42,6 +44,9 @@ const consoleDark = tokens(block(':root[data-palette="console"][data-theme="dark
 const desktopDark = tokens(block(':root[data-palette="desktop"][data-theme="dark"] {'))
 // The text-only layer Desktop and the soft-text versions share (XTRM-1053).
 const softText = tokens(block(':root[data-text="soft"][data-theme="dark"] {'))
+// The Desktop sidebar's selected row. It is READ, not assumed: whatever the rule stops declaring, the
+// selected plane stops painting, and the checks below fail instead of passing on a substituted colour.
+const selectedRow = tokens(block(':root[data-sidebar="desktop"][data-theme="dark"] [data-testid="sidebar"] [aria-selected="true"]'))
 const consoleDarkSet = { ...threadsLight, ...dark, ...consoleAll, ...consoleDark }
 const sets = [
   ["threads", "light", threadsLight],
@@ -53,8 +58,7 @@ const sets = [
   ["console-soft", "light", { ...threadsLight, ...consoleAll }],
   ["console-soft", "dark", { ...consoleDarkSet, ...softText }],
   ["desktop", "light", threadsLight],
-  // Desktop alone restyles muted text inside its #454545 selected row (styles.css, [aria-selected]).
-  ["desktop", "dark", { ...threadsLight, ...dark, ...desktopDark, ...softText, "muted-selected-rule": "on" }],
+  ["desktop", "dark", { ...threadsLight, ...dark, ...desktopDark, ...softText }],
 ]
 
 /** The final value of a token, following var(--x-name) the way the cascade does. */
@@ -112,6 +116,15 @@ const roles = [
   { name: "danger (failed, errors)", token: "danger" },
 ]
 
+/**
+ * The set as it paints inside the sidebar's selected row. The row rule is scoped to the Desktop
+ * sidebar in the dark theme, so only that set takes its declarations; every other set paints its own
+ * roles inside the row.
+ */
+function selected(set, palette, theme) {
+  return palette === "desktop" && theme === "dark" ? { ...set, ...selectedRow } : set
+}
+
 function plane(set, name) {
   if (name === "inset") {
     const canvas = parse(value(set, "canvas"), [255, 255, 255])
@@ -133,9 +146,8 @@ for (const [palette, theme, set] of sets) {
       // Error text never sits on a control, a selected sidebar row or a segmented track.
       if (role.token === "danger" && ["control", "selected", "track"].includes(name)) continue
       const bg = plane(set, name)
-      // Inside a selected row a palette may restyle muted text (Desktop: --x-ink-muted-selected).
-      const token = role.token === "ink-muted" && name === "selected" && set["muted-selected-rule"] ? "ink-muted-selected" : role.token
-      let fg = parse(value(set, token), bg)
+      const rowSet = name === "selected" ? selected(set, palette, theme) : set
+      let fg = parse(value(rowSet, role.token), bg)
       if (role.alpha) fg = mix(fg, bg, role.alpha)
       const result = ratio(fg, bg)
       const ok = result >= 4.5
@@ -176,11 +188,30 @@ for (const [palette, theme, set] of sets) {
   }
 }
 
+// XTRM-1155: the chrome marks — the header's icon buttons, the sidebar's collapse control, the host glyph
+// and the host glyph — are non-text marks, so each is held to the 3:1 minimum against the planes it sits
+// on, not the 4.5:1 text floor. Soft text dims them to #8e8e8e, which clears 3:1 everywhere except
+// Desktop's #454545 selected row; there the same rule that lifts muted text lifts the marks, so the
+// selected row is read in --x-ink-muted-selected.
+const iconPlanes = ["sidebar", "deep", "surface", "raised", "control", "canvas", "selected"]
+let iconFailures = 0
+for (const [palette, theme, set] of sets) {
+  for (const name of iconPlanes) {
+    const bg = plane(set, name)
+    const result = ratio(parse(value(name === "selected" ? selected(set, palette, theme) : set, "icon-ink"), bg), bg)
+    if (result < 3) iconFailures += 1
+    console.log(`${result >= 3 ? "PASS" : "FAIL"} ${palette.padEnd(12)} ${theme.padEnd(5)} ${"icon-ink chrome marks".padEnd(40)} on ${name.padEnd(14)} ${result.toFixed(2)}`)
+  }
+}
+
 if (failures) {
   console.error(`${failures} pair(s) below 4.5:1`)
 }
 if (dotFailures) {
   console.error(`${dotFailures} sidebar dot(s) below 3:1`)
 }
-if (failures || dotFailures) process.exit(1)
-console.log(`all transcript text roles >= 4.5:1 (Desktop dark muted text on a selected row reads in --x-ink-muted-selected), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, in all five palettes`)
+if (iconFailures) {
+  console.error(`${iconFailures} chrome mark(s) below 3:1`)
+}
+if (failures || dotFailures || iconFailures) process.exit(1)
+console.log(`all transcript text roles >= 4.5:1 (Desktop dark muted text on a selected row reads in --x-ink-muted-selected), prose >= 7:1 on the canvas, and all sidebar status dots >= 3:1, and all chrome marks (icon-ink) >= 3:1, in all five palettes`)

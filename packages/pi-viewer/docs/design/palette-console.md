@@ -81,7 +81,8 @@ sticky header; `bg-inset` on the four quiet panels; `xtrm-composer-box` on the c
 `npm run test:contrast` resolves the tokens for all ten sets (Threads, Threads · soft, Console, Console · soft and Desktop, dark and light)
 and checks ink, ink at 90%, read (thread prose), ink-muted, accent-ink and danger against deep, surface,
 raised, control, canvas, sidebar, composer-fill, composer-focus, code, inset, the sidebar's selected row and the segmented
-track: every pair is at least 4.5:1. Thread prose is also held to 7:1 on the canvas in every palette.
+track: every pair is at least 4.5:1. Thread prose is also held to 7:1 on the canvas in every palette, the
+sidebar status dots and the chrome marks (`--x-icon-ink`) to 3:1 in every palette.
 `ink-faint` stays a glyph role (INFO lines).
 
 ## Desktop palette (XTRM-1051)
@@ -105,10 +106,10 @@ row). Both equal `ink` and `hover` in Threads and Console, so nothing changes th
 | input | `#383838` | `--x-control`, and the focused composer fill (`--x-composer-focus`) |
 | composer | `#333333` | `--x-composer-fill` on the `#1f1f1f` base: one step up, no border (XTRM-1054) |
 | text primary | `#e4e4e4` | `--x-ink` (names, titles, selected rows) |
-| text secondary | `#c8c8c8` | `--x-read` (thread prose, operator bubble text); also the "icon primary" value |
-| text muted | `#8e8e8e`, ruled up to `#a1a1a1` (see below) | `--x-ink-muted` (meta, time, unselected labels, resting icons); inside a selected row `--x-ink-muted-selected` = `#c8c8c8` |
+| text secondary | `#c8c8c8` | `--x-read` (thread prose, operator bubble text, every sidebar name since XTRM-1155) |
+| text muted | `#8e8e8e`, ruled up to `#a1a1a1` (see below) | `--x-ink-muted` (meta, time, unselected labels); inside a selected row `--x-ink-muted-selected` = `#c8c8c8` |
 | border | `#383838` | `--x-border` (and the code frame edge) |
-| icon primary / muted | `#c8c8c8` / `#8e8e8e` (muted ruled up to `#a1a1a1`) | icons use `ink-muted` at rest and `ink` on hover; no separate token |
+| icon ink | `#8e8e8e`, `#c8c8c8` inside a selected row | `--x-icon-ink`: the header icon buttons, the sidebar's collapse control and the host glyph. Its own role since XTRM-1155 (3:1), because the muted **text** role stops at `#a1a1a1` on the `#383838` input. The row counters are text, not marks, and stay on muted ink (4.54:1 on the input) |
 
 ### Tokens, dark: Threads, Console, Desktop
 
@@ -175,7 +176,7 @@ Mechanism: a soft choice sets the root to the base's `data-palette` (`threads` o
 `src/styles.css` one block holds the text set and is shared with Desktop through a grouped selector
 (`:root[data-palette="desktop"][data-theme="dark"], :root[data-text="soft"][data-theme="dark"]`), so no value is
 written twice and no surface value appears in it. It matches in dark only; in light nothing matches and each
-soft version equals its base. `test/palette.test.ts` proves that the layer sets only the four text variables,
+soft version equals its base. `test/palette.test.ts` proves that the layer sets only the five ink variables,
 that each soft version differs from its base in no other variable (every non-text variable resolves
 byte-identical, including the ones that reference others), that the layer never names the light theme or a
 selected row, and that Desktop's own non-text values are unchanged.
@@ -185,11 +186,12 @@ selected row, and that Desktop's own non-text values are unchanged.
 | Token | Threads | Threads · soft | Console | Console · soft | Desktop |
 |---|---|---|---|---|---|
 | `--x-ink` (names, titles, selected rows) | `#ececef` | `#e4e4e4` | `#ececef` | `#e4e4e4` | `#e4e4e4` |
-| `--x-read` (thread prose, operator bubble) | ink `#ececef` | `#c8c8c8` | ink `#ececef` | `#c8c8c8` | `#c8c8c8` |
-| `--x-ink-muted` (meta, time, labels, resting icons) | `#a0a0a8` | `#a1a1a1` | `#a0a0a8` | `#a1a1a1` | `#a1a1a1` |
+| `--x-read` (thread prose, operator bubble, every sidebar name) | ink `#ececef` | `#c8c8c8` | ink `#ececef` | `#c8c8c8` | `#c8c8c8` |
+| `--x-ink-muted` (meta, time, labels) | `#a0a0a8` | `#a1a1a1` | `#a0a0a8` | `#a1a1a1` | `#a1a1a1` |
 | `--x-ink-muted-selected` | unused | `#c8c8c8` (unused) | unused | `#c8c8c8` (unused) | `#c8c8c8` (selected row) |
+| `--x-icon-ink` (chrome marks) | `#a0a0a8` | `#8e8e8e` | `#a0a0a8` | `#8e8e8e` | `#8e8e8e` (`#c8c8c8` in the selected row) |
 
-Icons follow the text tokens they already use (`ink-muted` at rest, `ink` on hover). Every other token (canvas,
+Icons at rest paint in `--x-icon-ink` and take `ink` on hover (XTRM-1155: a 3:1 role, so it can dim past the muted text floor). Every other token (canvas,
 sidebar, surface, raised, control, selected, segment, borders, accent, danger, pill edge, code frame, composer)
 is the base's, as in the tables above. Light theme: each soft version equals its base. The control's tooltip
 says so ("Dark theme: ... surfaces with softer text. In the light theme it equals ...").

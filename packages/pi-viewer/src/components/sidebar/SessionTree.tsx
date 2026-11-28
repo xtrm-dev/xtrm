@@ -9,6 +9,7 @@ import {
   type SessionNode,
   type WindowNode,
 } from "@/lib/tree"
+import { hostGlyph, hostLabel, windowHost, type HostGlyphName, type WindowHost } from "@/lib/host-glyph"
 import { scopeRowKey, type Scope } from "@/lib/scope"
 import { sidebarDotLabel } from "@/lib/status-dot"
 import { cn } from "@/lib/utils"
@@ -27,6 +28,24 @@ import { SidebarDot } from "./SidebarDot"
 const PROVIDER_LABEL = { pi: "Pi", claude: "Claude" } as const
 
 /**
+ * The host glyph on a row (XTRM-1155): the monitor for the machine that serves this viewer, the
+ * server for another host. It is decorative; the row's accessible name and tooltip carry `label`.
+ */
+function HostGlyph({ glyph, label, className }: { glyph: HostGlyphName; label: string; className?: string }) {
+  return (
+    <span
+      data-testid="host-glyph"
+      data-host={glyph === "monitor" ? "local" : "remote"}
+      title={label}
+      aria-hidden
+      className={cn("flex shrink-0 items-center", className)}
+    >
+      <Icon name={glyph} size="xs" />
+    </span>
+  )
+}
+
+/**
  * The role on line 2, bold for every role. Lead and Manager keep their role colours (the thread
  * view's pill colours); every other role is bold in the normal line ink (operator ruling, XTRM-1028).
  */
@@ -42,22 +61,30 @@ function RoleLabel({ role }: { role: string | null }) {
 function GroupRow({
   row,
   node,
+  host,
   onToggle,
 }: {
   row: FlatRow
   node: SessionNode | WindowNode
+  /** The window's host; null on a session row, which spans windows. */
+  host: WindowHost | null
   onToggle: (key: string, open: boolean) => void
 }) {
   const isSession = node.kind === "session"
   const count = node.kind === "session" ? node.count : node.panes.length
   return (
     <>
-      <span
-        className={cn("min-w-0 truncate text-sm", isSession ? "font-semibold text-ink" : "font-medium text-ink-muted")}
-        style={{ marginLeft: "var(--row-indent)" }}
-        title={node.kind === "window" ? `window ${node.index}` : undefined}
-      >
-        {node.name}
+      <span className="flex min-w-0 items-center gap-1" style={{ marginLeft: "var(--row-indent)" }}>
+        {host?.glyph ? <HostGlyph glyph={host.glyph} label={host.label} className="text-icon-ink" /> : null}
+        {/* Every name takes the reading role (XTRM-1155): --x-read is primary under standard text and
+            #c8c8c8 under soft, so the tree follows the Colours setting the chat already follows. Level
+            then reads from weight, indent and the chevron. */}
+        <span
+          className={cn("min-w-0 truncate text-sm text-read", isSession ? "font-semibold" : "font-medium")}
+          title={node.kind === "window" ? `window ${node.index}${host ? ` · ${host.label}` : ""}` : undefined}
+        >
+          {node.name}
+        </span>
       </span>
       {/* The chevron sits right after the label, as in the Claude Code sidebar. The row selects its
           scope; the chevron alone expands and collapses (the arrow keys do too). */}
@@ -71,17 +98,22 @@ function GroupRow({
       >
         <Icon name="chevronDown" size="xs" className={cn("transition-transform", !row.expanded && "-rotate-90")} />
       </span>
-      <span className="ml-auto shrink-0 text-xs text-ink-faint tabular">{count}</span>
+      <span className="ml-auto shrink-0 text-xs text-ink-muted tabular">{count}</span>
     </>
   )
 }
 
-function PaneRowBody({ pane, selected }: { pane: PaneNode; selected: boolean }) {
+function PaneRowBody({ pane, selected, host }: { pane: PaneNode; selected: boolean; host: { glyph: HostGlyphName; label: string } | null }) {
   const { agent } = pane
   return (
     <>
       <span className="flex min-w-0 flex-1 flex-col" style={{ marginLeft: "var(--row-indent)" }}>
-        <span className={cn("truncate text-sm", selected ? "font-medium text-ink" : "text-ink")}>{agent.name}</span>
+        {/* The pane row carries a host glyph only when it is the row that speaks for the window: a
+            single-pane window's stand-in row, or a pane in a window that mixes hosts (XTRM-1155). */}
+        <span className="flex min-w-0 items-center gap-1">
+          {host ? <HostGlyph glyph={host.glyph} label={host.label} className="text-icon-ink" /> : null}
+          <span className={cn("min-w-0 truncate text-sm text-read", selected ? "font-medium" : undefined)}>{agent.name}</span>
+        </span>
         {/* Line 2, in the operator's order (XTRM-1048): the role, then the runtime, then the folder and
             the repo. Spacing only, no separators; the state rides on the dot alone and is not written
             here a second time. */}
@@ -107,14 +139,36 @@ export function SessionTree({
   collapsed,
   onToggle,
   onSelect,
+  localHostId = null,
 }: {
   tree: SessionNode[]
   scope: Scope | null
   collapsed: ReadonlySet<string>
   onToggle: (key: string, open: boolean) => void
   onSelect: (scope: Scope) => void
+  /** The viewer's own host id, once discovery reports hosts; null reads every reported host as remote. */
+  localHostId?: string | null
 }) {
+  const localHost = localHostId ?? null
   const rows = useMemo(() => flatten(tree, collapsed), [tree, collapsed])
+  // The window's host, and the host a pane row carries when the pane row is the one that speaks for
+  // its window: a single-pane window has no row of its own, and a mixed window defers to its panes.
+  const windowHosts = useMemo(() => {
+    const map = new Map<string, WindowHost>()
+    for (const session of tree) for (const window of session.windows) map.set(window.key, windowHost(window.panes.map((pane) => pane.agent), localHost))
+    return map
+  }, [tree, localHost])
+  const paneHosts = useMemo(() => {
+    const map = new Map<string, { glyph: HostGlyphName; label: string }>()
+    for (const session of tree) {
+      for (const window of session.windows) {
+        const host = windowHosts.get(window.key)
+        if (!host || (window.panes.length !== 1 && !host.mixed)) continue
+        for (const pane of window.panes) map.set(pane.key, { glyph: hostGlyph(pane.agent.host, localHost), label: hostLabel(pane.agent.host, localHost) })
+      }
+    }
+    return map
+  }, [tree, windowHosts, localHost])
   const refs = useRef(new Map<string, HTMLDivElement>())
   const [focusKey, setFocusKey] = useState<string | null>(null)
   // The row that holds focus now, and the parents seen so far. When a render removes the focused
@@ -186,12 +240,16 @@ export function SessionTree({
     <div role="tree" aria-label="tmux sessions" className="flex flex-col">
       {rows.map((row) => {
         const selected = row.key === selectedKey
+        const windowRowHost = row.node.kind === "window" ? (windowHosts.get(row.key) ?? null) : null
+        const paneRowHost = row.node.kind === "pane" ? (paneHosts.get(row.key) ?? null) : null
+        const rowHost = windowRowHost ?? paneRowHost
+        const hostWords = rowHost ? `, ${rowHost.label}` : ""
         const label =
           row.node.kind === "pane"
-            ? `${row.node.agent.name}, ${row.node.agent.role ? `${row.node.agent.role}, ` : ""}${PROVIDER_LABEL[row.node.agent.provider]}, ${sidebarDotLabel(row.node.agent.status, row.node.agent.statusNote)}`
+            ? `${row.node.agent.name}, ${row.node.agent.role ? `${row.node.agent.role}, ` : ""}${PROVIDER_LABEL[row.node.agent.provider]}, ${sidebarDotLabel(row.node.agent.status, row.node.agent.statusNote)}${hostWords}`
             : row.node.kind === "session"
               ? `${row.node.name}, ${row.node.count} agents`
-              : `${row.node.name}, ${row.node.panes.length} agents`
+              : `${row.node.name}, ${row.node.panes.length} agents${hostWords}`
         return (
           <div
             key={row.key}
@@ -206,7 +264,7 @@ export function SessionTree({
             aria-expanded={row.expandable ? row.expanded : undefined}
             aria-selected={selected}
             aria-label={label}
-            title={row.node.kind === "pane" ? `${row.node.agent.provider} · ${row.node.agent.windowName || `window ${row.node.agent.windowIndex}`} · ${row.node.agent.cwd}` : undefined}
+            title={row.node.kind === "pane" ? `${row.node.agent.provider} · ${row.node.agent.windowName || `window ${row.node.agent.windowIndex}`} · ${row.node.agent.cwd}${paneRowHost ? ` · ${paneRowHost.label}` : ""}` : undefined}
             tabIndex={row.key === tabbable ? 0 : -1}
             data-key={row.key}
             data-provider={row.node.kind === "pane" ? row.node.agent.provider : undefined}
@@ -231,9 +289,9 @@ export function SessionTree({
             className={cn(ROW_BASE, row.node.kind === "pane" ? ROW_TWO_LINE : ROW_ONE_LINE, selected && ROW_SELECTED)}
           >
             {row.node.kind === "pane" ? (
-              <PaneRowBody pane={row.node} selected={selected} />
+              <PaneRowBody pane={row.node} selected={selected} host={paneRowHost} />
             ) : (
-              <GroupRow row={row} node={row.node} onToggle={onToggle} />
+              <GroupRow row={row} node={row.node} host={windowRowHost} onToggle={onToggle} />
             )}
           </div>
         )
