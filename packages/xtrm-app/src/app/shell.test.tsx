@@ -28,7 +28,7 @@ describe("Console v2 shell", () => {
     expect(screen.queryByTestId("global-rail")).toBeNull();
     expect(screen.getByTestId("context-sidebar")).toBeTruthy();
     expect(screen.getByTestId("inspector-rail")).toBeTruthy();
-    // The list key is the shared pill (2026-11-27 ruling): locator | short ref, full address in its tooltip.
+    // The list key is quiet text (XTRM-1136): the locator, then the short ref's number; full address in its tooltip.
     await screen.findByText("XTRM-300.1");
     const key = document.querySelector('[data-key-cell] [data-issue-key="XTRM-301"]') as HTMLElement;
     expect(key.dataset.locator).toBe("XTRM-300.1");

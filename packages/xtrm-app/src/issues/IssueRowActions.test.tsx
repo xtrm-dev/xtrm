@@ -22,7 +22,9 @@ function renderIssues() {
 /** The first rendered issue row, resolved from its key cell. */
 async function firstRow() {
   await screen.findByRole("region", { name: "XTRM Issues" });
-  const keys = await screen.findAllByText(/^XTRM-3\d\d$/, undefined, { timeout: 5000 });
+  // The list key splits the short ref into prefix and number (XTRM-1136); its data attribute keeps it whole.
+  await screen.findAllByText(/^3\d\d$/, undefined, { timeout: 5000 });
+  const keys = Array.from(document.querySelectorAll<HTMLElement>("[data-key-cell] [data-issue-key]")).filter((k) => /^XTRM-3\d\d$/.test(k.dataset.issueKey ?? ""));
   const row = keys[0].closest('[role="button"]') as HTMLElement | null;
   expect(row).not.toBeNull();
   return { row: row!, key: keys[0] };

@@ -1001,9 +1001,12 @@ keyboard focus.
 `Badge variant="solid"` fills one tone and inks it pure white from a single `--x-chip-*` set shared by
 both themes: `#5b54ea` accent (5.38:1), `#b45309` attention (5.02:1), `#157f4d` success (5.03:1),
 `#c0392b` danger (5.44:1), `#6b6b76` neutral (5.26:1); each value also clears 3.36:1 against the dark
-surface `#151515`. Terminal issues take the success tone. The key is the shared `IssueKeyPill`
-(2026-11-27 ruling, superseding the bare key): a hairline-bordered mono pill with no fill,
-`locator | short ref`, carrying the full address in its `title`. The status chip carries the colour;
+surface `#151515`. Terminal issues take the success tone. In the issue list the key is
+`IssueKeyText` (2026-11-27 follow-up, XTRM-1136, superseding the pill in the list only): quiet mono
+text, no border and no fill, the whole locator in faint ink and then only the short ref's number in
+semibold muted ink (`XTRM-300.1 301`; a root reads `XTRM-300`), with the full address in its
+`title`. Everywhere else (drawer, breadcrumbs, references) the key stays the shared `IssueKeyPill`:
+a hairline-bordered mono pill, `locator | short ref`. The status chip carries the colour;
 the key carries the address. Gaps (Draft, Unattested, Stale, Open) are the quiet muted tint; only a
 state of work is solid (`IssueStatusBadge`, the one chip for the list and the drawer).
 
