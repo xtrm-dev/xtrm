@@ -56,7 +56,13 @@ describe("expanding drop-up", () => {
     expectHeaderRepeatsTrigger(trigger);
     // The drop-up grows upward out of the trigger row, so the panel hangs above the header.
     expect(popup!.lastElementChild).toBe(header());
-    expect(popup!.querySelector("[data-expand-popover-surface]")!.className).toContain("bottom-full");
+    // One shell spans the header and the panel (XTRM-1136): anchored on the trigger's bottom edge,
+    // it grows upward, and the header copy paints no fill of its own over it.
+    const shell = popup!.querySelector<HTMLElement>("[data-expand-popover-shell]")!;
+    expect(shell.className).toContain("bottom-0");
+    expect(shell.className).toContain("flex-col-reverse");
+    expect(shell.className).toContain("bg-strip-open");
+    expect(header()!.className).toContain("bg-transparent!");
     // Today's content, now inside the collapsing body.
     const transport = screen.getByTestId("board-transport");
     expect(transport.closest("[data-expand-popover-body]")).not.toBeNull();
@@ -91,7 +97,10 @@ describe("expanding repository selector", () => {
     expectHeaderRepeatsTrigger(trigger);
     // The panel hangs off the header's outer edge: the popup box never leaves the trigger rect.
     expect([...popup.children].map((child) => child.hasAttribute("data-expand-popover-header"))).toEqual([false, true]);
-    expect(popup.querySelector("[data-expand-popover-surface]")!.className).toContain("top-full");
+    const shell = popup.querySelector<HTMLElement>("[data-expand-popover-shell]")!;
+    expect(shell.className).toContain("top-0");
+    expect(shell.className).toContain("bg-raised");
+    expect(shell.contains(popup.querySelector("[data-expand-popover-surface]"))).toBe(true);
     expect(screen.getByLabelText("Filter repositories")).toBeTruthy();
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });

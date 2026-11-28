@@ -31,6 +31,22 @@ describe("detail readiness (2026-11-27 drawer defect)", () => {
 });
 
 describe("IssueStatusBadge", () => {
+  it("leads with a glyph that differs by status, like the PR state chip (XTRM-1136)", () => {
+    const glyph = (over: Partial<IssueSummary>) => {
+      const { unmount } = render(<IssueStatusBadge issue={issue(over)} />);
+      const svg = screen.getByTestId("issue-status").querySelector("svg");
+      const shape = svg?.getAttribute("class") ?? "";
+      unmount();
+      return shape;
+    };
+    const inProgress = glyph({ readiness: "claimed" });
+    const blocked = glyph({ blockedBy: ["XTRM-2"] });
+    const done = glyph({ lifecycle: "done" });
+    expect(inProgress).not.toBe("");
+    expect(new Set([inProgress, blocked, done]).size).toBe(3);
+    expect(issueStatus(issue({ lifecycle: "done" })).icon).toBe("statusDone");
+  });
+
   it("renders a state of work as a solid chip", () => {
     render(<IssueStatusBadge issue={issue({ readiness: "claimed" })} />);
     const chip = screen.getByTestId("issue-status");

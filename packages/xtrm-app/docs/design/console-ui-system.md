@@ -129,6 +129,9 @@ a chart) is a **card title** — `text-base font-medium text-ink` via `DetailTit
    them is coloured and the other is plain. The status chip keeps its tone; the `PrKey` then renders
    with `quiet` (`text-ink-muted`; the state stays in the glyph, tooltip and `aria-label`). In a row
    with no status chip (the PR list) the `PrKey` is the coloured element.
+   *Superseded for the PR list row on 2026-11-27 (operator, XTRM-1136):* the row carries the glyph +
+   word state chip, the diff in success/danger ink, and tint pills for checks and review state. Those
+   pills name states (rule 2), and the key is plain.
 2. **Chips only for state, never for metadata.** Counts, branches, refs, roles, layers, categories,
    sources, bindings and sync labels are plain text, or mono for keys and paths. A chip names a
    state: an issue status, a PR state, a dispatch verdict, a finding.
@@ -140,8 +143,9 @@ a chart) is a **card title** — `text-base font-medium text-ink` via `DetailTit
 5. **A surface may not add a pill row.** A set of more than one tag-like value becomes a count plus a
    popover (`LinkedRefs`), never a second line of chips.
 
-Enforcement: rules 1 and 3 are asserted per surface (`src/github/pulls.test.tsx` "the key is the one
-coloured element in the list", "the header control is a ghost, not a filled pill");
+Enforcement: rules 1 and 3 are asserted per surface (`src/github/pulls.test.tsx`: the PR row's
+coloured diff and state pills after the XTRM-1136 supersession, "the header control is a ghost, not
+a filled pill");
 `src/issues/PullRequestsBlock.test.tsx` asserts the quiet key; `src/project/jira/JiraSurface.test.tsx`
 asserts the key is ink, not a second accent link. Rules 2, 4 and 5 are **review only**.
 
@@ -650,16 +654,22 @@ Four states plus `unknown` — `draft` is a flag on an open PR, resolved once by
 - `PrKey({ number, state, draft?, repo?, glyph = true, quiet?, className? })` — mono `text-xs`, glyph
   at `micro`/`text`, `title` + `aria-label` naming the state. `quiet` mutes the ink for a row that
   already has a coloured status (§2.3 rule 1).
-- `PrStateChip({ state, draft?, stateSource?, showSource?, size? })` — the glyph + word chip. Two
-  call sites: the PR inspector header, and (as the `PrStateBadge` alias) a linked PR row in the issue
-  page's PR block, where `showSource` adds the `assumed` chip. `assumed` renders as its own muted
+- `PrStateChip({ state, draft?, stateSource?, showSource?, size? })` — the glyph + word chip on the
+  state's solid fill. Every status pill in the console has this shape (XTRM-1136): `IssueStatusBadge`
+  leads with a glyph from `issueStatus().icon`: one glyph per status family (open-like gaps share a
+  circle, Ready and Attested share a dotted circle), so the word still names the exact status. Call
+  sites: the PR list row, the PR inspector header, and (as the `PrStateBadge` alias) a linked PR row
+  in the issue page's PR block, where `showSource` adds the `assumed` chip. The PR list row's rollups
+  are the bold diff (`text-success-ink` additions, `text-danger` deletions) and tint pills for checks
+  and review state. `assumed` renders as its own muted
   chip only where there is room for it.
 - `LinkedRefs({ refs, max = 1, onOpen? })` (`src/ui/linked-refs.tsx`) — one non-wrapping cell: the
   first `max` refs as chips, the rest as plain-text `+N` that opens a popover listing every ref; `—`
   for none.
 
 Enforcement: `src/ui/pr-key.test.tsx` (four states, unknown rendered, distinct glyph per state, quiet,
-chip in its tone), `src/github/pulls.test.tsx` (Restraint rules 1 and 3), 
+chip in its tone), `src/github/pulls.test.tsx` (rule 1 as superseded for the PR row by XTRM-1136: coloured
+diff and state pills; rule 3), 
 `src/ui/linked-refs.test.tsx` (em dash) with the connected cases in `src/github/pulls.test.tsx`.
 
 ## 11. Hairlines, not boxes
@@ -991,9 +1001,12 @@ keyboard focus.
 `Badge variant="solid"` fills one tone and inks it pure white from a single `--x-chip-*` set shared by
 both themes: `#5b54ea` accent (5.38:1), `#b45309` attention (5.02:1), `#157f4d` success (5.03:1),
 `#c0392b` danger (5.44:1), `#6b6b76` neutral (5.26:1); each value also clears 3.36:1 against the dark
-surface `#151515`. Terminal issues take the success tone. The key is the shared `IssueKeyPill`
-(2026-11-27 ruling, superseding the bare key): a hairline-bordered mono pill with no fill,
-`locator | short ref`, carrying the full address in its `title`. The status chip carries the colour;
+surface `#151515`. Terminal issues take the success tone. In the issue list the key is
+`IssueKeyText` (2026-11-27 follow-up, XTRM-1136, superseding the pill in the list only): quiet mono
+text, no border and no fill, all in one muted ink: the whole locator, a `/`, then only the short
+ref's number in semibold (`XTRM-300.1 / 301`; a root reads `XTRM-300`), with the full address in its
+`title`. Everywhere else (drawer, breadcrumbs, references) the key stays the shared `IssueKeyPill`:
+a hairline-bordered mono pill, `locator | short ref`. The status chip carries the colour;
 the key carries the address. Gaps (Draft, Unattested, Stale, Open) are the quiet muted tint; only a
 state of work is solid (`IssueStatusBadge`, the one chip for the list and the drawer).
 
@@ -1023,8 +1036,18 @@ than `--x-control`). This supersedes the ghost resting state of XTRM-939.
 
 `shadow-strip` (trigger) and `shadow-strip-open` (drop-up) are the XTRM-765 stacks as tokens; neither
 contains a `0 0 0 1px` layer, and the strip is the one floating layer that does not use
-`--x-shadow-float`. The repository picker keeps `shadow-float`. A test asserts the absence of the ring
+`--x-shadow-float`. The repository picker shares the strip's ringless open shadow (XTRM-1136). A test asserts the absence of the ring
 and that the open popup sits deeper than its trigger.
+
+Both expanding popovers (`ExpandPopover`) open as one surface: a shell spans the trigger row and the
+panel and carries the background, radius and shadow, and the header copy paints no fill of its own,
+so the panel grows out of the button with no seam at its edge (XTRM-1136). Neither carries a ring:
+the repository picker's shell is `rounded-lg bg-raised shadow-strip-open`, and the strip's drop-up
+is `rounded-md bg-strip-open shadow-strip-open`, the strip's own open colour. The picker's panel is
+capped at 384px (`maxHeight`). Unfiltered it lists only the 8 most recently active repositories
+(`pickerRepos`, `RECENT_REPOS`), plus the current repository when it is not among them; a filter
+searches every repository, and a long match scrolls in the panel's one scroller. The exit animation
+keeps the cap, so closing never grows the page.
 
 ### 8. Pull requests show every state by default
 

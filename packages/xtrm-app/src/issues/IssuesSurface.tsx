@@ -14,7 +14,7 @@ import { IssueBoard } from "./IssueBoard.tsx";
 import { INDENT_REM, ISSUE_STATUSES, buildTree, defaultDesc, keyNames, matchesIssueStatusSet, rollupActivity, type Sort, type SortKey, type TreeRow } from "./issue-table.ts";
 import { KeyChip, ListRow, StatPill } from "../ui/list-row.tsx";
 import { TERMINAL, PriorityScrutinyPill, kindIcon } from "./meta.tsx";
-import { IssueKeyPill } from "../ui/issue-key-pill.tsx";
+import { IssueKeyText } from "../ui/issue-key-pill.tsx";
 import { IssueStatusBadge } from "./IssueStatusBadge.tsx";
 import { NewIssueDialog } from "./NewIssueDialog.tsx";
 import { ReferenceChip } from "../refs/references.tsx";
@@ -255,7 +255,7 @@ function IssueRow({
           </span>
           {/* The key is the shared pill (2026-11-27 ruling, reversing the bare key): locator | short ref. */}
           <span data-key-cell="" className="flex min-w-0">
-            <IssueKeyPill locator={issue.locator} humanRef={issue.ref} title={keyNames(issue)} className="shrink-0" />
+            <IssueKeyText locator={issue.locator} humanRef={issue.ref} title={keyNames(issue)} className="shrink-0" />
           </span>
           {/* One chip for the list and the drawer: label, tone and fill live in IssueStatusBadge. */}
           <IssueStatusBadge issue={issue} size="xs" />

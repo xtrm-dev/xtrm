@@ -66,8 +66,8 @@ test("every row is one 32px line, indented by its own depth, with no header", as
     const line = row.locator("div").first();
     expect(await line.evaluate((el) => getComputedStyle(el).paddingLeft), `${ref} indents by its own depth`).toBe(`${ROW_PAD_PX + depth * INDENT_PX}px`);
 
-    // The key is the shared pill (2026-11-27 ruling): locator | short ref in mono, the full address in
-    // the tooltip, a hairline border and no fill.
+    // The list key is quiet mono text (XTRM-1136): the locator, a slash, then the short ref's number in semibold;
+    // the full address in the tooltip, no border and no fill.
     const key = row.locator("[data-key-cell]").first();
     const keyText = key.locator("[data-issue-key]").first();
     expect(await keyText.getAttribute("data-issue-key")).toBe(ref);

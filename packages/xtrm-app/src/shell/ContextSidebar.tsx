@@ -20,6 +20,31 @@ export function useGo() {
   return (href: string) => void navigate({ to: href } as never);
 }
 
+/** How many recently active repositories the picker lists before the operator types a filter. */
+export const RECENT_REPOS = 8;
+
+/**
+ * The picker's rows, most recently active first. A filter searches every repository. Unfiltered, the
+ * list is the RECENT_REPOS most recent (XTRM-1136), and the current repository is appended when it is
+ * not among them, so the selected row is never hidden.
+ */
+export function pickerRepos<R extends { fullName: string }>(
+  repos: readonly R[],
+  stats: ReadonlyArray<{ fullName: string; lastEventAt?: string | null }>,
+  filter: string,
+  current: string,
+): R[] {
+  const last = new Map(stats.map((s) => [s.fullName, s.lastEventAt ?? ""]));
+  const q = filter.trim().toLowerCase();
+  const sorted = repos
+    .filter((r) => !q || r.fullName.toLowerCase().includes(q))
+    .sort((a, b) => (last.get(b.fullName) ?? "").localeCompare(last.get(a.fullName) ?? "") || a.fullName.localeCompare(b.fullName));
+  if (q) return sorted;
+  const recent = sorted.slice(0, RECENT_REPOS);
+  const selected = sorted.find((r) => r.fullName === current);
+  return selected && !recent.includes(selected) ? [...recent, selected] : recent;
+}
+
 function RepositorySelector() {
   const { repo } = useShell();
   const go = useGo();
@@ -28,13 +53,10 @@ function RepositorySelector() {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
 
-  const ordered = useMemo(() => {
-    const last = new Map(stats.data?.map((s) => [s.fullName, s.lastEventAt ?? ""]));
-    const q = filter.trim().toLowerCase();
-    return (repos.data ?? [])
-      .filter((r) => !q || r.fullName.toLowerCase().includes(q))
-      .sort((a, b) => (last.get(b.fullName) ?? "").localeCompare(last.get(a.fullName) ?? "") || a.fullName.localeCompare(b.fullName));
-  }, [repos.data, stats.data, filter]);
+  const ordered = useMemo(
+    () => pickerRepos(repos.data ?? [], stats.data ?? [], filter, repo.fullName),
+    [repos.data, stats.data, filter, repo.fullName],
+  );
 
   const lastEvent = (fullName: string) => stats.data?.find((s) => s.fullName === fullName)?.lastEventAt ?? null;
 
@@ -45,7 +67,12 @@ function RepositorySelector() {
       open={open}
       onOpenChange={setOpen}
       triggerClassName="flex w-full min-w-0 flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:bg-hover data-[popup-open]:bg-hover"
-      popupClassName="rounded-b-lg bg-raised shadow-float"
+      // No ring (XTRM-1136): the strip drop-up's ringless shadow, so the open picker carries no border.
+      popupClassName="rounded-lg bg-raised shadow-strip-open"
+      // A height guard (XTRM-1136): unfiltered, pickerRepos lists only RECENT_REPOS rows (plus the
+      // current repository), so the cap matters for a broad filter, which then scrolls in the panel's
+      // one scroller.
+      maxHeight={384}
       row={
         <>
           <span className="text-2xs font-medium tracking-wide text-ink-faint uppercase">Repository</span>
@@ -159,7 +186,7 @@ function SourceFooter() {
         open={open}
         onOpenChange={setOpen}
         triggerClassName="flex h-7 w-full items-center gap-2 rounded-md bg-strip px-2 text-left text-xs text-strip-ink shadow-strip outline-none hover:bg-strip-open hover:text-strip-ink-strong focus-visible:bg-strip-open data-[popup-open]:bg-strip-open data-[popup-open]:text-strip-ink-strong"
-        popupClassName="rounded-t-md bg-strip text-sm text-strip-ink shadow-strip-open"
+        popupClassName="rounded-md bg-strip-open text-sm text-strip-ink shadow-strip-open"
         bodyClassName="flex flex-col gap-0.5 p-1.5"
         row={({ open }) => (
           <>
