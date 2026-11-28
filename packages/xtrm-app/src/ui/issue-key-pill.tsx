@@ -63,9 +63,9 @@ export function splitIssueRef(ref: string): { prefix: string; number: string } {
 
 /**
  * The issue key as quiet text, for the issue list only (2026-11-27 follow-up, XTRM-1136): the pill's
- * border and the repeated project prefix made the list noisy on long project names. The locator stays
- * whole in faint ink; the short ref drops its prefix and keeps only its number, in semibold muted ink,
- * so `XTRM-300.1 · XTRM-301` reads `XTRM-300.1 301`. A root issue reads `XTRM-300` with the number
+ * border and the repeated project prefix made the list noisy on long project names. The whole key is
+ * one muted ink; the short ref drops its prefix and keeps only its number, in semibold, after a `/`,
+ * so `XTRM-300.1 | XTRM-301` reads `XTRM-300.1 / 301`. A root issue reads `XTRM-300` with the number
  * in the same weight. The tooltip and the accessible name still carry both full identifiers, and the
  * data attributes match `IssueKeyPill`, so callers and tests address the key the same way.
  */
@@ -84,7 +84,7 @@ export function IssueKeyText({
   const { prefix, number } = splitIssueRef(humanRef);
   return (
     <span
-      className={cx("inline-flex min-w-0 items-baseline gap-1.5 font-mono text-xs leading-none text-ink-faint", className)}
+      className={cx("inline-flex min-w-0 items-baseline gap-1 font-mono text-xs leading-none text-ink-muted", className)}
       data-issue-key={humanRef}
       data-locator={detailed}
       title={title ?? (detailed === null ? humanRef : `${detailed} · ${humanRef}`)}
@@ -95,14 +95,17 @@ export function IssueKeyText({
           <span data-issue-key-locator className="min-w-0 truncate">
             {detailed}
           </span>
-          <span data-issue-key-number className="shrink-0 font-semibold text-ink-muted">
+          <span aria-hidden className="shrink-0">
+            /
+          </span>
+          <span data-issue-key-number className="shrink-0 font-semibold">
             {number}
           </span>
         </>
       ) : (
         <span className="shrink-0">
           {prefix}
-          <span data-issue-key-number className="font-semibold text-ink-muted">
+          <span data-issue-key-number className="font-semibold">
             {number}
           </span>
         </span>
