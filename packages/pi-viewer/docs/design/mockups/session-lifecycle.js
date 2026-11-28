@@ -41,8 +41,8 @@ function pane(p, ind, cls = "") {
 }
 const group = (name, n, ind, session, cls = "") =>
   `<div class="row g ${cls}" style="padding-left:${8 + ind * 12}px"><span class="tsm ${session ? "b ink" : "m muted"}">${name}</span><span class="chev">${i("down", 12)}</span><span class="cnt">${n}</span></div>`
-const draftRow = (ind, label) =>
-  `<div class="row p draft" style="padding-left:${8 + ind * 12}px"><div style="min-width:0;flex:1"><div class="tsm muted">${label}</div><div class="l2"><span>Draft</span></div></div><span class="dot draft"></span></div>`
+const draftRow = (ind, label, starting) =>
+  `<div class="row p draft" style="padding-left:${8 + ind * 12}px"><div style="min-width:0;flex:1"><div class="tsm muted">${label}</div><div class="l2"><span>${starting ? "Starting…" : "Draft"}</span></div></div>${starting ? '<span class="spin sm"></span>' : '<svg class="ddot" width="9" height="9" viewBox="0 0 9 9"><circle cx="4.5" cy="4.5" r="3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 2.2"/></svg>'}</div>`
 
 function sidebar(o = {}) {
   const c = o.ctx || ""
@@ -52,17 +52,17 @@ function sidebar(o = {}) {
     <span class="ib plus ${o.plus ? "on" : ""}" style="${o.plus ? "" : "opacity:.0"}">${i("plus")}</span></div>
   <div class="tree">
     ${group("xx", 4, 0, true, c === "sess" ? "ctx" : "")}
-    ${o.draft === "sess" ? draftRow(1, "New window") : ""}
+    ${o.draft === "sess" ? draftRow(1, "New window", o.starting) : ""}
     ${pane(PANES.lead, 1, o.sel === "lead" ? "sel" : "")}
     ${o.moved ? "" : group("workers", 2, 1, false, c === "win" ? "ctx" : "")}
     ${pane(PANES.w1, o.moved ? 1 : 2, (o.sel === "w1" ? "sel " : "") + (c === "w1" ? "ctx" : "") + (o.flash === "w1" ? " flash" : ""))}
     ${o.moved ? "" : pane(PANES.w2, 2, c === "w2" ? "ctx" : "")}
-    ${o.draft === "win" ? draftRow(2, "New thread") : ""}
+    ${o.draft === "win" ? draftRow(2, "New thread", o.starting) : ""}
     ${o.moved ? pane(PANES.w2, 1, "flash") : ""}
     ${group("mercury", 2, 0, true)}
     ${pane(PANES.mgr, 1)}
     ${pane(PANES.w3, 1)}
-    ${o.draft === "new" ? group("new session", 0, 0, true) + draftRow(1, "New thread") : ""}
+    ${o.draft === "new" ? group("new session", 0, 0, true) + draftRow(1, "New thread", o.starting) : ""}
   </div></aside>`
 }
 
@@ -70,7 +70,7 @@ function sidebar(o = {}) {
 function topbar(title, o = {}) {
   return `<div class="top"><span class="tsm b">${title}</span>${o.detail ? `<span class="t2xs faint">${o.detail}</span>` : ""}
   <div class="r"><div class="seg"><span class="on">Channel</span><span>All events</span></div><span class="ib">${i("sun")}</span>
-  <span class="newbtn ${o.newOn ? "" : "ghost"}">${i("plus", 13)}New thread<span class="kbd">⇧⌘O</span></span></div></div>`
+  <span class="newbtn ${o.newOn ? "" : "ghost"}">${i("plus", 13)}New thread<span class="kbd">Ctrl Alt N</span></span></div></div>`
 }
 function threadBody() {
   return `<div class="thread"><div class="lane">
@@ -84,7 +84,7 @@ function messageComposer() {
 }
 
 const PLACE = {
-  pane: ["Split", "xx › workers"],
+  pane: ["Add pane to", "xx › workers"],
   window: ["New window in", "xx"],
   session: ["New session", ""],
 }
@@ -104,7 +104,7 @@ function draftComposer(o) {
   const locked = o.issuePrompt
   return {
     hero: `<div class="hero"><h2>New thread</h2><p>${sentence}</p></div>`,
-    composer: `<div class="composer"><div class="lane" style="position:relative">
+    composer: `<div class="composer draftc"><div class="lane" style="position:relative">
     ${o.pop || ""}
     <div class="where">
       <span class="pick set" data-k="place">${i(o.place === "pane" ? "split" : o.place === "window" ? "window" : "session", 13)}${pk}${pv ? ` <span class="m">${pv}</span>` : ""} ${i("down", 12)}</span>
@@ -114,12 +114,15 @@ function draftComposer(o) {
     <div class="box"><div class="ta ${o.text ? "" : locked ? "locked" : "ph"}">${o.text || (locked ? "The issue is the prompt: XTRM-1078 renders as the first turn." : "Describe the task, or leave it empty to start idle")}</div>
       <span class="send">${o.busy ? '<span class="spin"></span>' : i("enter", 16)}</span></div>
     <div class="who">
-      <span class="prev mono" title="click copies">${i("terminal", 11)}${argv}</span>
       <span class="pick ${set("rt")}">${o.rt || "Claude"} ${i("down", 12)}</span>
       <span class="pick ${set("role")}">${o.role || "worker"} ${i("down", 12)}</span>
       <span class="pick ${set("model")}">${o.model || '<span class="faint">claude-opus-5-5</span>'} ${i("down", 12)}</span>
       <span class="pick ${set("issue")}">${o.issue === false ? '<span class="faint">No issue</span>' : "XTRM-1078"} ${i("down", 12)}</span>
-    </div></div></div>`,
+    </div>
+    ${o.cmdOpen
+      ? `<div class="cmd open"><span class="cmdh">${i("down", 11)}Command<span class="copy">${i("copy", 11)}Copy</span></span><code class="mono">${argv}</code></div>`
+      : `<div class="cmd"><span class="cmdh">${i("right", 11)}Command</span></div>`}
+    </div></div>`,
   }
 }
 
@@ -129,10 +132,10 @@ function desktop({ side, title, detail, body, composer, overlay = "", newOn }) {
 function draftFrame(o) {
   const d = draftComposer(o)
   return desktop({
-    side: sidebar({ draft: o.place === "pane" ? "win" : o.place === "window" ? "sess" : "new", ctx: o.ctx }),
+    side: sidebar({ draft: o.place === "pane" ? "win" : o.place === "window" ? "sess" : "new", ctx: o.ctx, starting: o.starting }),
     title: "New thread", detail: o.place === "pane" ? "draft · xx › workers" : o.place === "window" ? "draft · xx" : "draft",
-    body: `<div class="thread"><div class="lane">${d.hero}${o.card || ""}</div></div>`,
-    composer: d.composer, overlay: o.overlay, newOn: o.newOn,
+    body: `<div class="draftwrap"><div class="lane">${d.hero}</div>${d.composer}<div class="lane">${o.card || ""}</div></div>`,
+    composer: "", overlay: o.overlay, newOn: o.newOn,
   })
 }
 
@@ -142,7 +145,7 @@ const mi = (label, o = {}) =>
 const sep = '<div class="sep"></div>'
 
 const MENU_PANE = (top, left, hiMove) => `<div class="pop" style="top:${top}px;left:${left}px;min-width:224px">
-  ${mi("New thread beside", { icon: "split", det: "split workers" })}
+  ${mi("New thread beside", { icon: "split", det: "in workers" })}
   ${mi("Move to", { icon: "move", sub: true, hi: hiMove })}
   ${sep}${mi("Copy", { icon: "copy", sub: true })}
   ${sep}${mi("Close thread…", { icon: "trash", dng: true })}</div>`
@@ -183,12 +186,12 @@ F["F2"] = {
 }
 F["F3"] = {
   t: "Draft thread from a window row (entry a): placement picker open", why: "One component. Only the prefilled placement differs. Windows without agents are listed too. The command preview shows the exact argv.",
-  html: () => draftFrame({ place: "pane", ctx: "", set: ["place"],
-    pop: `<div class="pop" style="bottom:122px;left:0;width:300px;max-height:330px;overflow:hidden">
+  html: () => draftFrame({ place: "pane", ctx: "", set: ["place"], cmdOpen: true,
+    pop: `<div class="pop" style="top:28px;left:0;width:300px;max-height:330px;overflow:hidden">
       <div class="search">${i("search", 13)}<span>Filter sessions and windows</span></div>
       ${mi("New session", { icon: "session" })}
-      <div class="grp">xx</div>${mi("New window in xx", { icon: "plus" })}${mi("Split thread-lead window", { icon: "split" })}${mi("Split workers", { icon: "split", det: "2 panes", ck: true, hi: true })}${mi("Split scratch", { icon: "split", det: "no agent" })}
-      <div class="grp">mercury</div>${mi("New window in mercury", { icon: "plus" })}${mi("Split manager", { icon: "split" })}</div>` }),
+      <div class="grp">xx</div>${mi("New window in xx", { icon: "plus" })}${mi("Add pane to thread-lead window", { icon: "split" })}${mi("Add pane to workers", { icon: "split", det: "2 panes", ck: true, hi: true })}${mi("Add pane to scratch", { icon: "split", det: "no agent" })}
+      <div class="grp">mercury</div>${mi("New window in mercury", { icon: "plus" })}${mi("Add pane to manager", { icon: "split" })}</div>` }),
 }
 F["F4"] = {
   t: "Role picker: grouped, searchable, description on line 2", why: "From specialists list --json (36 roles). The model picker's placeholder follows the role's default model.",
@@ -206,31 +209,32 @@ F["F4"] = {
 }
 F["F5"] = {
   t: "Launch running (entry d, top-bar button)", why: "The fields lock and the send button spins. A launch card with elapsed time; the sidebar shows the draft row at its target.",
-  html: () => draftFrame({ place: "session", newOn: true, busy: true, set: ["place", "wt"], issue: false, text: "Audit the jira-cleanup skill against the current board",
+  html: () => draftFrame({ place: "session", newOn: true, busy: true, starting: true, set: ["place", "wt"], issue: false, text: "Audit the jira-cleanup skill against the current board",
     argv: "xt claude --role worker --new-session --prompt '…' --no-attach --json",
     card: `<div class="card"><div class="t">${'<span class="spin"></span>'}<span class="shimmer">Starting claude in a new worktree…</span><span class="txs faint" style="margin-left:auto">4 s</span></div>
       <div class="st"><span>Fetching origin/main, creating xt/&lt;name&gt;, starting the pane</span></div></div>` }),
 }
 F["F6"] = {
-  t: "Launch failed: inputs kept, reason shown, Retry", why: "The card shows reason_code and the summary from xtrm.command-outcome.v1. Nothing typed is lost.",
-  html: () => draftFrame({ place: "pane", rt: "Codex", set: ["place", "rt"], text: "Port the board-helper lanes to the new schema",
+  t: "Launch failed card: inputs kept, reason shown, Retry", why: "The card shows reason_code and the summary from xtrm.command-outcome.v1. Nothing typed is lost.",
+  html: () => draftFrame({ place: "pane", rt: "Codex", cmdOpen: true, set: ["place", "rt"], text: "Port the board-helper lanes to the new schema",
     argv: "xt codex --pane xx:workers --no-attach --json",
     card: `<div class="card err"><div class="t"><span class="danger">${i("alert", 14)}</span><span>Could not start codex</span><span class="mono txs faint" style="margin-left:auto">placement_unsupported</span></div>
       <div class="st"><span class="ink">xt codex has no --pane option; it can open a new session or a new window.</span></div>
       <div class="act"><span class="btn">Retry as new window</span><span class="btn">${i("copy", 12)}Copy command</span></div></div>` }),
 }
 const closeDialog = (o) => `<div class="backdrop"></div><div class="dialog">
-  <div class="dh"><div class="tt">Close sessiondesign</div><div class="mono txs faint" style="margin-top:2px">xt/sessiondesign · ~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-sessiondesign</div></div>
-  <div class="sec" style="display:flex;gap:8px;align-items:center"><span class="dot idle" style="margin:0"></span><span class="txs">Agent idle</span></div>
+  <div class="dh"><div class="tt">Close sessiondesign</div><div class="pathline txs faint" title="~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-sessiondesign"><span class="mono">xt/sessiondesign</span><span>·</span><span class="ltrunc mono"><bdi>~/dev/xtrm/.xtrm/worktrees/xtrm-xt-claude-sessiondesign</bdi></span></div></div>
+  <div class="sec" style="display:flex;gap:8px;align-items:center"><span class="sdot idle"></span><span class="txs">Agent idle</span><span class="txs faint" style="margin-left:auto">Commit and Discard are off while the agent works</span></div>
   <div class="sec"><div class="st"><span>Changes</span><span>4 files</span></div>
     <div class="file"><span class="g M">M</span><span class="mono">packages/pi-viewer/docs/design/xtrm-1078-session-lifecycle.md</span></div>
     <div class="file"><span class="g A">A</span><span class="mono">packages/pi-viewer/docs/design/mockups/session-lifecycle.html</span></div>
     <div class="file"><span class="g A">A</span><span class="mono">packages/pi-viewer/docs/design/mockups/session-lifecycle.js</span></div>
     <div class="file"><span class="g U">??</span><span class="mono">packages/pi-viewer/docs/design/shots/scratch.png</span></div>
-    ${o.commit ? `<div class="field">XTRM-1078: session lifecycle design note and mockups<span class="caret"></span></div>` : ""}</div>
+    ${o.commit ? `<label class="flabel">Commit message</label><div class="field">XTRM-1078: session lifecycle design note and mockups<span class="caret"></span></div>` : ""}</div>
   <div class="sec"><div class="st"><span>Not pushed</span></div><div class="txs muted">1 commit ahead of origin/xt/sessiondesign</div></div>
   <div class="ft"><span class="btn dghost">Discard changes…</span><span class="sp"></span>
-    ${o.commit ? `<span class="btn">Cancel</span><span class="btn pri">Commit and push</span>` : `<span class="btn">Commit and push</span><span class="btn pri dis" title="clean and pushed first">Close thread</span>`}</div></div>`
+    <span class="btn">Commit and push</span><span class="btn pri dis" title="Commit and push first">Close thread</span></div>
+  <div class="why2 txs faint">Close thread · commit and push first</div></div>`
 F["F7"] = {
   t: "Close dialog: git state, Commit and push", why: "Read with git status (never release --dry-run, which nudges the agent). Close is enabled only when the tree is clean and pushed.",
   html: () => desktop({ side: sidebar({ ctx: "w1" }), title: "sessiondesign", body: threadBody(), composer: messageComposer(), overlay: closeDialog({ commit: true }) }),
@@ -263,7 +267,7 @@ M["M1"] = {
 }
 M["M2"] = {
   t: "Phone: draft thread", why: "The pickers wrap; the command preview is hidden on phone.",
-  html: () => { const d = draftComposer({ place: "pane", set: ["place"] }); return mobile({ title: "New thread", body: `<div class="thread">${d.hero}</div>`, composer: d.composer }) },
+  html: () => { const d = draftComposer({ place: "pane", set: ["place"] }); return mobile({ title: "New thread", body: `<div class="draftwrap"><div class="lane" style="padding:0 12px">${d.hero}</div>${d.composer}</div>`, composer: "" }) },
 }
 M["M3"] = {
   t: "Phone: close dialog", why: "Full-width dialog, same content as F7.",

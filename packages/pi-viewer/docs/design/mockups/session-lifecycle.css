@@ -188,3 +188,29 @@ body { margin: 0; background: var(--x-gallery); color: var(--x-ink); font: 400 0
 .frame.mobile .hero { padding-top: 64px; }
 .frame.mobile .dialog { left: 8px; right: 8px; transform: none; width: auto; top: 56px; }
 svg { display: block; }
+
+/* round 2 (lead review of #527) */
+.draftwrap { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 0 24px; min-height: 0; }
+.draftwrap .hero { padding: 0 12px 18px; }
+.composer.draftc { padding: 0 48px; }
+.frame.mobile .composer.draftc { padding: 0 12px; }
+.frame.mobile .draftwrap .hero { padding: 0 0 14px; }
+.draftwrap > .lane { padding: 0 48px; max-width: calc(760px + 96px); }
+.frame.mobile .draftwrap > .lane { padding: 0 12px; }
+.cmd { margin: 8px 12px 0; font-size: 0.72rem; color: var(--x-ink-faint); }
+.cmd .cmdh { display: inline-flex; align-items: center; gap: 4px; }
+.cmd.open { background: var(--x-surface); box-shadow: 0 0 0 1px var(--x-border-muted); border-radius: 6px; padding: 6px 10px 8px; }
+.cmd.open .cmdh { display: flex; width: 100%; }
+.cmd .copy { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; color: var(--x-ink-muted); }
+.cmd code { display: block; margin-top: 4px; color: var(--x-ink-muted); white-space: pre-wrap; word-break: break-word; }
+.ddot { margin-left: auto; margin-top: 3px; color: var(--x-ink-faint); flex: none; }
+.spin.sm { width: 10px; height: 10px; border-width: 1.5px; margin-left: auto; margin-top: 3px; flex: none; }
+.sdot { width: 7px; height: 7px; border-radius: 99px; flex: none; }
+.sdot.idle { background: var(--x-ink-faint); } .sdot.run { background: var(--x-success); }
+.pathline { display: flex; gap: 6px; margin-top: 2px; min-width: 0; white-space: nowrap; }
+.ltrunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.flabel { display: block; margin-top: 10px; font-size: 0.72rem; color: var(--x-ink-muted); font-weight: 500; }
+.why2 { margin-left: 4px; }
+.kbd { font-family: "Figtree", system-ui, sans-serif; letter-spacing: 0.02em; }
+.dialog { width: 560px; }
+.why2 { margin: -6px 0 0; padding: 0 16px 12px; text-align: right; }
